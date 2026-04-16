@@ -38,6 +38,13 @@ export function useNodeInteractions() {
       });
     },
     openNodePicker(nodeId: string) {
+      setInteractionState({
+        connectingPayload: {
+          sourceNodeId: null,
+          sourceHandleId: null,
+          sourceNodeType: null
+        }
+      });
       setPanelState({
         nodePickerState: {
           open: true,
@@ -48,6 +55,13 @@ export function useNodeInteractions() {
       });
     },
     closeNodePicker() {
+      setInteractionState({
+        connectingPayload: {
+          sourceNodeId: null,
+          sourceHandleId: null,
+          sourceNodeType: null
+        }
+      });
       setPanelState({
         nodePickerState: {
           open: false,

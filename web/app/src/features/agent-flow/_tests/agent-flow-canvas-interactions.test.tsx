@@ -31,6 +31,7 @@ type MockReactFlowProps = {
   children?: ReactNode;
   edges?: Array<{
     id: string;
+    selected?: boolean;
     data?: {
       onInsertNode?: (edgeId: string, nodeType: FlowNodeType) => void;
     };
@@ -52,6 +53,12 @@ type MockReactFlowProps = {
       nodeId: string | null;
       handleType: 'source' | 'target' | null;
       handleId: string | null;
+    }
+  ) => void;
+  onEdgeClick?: (
+    event: unknown,
+    edge: {
+      id: string;
     }
   ) => void;
   onPaneClick?: () => void;
@@ -99,6 +106,7 @@ type ObservedEditorState = {
     anchorEdgeId: string | null;
     anchorCanvasPosition: { x: number; y: number } | null;
   };
+  selectedEdgeId: string | null;
   selectedNodeId: string | null;
   workingDocument: ReturnType<typeof createDefaultAgentFlowDocument>;
 };
@@ -110,15 +118,17 @@ function StoreObserver({
 }) {
   const workingDocument = useAgentFlowEditorStore(selectWorkingDocument);
   const nodePickerState = useAgentFlowEditorStore((state) => state.nodePickerState);
+  const selectedEdgeId = useAgentFlowEditorStore((state) => state.selectedEdgeId);
   const selectedNodeId = useAgentFlowEditorStore((state) => state.selectedNodeId);
 
   useEffect(() => {
     onChange({
       nodePickerState,
+      selectedEdgeId,
       selectedNodeId,
       workingDocument
     });
-  }, [nodePickerState, onChange, selectedNodeId, workingDocument]);
+  }, [nodePickerState, onChange, selectedEdgeId, selectedNodeId, workingDocument]);
 
   return null;
 }
@@ -365,6 +375,77 @@ describe('AgentFlowCanvas interactions', () => {
       anchorEdgeId: null,
       anchorCanvasPosition: { x: 420, y: 260 }
     });
+  });
+
+  test('creates a branched node from the dragged connection without rewriting the original outgoing edge', async () => {
+    const { getState } = renderCanvas();
+
+    act(() => {
+      latestReactFlowProps?.onConnectStart?.(null, {
+        nodeId: 'node-llm',
+        handleType: 'source',
+        handleId: 'source-right'
+      });
+      latestReactFlowProps?.onConnectEnd?.({
+        clientX: 420,
+        clientY: 260,
+        target: document.createElement('div')
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: 'Template Transform' })
+    );
+
+    const insertedNode = getState().workingDocument.graph.nodes.find(
+      (node) => node.type === 'template_transform'
+    );
+
+    expect(insertedNode).toBeDefined();
+    expect(insertedNode?.position).toEqual({ x: 420, y: 260 });
+    expect(getState().workingDocument.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'edge-llm-answer',
+          source: 'node-llm',
+          target: 'node-answer'
+        }),
+        expect.objectContaining({
+          source: 'node-llm',
+          target: insertedNode?.id
+        })
+      ])
+    );
+    expect(getState().workingDocument.graph.edges).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: insertedNode?.id,
+          target: 'node-answer'
+        })
+      ])
+    );
+  });
+
+  test('selects an edge when it is clicked', () => {
+    const { getState } = renderCanvas();
+
+    expect(latestReactFlowProps?.onEdgeClick).toBeTypeOf('function');
+
+    act(() => {
+      latestReactFlowProps?.onEdgeClick?.(null, {
+        id: 'edge-llm-answer'
+      });
+    });
+
+    expect(getState().selectedEdgeId).toBe('edge-llm-answer');
+    expect(latestReactFlowProps?.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'edge-llm-answer',
+          selected: true
+        })
+      ])
+    );
   });
 
   test('clears node selection when clicking the pane', () => {

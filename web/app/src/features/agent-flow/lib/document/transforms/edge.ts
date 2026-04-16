@@ -194,3 +194,64 @@ export function insertNodeOnEdge(
     }
   };
 }
+
+export function connectNodeFromSource(
+  document: FlowAuthoringDocument,
+  payload: {
+    sourceNodeId: string;
+    sourceHandleId?: string | null;
+    node: FlowNodeDocument;
+  }
+): FlowAuthoringDocument {
+  const sourceNode = getNodeById(document, payload.sourceNodeId);
+
+  if (!sourceNode) {
+    return document;
+  }
+
+  const insertedNode = {
+    ...payload.node,
+    containerId: sourceNode.containerId
+  };
+
+  return {
+    ...document,
+    graph: {
+      ...document.graph,
+      nodes: [...document.graph.nodes, insertedNode],
+      edges: [
+        ...document.graph.edges,
+        createEdgeDocument({
+          id: createNextEdgeId(document, {
+            source: sourceNode.id,
+            target: insertedNode.id
+          }),
+          source: sourceNode.id,
+          target: insertedNode.id,
+          sourceHandle: payload.sourceHandleId ?? null,
+          targetHandle: null,
+          containerId: sourceNode.containerId
+        })
+      ]
+    }
+  };
+}
+
+export function removeEdge(
+  document: FlowAuthoringDocument,
+  payload: {
+    edgeId: string;
+  }
+): FlowAuthoringDocument {
+  if (!document.graph.edges.some((edge) => edge.id === payload.edgeId)) {
+    return document;
+  }
+
+  return {
+    ...document,
+    graph: {
+      ...document.graph,
+      edges: document.graph.edges.filter((edge) => edge.id !== payload.edgeId)
+    }
+  };
+}

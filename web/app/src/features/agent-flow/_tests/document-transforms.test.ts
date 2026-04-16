@@ -5,6 +5,7 @@ import { classifyDocumentChange } from '../lib/document/change-kind';
 import { createNodeDocument } from '../lib/document/node-factory';
 import { getContainerPathForNode } from '../lib/document/transforms/container';
 import {
+  removeEdge,
   insertNodeOnEdge,
   reconnectEdge,
   validateConnection
@@ -107,5 +108,28 @@ describe('agent flow document transforms', () => {
     expect(getContainerPathForNode(document, 'node-inner-answer-1')).toEqual([
       'node-iteration-1'
     ]);
+  });
+
+  test('removes a single edge by id without touching sibling edges', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    const next = removeEdge(document, {
+      edgeId: 'edge-llm-answer'
+    });
+
+    expect(next.graph.edges).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'edge-llm-answer'
+        })
+      ])
+    );
+    expect(next.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'edge-start-llm'
+        })
+      ])
+    );
   });
 });

@@ -6,8 +6,10 @@ import {
   createNodeDocument
 } from '../../lib/document/node-factory';
 import {
+  connectNodeFromSource,
   connectNodes,
   insertNodeOnEdge,
+  removeEdge,
   reconnectEdge,
   validateConnection
 } from '../../lib/document/transforms/edge';
@@ -28,6 +30,7 @@ export function useEdgeInteractions() {
   const setInteractionState = useAgentFlowEditorStore(
     (state) => state.setInteractionState
   );
+  const nodePickerState = useAgentFlowEditorStore((state) => state.nodePickerState);
 
   useEffect(() => {
     connectingPayloadRef.current = connectingPayload;
@@ -100,6 +103,63 @@ export function useEdgeInteractions() {
         selectedEdgeId: null
       });
     },
+    insertFromConnection(nodeType: FlowNodeType) {
+      const sourceNodeId = connectingPayloadRef.current.sourceNodeId;
+      const sourceHandleId = connectingPayloadRef.current.sourceHandleId;
+      const anchorCanvasPosition = nodePickerState.anchorCanvasPosition;
+      const zoom = document.editor.viewport.zoom || 1;
+
+      if (!sourceNodeId || !anchorCanvasPosition) {
+        return;
+      }
+
+      const flowPosition = {
+        x: Math.round((anchorCanvasPosition.x - document.editor.viewport.x) / zoom),
+        y: Math.round((anchorCanvasPosition.y - document.editor.viewport.y) / zoom)
+      };
+      const nextNode = createNodeDocument(
+        nodeType,
+        createNextNodeId(document, nodeType),
+        flowPosition.x,
+        flowPosition.y
+      );
+      const nextDocument = connectNodeFromSource(document, {
+        sourceNodeId,
+        sourceHandleId,
+        node: nextNode
+      });
+
+      if (nextDocument === document) {
+        return;
+      }
+
+      setWorkingDocument(nextDocument);
+      setSelection({
+        selectedNodeId: nextNode.id,
+        selectedNodeIds: [nextNode.id],
+        selectedEdgeId: null
+      });
+      setPanelState({
+        nodePickerState: {
+          open: false,
+          anchorNodeId: null,
+          anchorEdgeId: null,
+          anchorCanvasPosition: null
+        }
+      });
+      setInteractionState({
+        connectingPayload: {
+          sourceNodeId: null,
+          sourceHandleId: null,
+          sourceNodeType: null
+        }
+      });
+      connectingPayloadRef.current = {
+        sourceNodeId: null,
+        sourceHandleId: null,
+        sourceNodeType: null
+      };
+    },
     startConnection(payload: {
       nodeId: string | null;
       handleType: 'source' | 'target' | null;
@@ -147,18 +207,6 @@ export function useEdgeInteractions() {
           anchorCanvasPosition: position
         }
       });
-      setInteractionState({
-        connectingPayload: {
-          sourceNodeId: null,
-          sourceHandleId: null,
-          sourceNodeType: null
-        }
-      });
-      connectingPayloadRef.current = {
-        sourceNodeId: null,
-        sourceHandleId: null,
-        sourceNodeType: null
-      };
     },
     cancelConnection() {
       setInteractionState({
@@ -178,6 +226,20 @@ export function useEdgeInteractions() {
       connection: Parameters<typeof validateConnection>[1]
     ) {
       return validateConnection(document, connection);
+    },
+    remove(edgeId: string) {
+      const nextDocument = removeEdge(document, {
+        edgeId
+      });
+
+      if (nextDocument === document) {
+        return;
+      }
+
+      setWorkingDocument(nextDocument);
+      setSelection({
+        selectedEdgeId: null
+      });
     }
   };
 }

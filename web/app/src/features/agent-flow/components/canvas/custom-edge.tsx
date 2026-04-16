@@ -29,7 +29,8 @@ export function AgentFlowCustomEdge(props: EdgeProps<AgentFlowCanvasEdge>) {
     targetPosition,
     style,
     markerEnd,
-    data
+    data,
+    selected
   } = props;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [edgePath, labelX, labelY] = getBezierPath({
@@ -45,7 +46,11 @@ export function AgentFlowCustomEdge(props: EdgeProps<AgentFlowCanvasEdge>) {
     <>
       <path
         id={id}
-        style={style}
+        style={{
+          ...style,
+          stroke: selected ? '#497a5d' : style?.stroke,
+          strokeWidth: selected ? 3 : style?.strokeWidth
+        }}
         className="react-flow__edge-path agent-flow-custom-edge-path"
         d={edgePath}
         markerEnd={markerEnd}
@@ -57,7 +62,10 @@ export function AgentFlowCustomEdge(props: EdgeProps<AgentFlowCanvasEdge>) {
             position: 'absolute',
             transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             pointerEvents: 'all',
-            zIndex: 20
+            zIndex: 20,
+            boxShadow: selected
+              ? '0 0 0 2px rgba(73, 122, 93, 0.18), 0 2px 8px rgba(33, 62, 44, 0.16)'
+              : undefined
           }}
         >
           <div className="agent-flow-edge-add-button-wrapper">

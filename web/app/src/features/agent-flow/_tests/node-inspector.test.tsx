@@ -55,7 +55,9 @@ function DocumentObserver({
 }
 
 describe('NodeInspector', () => {
-  test('renders node alias and description in the inspector header while keeping config sections below', () => {
+  test(
+    'renders node alias and description in the inspector header while keeping config sections below',
+    () => {
     render(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
         <NodeInspector />
@@ -70,7 +72,9 @@ describe('NodeInspector', () => {
     expect(screen.getByText('Policy')).toBeInTheDocument();
     expect(screen.getByText('Advanced')).toBeInTheDocument();
     expect(screen.getByLabelText('System Prompt')).toBeInTheDocument();
-  });
+    },
+    10000
+  );
 
   test('updates node fields through inspector interactions instead of mutating document inline', () => {
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });

@@ -127,6 +127,7 @@ function AgentFlowCanvasInner({
   const canvasRef = useRef<HTMLDivElement>(null);
   const document = useAgentFlowEditorStore(selectWorkingDocument);
   const activeContainerId = useAgentFlowEditorStore(selectActiveContainerId);
+  const selectedEdgeId = useAgentFlowEditorStore((state) => state.selectedEdgeId);
   const selectedNodeId = useAgentFlowEditorStore(selectSelectedNodeId);
   const nodePickerState = useAgentFlowEditorStore((state) => state.nodePickerState);
   const canvasInteractions = useCanvasInteractions();
@@ -165,10 +166,10 @@ function AgentFlowCanvasInner({
   );
   const edges = useMemo(
     () =>
-      toCanvasEdges(document, activeContainerId, {
+      toCanvasEdges(document, activeContainerId, selectedEdgeId, {
         onInsertNode: edgeInteractions.insertOnEdge
       }),
-    [activeContainerId, document, edgeInteractions.insertOnEdge]
+    [activeContainerId, document, edgeInteractions.insertOnEdge, selectedEdgeId]
   );
 
   return (
@@ -223,6 +224,9 @@ function AgentFlowCanvasInner({
         onReconnect={(oldEdge: Edge, connection) => {
           edgeInteractions.reconnect(oldEdge.id, connection);
         }}
+        onEdgeClick={(_, edge) => {
+          selectionInteractions.selectEdge(edge.id);
+        }}
         isValidConnection={edgeInteractions.isValidConnection}
         onPaneClick={selectionInteractions.clearSelection}
       >
@@ -254,10 +258,7 @@ function AgentFlowCanvasInner({
               }
             }}
             onPickNode={(nodeType) => {
-              nodeInteractions.insertAfterNode(
-                nodePickerState.anchorNodeId as string,
-                nodeType
-              );
+              edgeInteractions.insertFromConnection(nodeType);
             }}
           />
         </div>

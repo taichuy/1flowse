@@ -6,6 +6,7 @@ import type { AgentFlowCanvasEdge } from '../../components/canvas/node-types';
 export function toCanvasEdges(
   document: FlowAuthoringDocument,
   activeContainerId: string | null,
+  selectedEdgeId: string | null,
   actions: {
     onInsertNode: (edgeId: string, nodeType: FlowNodeType) => void;
   }
@@ -26,6 +27,7 @@ export function toCanvasEdges(
     .map((edge) => ({
       id: edge.id,
       type: 'agentFlowEdge',
+      selected: edge.id === selectedEdgeId,
       source: edge.source,
       target: edge.target,
       sourceHandle: edge.sourceHandle,

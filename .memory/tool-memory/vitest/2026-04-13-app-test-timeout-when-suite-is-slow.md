@@ -1,25 +1,29 @@
 ---
 memory_type: tool
 topic: Vitest 默认 5 秒超时在慢速前端集成套件下可能误报失败
-summary: 在 `web/app` 中一次性跑多组前端测试时，`App`、`App shell`、`MePage`、`RolePermissionPanel`、`agent-flow-editor-page` 等集成测试都可能因 jsdom 与 Ant Design / React Flow 渲染耗时触发默认 `5000ms` 超时；已验证可通过命令级或单测级显式超时重新确认真实断言结果。
+summary: 在 `web/app` 中一次性跑多组前端测试时，`App`、`App shell`、`MePage`、`RolePermissionPanel`、`agent-flow-editor-page`、`node-inspector` 等集成测试都可能因 jsdom 与 Ant Design / React Flow 渲染耗时触发默认 `5000ms` 超时；已验证可通过命令级或单测级显式超时重新确认真实断言结果。
 keywords:
   - vitest
   - timeout
   - jsdom
   - antd
   - web/app
+  - agent-flow
+  - node-inspector
 match_when:
   - `App.test.tsx`、`app-shell.test.tsx`、`me-page.test.tsx`、`role-permission-panel.test.tsx` 或 `agent-flow-editor-page.test.tsx` 报 `Test timed out in 5000ms`
+  - `src/features/agent-flow/_tests/node-inspector.test.tsx` 在批量 suite 中报 `Test timed out in 5000ms`
   - 一次性运行 `pnpm --dir web test` 时出现不稳定超时
 created_at: 2026-04-13 12
-updated_at: 2026-04-16 12
-last_verified_at: 2026-04-16 12
+updated_at: 2026-04-16 17
+last_verified_at: 2026-04-16 17
 decision_policy: reference_on_failure
 scope:
   - vitest
   - web/app
   - web/app/src/app/App.test.tsx
   - web/app/src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx
+  - web/app/src/features/agent-flow/_tests/node-inspector.test.tsx
 ---
 
 # Vitest 默认 5 秒超时在慢速前端集成套件下可能误报失败
@@ -30,7 +34,7 @@ scope:
 
 ## 失败现象
 
-在 `web/app` 里一次性跑整套前端测试时，`src/app/App.test.tsx`、`src/app/_tests/app-shell.test.tsx`、`src/features/me/_tests/me-page.test.tsx`、`src/features/settings/_tests/role-permission-panel.test.tsx`、`src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx` 都可能报：
+在 `web/app` 里一次性跑整套前端测试时，`src/app/App.test.tsx`、`src/app/_tests/app-shell.test.tsx`、`src/features/me/_tests/me-page.test.tsx`、`src/features/settings/_tests/role-permission-panel.test.tsx`、`src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx`、`src/features/agent-flow/_tests/node-inspector.test.tsx` 都可能报：
 
 ```text
 Test timed out in 5000ms.
@@ -47,7 +51,7 @@ Test timed out in 5000ms.
 
 ## 根因
 
-这是测试环境性能噪声，不是断言逻辑错误。套件一起跑时，壳层导航、个人资料页重定向、角色对话框，以及带 `React Flow` / `Query` provider 的 agent-flow 页面渲染链路较长，超过默认超时。
+这是测试环境性能噪声，不是断言逻辑错误。套件一起跑时，壳层导航、个人资料页重定向、角色对话框，以及带 `React Flow` / `Query` provider 的 agent-flow 页面和 inspector 渲染链路较长，超过默认超时。
 
 ## 解法
 
@@ -66,8 +70,11 @@ Test timed out in 5000ms.
 
 `2026-04-16 12` 已验证：`pnpm --dir web test` 在 `src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx` 的 `renders provider-backed editor chrome on desktop` 用例上再次触发 `5000ms` 超时；单独运行该文件通过后，将该用例超时显式提高到 `10000ms`，随后 `pnpm --dir web test` 全量 `34` 文件、`101` 测试通过。
 
+`2026-04-16 17` 已验证：`pnpm --dir web test` 在 `src/features/agent-flow/_tests/node-inspector.test.tsx` 的 `renders node alias and description in the inspector header while keeping config sections below` 用例上再次触发 `5000ms` 超时；单文件复跑约 `3.2s` 可稳定通过，将该用例超时显式提高到 `10000ms` 后，`pnpm --dir web test` 全量 `35` 文件、`105` 测试通过。
+
 ## 复现记录
 
 - `2026-04-13 12`：一次性运行 App 相关测试时，`App.test.tsx` 因默认 `5000ms` 超时报错；提高到 `15000ms` 后通过。
 - `2026-04-14 21`：执行角色策略计划 Task 5 时，`pnpm --dir web test` 在 `app-shell`、`MePage`、`RolePermissionPanel` 上复现慢测超时；为慢测试补显式超时并调整提交方式后全量通过。
 - `2026-04-16 12`：执行 agent-flow handle-first 跟进修复时，`pnpm --dir web test` 先在 `agent-flow-editor-page.test.tsx` 的桌面渲染用例上复现 `5000ms` 超时；单文件复跑通过后，将该用例超时提高到 `10000ms`，再次全量运行后通过。
+- `2026-04-16 17`：继续执行 agent-flow 连线 follow-up 时，`pnpm --dir web test` 在 `node-inspector.test.tsx` 的 inspector 头部渲染用例上复现 `5000ms` 超时；单文件复跑通过后，将该用例超时提高到 `10000ms`，再次全量运行后通过。

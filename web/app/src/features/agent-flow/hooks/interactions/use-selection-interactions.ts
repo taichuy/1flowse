@@ -29,6 +29,30 @@ export function useSelectionInteractions() {
           sourceNodeType: null
         }
       });
+    },
+    selectEdge(edgeId: string) {
+      setSelection({
+        selectedEdgeId: edgeId,
+        selectedNodeId: null,
+        selectedNodeIds: [],
+        focusedFieldKey: null,
+        openInspectorSectionKey: null
+      });
+      setPanelState({
+        nodePickerState: {
+          open: false,
+          anchorNodeId: null,
+          anchorEdgeId: null,
+          anchorCanvasPosition: null
+        }
+      });
+      setInteractionState({
+        connectingPayload: {
+          sourceNodeId: null,
+          sourceHandleId: null,
+          sourceNodeType: null
+        }
+      });
     }
   };
 }
