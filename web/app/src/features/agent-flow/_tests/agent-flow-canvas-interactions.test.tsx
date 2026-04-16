@@ -1,9 +1,18 @@
 import type { ReactNode } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { createDefaultAgentFlowDocument } from '@1flowse/flow-schema';
+import {
+  createDefaultAgentFlowDocument,
+  type FlowNodeType
+} from '@1flowse/flow-schema';
 import { AgentFlowCanvas } from '../components/editor/AgentFlowCanvas';
+import {
+  AgentFlowEditorStoreProvider,
+  useAgentFlowEditorStore
+} from '../store/editor/provider';
+import { selectWorkingDocument } from '../store/editor/selectors';
 
 type MockNodeChange = {
   id: string;
@@ -20,6 +29,13 @@ type MockViewport = {
 
 type MockReactFlowProps = {
   children?: ReactNode;
+  edges?: Array<{
+    id: string;
+    data?: {
+      onInsertNode?: (edgeId: string, nodeType: FlowNodeType) => void;
+    };
+  }>;
+  onPaneClick?: () => void;
   onNodesChange?: (changes: MockNodeChange[]) => void;
   onReconnect?: (
     oldEdge: {
@@ -42,6 +58,70 @@ type MockReactFlowProps = {
 
 let latestReactFlowProps: MockReactFlowProps | null = null;
 let mockViewport: MockViewport = { x: 0, y: 0, zoom: 1 };
+
+function createInitialState(document = createDefaultAgentFlowDocument({ flowId: 'flow-1' })) {
+  return {
+    flow_id: 'flow-1',
+    draft: {
+      id: 'draft-1',
+      flow_id: 'flow-1',
+      updated_at: '2026-04-16T10:00:00Z',
+      document
+    },
+    autosave_interval_seconds: 30,
+    versions: []
+  };
+}
+
+type ObservedEditorState = {
+  selectedNodeId: string | null;
+  workingDocument: ReturnType<typeof createDefaultAgentFlowDocument>;
+};
+
+function StoreObserver({
+  onChange
+}: {
+  onChange: (state: ObservedEditorState) => void;
+}) {
+  const workingDocument = useAgentFlowEditorStore(selectWorkingDocument);
+  const selectedNodeId = useAgentFlowEditorStore((state) => state.selectedNodeId);
+
+  useEffect(() => {
+    onChange({
+      selectedNodeId,
+      workingDocument
+    });
+  }, [onChange, selectedNodeId, workingDocument]);
+
+  return null;
+}
+
+function renderCanvas(
+  document = createDefaultAgentFlowDocument({ flowId: 'flow-1' })
+) {
+  let latestState: ObservedEditorState | null = null;
+
+  render(
+    <AgentFlowEditorStoreProvider initialState={createInitialState(document)}>
+      <StoreObserver
+        onChange={(state) => {
+          latestState = state;
+        }}
+      />
+      <AgentFlowCanvas issueCountByNodeId={{}} />
+    </AgentFlowEditorStoreProvider>
+  );
+
+  return {
+    getState() {
+      if (!latestState) {
+        throw new Error('editor state not observed');
+      }
+
+      return latestState;
+    }
+  };
+}
 
 vi.mock('@xyflow/react', () => ({
   Background: () => null,
@@ -107,176 +187,109 @@ describe('AgentFlowCanvas interactions', () => {
   });
 
   test('writes dragged node positions back into the document', () => {
-    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    const onDocumentChange = vi.fn();
-
-    render(
-      <AgentFlowCanvas
-        activeContainerId={null}
-        document={document}
-        issueCountByNodeId={{}}
-        selectedNodeId="node-llm"
-        onOpenContainer={vi.fn()}
-        onSelectNode={vi.fn()}
-        onDocumentChange={onDocumentChange}
-      />
-    );
+    const { getState } = renderCanvas();
 
     fireEvent.click(screen.getByRole('button', { name: 'trigger node drag' }));
 
-    expect(onDocumentChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        graph: expect.objectContaining({
-          nodes: expect.arrayContaining([
-            expect.objectContaining({
-              id: 'node-llm',
-              position: { x: 520, y: 260 }
-            })
-          ])
+    expect(getState().workingDocument.graph.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'node-llm',
+          position: { x: 520, y: 260 }
         })
-      })
+      ])
     );
   });
 
   test('opens with the document viewport and shows a plain percentage label', () => {
-    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-
-    render(
-      <AgentFlowCanvas
-        activeContainerId={null}
-        document={document}
-        issueCountByNodeId={{}}
-        selectedNodeId="node-llm"
-        onOpenContainer={vi.fn()}
-        onSelectNode={vi.fn()}
-        onDocumentChange={vi.fn()}
-      />
-    );
+    renderCanvas();
 
     expect(latestReactFlowProps?.viewport).toEqual({ x: 0, y: 0, zoom: 1 });
     expect(screen.getByLabelText('当前缩放')).toHaveTextContent('100%');
   });
 
   test('writes viewport changes back into the document', () => {
-    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    const onDocumentChange = vi.fn();
-
-    render(
-      <AgentFlowCanvas
-        activeContainerId={null}
-        document={document}
-        issueCountByNodeId={{}}
-        selectedNodeId="node-llm"
-        onOpenContainer={vi.fn()}
-        onSelectNode={vi.fn()}
-        onDocumentChange={onDocumentChange}
-      />
-    );
+    const { getState } = renderCanvas();
 
     fireEvent.click(screen.getByRole('button', { name: 'trigger viewport change' }));
 
-    expect(onDocumentChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        editor: expect.objectContaining({
-          viewport: { x: 120, y: 48, zoom: 0.85 }
-        })
-      })
-    );
+    expect(getState().workingDocument.editor.viewport).toEqual({
+      x: 120,
+      y: 48,
+      zoom: 0.85
+    });
   });
 
-  test('inserts a node when the edge add event is dispatched', async () => {
-    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    const onDocumentChange = vi.fn();
-
-    render(
-      <AgentFlowCanvas
-        activeContainerId={null}
-        document={document}
-        issueCountByNodeId={{}}
-        selectedNodeId="node-llm"
-        onOpenContainer={vi.fn()}
-        onSelectNode={vi.fn()}
-        onDocumentChange={onDocumentChange}
-      />
-    );
+  test('inserts a node through the edge action callback', () => {
+    const { getState } = renderCanvas();
 
     expect(latestReactFlowProps).not.toBeNull();
+    const insertOnEdge = latestReactFlowProps?.edges
+      ?.find((edge) => edge.id === 'edge-llm-answer')
+      ?.data?.onInsertNode;
 
-    window.dispatchEvent(
-      new CustomEvent('agent-flow-insert-node', {
-        detail: {
-          sourceNodeId: 'node-llm',
-          nodeType: 'template_transform',
-          edgeId: 'edge-node-llm-node-answer'
-        }
-      })
-    );
+    expect(insertOnEdge).toBeTypeOf('function');
 
-    await waitFor(() => {
-      expect(onDocumentChange).toHaveBeenCalled();
+    act(() => {
+      insertOnEdge?.('edge-llm-answer', 'template_transform');
     });
 
-    expect(onDocumentChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        graph: expect.objectContaining({
-          nodes: expect.arrayContaining([
-            expect.objectContaining({
-              type: 'template_transform'
-            })
-          ])
+    expect(getState().workingDocument.graph.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'template_transform'
         })
-      })
+      ])
     );
+    expect(getState().selectedNodeId).toMatch(/^node-template-transform-/);
   });
 
   test('rewrites the document edge when an existing line is reconnected', () => {
-    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    const onDocumentChange = vi.fn();
-
-    render(
-      <AgentFlowCanvas
-        activeContainerId={null}
-        document={document}
-        issueCountByNodeId={{}}
-        selectedNodeId="node-llm"
-        onOpenContainer={vi.fn()}
-        onSelectNode={vi.fn()}
-        onDocumentChange={onDocumentChange}
-      />
-    );
+    const { getState } = renderCanvas();
 
     expect(latestReactFlowProps?.onReconnect).toBeTypeOf('function');
 
-    latestReactFlowProps?.onReconnect?.(
-      {
-        id: 'edge-start-llm',
-        source: 'node-start',
-        target: 'node-llm',
-        sourceHandle: null,
-        targetHandle: null
-      },
-      {
-        source: 'node-start',
-        target: 'node-answer',
-        sourceHandle: 'source-right',
-        targetHandle: 'target-left'
-      }
-    );
+    act(() => {
+      latestReactFlowProps?.onReconnect?.(
+        {
+          id: 'edge-start-llm',
+          source: 'node-start',
+          target: 'node-llm',
+          sourceHandle: null,
+          targetHandle: null
+        },
+        {
+          source: 'node-start',
+          target: 'node-answer',
+          sourceHandle: 'source-right',
+          targetHandle: 'target-left'
+        }
+      );
+    });
 
-    expect(onDocumentChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        graph: expect.objectContaining({
-          edges: expect.arrayContaining([
-            expect.objectContaining({
-              id: 'edge-start-llm',
-              source: 'node-start',
-              target: 'node-answer',
-              sourceHandle: 'source-right',
-              targetHandle: 'target-left'
-            })
-          ])
+    expect(getState().workingDocument.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'edge-start-llm',
+          source: 'node-start',
+          target: 'node-answer',
+          sourceHandle: 'source-right',
+          targetHandle: 'target-left'
         })
-      })
+      ])
     );
+  });
+
+  test('clears node selection when clicking the pane', () => {
+    const { getState } = renderCanvas();
+
+    expect(getState().selectedNodeId).toBe('node-llm');
+    expect(latestReactFlowProps?.onPaneClick).toBeTypeOf('function');
+
+    act(() => {
+      latestReactFlowProps?.onPaneClick?.();
+    });
+
+    expect(getState().selectedNodeId).toBe(null);
   });
 });

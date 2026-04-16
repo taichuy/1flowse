@@ -38,7 +38,7 @@ export function reconnectEdge(
     edgeId: string;
     connection: EdgeConnection;
   }
-) {
+): FlowAuthoringDocument {
   const edge = getEdgeById(document, payload.edgeId);
 
   if (!edge || !validateConnection(document, payload.connection)) {
@@ -70,7 +70,7 @@ export function insertNodeOnEdge(
     edgeId: string;
     node: FlowNodeDocument;
   }
-) {
+): FlowAuthoringDocument {
   const edge = getEdgeById(document, payload.edgeId);
 
   if (!edge) {

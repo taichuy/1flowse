@@ -3,7 +3,7 @@ import type { FlowAuthoringDocument } from '@1flowse/flow-schema';
 export function setViewport(
   document: FlowAuthoringDocument,
   viewport: FlowAuthoringDocument['editor']['viewport']
-) {
+): FlowAuthoringDocument {
   const currentViewport = document.editor.viewport;
 
   if (

@@ -18,10 +18,20 @@ type NodeFieldValue =
   | string[]
   | string[][];
 
+function replaceOutputTitle(
+  outputs: FlowNodeDocument['outputs'],
+  outputKey: string,
+  title: string
+): FlowNodeDocument['outputs'] {
+  return outputs.map((output) =>
+    output.key === outputKey ? { ...output, title } : output
+  );
+}
+
 export function moveNodes(
   document: FlowAuthoringDocument,
   positions: Record<string, { x: number; y: number }>
-) {
+): FlowAuthoringDocument {
   if (Object.keys(positions).length === 0) {
     return document;
   }
@@ -49,7 +59,7 @@ export function updateNodeField(
     fieldKey: string;
     value: NodeFieldValue;
   }
-) {
+): FlowAuthoringDocument {
   return {
     ...document,
     graph: {
@@ -108,11 +118,7 @@ export function updateNodeField(
 
           return {
             ...node,
-            outputs: node.outputs.map((output) =>
-              output.key === outputKey
-                ? { ...output, title: payload.value }
-                : output
-            )
+            outputs: replaceOutputTitle(node.outputs, outputKey, payload.value)
           };
         }
 
@@ -126,7 +132,7 @@ export function insertNodeAfter(
   document: FlowAuthoringDocument,
   anchorNodeId: string,
   node: FlowNodeDocument
-) {
+): FlowAuthoringDocument {
   const anchorNode = getNodeById(document, anchorNodeId);
 
   if (!anchorNode) {

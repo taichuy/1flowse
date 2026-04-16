@@ -215,19 +215,6 @@ export function AgentFlowCanvasFrame({
     });
   }
 
-  function handleOpenContainer(nodeId: string) {
-    setInteractionState({
-      activeContainerPath: [...activeContainerPath, nodeId]
-    });
-    const firstChildNode =
-      workingDocument.graph.nodes.find((node) => node.containerId === nodeId)?.id ??
-      null;
-    setSelection({
-      selectedNodeId: firstChildNode,
-      selectedNodeIds: firstChildNode ? [firstChildNode] : []
-    });
-  }
-
   function handleReturnToRootCanvas() {
     const currentContainerId = activeContainerPath.at(-1) ?? null;
 
@@ -274,18 +261,7 @@ export function AgentFlowCanvasFrame({
         className={`agent-flow-editor__body agent-flow-editor__shell${selectedNodeId ? ' agent-flow-editor__body--with-inspector' : ''}`}
       >
         <AgentFlowCanvas
-          activeContainerId={activeContainerId}
-          document={workingDocument}
           issueCountByNodeId={issueCountByNodeId}
-          onOpenContainer={handleOpenContainer}
-          selectedNodeId={selectedNodeId}
-          onSelectNode={(nodeId) =>
-            setSelection({
-              selectedNodeId: nodeId,
-              selectedNodeIds: nodeId ? [nodeId] : []
-            })
-          }
-          onDocumentChange={handleDocumentChange}
           onViewportSnapshotChange={(viewport) => {
             viewportSnapshotRef.current = viewport;
           }}

@@ -9,175 +9,34 @@ import {
   ReactFlowProvider,
   useReactFlow,
   useViewport,
-  type Connection,
-  type Edge,
-  type NodeChange,
-  type Viewport
+  type Edge
 } from '@xyflow/react';
 import type { FlowAuthoringDocument } from '@1flowse/flow-schema';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 
+import { useCanvasInteractions } from '../../hooks/interactions/use-canvas-interactions';
+import { useEdgeInteractions } from '../../hooks/interactions/use-edge-interactions';
+import { useNodeInteractions } from '../../hooks/interactions/use-node-interactions';
+import { useSelectionInteractions } from '../../hooks/interactions/use-selection-interactions';
+import { toCanvasEdges } from '../../lib/adapters/to-canvas-edges';
+import { toCanvasNodes } from '../../lib/adapters/to-canvas-nodes';
+import { useAgentFlowEditorStore } from '../../store/editor/provider';
 import {
-  createNextNodeId,
-  createNodeDocument,
-  insertNodeAfter
-} from '../../lib/default-agent-flow-document';
-import {
-  agentFlowNodeTypes,
-  agentFlowEdgeTypes,
-  toCanvasEdges,
-  toCanvasNodes
-} from '../nodes/node-registry';
+  selectActiveContainerId,
+  selectSelectedNodeId,
+  selectWorkingDocument
+} from '../../store/editor/selectors';
+import { AgentFlowCustomConnectionLine } from '../canvas/custom-connection-line';
+import { agentFlowEdgeTypes, agentFlowNodeTypes } from '../canvas/node-types';
 
 interface AgentFlowCanvasProps {
-  activeContainerId: string | null;
-  document: FlowAuthoringDocument;
   issueCountByNodeId: Record<string, number>;
-  selectedNodeId: string | null;
-  onOpenContainer: (nodeId: string) => void;
-  onSelectNode: (nodeId: string | null) => void;
-  onDocumentChange: (document: FlowAuthoringDocument) => void;
   onViewportSnapshotChange?: (
     viewport: FlowAuthoringDocument['editor']['viewport']
   ) => void;
   onViewportGetterReady?: (
     getter: (() => FlowAuthoringDocument['editor']['viewport']) | null
   ) => void;
-}
-
-interface InsertNodeEventDetail {
-  edgeId: string;
-  nodeType: Parameters<typeof createNodeDocument>[0];
-  sourceNodeId: string;
-}
-
-function applyNodePositionChanges(
-  document: FlowAuthoringDocument,
-  changes: NodeChange[]
-) {
-  const nextPositionsByNodeId = new Map<string, { x: number; y: number }>();
-
-  for (const change of changes) {
-    if (change.type !== 'position' || !change.position) {
-      continue;
-    }
-
-    nextPositionsByNodeId.set(change.id, change.position);
-  }
-
-  if (nextPositionsByNodeId.size === 0) {
-    return document;
-  }
-
-  return {
-    ...document,
-    graph: {
-      ...document.graph,
-      nodes: document.graph.nodes.map((node) => {
-        const nextPosition = nextPositionsByNodeId.get(node.id);
-
-        if (!nextPosition) {
-          return node;
-        }
-
-        return {
-          ...node,
-          position: nextPosition
-        };
-      })
-    }
-  };
-}
-
-function applyViewportChanges(
-  document: FlowAuthoringDocument,
-  viewport: Viewport
-) {
-  const currentViewport = document.editor.viewport;
-
-  if (
-    currentViewport.x === viewport.x &&
-    currentViewport.y === viewport.y &&
-    currentViewport.zoom === viewport.zoom
-  ) {
-    return document;
-  }
-
-  return {
-    ...document,
-    editor: {
-      ...document.editor,
-      viewport: {
-        x: viewport.x,
-        y: viewport.y,
-        zoom: viewport.zoom
-      }
-    }
-  };
-}
-
-function applyEdgeReconnect(
-  document: FlowAuthoringDocument,
-  edgeId: string,
-  connection: Connection
-) {
-  if (!connection.source || !connection.target) {
-    return document;
-  }
-
-  const sourceNode = document.graph.nodes.find(
-    (node) => node.id === connection.source
-  );
-  const targetNode = document.graph.nodes.find(
-    (node) => node.id === connection.target
-  );
-
-  if (!sourceNode || !targetNode || sourceNode.containerId !== targetNode.containerId) {
-    return document;
-  }
-
-  let changed = false;
-  const nextEdges = document.graph.edges.map((edge) => {
-    if (edge.id !== edgeId) {
-      return edge;
-    }
-
-    const nextSourceHandle = connection.sourceHandle ?? null;
-    const nextTargetHandle = connection.targetHandle ?? null;
-
-    if (
-      edge.source === connection.source &&
-      edge.target === connection.target &&
-      edge.sourceHandle === nextSourceHandle &&
-      edge.targetHandle === nextTargetHandle &&
-      edge.containerId === sourceNode.containerId
-    ) {
-      return edge;
-    }
-
-    changed = true;
-
-    return {
-      ...edge,
-      source: connection.source,
-      target: connection.target,
-      sourceHandle: nextSourceHandle,
-      targetHandle: nextTargetHandle,
-      containerId: sourceNode.containerId
-    };
-  });
-
-  if (!changed) {
-    return document;
-  }
-
-  return {
-    ...document,
-    graph: {
-      ...document.graph,
-      edges: nextEdges
-    }
-  };
 }
 
 function ZoomToolbar() {
@@ -259,17 +118,18 @@ function ViewportObserver({
 }
 
 function AgentFlowCanvasInner({
-  activeContainerId,
-  document,
   issueCountByNodeId,
-  onOpenContainer,
-  selectedNodeId,
-  onSelectNode,
-  onDocumentChange,
   onViewportSnapshotChange,
   onViewportGetterReady
 }: AgentFlowCanvasProps) {
-  const [pickerNodeId, setPickerNodeId] = useState<string | null>(null);
+  const document = useAgentFlowEditorStore(selectWorkingDocument);
+  const activeContainerId = useAgentFlowEditorStore(selectActiveContainerId);
+  const selectedNodeId = useAgentFlowEditorStore(selectSelectedNodeId);
+  const nodePickerState = useAgentFlowEditorStore((state) => state.nodePickerState);
+  const canvasInteractions = useCanvasInteractions();
+  const nodeInteractions = useNodeInteractions();
+  const edgeInteractions = useEdgeInteractions();
+  const selectionInteractions = useSelectionInteractions();
 
   const nodes = useMemo(
     () =>
@@ -277,77 +137,33 @@ function AgentFlowCanvasInner({
         document,
         activeContainerId,
         selectedNodeId,
-        pickerNodeId,
+        nodePickerState.open ? nodePickerState.anchorNodeId : null,
         issueCountByNodeId,
         {
-        onOpenPicker: setPickerNodeId,
-        onClosePicker: () => setPickerNodeId(null),
-        onOpenContainer,
-        onSelectNode: (nodeId) => {
-          onSelectNode(nodeId);
-          setPickerNodeId(null);
-        },
-        onInsertNode: (anchorNodeId, nodeType) => {
-          const anchorNode = document.graph.nodes.find((node) => node.id === anchorNodeId);
-
-          if (!anchorNode) {
-            return;
-          }
-
-          const nextNode = createNodeDocument(
-            nodeType,
-            createNextNodeId(document, nodeType),
-            anchorNode.position.x + 280,
-            anchorNode.position.y
-          );
-          const nextDocument = insertNodeAfter(document, anchorNodeId, nextNode);
-
-          onDocumentChange(nextDocument);
-          onSelectNode(nextNode.id);
-          setPickerNodeId(null);
+          onOpenPicker: nodeInteractions.openNodePicker,
+          onClosePicker: nodeInteractions.closeNodePicker,
+          onOpenContainer: nodeInteractions.openContainer,
+          onSelectNode: nodeInteractions.selectNode,
+          onInsertNode: nodeInteractions.insertAfterNode
         }
-      }),
+      ),
     [
       activeContainerId,
       document,
       issueCountByNodeId,
-      onOpenContainer,
-      onDocumentChange,
-      onSelectNode,
-      pickerNodeId,
+      nodeInteractions,
+      nodePickerState.anchorNodeId,
+      nodePickerState.open,
       selectedNodeId
     ]
   );
   const edges = useMemo(
-    () => toCanvasEdges(document, activeContainerId),
-    [activeContainerId, document]
+    () =>
+      toCanvasEdges(document, activeContainerId, {
+        onInsertNode: edgeInteractions.insertOnEdge
+      }),
+    [activeContainerId, document, edgeInteractions.insertOnEdge]
   );
-
-  useEffect(() => {
-    const handleInsert = (event: Event) => {
-      const detail = (event as CustomEvent<InsertNodeEventDetail>).detail;
-      const anchorNode = document.graph.nodes.find((node) => node.id === detail.sourceNodeId);
-
-      if (!anchorNode) {
-        return;
-      }
-
-      const nextNode = createNodeDocument(
-        detail.nodeType,
-        createNextNodeId(document, detail.nodeType),
-        anchorNode.position.x + 280,
-        anchorNode.position.y
-      );
-      const nextDocument = insertNodeAfter(document, detail.sourceNodeId, nextNode);
-
-      onDocumentChange(nextDocument);
-      onSelectNode(nextNode.id);
-    };
-
-    window.addEventListener('agent-flow-insert-node', handleInsert);
-
-    return () => window.removeEventListener('agent-flow-insert-node', handleInsert);
-  }, [document, onDocumentChange, onSelectNode]);
 
   return (
     <div className="agent-flow-canvas">
@@ -357,32 +173,15 @@ function AgentFlowCanvasInner({
         viewport={document.editor.viewport}
         nodeTypes={agentFlowNodeTypes}
         edgeTypes={agentFlowEdgeTypes}
+        connectionLineComponent={AgentFlowCustomConnectionLine}
         nodesDraggable
-        onNodesChange={(changes) => {
-          const nextDocument = applyNodePositionChanges(document, changes);
-
-          if (nextDocument !== document) {
-            onDocumentChange(nextDocument);
-          }
-        }}
-        onViewportChange={(viewport) => {
-          const nextDocument = applyViewportChanges(document, viewport);
-
-          if (nextDocument !== document) {
-            onDocumentChange(nextDocument);
-          }
-        }}
+        onNodesChange={canvasInteractions.onNodesChange}
+        onViewportChange={canvasInteractions.onViewportChange}
         onReconnect={(oldEdge: Edge, connection) => {
-          const nextDocument = applyEdgeReconnect(document, oldEdge.id, connection);
-
-          if (nextDocument !== document) {
-            onDocumentChange(nextDocument);
-          }
+          edgeInteractions.reconnect(oldEdge.id, connection);
         }}
-        onPaneClick={() => {
-          onSelectNode(null);
-          setPickerNodeId(null);
-        }}
+        isValidConnection={edgeInteractions.isValidConnection}
+        onPaneClick={selectionInteractions.clearSelection}
       >
         <Background gap={20} size={1} />
         <ViewportObserver

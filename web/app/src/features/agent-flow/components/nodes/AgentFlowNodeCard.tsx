@@ -1,7 +1,8 @@
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Position, type NodeProps } from '@xyflow/react';
 
+import { CanvasHandle } from '../canvas/CanvasHandle';
 import { NodePickerPopover } from '../node-picker/NodePickerPopover';
-import type { AgentFlowCanvasNode } from './node-registry';
+import type { AgentFlowCanvasNode } from '../canvas/node-types';
 
 export function AgentFlowNodeCard({
   data,
@@ -10,7 +11,7 @@ export function AgentFlowNodeCard({
   return (
     <>
       {data.showTargetHandle ? (
-        <Handle
+        <CanvasHandle
           type="target"
           position={Position.Left}
           className="agent-flow-node-handle agent-flow-node-handle--target"
@@ -44,25 +45,27 @@ export function AgentFlowNodeCard({
           <div className="agent-flow-node-card__description">{data.description}</div>
         ) : null}
       </div>
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="agent-flow-node-handle agent-flow-node-handle--source"
-      >
-        <NodePickerPopover
-          ariaLabel={`在 ${data.alias} 后新增节点`}
-          open={data.pickerOpen}
-          onOpenChange={(open) => {
-            if (open) {
-              data.onOpenPicker(data.nodeId);
-              return;
-            }
+      {data.showSourceHandle ? (
+        <CanvasHandle
+          type="source"
+          position={Position.Right}
+          className="agent-flow-node-handle agent-flow-node-handle--source"
+        >
+          <NodePickerPopover
+            ariaLabel={`在 ${data.alias} 后新增节点`}
+            open={data.pickerOpen}
+            onOpenChange={(open) => {
+              if (open) {
+                data.onOpenPicker(data.nodeId);
+                return;
+              }
 
-            data.onClosePicker();
-          }}
-          onPickNode={(nodeType) => data.onInsertNode(data.nodeId, nodeType)}
-        />
-      </Handle>
+              data.onClosePicker();
+            }}
+            onPickNode={(nodeType) => data.onInsertNode(data.nodeId, nodeType)}
+          />
+        </CanvasHandle>
+      ) : null}
     </>
   );
 }

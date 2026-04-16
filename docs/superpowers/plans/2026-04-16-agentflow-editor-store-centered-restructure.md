@@ -1004,7 +1004,7 @@ git commit -m "refactor: add agent flow editor store"
 - Modify: `web/app/src/features/agent-flow/_tests/agent-flow-canvas-interactions.test.tsx`
 - Delete: `web/app/src/features/agent-flow/components/nodes/node-registry.tsx`
 
-- [ ] **Step 1: 先让 Canvas 交互测试失败，锁定“无全局事件桥”的目标**
+- [x] **Step 1: 先让 Canvas 交互测试失败，锁定“无全局事件桥”的目标**
 
 ```tsx
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -1046,13 +1046,13 @@ describe('AgentFlowCanvas interactions', () => {
 });
 ```
 
-- [ ] **Step 2: 运行交互测试，确认当前实现仍依赖 `window.dispatchEvent`**
+- [x] **Step 2: 运行交互测试，确认当前实现仍依赖 `window.dispatchEvent`**
 
 Run: `pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/agent-flow-canvas.test.tsx src/features/agent-flow/_tests/agent-flow-canvas-interactions.test.tsx`
 
 Expected: FAIL because `AgentFlowCanvas` 仍直接修改 document、仍监听 `agent-flow-insert-node`，并且组件 props 还没有从 store 中读取 selection / picker / viewport。
 
-- [ ] **Step 3: 实现 adapters、custom edge 和 interaction hooks**
+- [x] **Step 3: 实现 adapters、custom edge 和 interaction hooks**
 
 ```ts
 // web/app/src/features/agent-flow/hooks/interactions/use-canvas-interactions.ts
@@ -1398,11 +1398,15 @@ export function AgentFlowCanvas({
 }
 ```
 
-- [ ] **Step 4: 重跑画布与交互测试**
+- [x] **Step 4: 重跑画布与交互测试**
 
 Run: `pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/agent-flow-canvas.test.tsx src/features/agent-flow/_tests/agent-flow-canvas-interactions.test.tsx`
 
 Expected: PASS; `AgentFlowCanvas` 不再依赖 `window.dispatchEvent`，拖拽节点、viewport 变化、edge reconnect、edge 中点插入都通过 store action 改写 `workingDocument`。
+
+Status note (`2026-04-16 10:51`): 本任务从一个半完成的 Task 3 工作树继续推进，没有重新回到纯旧实现去复现“事件桥仍存在”的初始红灯；实际收口过程中先暴露的是 `AgentFlowCanvasFrame` 仍传旧 props、交互测试仍断言旧 `onDocumentChange` 桥、以及 custom edge / `NodeChange` 的 TypeScript 类型未收紧。随后已将断言迁移为观察 editor store 状态，并删除 `node-registry.tsx` 与全局事件桥依赖。
+
+Status note (`2026-04-16 10:51`): 已执行 `pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/agent-flow-canvas.test.tsx src/features/agent-flow/_tests/agent-flow-canvas-interactions.test.tsx`，结果为 `2` 个文件、`8` 个测试全部 PASS。`React Flow` 仍在真实渲染测试中输出容器尺寸与样式加载警告，但未影响断言结果。
 
 - [ ] **Step 5: Commit**
 
