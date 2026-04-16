@@ -109,7 +109,8 @@ describe('useDraftSync', () => {
         nodePickerState: {
           open: true,
           anchorNodeId: 'node-llm',
-          anchorEdgeId: null
+          anchorEdgeId: null,
+          anchorCanvasPosition: null
         }
       });
       result.current.setInteractionState({

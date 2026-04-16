@@ -1,4 +1,5 @@
 import { Button, Popover } from 'antd';
+import type { ReactElement, ReactNode } from 'react';
 import type { FlowNodeType } from '@1flowse/flow-schema';
 
 const NODE_OPTIONS: Array<{ type: FlowNodeType; label: string }> = [
@@ -19,20 +20,28 @@ interface NodePickerPopoverProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPickNode: (nodeType: FlowNodeType) => void;
+  buttonClassName?: string;
+  buttonContent?: ReactNode;
+  children?: ReactElement;
+  placement?: 'top' | 'bottom' | 'left' | 'right' | 'rightTop';
 }
 
 export function NodePickerPopover({
   ariaLabel,
   open,
   onOpenChange,
-  onPickNode
+  onPickNode,
+  buttonClassName,
+  buttonContent = '+',
+  children,
+  placement = 'rightTop'
 }: NodePickerPopoverProps) {
   return (
     <Popover
       destroyOnHidden
       trigger="click"
       open={open}
-      placement="rightTop"
+      placement={placement}
       onOpenChange={onOpenChange}
       content={
         <div className="agent-flow-node-picker" role="menu">
@@ -53,19 +62,19 @@ export function NodePickerPopover({
         </div>
       }
     >
-      <Button
-        aria-label={ariaLabel}
-        size="small"
-        type="text"
-        onClick={(event) => {
-          event.stopPropagation();
-        }}
-        onMouseDown={(event) => {
-          event.stopPropagation();
-        }}
-      >
-        +
-      </Button>
+      {children ?? (
+        <Button
+          aria-label={ariaLabel}
+          className={buttonClassName}
+          size="small"
+          type="text"
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          {buttonContent}
+        </Button>
+      )}
     </Popover>
   );
 }

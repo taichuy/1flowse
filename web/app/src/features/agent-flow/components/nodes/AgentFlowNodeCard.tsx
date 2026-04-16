@@ -46,25 +46,52 @@ export function AgentFlowNodeCard({
         ) : null}
       </div>
       {data.showSourceHandle ? (
-        <CanvasHandle
-          type="source"
-          position={Position.Right}
-          className="agent-flow-node-handle agent-flow-node-handle--source"
+        <NodePickerPopover
+          ariaLabel={`在 ${data.alias} 后新增节点`}
+          open={data.pickerOpen}
+          onOpenChange={(open) => {
+            if (open) {
+              data.onOpenPicker(data.nodeId);
+              return;
+            }
+
+            data.onClosePicker();
+          }}
+          onPickNode={(nodeType) => data.onInsertNode(data.nodeId, nodeType)}
         >
-          <NodePickerPopover
-            ariaLabel={`在 ${data.alias} 后新增节点`}
-            open={data.pickerOpen}
-            onOpenChange={(open) => {
-              if (open) {
-                data.onOpenPicker(data.nodeId);
+          <CanvasHandle
+            type="source"
+            position={Position.Right}
+            aria-expanded={data.pickerOpen}
+            aria-haspopup="menu"
+            aria-label={`在 ${data.alias} 后新增节点`}
+            className="agent-flow-node-handle agent-flow-node-handle--source"
+            role="button"
+            tabIndex={0}
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') {
                 return;
               }
 
-              data.onClosePicker();
+              event.preventDefault();
+              event.stopPropagation();
+
+              if (data.pickerOpen) {
+                data.onClosePicker();
+                return;
+              }
+
+              data.onOpenPicker(data.nodeId);
             }}
-            onPickNode={(nodeType) => data.onInsertNode(data.nodeId, nodeType)}
-          />
-        </CanvasHandle>
+          >
+            <span aria-hidden="true" className="agent-flow-node-handle__icon">
+              +
+            </span>
+          </CanvasHandle>
+        </NodePickerPopover>
       ) : null}
     </>
   );

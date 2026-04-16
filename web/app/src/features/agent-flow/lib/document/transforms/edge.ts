@@ -64,6 +64,81 @@ export function reconnectEdge(
   };
 }
 
+function createNextEdgeId(
+  document: FlowAuthoringDocument,
+  connection: {
+    source: NonNullable<EdgeConnection['source']>;
+    target: NonNullable<EdgeConnection['target']>;
+  }
+) {
+  const baseId = `edge-${connection.source.replace(/^node-/, '')}-${connection.target.replace(/^node-/, '')}`;
+
+  if (!document.graph.edges.some((edge) => edge.id === baseId)) {
+    return baseId;
+  }
+
+  let index = 2;
+
+  while (
+    document.graph.edges.some((edge) => edge.id === `${baseId}-${index}`)
+  ) {
+    index += 1;
+  }
+
+  return `${baseId}-${index}`;
+}
+
+export function connectNodes(
+  document: FlowAuthoringDocument,
+  payload: {
+    connection: EdgeConnection;
+  }
+): FlowAuthoringDocument {
+  if (!validateConnection(document, payload.connection)) {
+    return document;
+  }
+
+  const sourceNode = getNodeById(document, payload.connection.source ?? null);
+  const targetNode = getNodeById(document, payload.connection.target ?? null);
+
+  if (!sourceNode || !targetNode) {
+    return document;
+  }
+
+  const alreadyExists = document.graph.edges.some(
+    (edge) =>
+      edge.source === payload.connection.source &&
+      edge.target === payload.connection.target &&
+      edge.sourceHandle === (payload.connection.sourceHandle ?? null) &&
+      edge.targetHandle === (payload.connection.targetHandle ?? null)
+  );
+
+  if (alreadyExists) {
+    return document;
+  }
+
+  return {
+    ...document,
+    graph: {
+      ...document.graph,
+      edges: [
+        ...document.graph.edges,
+        createEdgeDocument({
+          id: createNextEdgeId(document, {
+            source: sourceNode.id,
+            target: targetNode.id
+          }),
+          source: sourceNode.id,
+          target: targetNode.id,
+          sourceHandle: payload.connection.sourceHandle ?? null,
+          targetHandle: payload.connection.targetHandle ?? null,
+          containerId: sourceNode.containerId
+        })
+      ]
+    }
+  };
+}
+
 export function insertNodeOnEdge(
   document: FlowAuthoringDocument,
   payload: {

@@ -16,6 +16,9 @@ export function useNodeInteractions() {
   );
   const setSelection = useAgentFlowEditorStore((state) => state.setSelection);
   const setPanelState = useAgentFlowEditorStore((state) => state.setPanelState);
+  const setInteractionState = useAgentFlowEditorStore(
+    (state) => state.setInteractionState
+  );
   const navigation = useContainerNavigation();
 
   return {
@@ -29,7 +32,8 @@ export function useNodeInteractions() {
         nodePickerState: {
           open: false,
           anchorNodeId: null,
-          anchorEdgeId: null
+          anchorEdgeId: null,
+          anchorCanvasPosition: null
         }
       });
     },
@@ -38,7 +42,8 @@ export function useNodeInteractions() {
         nodePickerState: {
           open: true,
           anchorNodeId: nodeId,
-          anchorEdgeId: null
+          anchorEdgeId: null,
+          anchorCanvasPosition: null
         }
       });
     },
@@ -47,7 +52,8 @@ export function useNodeInteractions() {
         nodePickerState: {
           open: false,
           anchorNodeId: null,
-          anchorEdgeId: null
+          anchorEdgeId: null,
+          anchorCanvasPosition: null
         }
       });
     },
@@ -71,11 +77,19 @@ export function useNodeInteractions() {
         selectedNodeId: nextNode.id,
         selectedNodeIds: [nextNode.id]
       });
+      setInteractionState({
+        connectingPayload: {
+          sourceNodeId: null,
+          sourceHandleId: null,
+          sourceNodeType: null
+        }
+      });
       setPanelState({
         nodePickerState: {
           open: false,
           anchorNodeId: null,
-          anchorEdgeId: null
+          anchorEdgeId: null,
+          anchorCanvasPosition: null
         }
       });
     },

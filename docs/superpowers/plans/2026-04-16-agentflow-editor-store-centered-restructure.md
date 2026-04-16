@@ -1994,6 +1994,14 @@ Status note (`2026-04-16 11:17`): 最终验证结果如下。
 - `node scripts/node/check-style-boundary.js file web/app/src/features/agent-flow/components/editor/agent-flow-editor.css` => PASS。
 - `pnpm --dir web test` => `33` 个文件、`99` 个测试全部 PASS；本次未复现计划里提到的 `me-page` 历史超时。
 
+Status note (`2026-04-16 12`): 计划完成后，用户追加指出“节点出口 `+` 仍是覆盖按钮，不符合 Dify 式 click/drag 同入口”。已将 `AgentFlowNodeCard` 的 source trigger 从 `Handle > Button > Popover` 收口成 `Handle-first` 结构：真实 `Handle` 直接承担点击开菜单与拖线入口，`NodePickerPopover` 退回为复用菜单层；同时新增 `agent-flow-node-card.test.tsx` 锁定“入口本体就是 handle”的结构回归。跟进验证结果如下。
+- `pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/agent-flow-canvas-interactions.test.tsx src/features/agent-flow/_tests/agent-flow-node-card.test.tsx src/features/agent-flow/_tests/node-picker-popover.test.tsx src/features/agent-flow/_tests/editor-store.test.ts src/features/agent-flow/_tests/draft-sync.test.tsx` => `5` 个文件、`16` 个测试全部 PASS。
+- `pnpm --dir web lint` => PASS；仍仅剩 `web/app/src/features/agent-flow/store/editor/provider.tsx` 的既有 `react-refresh/only-export-components` warning。
+- `pnpm --dir web/app build` => PASS。
+- `node scripts/node/check-style-boundary.js page page.application-detail` => PASS。
+- `node scripts/node/check-style-boundary.js file web/app/src/features/agent-flow/components/editor/agent-flow-editor.css` => PASS。
+- `pnpm --dir web test` => 第一次因 `src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx` 的桌面渲染用例命中 Vitest 默认 `5000ms` 超时失败；单文件复跑通过后，将该用例超时显式提高到 `10000ms`，再次执行后 `34` 个文件、`101` 个测试全部 PASS。
+
 - [ ] **Step 5: Commit**
 
 ```bash

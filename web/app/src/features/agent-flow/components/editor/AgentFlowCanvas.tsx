@@ -13,6 +13,7 @@ import {
 } from '@xyflow/react';
 import type { FlowAuthoringDocument } from '@1flowse/flow-schema';
 import { useEffect, useMemo } from 'react';
+import { useRef } from 'react';
 
 import { useCanvasInteractions } from '../../hooks/interactions/use-canvas-interactions';
 import { useEdgeInteractions } from '../../hooks/interactions/use-edge-interactions';
@@ -27,6 +28,7 @@ import {
   selectWorkingDocument
 } from '../../store/editor/selectors';
 import { AgentFlowCustomConnectionLine } from '../canvas/custom-connection-line';
+import { NodePickerPopover } from '../node-picker/NodePickerPopover';
 import { agentFlowEdgeTypes, agentFlowNodeTypes } from '../canvas/node-types';
 
 interface AgentFlowCanvasProps {
@@ -122,6 +124,7 @@ function AgentFlowCanvasInner({
   onViewportSnapshotChange,
   onViewportGetterReady
 }: AgentFlowCanvasProps) {
+  const canvasRef = useRef<HTMLDivElement>(null);
   const document = useAgentFlowEditorStore(selectWorkingDocument);
   const activeContainerId = useAgentFlowEditorStore(selectActiveContainerId);
   const selectedNodeId = useAgentFlowEditorStore(selectSelectedNodeId);
@@ -137,7 +140,9 @@ function AgentFlowCanvasInner({
         document,
         activeContainerId,
         selectedNodeId,
-        nodePickerState.open ? nodePickerState.anchorNodeId : null,
+        nodePickerState.open && !nodePickerState.anchorCanvasPosition
+          ? nodePickerState.anchorNodeId
+          : null,
         issueCountByNodeId,
         {
           onOpenPicker: nodeInteractions.openNodePicker,
@@ -152,6 +157,7 @@ function AgentFlowCanvasInner({
       document,
       issueCountByNodeId,
       nodeInteractions,
+      nodePickerState.anchorCanvasPosition,
       nodePickerState.anchorNodeId,
       nodePickerState.open,
       selectedNodeId
@@ -166,7 +172,7 @@ function AgentFlowCanvasInner({
   );
 
   return (
-    <div className="agent-flow-canvas">
+    <div className="agent-flow-canvas" ref={canvasRef}>
       <ReactFlow
         edges={edges}
         nodes={nodes}
@@ -175,6 +181,43 @@ function AgentFlowCanvasInner({
         edgeTypes={agentFlowEdgeTypes}
         connectionLineComponent={AgentFlowCustomConnectionLine}
         nodesDraggable
+        onConnect={edgeInteractions.connect}
+        onConnectStart={(_, payload) => {
+          edgeInteractions.startConnection(payload);
+        }}
+        onConnectEnd={(event) => {
+          if (!event) {
+            edgeInteractions.cancelConnection();
+            return;
+          }
+
+          const target = event.target instanceof Element ? event.target : null;
+
+          if (
+            target?.closest('.react-flow__node') ||
+            target?.closest('.react-flow__handle')
+          ) {
+            edgeInteractions.cancelConnection();
+            return;
+          }
+
+          const bounds = canvasRef.current?.getBoundingClientRect();
+          const clientPosition =
+            'changedTouches' in event && event.changedTouches.length > 0
+              ? {
+                  x: event.changedTouches[0].clientX,
+                  y: event.changedTouches[0].clientY
+                }
+              : {
+                  x: 'clientX' in event ? event.clientX : 0,
+                  y: 'clientY' in event ? event.clientY : 0
+                };
+
+          edgeInteractions.finishConnectionOnPane({
+            x: clientPosition.x - (bounds?.left ?? 0),
+            y: clientPosition.y - (bounds?.top ?? 0)
+          });
+        }}
         onNodesChange={canvasInteractions.onNodesChange}
         onViewportChange={canvasInteractions.onViewportChange}
         onReconnect={(oldEdge: Edge, connection) => {
@@ -190,6 +233,35 @@ function AgentFlowCanvasInner({
         />
         <ZoomToolbar />
       </ReactFlow>
+      {nodePickerState.open &&
+      nodePickerState.anchorNodeId &&
+      nodePickerState.anchorCanvasPosition ? (
+        <div
+          className="agent-flow-floating-picker-anchor"
+          style={{
+            left: nodePickerState.anchorCanvasPosition.x,
+            top: nodePickerState.anchorCanvasPosition.y
+          }}
+        >
+          <NodePickerPopover
+            ariaLabel="在当前连线位置插入节点"
+            buttonClassName="agent-flow-floating-picker-anchor__button"
+            open
+            placement="bottom"
+            onOpenChange={(open) => {
+              if (!open) {
+                nodeInteractions.closeNodePicker();
+              }
+            }}
+            onPickNode={(nodeType) => {
+              nodeInteractions.insertAfterNode(
+                nodePickerState.anchorNodeId as string,
+                nodeType
+              );
+            }}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

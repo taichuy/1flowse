@@ -51,7 +51,8 @@ describe('agent flow editor store', () => {
       nodePickerState: {
         open: true,
         anchorNodeId: 'node-llm',
-        anchorEdgeId: null
+        anchorEdgeId: null,
+        anchorCanvasPosition: null
       }
     });
     store.getState().focusIssueField({

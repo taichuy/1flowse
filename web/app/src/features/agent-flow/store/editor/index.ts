@@ -85,7 +85,8 @@ export function createAgentFlowEditorStore(
     nodePickerState: {
       open: false,
       anchorNodeId: null,
-      anchorEdgeId: null
+      anchorEdgeId: null,
+      anchorCanvasPosition: null
     },
     activeContainerPath: [],
     connectingPayload: {
@@ -192,7 +193,8 @@ export function createAgentFlowEditorStore(
         nodePickerState: {
           open: false,
           anchorNodeId: null,
-          anchorEdgeId: null
+          anchorEdgeId: null,
+          anchorCanvasPosition: null
         },
         activeContainerPath: [],
         connectingPayload: {
@@ -219,7 +221,8 @@ export function createAgentFlowEditorStore(
         nodePickerState: {
           open: false,
           anchorNodeId: null,
-          anchorEdgeId: null
+          anchorEdgeId: null,
+          anchorCanvasPosition: null
         },
         activeContainerPath: [],
         connectingPayload: {

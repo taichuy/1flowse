@@ -1,5 +1,8 @@
+import { forwardRef } from 'react';
 import { Handle, type HandleProps } from '@xyflow/react';
 
-export function CanvasHandle(props: HandleProps) {
-  return <Handle {...props} />;
-}
+export const CanvasHandle = forwardRef<HTMLDivElement, HandleProps>(
+  function CanvasHandle(props, ref) {
+    return <Handle ref={ref} {...props} />;
+  }
+);

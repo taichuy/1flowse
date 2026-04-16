@@ -35,6 +35,25 @@ type MockReactFlowProps = {
       onInsertNode?: (edgeId: string, nodeType: FlowNodeType) => void;
     };
   }>;
+  onConnect?: (connection: {
+    source: string;
+    target: string;
+    sourceHandle?: string | null;
+    targetHandle?: string | null;
+  }) => void;
+  onConnectEnd?: (event: {
+    clientX: number;
+    clientY: number;
+    target: EventTarget | null;
+  }) => void;
+  onConnectStart?: (
+    event: unknown,
+    payload: {
+      nodeId: string | null;
+      handleType: 'source' | 'target' | null;
+      handleId: string | null;
+    }
+  ) => void;
   onPaneClick?: () => void;
   onNodesChange?: (changes: MockNodeChange[]) => void;
   onReconnect?: (
@@ -74,6 +93,12 @@ function createInitialState(document = createDefaultAgentFlowDocument({ flowId: 
 }
 
 type ObservedEditorState = {
+  nodePickerState: {
+    open: boolean;
+    anchorNodeId: string | null;
+    anchorEdgeId: string | null;
+    anchorCanvasPosition: { x: number; y: number } | null;
+  };
   selectedNodeId: string | null;
   workingDocument: ReturnType<typeof createDefaultAgentFlowDocument>;
 };
@@ -84,14 +109,16 @@ function StoreObserver({
   onChange: (state: ObservedEditorState) => void;
 }) {
   const workingDocument = useAgentFlowEditorStore(selectWorkingDocument);
+  const nodePickerState = useAgentFlowEditorStore((state) => state.nodePickerState);
   const selectedNodeId = useAgentFlowEditorStore((state) => state.selectedNodeId);
 
   useEffect(() => {
     onChange({
+      nodePickerState,
       selectedNodeId,
       workingDocument
     });
-  }, [onChange, selectedNodeId, workingDocument]);
+  }, [nodePickerState, onChange, selectedNodeId, workingDocument]);
 
   return null;
 }
@@ -174,6 +201,7 @@ vi.mock('@xyflow/react', () => ({
   getBezierPath: () => ['M0,0', 0, 0],
   useReactFlow: () => ({
     fitView: vi.fn(),
+    screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
     zoomIn: vi.fn(),
     zoomOut: vi.fn()
   }),
@@ -278,6 +306,65 @@ describe('AgentFlowCanvas interactions', () => {
         })
       ])
     );
+  });
+
+  test('creates a new edge when a source handle connects to another node', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    document.graph.edges = document.graph.edges.filter(
+      (edge) => edge.id !== 'edge-start-llm'
+    );
+
+    const { getState } = renderCanvas(document);
+
+    expect(latestReactFlowProps?.onConnect).toBeTypeOf('function');
+
+    act(() => {
+      latestReactFlowProps?.onConnect?.({
+        source: 'node-start',
+        target: 'node-llm',
+        sourceHandle: 'source-right',
+        targetHandle: 'target-left'
+      });
+    });
+
+    expect(getState().workingDocument.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'node-start',
+          target: 'node-llm',
+          sourceHandle: 'source-right',
+          targetHandle: 'target-left'
+        })
+      ])
+    );
+  });
+
+  test('opens the shared node picker when a dragged connection stops on the pane', () => {
+    const { getState } = renderCanvas();
+
+    expect(latestReactFlowProps?.onConnectStart).toBeTypeOf('function');
+    expect(latestReactFlowProps?.onConnectEnd).toBeTypeOf('function');
+
+    act(() => {
+      latestReactFlowProps?.onConnectStart?.(null, {
+        nodeId: 'node-llm',
+        handleType: 'source',
+        handleId: 'source-right'
+      });
+      latestReactFlowProps?.onConnectEnd?.({
+        clientX: 420,
+        clientY: 260,
+        target: document.createElement('div')
+      });
+    });
+
+    expect(getState().nodePickerState).toEqual({
+      open: true,
+      anchorNodeId: 'node-llm',
+      anchorEdgeId: null,
+      anchorCanvasPosition: { x: 420, y: 260 }
+    });
   });
 
   test('clears node selection when clicking the pane', () => {

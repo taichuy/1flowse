@@ -2,6 +2,9 @@ import { useAgentFlowEditorStore } from '../../store/editor/provider';
 
 export function useSelectionInteractions() {
   const setSelection = useAgentFlowEditorStore((state) => state.setSelection);
+  const setInteractionState = useAgentFlowEditorStore(
+    (state) => state.setInteractionState
+  );
   const setPanelState = useAgentFlowEditorStore((state) => state.setPanelState);
 
   return {
@@ -15,7 +18,15 @@ export function useSelectionInteractions() {
         nodePickerState: {
           open: false,
           anchorNodeId: null,
-          anchorEdgeId: null
+          anchorEdgeId: null,
+          anchorCanvasPosition: null
+        }
+      });
+      setInteractionState({
+        connectingPayload: {
+          sourceNodeId: null,
+          sourceHandleId: null,
+          sourceNodeType: null
         }
       });
     }

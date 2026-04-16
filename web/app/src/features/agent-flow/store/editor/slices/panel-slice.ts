@@ -6,5 +6,6 @@ export interface PanelSlice {
     open: boolean;
     anchorNodeId: string | null;
     anchorEdgeId: string | null;
+    anchorCanvasPosition: { x: number; y: number } | null;
   };
 }

@@ -1,10 +1,12 @@
 import type { FlowNodeType } from '@1flowse/flow-schema';
+import { useEffect, useRef } from 'react';
 
 import {
   createNextNodeId,
   createNodeDocument
 } from '../../lib/document/node-factory';
 import {
+  connectNodes,
   insertNodeOnEdge,
   reconnectEdge,
   validateConnection
@@ -14,12 +16,56 @@ import { selectWorkingDocument } from '../../store/editor/selectors';
 
 export function useEdgeInteractions() {
   const document = useAgentFlowEditorStore(selectWorkingDocument);
+  const connectingPayload = useAgentFlowEditorStore(
+    (state) => state.connectingPayload
+  );
+  const connectingPayloadRef = useRef(connectingPayload);
   const setWorkingDocument = useAgentFlowEditorStore(
     (state) => state.setWorkingDocument
   );
   const setSelection = useAgentFlowEditorStore((state) => state.setSelection);
+  const setPanelState = useAgentFlowEditorStore((state) => state.setPanelState);
+  const setInteractionState = useAgentFlowEditorStore(
+    (state) => state.setInteractionState
+  );
+
+  useEffect(() => {
+    connectingPayloadRef.current = connectingPayload;
+  }, [connectingPayload]);
 
   return {
+    connect(connection: Parameters<typeof connectNodes>[1]['connection']) {
+      const nextDocument = connectNodes(document, {
+        connection
+      });
+
+      setPanelState({
+        nodePickerState: {
+          open: false,
+          anchorNodeId: null,
+          anchorEdgeId: null,
+          anchorCanvasPosition: null
+        }
+      });
+      setInteractionState({
+        connectingPayload: {
+          sourceNodeId: null,
+          sourceHandleId: null,
+          sourceNodeType: null
+        }
+      });
+      connectingPayloadRef.current = {
+        sourceNodeId: null,
+        sourceHandleId: null,
+        sourceNodeType: null
+      };
+
+      if (nextDocument === document) {
+        return;
+      }
+
+      setWorkingDocument(nextDocument);
+    },
     reconnect(edgeId: string, connection: Parameters<typeof reconnectEdge>[1]['connection']) {
       const nextDocument = reconnectEdge(document, {
         edgeId,
@@ -53,6 +99,80 @@ export function useEdgeInteractions() {
         selectedNodeIds: [nextNode.id],
         selectedEdgeId: null
       });
+    },
+    startConnection(payload: {
+      nodeId: string | null;
+      handleType: 'source' | 'target' | null;
+      handleId: string | null;
+    }) {
+      if (!payload.nodeId || payload.handleType !== 'source') {
+        return;
+      }
+
+      const sourceNode = document.graph.nodes.find((node) => node.id === payload.nodeId);
+
+      setPanelState({
+        nodePickerState: {
+          open: false,
+          anchorNodeId: null,
+          anchorEdgeId: null,
+          anchorCanvasPosition: null
+        }
+      });
+      setInteractionState({
+        connectingPayload: {
+          sourceNodeId: payload.nodeId,
+          sourceHandleId: payload.handleId,
+          sourceNodeType: sourceNode?.type ?? null
+        }
+      });
+      connectingPayloadRef.current = {
+        sourceNodeId: payload.nodeId,
+        sourceHandleId: payload.handleId,
+        sourceNodeType: sourceNode?.type ?? null
+      };
+    },
+    finishConnectionOnPane(position: { x: number; y: number }) {
+      const sourceNodeId = connectingPayloadRef.current.sourceNodeId;
+
+      if (!sourceNodeId) {
+        return;
+      }
+
+      setPanelState({
+        nodePickerState: {
+          open: true,
+          anchorNodeId: sourceNodeId,
+          anchorEdgeId: null,
+          anchorCanvasPosition: position
+        }
+      });
+      setInteractionState({
+        connectingPayload: {
+          sourceNodeId: null,
+          sourceHandleId: null,
+          sourceNodeType: null
+        }
+      });
+      connectingPayloadRef.current = {
+        sourceNodeId: null,
+        sourceHandleId: null,
+        sourceNodeType: null
+      };
+    },
+    cancelConnection() {
+      setInteractionState({
+        connectingPayload: {
+          sourceNodeId: null,
+          sourceHandleId: null,
+          sourceNodeType: null
+        }
+      });
+      connectingPayloadRef.current = {
+        sourceNodeId: null,
+        sourceHandleId: null,
+        sourceNodeType: null
+      };
     },
     isValidConnection(
       connection: Parameters<typeof validateConnection>[1]

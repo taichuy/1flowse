@@ -201,5 +201,5 @@ describe('AgentFlowEditorShell', () => {
     expect(await screen.findByRole('button', { name: '历史版本' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Issues' })).toBeInTheDocument();
     expect(screen.queryByText('请使用桌面端编辑')).not.toBeInTheDocument();
-  });
+  }, 10_000);
 });

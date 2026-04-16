@@ -260,24 +260,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.agent-flow-node-handle--source .ant-btn {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  padding: 0;
-  border: none;
-  border-radius: 999px;
   color: #1f3326;
+  cursor: crosshair;
   font-size: 20px;
   line-height: 1;
 }
 
-.agent-flow-node-handle--source .ant-btn:hover,
-.agent-flow-node-handle--source .ant-btn:focus-visible {
+.agent-flow-node-handle__icon {
+  pointer-events: none;
+}
+
+.agent-flow-node-handle--source.react-flow__handle:hover,
+.agent-flow-node-handle--source.react-flow__handle:focus-visible {
   background: rgba(132, 165, 143, 0.14);
-  color: #1f3326;
+  box-shadow: 0 4px 14px rgba(33, 62, 44, 0.18);
 }
 
 .agent-flow-edge-label-container {
@@ -309,6 +305,33 @@
 .agent-flow-edge-add-button-wrapper .ant-btn:hover {
   background: #497a5d;
   color: white;
+}
+
+.agent-flow-floating-picker-anchor {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 15;
+  pointer-events: auto;
+}
+
+.agent-flow-floating-picker-anchor__button.ant-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border: 2px solid #84a58f;
+  border-radius: 999px;
+  background: #f3f8f3;
+  box-shadow: 0 4px 12px rgba(33, 62, 44, 0.12);
+  color: #1f3326;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.agent-flow-floating-picker-anchor__button.ant-btn:hover,
+.agent-flow-floating-picker-anchor__button.ant-btn:focus-visible {
+  background: rgba(132, 165, 143, 0.14);
+  color: #1f3326;
 }
 
 .agent-flow-zoom-toolbar {
