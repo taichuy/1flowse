@@ -1,159 +1,127 @@
 # 文档计划审计待讨论
 
-更新时间：`2026-04-17 00:40 CST`
+更新时间：`2026-04-17 03:08 CST`
 
-说明：本轮继续沿用 `document-plan-audit` 主题，但重点不再是“文档太长”。现在更值得讨论的是五个新信号：`文档真值层互相冲突`、`node detail 已经进入修正态`、`官方验证链和真实可用性分裂`、`前端进入性能/开发回路治理区`、`最近 24 小时执行仍然明显 editor-first`。
+这次要讨论的重点已经变了：
+
+- 不再是“`node detail` 还停在未提交工作树”
+- 而是“代码已经继续往前走，但文档、记忆和审计摘要没有跟上”
 
 ## 1. 现状
 
-- 最近 `24` 小时共有 `32` 次提交：
-  - `docs`: `14`
-  - `feat`: `8`
+- 当前 `HEAD` 已经是 `2af40f3c feat: revise agentflow node detail panel`
+- 当前工作树只剩两份审计文档脏文件
+- 最近 `24` 小时共有 `33` 次提交：
+  - `docs`: `15`
+  - `feat`: `9`
   - `refactor`: `5`
-  - `fix`: `4`
+  - `fix`: `3`
   - `test`: `1`
-- 改动重心非常集中：
-  - `web/` 命中记录 `170`
-  - 其中 `web/app/src/features/agent-flow` 命中 `155`
-  - `api/` 命中只有 `12`
-  - `web/app/src/features/applications` 命中只有 `6`
-- 当前真实开发状态：
-  - `03 Application shell` 已经是代码事实，不是“待开发”
-  - `04 agentFlow authoring baseline` 已经落地，但 UI 结构还在收口
-  - `05/06B` 还没有最小外部价值闭环
-- 本轮验证结果：
-  - `pnpm --dir web lint`：通过，但还有 `1` 条 fast refresh warning
-  - `pnpm --dir web test`：通过，`39` 个文件、`118` 个测试
-  - `pnpm --dir web/app build`：通过，但主包 `5,254.75 kB`
-  - `node scripts/node/verify-backend.js`：失败，停在 `cargo fmt --check`
-  - `cargo test -p api-server application_orchestration_routes`：通过
-  - `cargo test -p storage-pg flow_repository_tests`：通过
-  - `node scripts/node/check-style-boundary.js page page.application-detail`：失败，前端拉起不稳定
+- 最近 `24` 小时主投入仍明显偏向 `agent-flow`
+  - `agent-flow commits`: `17`
+  - `applications commits`: `1`
+  - `api commits`: `1`
+- 当前真实状态：
+  - `03` 已经不是待开发：首页就是应用列表，应用支持筛选、标签、编辑
+  - `04` 已经不是未来设计：有正式编排页、Draft 保存、版本恢复、停靠式 node detail
+  - `05/06B` 仍没有最小对外价值闭环
 
-### 现在最关键的问题
+本轮新验证：
 
-1. `文档真值层内部冲突`
-   - 产品设计仍然强调 `publish-first`
-   - 模块总览却还把 `03` 写成待开发、把 `04` 写成未来设计
-   - `03 README` 甚至还在写“当前没有 Application 列表/详情/四分区”
-2. `node detail` 已经出现“当天实现，当天补修正计划”的回摆
-   - 最新计划已经要求改成 `Splitter` 停靠 panel
-   - 当前代码仍是绝对定位浮层
-   - header 还没收回 `别名/简介` 内联编辑
-3. `门禁分裂`
-   - 后端官方入口红，但定向测试绿
-   - 样式运行时门禁尝试执行后失败，当前没有浏览器级 PASS 证据
-4. `前端已进入治理阶段`
-   - 主包 `5.25 MB`
-   - 路由还是全量静态导入
-   - 还有 HMR warning 与 `Tooltip overlayInnerStyle` 弃用警告
-5. `执行重心仍然 editor-first`
-   - 最近 24 小时几乎都在做 `agent-flow`
-   - `05/06B` 没有形成新闭环
+- `pnpm --dir web lint`：通过，但还有 `provider.tsx` 的 `Fast Refresh` warning
+- `pnpm --dir web/app build`：通过，但主包仍是 `5,268.92 kB`，`vite` 继续报 chunk 过大
+- 定向 `vitest`：`3` 个文件 `15` 个测试通过，但仍有 `React Flow` 容器 / 样式提示和 `Tooltip overlayInnerStyle` 弃用提示
+- `cargo fmt --all --check`：失败，说明后端正式格式门禁没收口
 
-### 当前健康判断
+现在最关键的几个问题：
 
-- 执行效率：`好`
-- 代码结构收敛：`中上`
-- 产品真值同步：`差`
-- 官方门禁可信度：`中下`
-- 对外价值推进：`弱`
+1. 真值层已经失真
+   - 模块总览还把 `03` 写成 `已确认待开发`
+   - 还把 `04` 写成 `未来设计`
+   - `03` README 还在写“首页是空态、没有 Application 列表和四分区”
+2. `03` 模块边界已经变了，但文档没跟上
+   - 当前代码已从“最小壳层”扩到“应用运营面”
+3. 执行排序仍偏 editor-first
+   - 产品北极星还是 publish-first
+   - 但最近主投入仍集中在 `agent-flow`
+4. 工程门禁开始出现裂缝
+   - 前端能过 lint/build/test
+   - 但 warning、弃用提示、超大 chunk 还在
+   - 后端 `fmt` 直接没过
+5. 检索系统已经开始有噪声压力
+   - `.memory/project-memory`：`65`
+   - `plans/history`：`22`
+   - `specs/history`：`20`
+   - 多份计划文档超过 `1500` 行
 
-### AI 时代下，当前进度怎么评估
+当前健康判断：
 
-- 不能再按“模块完成百分比”看
-- 应该看：
-  - 已验证垂直切片数量
-  - 和北极星的对齐度
-  - 官方门禁是否可信
-  - 距离最小外部价值证明还差多少
-- 按这个口径：
-  - `03` 和 `04` 推进很快
-  - 但对外主线还没有被拉回 publish/runtime
-
-### 记忆清理建议
-
-- `project-memory` 现在有 `65` 条，`tool-memory` 有 `78` 条，噪声已经开始上升
-- 建议先合并：
-  - `03` 的 `plan-stage / future-hooks` 两条记忆，改成一条 `module-03-current-state`
-  - 最近 `04` 的多条同主题记忆，改成一条 `module-04-current-state`
-  - `vite 3100 端口` 与 `style-boundary dev-up` 的相邻工具记忆，改成两条更稳定的前置条件记忆
-- `feedback-memory` 当前不多，不建议动
+- 速度：`好`
+- 垂直切片推进：`好`
+- 文档真值同步：`差`
+- 工程门禁稳定性：`中下`
+- AI 检索效率：`中下`
+- 北极星对齐：`中`
 
 ## 2. 可能方向
 
-### 方向 A：先把当前基线写对
+### 方向 A：先把真值层写对
 
-- 回写模块总览和 `03/04/05/06B README`
+- 更新模块总览、`03`、`04`
+- 更新这次审计主题
 
-### 方向 B：先收口 `node detail` 的中间态
+### 方向 B：下一条直接做最小 `05/06B`
 
-- 执行 `agentflow-node-detail-panel-revision`，但只收真值，不扩功能
+- 做一条可发布、可调用、可见结果的最小链路
 
-### 方向 C：先修验证链
+### 方向 C：先做治理
 
-- `verify-backend.js` 回绿
-- `style-boundary` 形成可重复 PASS
-- 清掉前端 warning / deprecation 噪声
+- 合并高噪声记忆
+- 收纳超长计划和过满目录
+- 处理前端 chunk / warning / deprecation 噪声
 
-### 方向 D：下一条功能切片直接补最小 `05/06B`
+### 方向 D：继续深挖 editor
 
-- 做一条最小外部价值证明
-
-### 方向 E：再做前端性能治理
-
-- 路由懒加载
-- chunk 切分
+- 继续做 node detail / 画布体验优化
 
 ## 3. 不同方向的风险和收益
 
-### 方向 A：写对当前基线
+### 方向 A
 
-- 收益：以后所有讨论都会回到统一事实层
-- 风险：短期没有新功能观感
+- 收益：后面每轮判断都会更准
+- 风险：短期新功能观感不强
 
-### 方向 B：收口 `04`
+### 方向 B
 
-- 收益：避免继续在已知中间态上叠功能
-- 风险：如果做过头，会继续拖在 editor 视角
+- 收益：最快回到产品主线
+- 风险：如果不先校正真值，会带着旧文档推进新切片
 
-### 方向 C：修门禁
+### 方向 C
 
-- 收益：完成标准重新可信
-- 风险：治理投入对外不明显
+- 收益：长期成本最低，AI 检索会更稳
+- 风险：短期不显眼，容易被误以为“没推进功能”
 
-### 方向 D：补最小 `05/06B`
+### 方向 D
 
-- 收益：最快把项目拉回 publish-first
-- 风险：如果不先修真值和门禁，会把旧债带进新模块
-
-### 方向 E：性能治理
-
-- 收益：在后续继续加模块前先控住主包
-- 风险：优先级不如 `A/B/C/D` 直接
+- 收益：编辑器体验继续变好
+- 风险：继续偏离 publish-first
 
 ## 4. 对此你建议是什么？
 
-建议顺序：`A + B + C -> D -> E`
+建议顺序：`A-lite -> B -> C`
 
-### 我建议现在先做
+我建议现在先做：
 
-1. 把模块总览和 `03/04/05/06B` 当前基线写对。
-2. 执行 `node detail panel revision`，只做结构收口，不再顺手加功能。
-3. 让 `verify-backend.js` 和 `style-boundary` 至少各有一条稳定可复现的通过路径。
+1. 把模块总览、`03`、`04`、当前审计主题更新为最新真值。
+2. 把 `node detail revision` 明确标记为“已提交基线”，不要再按未提交问题讨论。
+3. 合并高噪声记忆，优先清理 `03 / 04 / node detail / 本地前端验证` 四组。
 
-### 我建议紧接着做
+我建议紧接着做：
 
-1. 下一条功能切片直接补最小 `05/06B` 外部价值证明。
-2. 不要再默认继续做 editor 小功能。
+1. 下一条主切片直接补最小 `05/06B`。
+2. 目标固定为“可发布、可调用、可看到最小运行结果”，不要再扩成 editor 新专题。
 
-### 我建议随后做
+当前不建议优先做：
 
-1. 做前端路由拆包和 chunk 治理。
-2. 清理 `.memory/project-memory` 和 `.memory/tool-memory` 的同主题碎片。
-
-### 当前不建议优先做
-
-1. 继续在当前 `agent-flow` 中间态上叠功能。
-2. 把“局部测试绿”直接当成“官方门禁绿”。
-3. 继续让文档、计划和代码状态各说各话。
+1. 继续频繁刷新同一个审计主题但不清旧结论。
+2. 继续默认把主精力投到 editor 微优化。
