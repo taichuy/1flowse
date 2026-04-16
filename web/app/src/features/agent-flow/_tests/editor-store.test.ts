@@ -105,4 +105,69 @@ describe('agent flow editor store', () => {
     expect(store.getState().nodeDetailTab).toBe('lastRun');
     expect(store.getState().nodeDetailWidth).toBe(488);
   });
+
+  test('keeps node detail width when switching tabs', () => {
+    const store = createAgentFlowEditorStore({
+      flow_id: 'flow-1',
+      draft: {
+        id: 'draft-1',
+        flow_id: 'flow-1',
+        updated_at: '2026-04-16T10:00:00Z',
+        document: createDefaultAgentFlowDocument({ flowId: 'flow-1' })
+      },
+      autosave_interval_seconds: 30,
+      versions: []
+    });
+
+    store.getState().setPanelState({
+      nodeDetailWidth: 560,
+      nodeDetailTab: 'config'
+    });
+    store.getState().setPanelState({ nodeDetailTab: 'lastRun' });
+
+    expect(store.getState().nodeDetailWidth).toBe(560);
+    expect(store.getState().nodeDetailTab).toBe('lastRun');
+  });
+
+  test('keeps node detail width when replacing from server state', () => {
+    const initialDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const store = createAgentFlowEditorStore({
+      flow_id: 'flow-1',
+      draft: {
+        id: 'draft-1',
+        flow_id: 'flow-1',
+        updated_at: '2026-04-16T10:00:00Z',
+        document: initialDocument
+      },
+      autosave_interval_seconds: 30,
+      versions: []
+    });
+
+    store.getState().setPanelState({
+      nodeDetailWidth: 560,
+      nodeDetailTab: 'lastRun'
+    });
+
+    store.getState().replaceFromServerState({
+      flow_id: 'flow-1',
+      draft: {
+        id: 'draft-2',
+        flow_id: 'flow-1',
+        updated_at: '2026-04-16T10:05:00Z',
+        document: {
+          ...initialDocument,
+          meta: {
+            ...initialDocument.meta,
+            name: 'Server synced'
+          }
+        }
+      },
+      autosave_interval_seconds: 30,
+      versions: []
+    });
+
+    expect(store.getState().workingDocument.meta.name).toBe('Server synced');
+    expect(store.getState().nodeDetailWidth).toBe(560);
+    expect(store.getState().nodeDetailTab).toBe('config');
+  });
 });

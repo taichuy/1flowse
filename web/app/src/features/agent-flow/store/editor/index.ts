@@ -1,6 +1,7 @@
 import type { ConsoleApplicationOrchestrationState } from '@1flowse/api-client';
 import { createStore } from 'zustand/vanilla';
 
+import { NODE_DETAIL_DEFAULT_WIDTH } from '../../lib/detail-panel-width';
 import type { DocumentSlice } from './slices/document-slice';
 import type { InteractionSlice } from './slices/interaction-slice';
 import type { PanelSlice } from './slices/panel-slice';
@@ -95,7 +96,7 @@ export function createAgentFlowEditorStore(
     historyOpen: false,
     publishConfigOpen: false,
     nodeDetailTab: 'config',
-    nodeDetailWidth: 420,
+    nodeDetailWidth: NODE_DETAIL_DEFAULT_WIDTH,
     nodePickerState: {
       open: false,
       anchorNodeId: null,
@@ -196,7 +197,7 @@ export function createAgentFlowEditorStore(
     replaceFromServerState: (nextState) => {
       const nextSelectedNodeId = getDefaultSelectedNodeId(nextState);
 
-      set({
+      set((current) => ({
         workingDocument: nextState.draft.document,
         lastSavedDocument: nextState.draft.document,
         draftMeta: {
@@ -216,7 +217,7 @@ export function createAgentFlowEditorStore(
         historyOpen: false,
         publishConfigOpen: false,
         nodeDetailTab: 'config',
-        nodeDetailWidth: 420,
+        nodeDetailWidth: current.nodeDetailWidth,
         nodePickerState: {
           open: false,
           anchorNodeId: null,
@@ -239,10 +240,10 @@ export function createAgentFlowEditorStore(
         lastChangeKind: null,
         lastChangeSummary: null,
         autosaveIntervalMs: nextState.autosave_interval_seconds * 1000
-      });
+      }));
     },
     resetTransientInteractionState: () =>
-      set({
+      set((current) => ({
         selectedEdgeId: null,
         focusedFieldKey: null,
         openInspectorSectionKey: null,
@@ -265,7 +266,7 @@ export function createAgentFlowEditorStore(
         issuesOpen: false,
         historyOpen: false,
         nodeDetailTab: 'config',
-        nodeDetailWidth: 420
-      })
+        nodeDetailWidth: current.nodeDetailWidth
+      }))
   }));
 }

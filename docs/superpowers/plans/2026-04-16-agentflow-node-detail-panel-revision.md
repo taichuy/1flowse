@@ -14,6 +14,21 @@
 
 **Execution Note:** 该计划是对已完成第一版实现的修正计划，不覆写已完成计划的勾选历史。执行时继续直接在当前工作区推进，不使用 `git worktree`。完成后仍必须执行 `pnpm --dir web lint`、`pnpm --dir web test`、`pnpm --dir web/app build`，并补一次 `style-boundary` 页面回归。
 
+Status note (`2026-04-17 01`): 已按当前工作区完成 Task 1-3。由于 `agent-flow` 的测试文件和场景清单跨任务共享，实际采用一条最终收尾提交统一落盘，而不是按任务拆成 3 条非交互式提交。已执行并通过：
+
+- `pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/detail-panel-width.test.ts src/features/agent-flow/_tests/node-detail-panel.test.tsx src/features/agent-flow/_tests/node-last-run-tab.test.tsx src/features/agent-flow/_tests/node-action-menu.test.tsx src/features/agent-flow/_tests/document-transforms.test.ts src/features/agent-flow/_tests/node-inspector.test.tsx src/features/agent-flow/_tests/editor-store.test.ts src/features/agent-flow/_tests/validate-document.test.ts src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx`
+- `pnpm --dir web lint`
+- `pnpm --dir web test`
+- `pnpm --dir web/app build`
+- `node scripts/node/check-style-boundary.js page page.application-detail`
+
+Manual verification (`2026-04-17 01`):
+
+- 通过前台 PTY `vite` + Playwright 检查 `http://127.0.0.1:3100/style-boundary.html?scene=page.application-detail`
+- 桌面视口确认 `Splitter` 停靠 panel、`节点详情` 容器与 `上次运行` 共壳层
+- 窄视口确认仍走 `请使用桌面端编辑` 降级路径
+- 截图：`uploads/agentflow-node-detail-panel/desktop.png`、`uploads/agentflow-node-detail-panel/mobile.png`
+
 ---
 
 ## File Structure
@@ -58,7 +73,7 @@
 - Modify: `web/app/src/features/agent-flow/components/editor/agent-flow-editor.css`
 - Modify: `web/app/src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx`
 
-- [ ] **Step 1: Write the failing width helper and docked-layout tests**
+- [x] **Step 1: Write the failing width helper and docked-layout tests**
 
 ```ts
 // web/app/src/features/agent-flow/_tests/detail-panel-width.test.ts
@@ -108,7 +123,7 @@ test('renders node detail inside a docked splitter panel on orchestration page',
 });
 ```
 
-- [ ] **Step 2: Run the focused tests and confirm failure**
+- [x] **Step 2: Run the focused tests and confirm failure**
 
 Run:
 
@@ -120,7 +135,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: FAIL because `detail-panel-width.ts` does not exist yet and the page still renders an absolutely-positioned detail overlay instead of a docked splitter layout.
 
-- [ ] **Step 3: Implement bounded width helpers and docked splitter layout**
+- [x] **Step 3: Implement bounded width helpers and docked splitter layout**
 
 ```ts
 // web/app/src/features/agent-flow/lib/detail-panel-width.ts
@@ -313,7 +328,7 @@ export function NodeDetailPanel({
 }
 ```
 
-- [ ] **Step 4: Re-run the focused tests and confirm the docked layout passes**
+- [x] **Step 4: Re-run the focused tests and confirm the docked layout passes**
 
 Run:
 
@@ -325,7 +340,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: PASS with width clamping covered in unit tests and the orchestration page rendering a `Splitter`-backed docked detail panel.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add \
@@ -348,7 +363,7 @@ git commit -m "feat: dock node detail panel with splitter"
 - Modify: `web/app/src/features/agent-flow/_tests/node-detail-panel.test.tsx`
 - Modify: `web/app/src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx`
 
-- [ ] **Step 1: Write the failing header-identity tests**
+- [x] **Step 1: Write the failing header-identity tests**
 
 ```tsx
 // web/app/src/features/agent-flow/_tests/node-detail-panel.test.tsx
@@ -426,7 +441,7 @@ test('saves alias changes from the header editor', async () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused tests and confirm failure**
+- [x] **Step 2: Run the focused tests and confirm failure**
 
 Run:
 
@@ -438,7 +453,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: FAIL because the current header only renders a read-only alias and the summary card still owns the editable alias and description fields.
 
-- [ ] **Step 3: Move alias and description editing into the header**
+- [x] **Step 3: Move alias and description editing into the header**
 
 ```tsx
 // web/app/src/features/agent-flow/components/detail/NodeDetailHeader.tsx
@@ -570,7 +585,7 @@ export function NodeSummaryCard() {
 }
 ```
 
-- [ ] **Step 4: Re-run the focused tests and confirm the header contract passes**
+- [x] **Step 4: Re-run the focused tests and confirm the header contract passes**
 
 Run:
 
@@ -582,7 +597,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: PASS with exactly one editable `节点别名 / 节点简介` pair rendered in the header and the save flow still writing alias changes back into the draft.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add \
@@ -602,7 +617,7 @@ git commit -m "feat: restore node detail identity header"
 - Modify: `web/app/src/features/agent-flow/_tests/editor-store.test.ts`
 - Modify: `web/app/src/style-boundary/scenario-manifest.json`
 
-- [ ] **Step 1: Write the failing tab-container and style-boundary assertions**
+- [x] **Step 1: Write the failing tab-container and style-boundary assertions**
 
 ```tsx
 // web/app/src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx
@@ -656,7 +671,7 @@ test('keeps node detail width when switching tabs', () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused tests and confirm failure**
+- [x] **Step 2: Run the focused tests and confirm failure**
 
 Run:
 
@@ -668,7 +683,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: FAIL until the regression coverage explicitly asserts the new same-container behavior and store persistence contract.
 
-- [ ] **Step 3: Update page regression coverage and style-boundary selectors**
+- [x] **Step 3: Update page regression coverage and style-boundary selectors**
 
 ```json
 // web/app/src/style-boundary/scenario-manifest.json
@@ -730,7 +745,7 @@ test('keeps last-run content inside the same docked detail panel shell', async (
 });
 ```
 
-- [ ] **Step 4: Run the full verification matrix**
+- [x] **Step 4: Run the full verification matrix**
 
 Run:
 
@@ -773,7 +788,7 @@ Then verify:
 - Header exposes editable `别名 / 简介`
 - Narrow viewport still follows the existing “请使用桌面端编辑” downgrade path
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add \
@@ -806,4 +821,3 @@ git commit -m "test: cover docked node detail panel revision"
 - 宽度常量统一使用 `NODE_DETAIL_DEFAULT_WIDTH / NODE_DETAIL_MIN_WIDTH / NODE_DETAIL_MIN_CANVAS_WIDTH`
 - 宽度收口统一走 `clampNodeDetailWidth / getMaxNodeDetailWidth / getNodeDetailWidthFromSplitter`
 - panel 结构统一使用 `AgentFlowCanvasFrame -> Splitter -> NodeDetailPanel`
-

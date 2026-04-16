@@ -13,15 +13,10 @@ export function NodeDetailPanel({
   onRunNode?: (() => void) | undefined;
 }) {
   const nodeDetailTab = useAgentFlowEditorStore((state) => state.nodeDetailTab);
-  const nodeDetailWidth = useAgentFlowEditorStore((state) => state.nodeDetailWidth);
   const setPanelState = useAgentFlowEditorStore((state) => state.setPanelState);
 
   return (
-    <aside
-      aria-label="节点详情"
-      className="agent-flow-node-detail"
-      style={{ width: nodeDetailWidth }}
-    >
+    <aside aria-label="节点详情" className="agent-flow-node-detail">
       <NodeDetailHeader onClose={onClose} onRunNode={onRunNode} />
       <Tabs
         activeKey={nodeDetailTab}

@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useEffect } from 'react';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowse/flow-schema';
 
 import { createNodeDocument } from '../lib/document/node-factory';
+import { NodeDetailPanel } from '../components/detail/NodeDetailPanel';
 import { NodeConfigTab } from '../components/detail/tabs/NodeConfigTab';
 import { NodeInspector } from '../components/inspector/NodeInspector';
 import {
@@ -112,7 +113,7 @@ describe('NodeInspector', () => {
     10000
   );
 
-  test('updates node fields through summary interactions instead of mutating document inline', () => {
+  test('updates node identity through header interactions instead of mutating document inline', () => {
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
     render(
@@ -123,19 +124,21 @@ describe('NodeInspector', () => {
             latestDocument = document;
           }}
         />
-        <NodeConfigTab />
+        <NodeDetailPanel onClose={vi.fn()} onRunNode={undefined} />
       </AgentFlowEditorStoreProvider>
     );
 
-    fireEvent.change(screen.getByLabelText('节点别名'), {
+    const header = screen.getByTestId('node-detail-header');
+
+    fireEvent.change(within(header).getByLabelText('节点别名'), {
       target: { value: '入口节点' }
     });
-    fireEvent.change(screen.getByLabelText('节点简介'), {
+    fireEvent.change(within(header).getByLabelText('节点简介'), {
       target: { value: '收集首轮用户输入并启动工作流。' }
     });
 
-    expect(screen.getByLabelText('节点别名')).toHaveValue('入口节点');
-    expect(screen.getByLabelText('节点简介')).toHaveValue(
+    expect(within(header).getByLabelText('节点别名')).toHaveValue('入口节点');
+    expect(within(header).getByLabelText('节点简介')).toHaveValue(
       '收集首轮用户输入并启动工作流。'
     );
     expect(latestDocument.graph.nodes).toEqual(

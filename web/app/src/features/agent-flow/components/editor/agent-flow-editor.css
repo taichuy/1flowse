@@ -40,22 +40,28 @@
   min-height: 0;
 }
 
-.agent-flow-editor__body--with-detail {
-  /* Inspector handles its own floating position now */
+.agent-flow-editor__splitter-shell,
+.agent-flow-editor__splitter {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.agent-flow-editor__canvas-panel,
+.agent-flow-editor__detail-panel {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
 }
 
 .agent-flow-node-detail {
-  position: absolute;
-  top: var(--agent-flow-secondary-top);
-  right: 16px;
-  bottom: 16px;
-  z-index: 10;
   display: flex;
   flex-direction: column;
-  border: 1px solid #e4eadf;
-  border-radius: 18px;
+  height: 100%;
+  min-height: 0;
+  border-left: 1px solid #e4eadf;
   background: rgba(255, 255, 255, 0.96);
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.08);
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -64,15 +70,27 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 20px 20px 0;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid #edf2ea;
 }
 
 .agent-flow-node-detail__header-main {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+}
+
+.agent-flow-node-detail__header-meta {
   min-width: 0;
 }
 
-.agent-flow-node-detail__header-main .ant-typography {
-  margin-bottom: 4px;
+.agent-flow-node-detail__header-type.ant-typography {
+  margin: 0;
+  color: #60756a;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .agent-flow-node-detail .ant-tabs {

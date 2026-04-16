@@ -152,12 +152,26 @@
         ]
       },
       {
+        "id": "editor-splitter",
+        "selector": ".agent-flow-editor__splitter",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "flex"
+          }
+        ]
+      },
+      {
         "id": "editor-detail-panel",
         "selector": ".agent-flow-node-detail",
         "propertyAssertions": [
           {
             "property": "display",
             "expected": "flex"
+          },
+          {
+            "property": "box-shadow",
+            "expected": "none"
           }
         ]
       },

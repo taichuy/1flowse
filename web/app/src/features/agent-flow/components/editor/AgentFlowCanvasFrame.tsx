@@ -3,13 +3,21 @@ import type {
   SaveConsoleApplicationDraftInput
 } from '@1flowse/api-client';
 import type { FlowAuthoringDocument } from '@1flowse/flow-schema';
-import { Button, Typography } from 'antd';
-import { useEffect, useMemo, useRef } from 'react';
+import { Button, Splitter, Typography } from 'antd';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useContainerNavigation } from '../../hooks/interactions/use-container-navigation';
 import { useDraftSync } from '../../hooks/interactions/use-draft-sync';
 import { useEditorShortcuts } from '../../hooks/interactions/use-editor-shortcuts';
 import { useNodeDetailActions } from '../../hooks/interactions/use-node-detail-actions';
+import {
+  NODE_DETAIL_DEFAULT_WIDTH,
+  NODE_DETAIL_MIN_CANVAS_WIDTH,
+  NODE_DETAIL_MIN_WIDTH,
+  clampNodeDetailWidth,
+  getMaxNodeDetailWidth,
+  getNodeDetailWidthFromSplitter
+} from '../../lib/detail-panel-width';
 import { validateDocument } from '../../lib/validate-document';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 import {
@@ -57,12 +65,15 @@ export function AgentFlowCanvasFrame({
   const isRestoringVersion = useAgentFlowEditorStore(
     (state) => state.isRestoringVersion
   );
+  const nodeDetailWidth = useAgentFlowEditorStore((state) => state.nodeDetailWidth);
   const setPanelState = useAgentFlowEditorStore((state) => state.setPanelState);
   const documentRef = useRef(workingDocument);
   const lastSavedDocumentRef = useRef(lastSavedDocument);
   const viewportSnapshotRef = useRef(workingDocument.editor.viewport);
   const viewportGetterRef =
     useRef<(() => FlowAuthoringDocument['editor']['viewport']) | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [bodyWidth, setBodyWidth] = useState(0);
   const navigation = useContainerNavigation();
   const draftSync = useDraftSync({
     applicationId,
@@ -100,7 +111,41 @@ export function AgentFlowCanvasFrame({
     viewportSnapshotRef.current = workingDocument.editor.viewport;
   }, [workingDocument.editor.viewport]);
 
+  useEffect(() => {
+    const element = bodyRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0];
+
+      if (!entry) {
+        return;
+      }
+
+      setBodyWidth(entry.contentRect.width);
+    });
+
+    resizeObserver.observe(element);
+    setBodyWidth(element.getBoundingClientRect().width);
+
+    return () => resizeObserver.disconnect();
+  }, []);
+
   useEditorShortcuts();
+
+  const boundedNodeDetailWidth = clampNodeDetailWidth(
+    nodeDetailWidth,
+    bodyWidth || NODE_DETAIL_DEFAULT_WIDTH + NODE_DETAIL_MIN_CANVAS_WIDTH
+  );
+
+  function syncNodeDetailWidth(sizes: number[]) {
+    setPanelState({
+      nodeDetailWidth: getNodeDetailWidthFromSplitter(sizes, bodyWidth)
+    });
+  }
 
   function getDocumentWithLatestViewport(currentDocument: FlowAuthoringDocument) {
     const viewport = viewportGetterRef.current?.() ?? viewportSnapshotRef.current;
@@ -156,21 +201,59 @@ export function AgentFlowCanvasFrame({
         </div>
       ) : null}
       <div
-        className={`agent-flow-editor__body agent-flow-editor__shell${selectedNodeId ? ' agent-flow-editor__body--with-detail' : ''}`}
+        ref={bodyRef}
+        className="agent-flow-editor__body agent-flow-editor__shell"
         data-testid="agent-flow-editor-body"
       >
-        <AgentFlowCanvas
-          issueCountByNodeId={issueCountByNodeId}
-          onViewportSnapshotChange={(viewport) => {
-            viewportSnapshotRef.current = viewport;
-          }}
-          onViewportGetterReady={(getter) => {
-            viewportGetterRef.current = getter;
-          }}
-        />
         {selectedNodeId ? (
-          <NodeDetailPanel onClose={detailActions.closeDetail} onRunNode={undefined} />
-        ) : null}
+          <div
+            className="agent-flow-editor__splitter-shell"
+            data-testid="agent-flow-editor-splitter"
+          >
+            <Splitter
+              className="agent-flow-editor__splitter"
+              layout="horizontal"
+              onResize={syncNodeDetailWidth}
+              onResizeEnd={syncNodeDetailWidth}
+            >
+              <Splitter.Panel
+                className="agent-flow-editor__canvas-panel"
+                min={NODE_DETAIL_MIN_CANVAS_WIDTH}
+              >
+                <AgentFlowCanvas
+                  issueCountByNodeId={issueCountByNodeId}
+                  onViewportSnapshotChange={(viewport) => {
+                    viewportSnapshotRef.current = viewport;
+                  }}
+                  onViewportGetterReady={(getter) => {
+                    viewportGetterRef.current = getter;
+                  }}
+                />
+              </Splitter.Panel>
+              <Splitter.Panel
+                className="agent-flow-editor__detail-panel"
+                min={NODE_DETAIL_MIN_WIDTH}
+                max={getMaxNodeDetailWidth(bodyWidth || boundedNodeDetailWidth)}
+                size={boundedNodeDetailWidth}
+              >
+                <NodeDetailPanel
+                  onClose={detailActions.closeDetail}
+                  onRunNode={undefined}
+                />
+              </Splitter.Panel>
+            </Splitter>
+          </div>
+        ) : (
+          <AgentFlowCanvas
+            issueCountByNodeId={issueCountByNodeId}
+            onViewportSnapshotChange={(viewport) => {
+              viewportSnapshotRef.current = viewport;
+            }}
+            onViewportGetterReady={(getter) => {
+              viewportGetterRef.current = getter;
+            }}
+          />
+        )}
       </div>
       {issues.some((issue) => issue.scope === 'global') ? (
         <Typography.Text type="danger">

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowse/flow-schema';
@@ -38,6 +38,21 @@ describe('NodeDetailPanel', () => {
     expect(screen.getByRole('heading', { name: 'LLM' })).toBeInTheDocument();
   }, 10_000);
 
+  test('renders alias and description editors inside the header exactly once', () => {
+    render(
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <NodeDetailPanel onClose={vi.fn()} onRunNode={undefined} />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const header = screen.getByTestId('node-detail-header');
+
+    expect(within(header).getByLabelText('节点别名')).toHaveValue('LLM');
+    expect(within(header).getByLabelText('节点简介')).toHaveValue('');
+    expect(screen.getAllByLabelText('节点别名')).toHaveLength(1);
+    expect(screen.getAllByLabelText('节点简介')).toHaveLength(1);
+  });
+
   test('shows node summary, read-only output contract and direct relations in config tab', () => {
     render(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
@@ -50,5 +65,17 @@ describe('NodeDetailPanel', () => {
     expect(screen.getByText('上游节点')).toBeInTheDocument();
     expect(screen.getByText('下游节点')).toBeInTheDocument();
     expect(screen.getByText('模型输出')).toBeInTheDocument();
+  });
+
+  test('keeps the summary card read-only after identity editing moves into header', () => {
+    render(
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(screen.getByText('节点说明')).toBeInTheDocument();
+    expect(screen.queryByText('节点别名')).not.toBeInTheDocument();
+    expect(screen.queryByText('节点简介')).not.toBeInTheDocument();
   });
 });

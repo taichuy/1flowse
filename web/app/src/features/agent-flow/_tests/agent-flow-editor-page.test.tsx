@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Grid } from 'antd';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
@@ -51,7 +51,7 @@ describe('AgentFlowEditorShell', () => {
     expect(screen.getByRole('button', { name: '发布配置' })).toBeInTheDocument();
   }, 20_000);
 
-  test('saves the current document when clicking 保存', async () => {
+  test('saves alias changes from the header editor', async () => {
     const initialState = createInitialState();
     const saveDraftOverride = vi.fn(async (input) => ({
       ...initialState,
@@ -74,7 +74,9 @@ describe('AgentFlowEditorShell', () => {
       </div>
     );
 
-    fireEvent.change(screen.getByLabelText('节点别名'), {
+    const header = screen.getByTestId('node-detail-header');
+
+    fireEvent.change(within(header).getByLabelText('节点别名'), {
       target: { value: 'Support LLM' }
     });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
@@ -207,7 +209,7 @@ describe('AgentFlowEditorShell', () => {
     expect(screen.queryByText('请使用桌面端编辑')).not.toBeInTheDocument();
   }, 20_000);
 
-  test('renders node detail shell with config and last-run tabs on orchestration page', async () => {
+  test('renders node detail inside a docked splitter panel on orchestration page', async () => {
     vi.spyOn(Grid, 'useBreakpoint').mockReturnValue({ lg: true } as never);
     vi.spyOn(orchestrationApi, 'fetchOrchestrationState').mockResolvedValueOnce(
       createInitialState()
@@ -222,11 +224,35 @@ describe('AgentFlowEditorShell', () => {
       </AppProviders>
     );
 
-    expect(await screen.findByRole('tab', { name: '配置' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: '上次运行' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '运行当前节点' })).toBeDisabled();
-    expect(screen.getByTestId('agent-flow-editor-body')).toHaveClass(
-      'agent-flow-editor__body--with-detail'
+    expect(
+      await screen.findByTestId('agent-flow-editor-splitter')
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('节点详情')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '配置' })).toBeInTheDocument();
+  }, 20_000);
+
+  test('keeps last-run content inside the same docked detail panel shell', async () => {
+    vi.spyOn(Grid, 'useBreakpoint').mockReturnValue({ lg: true } as never);
+    vi.spyOn(orchestrationApi, 'fetchOrchestrationState').mockResolvedValueOnce(
+      createInitialState()
     );
+
+    render(
+      <AppProviders>
+        <AgentFlowEditorPage
+          applicationId="app-1"
+          applicationName="Support Agent"
+        />
+      </AppProviders>
+    );
+
+    const splitter = await screen.findByTestId('agent-flow-editor-splitter');
+
+    fireEvent.click(screen.getByRole('tab', { name: '上次运行' }));
+
+    expect(screen.getByText('运行摘要')).toBeInTheDocument();
+    expect(splitter).toBeInTheDocument();
+    expect(screen.getByLabelText('节点详情')).toBeInTheDocument();
+    expect(screen.queryByText('请使用桌面端编辑')).not.toBeInTheDocument();
   }, 20_000);
 });
