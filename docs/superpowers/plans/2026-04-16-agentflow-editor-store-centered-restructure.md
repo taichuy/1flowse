@@ -553,7 +553,7 @@ git commit -m "refactor: extract agent flow document transforms"
 - Modify: `web/app/src/features/agent-flow/components/editor/AgentFlowEditorShell.tsx`
 - Modify: `web/app/src/features/agent-flow/pages/AgentFlowEditorPage.tsx`
 
-- [ ] **Step 1: 写失败的 store 测试**
+- [x] **Step 1: 写失败的 store 测试**
 
 ```ts
 import { describe, expect, test } from 'vitest';
@@ -637,13 +637,15 @@ describe('agent flow editor store', () => {
 });
 ```
 
-- [ ] **Step 2: 运行 store 测试，确认 provider/store 还不存在**
+- [x] **Step 2: 运行 store 测试，确认 provider/store 还不存在**
 
 Run: `pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/editor-store.test.ts`
 
 Expected: FAIL with `createAgentFlowEditorStore` missing and unresolved imports under `store/editor/*`.
 
-- [ ] **Step 3: 实现 store、slice 和 selector**
+Status note (`2026-04-16 10`): 已执行 `pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/editor-store.test.ts`。第一次运行按预期失败，失败点为 `../store/editor` 尚不存在。
+
+- [x] **Step 3: 实现 store、slice 和 selector**
 
 ```ts
 // web/app/src/features/agent-flow/store/editor/slices/document-slice.ts
@@ -933,7 +935,7 @@ export const selectAutosaveStatus = (state: AgentFlowEditorState) =>
 export const selectVersions = (state: AgentFlowEditorState) => state.versions;
 ```
 
-- [ ] **Step 4: 把 Shell 收口成 Provider + 布局装配**
+- [x] **Step 4: 把 Shell 收口成 Provider + 布局装配**
 
 ```tsx
 // web/app/src/features/agent-flow/components/editor/AgentFlowCanvasFrame.tsx
@@ -962,11 +964,13 @@ export function AgentFlowEditorShell({
 }
 ```
 
-- [ ] **Step 5: 重跑 store 测试和 editor page 测试**
+- [x] **Step 5: 重跑 store 测试和 editor page 测试**
 
 Run: `pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/editor-store.test.ts src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx`
 
 Expected: PASS; store 测试能读到 `workingDocument`、selection、panel、sync 初始值，`AgentFlowEditorPage` 继续通过桌面端展示、移动端降级和 query error state 断言。
+
+Status note (`2026-04-16 10`): 已执行 `pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/editor-store.test.ts src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx`，结果为 `2` 个文件、`9` 个测试全部 PASS。运行过程中出现 `React Flow` 关于测试容器尺寸与样式加载的既有警告，但未导致断言失败。
 
 - [ ] **Step 6: Commit**
 
