@@ -61,6 +61,19 @@ pub struct ApplicationSections {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationTag {
+    pub id: Uuid,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationTagCatalogEntry {
+    pub id: Uuid,
+    pub name: String,
+    pub application_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApplicationRecord {
     pub id: Uuid,
     pub workspace_id: Uuid,
@@ -72,5 +85,6 @@ pub struct ApplicationRecord {
     pub icon_background: Option<String>,
     pub created_by: Uuid,
     pub updated_at: OffsetDateTime,
+    pub tags: Vec<ApplicationTag>,
     pub sections: ApplicationSections,
 }

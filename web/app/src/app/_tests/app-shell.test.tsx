@@ -7,6 +7,10 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('@1flowse/api-client', () => ({
   getDefaultApiBaseUrl: vi.fn().mockReturnValue('http://127.0.0.1:7800'),
+  getConsoleApplicationCatalog: vi.fn().mockResolvedValue({
+    types: [{ value: 'agent_flow', label: 'AgentFlow' }],
+    tags: []
+  }),
   listConsoleApplications: vi.fn().mockResolvedValue([
     {
       id: 'app-1',
@@ -16,7 +20,9 @@ vi.mock('@1flowse/api-client', () => ({
       icon: 'RobotOutlined',
       icon_type: 'iconfont',
       icon_background: '#E6F7F2',
-      updated_at: '2026-04-15T09:00:00Z'
+      created_by: 'user-1',
+      updated_at: '2026-04-15T09:00:00Z',
+      tags: []
     }
   ])
 }));

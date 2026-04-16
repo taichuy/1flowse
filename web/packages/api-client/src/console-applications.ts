@@ -2,6 +2,25 @@ import { apiFetch } from './transport';
 
 export type ConsoleApplicationType = 'agent_flow' | 'workflow';
 
+export interface ConsoleApplicationTag {
+  id: string;
+  name: string;
+}
+
+export interface ConsoleApplicationTagCatalogEntry extends ConsoleApplicationTag {
+  application_count: number;
+}
+
+export interface ConsoleApplicationTypeOption {
+  value: ConsoleApplicationType;
+  label: string;
+}
+
+export interface ConsoleApplicationCatalog {
+  types: ConsoleApplicationTypeOption[];
+  tags: ConsoleApplicationTagCatalogEntry[];
+}
+
 export interface ConsoleApplicationSummary {
   id: string;
   application_type: ConsoleApplicationType;
@@ -10,7 +29,9 @@ export interface ConsoleApplicationSummary {
   icon: string | null;
   icon_type: string | null;
   icon_background: string | null;
+  created_by: string;
   updated_at: string;
+  tags: ConsoleApplicationTag[];
 }
 
 export interface ConsoleApplicationSections {
@@ -56,9 +77,28 @@ export interface CreateConsoleApplicationInput {
   icon_background: string | null;
 }
 
+export interface UpdateConsoleApplicationInput {
+  name: string;
+  description: string;
+  tag_ids: string[];
+}
+
+export interface CreateConsoleApplicationTagInput {
+  name: string;
+}
+
 export function listConsoleApplications(baseUrl?: string): Promise<ConsoleApplicationSummary[]> {
   return apiFetch<ConsoleApplicationSummary[]>({
     path: '/api/console/applications',
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationCatalog(
+  baseUrl?: string
+): Promise<ConsoleApplicationCatalog> {
+  return apiFetch<ConsoleApplicationCatalog>({
+    path: '/api/console/applications/catalog',
     baseUrl
   });
 }
@@ -83,6 +123,35 @@ export function getConsoleApplication(
 ): Promise<ConsoleApplicationDetail> {
   return apiFetch<ConsoleApplicationDetail>({
     path: `/api/console/applications/${applicationId}`,
+    baseUrl
+  });
+}
+
+export function updateConsoleApplication(
+  applicationId: string,
+  input: UpdateConsoleApplicationInput,
+  csrfToken: string,
+  baseUrl?: string
+): Promise<ConsoleApplicationDetail> {
+  return apiFetch<ConsoleApplicationDetail>({
+    path: `/api/console/applications/${applicationId}`,
+    method: 'PATCH',
+    body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function createConsoleApplicationTag(
+  input: CreateConsoleApplicationTagInput,
+  csrfToken: string,
+  baseUrl?: string
+): Promise<ConsoleApplicationTagCatalogEntry> {
+  return apiFetch<ConsoleApplicationTagCatalogEntry>({
+    path: '/api/console/applications/tags',
+    method: 'POST',
+    body: input,
+    csrfToken,
     baseUrl
   });
 }

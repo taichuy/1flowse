@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
@@ -11,7 +11,10 @@ use uuid::Uuid;
 use crate::{
     audit::audit_log,
     errors::ControlPlaneError,
-    ports::{ApplicationRepository, ApplicationVisibility, CreateApplicationInput},
+    ports::{
+        ApplicationRepository, ApplicationVisibility, CreateApplicationInput,
+        CreateApplicationTagInput, UpdateApplicationInput,
+    },
 };
 
 pub struct CreateApplicationCommand {
@@ -22,6 +25,19 @@ pub struct CreateApplicationCommand {
     pub icon: Option<String>,
     pub icon_type: Option<String>,
     pub icon_background: Option<String>,
+}
+
+pub struct UpdateApplicationCommand {
+    pub actor_user_id: Uuid,
+    pub application_id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub tag_ids: Vec<Uuid>,
+}
+
+pub struct CreateApplicationTagCommand {
+    pub actor_user_id: Uuid,
+    pub name: String,
 }
 
 pub struct ApplicationService<R> {
@@ -92,6 +108,102 @@ where
         Ok(created)
     }
 
+    pub async fn update_application(
+        &self,
+        command: UpdateApplicationCommand,
+    ) -> Result<domain::ApplicationRecord> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
+        let application = self
+            .repository
+            .get_application(actor.current_workspace_id, command.application_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("application"))?;
+
+        ensure_application_edit_permission(&actor, &application)?;
+
+        let updated = self
+            .repository
+            .update_application(&UpdateApplicationInput {
+                actor_user_id: command.actor_user_id,
+                workspace_id: actor.current_workspace_id,
+                application_id: command.application_id,
+                name: normalize_required_text(&command.name, "name")?,
+                description: command.description.trim().to_string(),
+                tag_ids: dedupe_tag_ids(command.tag_ids),
+            })
+            .await?;
+        self.repository
+            .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
+                Some(command.actor_user_id),
+                "application",
+                Some(updated.id),
+                "application.updated",
+                serde_json::json!({
+                    "name": updated.name,
+                    "tag_count": updated.tags.len(),
+                }),
+            ))
+            .await?;
+
+        Ok(updated)
+    }
+
+    pub async fn list_application_tags(
+        &self,
+        actor_user_id: Uuid,
+    ) -> Result<Vec<domain::ApplicationTagCatalogEntry>> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(actor_user_id)
+            .await?;
+        let visibility = resolve_application_visibility(&actor)?;
+
+        self.repository
+            .list_application_tags(actor.current_workspace_id, actor_user_id, visibility)
+            .await
+    }
+
+    pub async fn create_application_tag(
+        &self,
+        command: CreateApplicationTagCommand,
+    ) -> Result<domain::ApplicationTagCatalogEntry> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
+
+        if !can_manage_application_metadata(&actor) {
+            return Err(ControlPlaneError::PermissionDenied("permission_denied").into());
+        }
+
+        let tag = self
+            .repository
+            .create_application_tag(&CreateApplicationTagInput {
+                actor_user_id: command.actor_user_id,
+                workspace_id: actor.current_workspace_id,
+                name: normalize_required_text(&command.name, "name")?,
+            })
+            .await?;
+        self.repository
+            .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
+                Some(command.actor_user_id),
+                "application_tag",
+                Some(tag.id),
+                "application.tag_created",
+                serde_json::json!({
+                    "name": tag.name,
+                }),
+            ))
+            .await?;
+
+        Ok(tag)
+    }
+
     pub async fn get_application(
         &self,
         actor_user_id: Uuid,
@@ -132,9 +244,53 @@ fn resolve_application_visibility(
     Err(ControlPlaneError::PermissionDenied("permission_denied"))
 }
 
+fn ensure_application_edit_permission(
+    actor: &domain::ActorContext,
+    application: &domain::ApplicationRecord,
+) -> Result<(), ControlPlaneError> {
+    if actor.is_root || actor.has_permission("application.edit.all") {
+        return Ok(());
+    }
+
+    if actor.has_permission("application.edit.own") && application.created_by == actor.user_id {
+        return Ok(());
+    }
+
+    Err(ControlPlaneError::PermissionDenied("permission_denied"))
+}
+
+fn can_manage_application_metadata(actor: &domain::ActorContext) -> bool {
+    actor.is_root
+        || actor.has_permission("application.edit.all")
+        || actor.has_permission("application.edit.own")
+        || actor.has_permission("application.create.all")
+}
+
+fn normalize_required_text(value: &str, field: &'static str) -> Result<String, ControlPlaneError> {
+    let normalized = value.trim();
+    if normalized.is_empty() {
+        return Err(ControlPlaneError::InvalidInput(field));
+    }
+
+    Ok(normalized.to_string())
+}
+
+fn dedupe_tag_ids(tag_ids: Vec<Uuid>) -> Vec<Uuid> {
+    let mut seen = HashSet::new();
+    let mut deduped = Vec::new();
+    for tag_id in tag_ids {
+        if seen.insert(tag_id) {
+            deduped.push(tag_id);
+        }
+    }
+
+    deduped
+}
+
 #[derive(Default)]
 struct InMemoryApplicationRepositoryInner {
     applications: HashMap<Uuid, domain::ApplicationRecord>,
+    tags: HashMap<Uuid, domain::ApplicationTagCatalogEntry>,
     permissions: Vec<String>,
     workspace_id: Uuid,
     tenant_id: Uuid,
@@ -151,6 +307,7 @@ impl InMemoryApplicationRepository {
         Self {
             inner: Arc::new(Mutex::new(InMemoryApplicationRepositoryInner {
                 applications: HashMap::new(),
+                tags: HashMap::new(),
                 permissions: permissions.into_iter().map(str::to_string).collect(),
                 workspace_id: Uuid::nil(),
                 tenant_id: Uuid::nil(),
@@ -247,6 +404,38 @@ impl ApplicationRepository for InMemoryApplicationRepository {
         Ok(application)
     }
 
+    async fn update_application(
+        &self,
+        input: &UpdateApplicationInput,
+    ) -> Result<domain::ApplicationRecord> {
+        let mut inner = self
+            .inner
+            .lock()
+            .expect("in-memory app repo mutex poisoned");
+        let tags = input
+            .tag_ids
+            .iter()
+            .map(|tag_id| inner.tags.get(tag_id).cloned())
+            .collect::<Option<Vec<_>>>()
+            .ok_or(ControlPlaneError::InvalidInput("tag_ids"))?
+            .into_iter()
+            .map(|tag| domain::ApplicationTag {
+                id: tag.id,
+                name: tag.name,
+            })
+            .collect::<Vec<_>>();
+        let application = inner
+            .applications
+            .get_mut(&input.application_id)
+            .ok_or(ControlPlaneError::NotFound("application"))?;
+        application.name = input.name.clone();
+        application.description = input.description.clone();
+        application.updated_at = time::OffsetDateTime::now_utc();
+        application.tags = tags;
+
+        Ok(application.clone())
+    }
+
     async fn get_application(
         &self,
         workspace_id: Uuid,
@@ -262,6 +451,61 @@ impl ApplicationRepository for InMemoryApplicationRepository {
             .filter(|application| application.workspace_id == workspace_id);
 
         Ok(application)
+    }
+
+    async fn list_application_tags(
+        &self,
+        workspace_id: Uuid,
+        actor_user_id: Uuid,
+        visibility: ApplicationVisibility,
+    ) -> Result<Vec<domain::ApplicationTagCatalogEntry>> {
+        let inner = self
+            .inner
+            .lock()
+            .expect("in-memory app repo mutex poisoned");
+        let mut tags = inner.tags.values().cloned().collect::<Vec<_>>();
+        for tag in &mut tags {
+            tag.application_count = inner
+                .applications
+                .values()
+                .filter(|application| application.workspace_id == workspace_id)
+                .filter(|application| {
+                    matches!(visibility, ApplicationVisibility::All)
+                        || application.created_by == actor_user_id
+                })
+                .filter(|application| application.tags.iter().any(|item| item.id == tag.id))
+                .count() as i64;
+        }
+        tags.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+
+        Ok(tags)
+    }
+
+    async fn create_application_tag(
+        &self,
+        input: &CreateApplicationTagInput,
+    ) -> Result<domain::ApplicationTagCatalogEntry> {
+        let mut inner = self
+            .inner
+            .lock()
+            .expect("in-memory app repo mutex poisoned");
+        if let Some(existing) = inner
+            .tags
+            .values()
+            .find(|tag| tag.name.eq_ignore_ascii_case(&input.name))
+            .cloned()
+        {
+            return Ok(existing);
+        }
+
+        let tag = domain::ApplicationTagCatalogEntry {
+            id: Uuid::now_v7(),
+            name: input.name.clone(),
+            application_count: 0,
+        };
+        inner.tags.insert(tag.id, tag.clone());
+
+        Ok(tag)
     }
 
     async fn append_audit_log(&self, event: &domain::AuditLogRecord) -> Result<()> {
@@ -286,6 +530,7 @@ fn build_application_record(id: Uuid, input: CreateApplicationInput) -> domain::
         icon_background: input.icon_background,
         created_by: input.actor_user_id,
         updated_at: time::OffsetDateTime::now_utc(),
+        tags: Vec::new(),
         sections: planned_sections(input.application_type),
     }
 }
@@ -327,6 +572,7 @@ impl ApplicationService<InMemoryApplicationRepository> {
         Self::new(InMemoryApplicationRepository::with_permissions(vec![
             "application.view.all",
             "application.create.all",
+            "application.edit.all",
         ]))
     }
 

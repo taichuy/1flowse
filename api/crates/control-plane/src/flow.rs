@@ -11,7 +11,10 @@ use uuid::Uuid;
 use crate::{
     application::{ApplicationService, InMemoryApplicationRepository},
     errors::ControlPlaneError,
-    ports::{ApplicationRepository, CreateApplicationInput, FlowRepository},
+    ports::{
+        ApplicationRepository, ApplicationVisibility, CreateApplicationInput,
+        CreateApplicationTagInput, FlowRepository, UpdateApplicationInput,
+    },
 };
 
 pub struct SaveFlowDraftCommand {
@@ -180,6 +183,35 @@ impl ApplicationRepository for InMemoryFlowRepository {
     ) -> Result<Option<domain::ApplicationRecord>> {
         ApplicationRepository::get_application(&self.applications, workspace_id, application_id)
             .await
+    }
+
+    async fn update_application(
+        &self,
+        input: &UpdateApplicationInput,
+    ) -> Result<domain::ApplicationRecord> {
+        ApplicationRepository::update_application(&self.applications, input).await
+    }
+
+    async fn list_application_tags(
+        &self,
+        workspace_id: Uuid,
+        actor_user_id: Uuid,
+        visibility: ApplicationVisibility,
+    ) -> Result<Vec<domain::ApplicationTagCatalogEntry>> {
+        ApplicationRepository::list_application_tags(
+            &self.applications,
+            workspace_id,
+            actor_user_id,
+            visibility,
+        )
+        .await
+    }
+
+    async fn create_application_tag(
+        &self,
+        input: &CreateApplicationTagInput,
+    ) -> Result<domain::ApplicationTagCatalogEntry> {
+        ApplicationRepository::create_application_tag(&self.applications, input).await
     }
 
     async fn append_audit_log(&self, event: &domain::AuditLogRecord) -> Result<()> {

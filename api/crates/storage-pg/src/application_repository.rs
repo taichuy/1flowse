@@ -2,7 +2,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use control_plane::ports::{
     ApplicationRepository, ApplicationVisibility, AuthRepository, CreateApplicationInput,
+    CreateApplicationTagInput, UpdateApplicationInput,
 };
+use control_plane::errors::ControlPlaneError;
 use sqlx::Row;
 use uuid::Uuid;
 
@@ -25,6 +27,7 @@ fn map_application_record(row: sqlx::postgres::PgRow) -> Result<domain::Applicat
         updated_at: row.get("updated_at"),
         current_flow_id: row.get("current_flow_id"),
         current_draft_id: row.get("current_draft_id"),
+        tags: row.get("tags"),
     })
 }
 
@@ -53,22 +56,32 @@ impl ApplicationRepository for PgControlPlaneStore {
         let rows = sqlx::query(
             r#"
             select
-                id,
-                workspace_id,
-                application_type,
-                name,
-                description,
-                icon_type,
-                icon,
-                icon_background,
-                created_by,
-                updated_at,
+                a.id,
+                a.workspace_id,
+                a.application_type,
+                a.name,
+                a.description,
+                a.icon_type,
+                a.icon,
+                a.icon_background,
+                a.created_by,
+                a.updated_at,
                 null::uuid as current_flow_id,
-                null::uuid as current_draft_id
-            from applications
-            where workspace_id = $1
-              and ($3 = 'all' or created_by = $2)
-            order by updated_at desc, id desc
+                null::uuid as current_draft_id,
+                coalesce(tags.tags, '[]'::jsonb) as tags
+            from applications a
+            left join lateral (
+                select jsonb_agg(
+                    jsonb_build_object('id', tag.id, 'name', tag.name)
+                    order by tag.name asc, tag.id asc
+                ) as tags
+                from application_tag_bindings binding
+                join application_tags tag on tag.id = binding.tag_id
+                where binding.application_id = a.id
+            ) tags on true
+            where a.workspace_id = $1
+              and ($3 = 'all' or a.created_by = $2)
+            order by a.updated_at desc, a.id desc
             "#,
         )
         .bind(workspace_id)
@@ -110,7 +123,8 @@ impl ApplicationRepository for PgControlPlaneStore {
                 created_by,
                 updated_at,
                 null::uuid as current_flow_id,
-                null::uuid as current_draft_id
+                null::uuid as current_draft_id,
+                '[]'::jsonb as tags
             "#,
         )
         .bind(Uuid::now_v7())
@@ -124,6 +138,115 @@ impl ApplicationRepository for PgControlPlaneStore {
         .bind(input.actor_user_id)
         .fetch_one(self.pool())
         .await?;
+
+        map_application_record(row)
+    }
+
+    async fn update_application(
+        &self,
+        input: &UpdateApplicationInput,
+    ) -> Result<domain::ApplicationRecord> {
+        let mut tx = self.pool().begin().await?;
+        let tag_count = sqlx::query_scalar::<_, i64>(
+            r#"
+            select count(*)::bigint
+            from application_tags
+            where workspace_id = $1
+              and id = any($2)
+            "#,
+        )
+        .bind(input.workspace_id)
+        .bind(&input.tag_ids)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        if tag_count != input.tag_ids.len() as i64 {
+            anyhow::bail!(ControlPlaneError::InvalidInput("tag_ids"));
+        }
+
+        let updated_rows = sqlx::query(
+            r#"
+            update applications
+            set
+                name = $3,
+                description = $4,
+                updated_by = $5,
+                updated_at = now()
+            where workspace_id = $1
+              and id = $2
+            "#,
+        )
+        .bind(input.workspace_id)
+        .bind(input.application_id)
+        .bind(&input.name)
+        .bind(&input.description)
+        .bind(input.actor_user_id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+        if updated_rows == 0 {
+            anyhow::bail!(ControlPlaneError::NotFound("application"));
+        }
+
+        sqlx::query("delete from application_tag_bindings where application_id = $1")
+            .bind(input.application_id)
+            .execute(&mut *tx)
+            .await?;
+
+        for tag_id in &input.tag_ids {
+            sqlx::query(
+                r#"
+                insert into application_tag_bindings (
+                    application_id,
+                    tag_id,
+                    created_by
+                ) values ($1, $2, $3)
+                "#,
+            )
+            .bind(input.application_id)
+            .bind(tag_id)
+            .bind(input.actor_user_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        let row = sqlx::query(
+            r#"
+            select
+                a.id,
+                a.workspace_id,
+                a.application_type,
+                a.name,
+                a.description,
+                a.icon_type,
+                a.icon,
+                a.icon_background,
+                a.created_by,
+                a.updated_at,
+                null::uuid as current_flow_id,
+                null::uuid as current_draft_id,
+                coalesce(tags.tags, '[]'::jsonb) as tags
+            from applications a
+            left join lateral (
+                select jsonb_agg(
+                    jsonb_build_object('id', tag.id, 'name', tag.name)
+                    order by tag.name asc, tag.id asc
+                ) as tags
+                from application_tag_bindings binding
+                join application_tags tag on tag.id = binding.tag_id
+                where binding.application_id = a.id
+            ) tags on true
+            where a.workspace_id = $1
+              and a.id = $2
+            "#,
+        )
+        .bind(input.workspace_id)
+        .bind(input.application_id)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
 
         map_application_record(row)
     }
@@ -147,10 +270,20 @@ impl ApplicationRepository for PgControlPlaneStore {
                 a.created_by,
                 a.updated_at,
                 f.id as current_flow_id,
-                fd.id as current_draft_id
+                fd.id as current_draft_id,
+                coalesce(tags.tags, '[]'::jsonb) as tags
             from applications a
             left join flows f on f.application_id = a.id
             left join flow_drafts fd on fd.flow_id = f.id
+            left join lateral (
+                select jsonb_agg(
+                    jsonb_build_object('id', tag.id, 'name', tag.name)
+                    order by tag.name asc, tag.id asc
+                ) as tags
+                from application_tag_bindings binding
+                join application_tags tag on tag.id = binding.tag_id
+                where binding.application_id = a.id
+            ) tags on true
             where a.workspace_id = $1
               and a.id = $2
             "#,
@@ -161,6 +294,90 @@ impl ApplicationRepository for PgControlPlaneStore {
         .await?;
 
         row.map(map_application_record).transpose()
+    }
+
+    async fn list_application_tags(
+        &self,
+        workspace_id: Uuid,
+        actor_user_id: Uuid,
+        visibility: ApplicationVisibility,
+    ) -> Result<Vec<domain::ApplicationTagCatalogEntry>> {
+        let visibility_value = match visibility {
+            ApplicationVisibility::Own => "own",
+            ApplicationVisibility::All => "all",
+        };
+
+        let rows = sqlx::query(
+            r#"
+            select
+                tag.id,
+                tag.name,
+                count(app.id)::bigint as application_count
+            from application_tags tag
+            left join application_tag_bindings binding on binding.tag_id = tag.id
+            left join applications app
+                on app.id = binding.application_id
+               and app.workspace_id = $1
+               and ($3 = 'all' or app.created_by = $2)
+            where tag.workspace_id = $1
+            group by tag.id, tag.name
+            order by tag.name asc, tag.id asc
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(actor_user_id)
+        .bind(visibility_value)
+        .fetch_all(self.pool())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| domain::ApplicationTagCatalogEntry {
+                id: row.get("id"),
+                name: row.get("name"),
+                application_count: row.get("application_count"),
+            })
+            .collect())
+    }
+
+    async fn create_application_tag(
+        &self,
+        input: &CreateApplicationTagInput,
+    ) -> Result<domain::ApplicationTagCatalogEntry> {
+        let normalized_name = input.name.to_lowercase();
+        let row = sqlx::query(
+            r#"
+            insert into application_tags (
+                id,
+                workspace_id,
+                name,
+                normalized_name,
+                created_by,
+                updated_by
+            ) values ($1, $2, $3, $4, $5, $5)
+            on conflict (workspace_id, normalized_name) do update
+                set name = excluded.name,
+                    updated_by = excluded.updated_by,
+                    updated_at = now()
+            returning
+                id,
+                name,
+                0::bigint as application_count
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.workspace_id)
+        .bind(&input.name)
+        .bind(&normalized_name)
+        .bind(input.actor_user_id)
+        .fetch_one(self.pool())
+        .await?;
+
+        Ok(domain::ApplicationTagCatalogEntry {
+            id: row.get("id"),
+            name: row.get("name"),
+            application_count: row.get("application_count"),
+        })
     }
 
     async fn append_audit_log(&self, event: &domain::AuditLogRecord) -> Result<()> {

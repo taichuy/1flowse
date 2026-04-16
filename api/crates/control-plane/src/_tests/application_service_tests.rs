@@ -1,4 +1,7 @@
-use control_plane::application::{ApplicationService, CreateApplicationCommand};
+use control_plane::application::{
+    ApplicationService, CreateApplicationCommand, CreateApplicationTagCommand,
+    UpdateApplicationCommand,
+};
 use domain::ApplicationType;
 use uuid::Uuid;
 
@@ -76,4 +79,81 @@ async fn get_application_detail_returns_planned_future_hooks() {
         detail.sections.monitoring.metrics_object_kind,
         "application_metrics"
     );
+}
+
+#[tokio::test]
+async fn update_application_requires_edit_permission() {
+    let service = ApplicationService::for_tests_with_permissions(vec![
+        "application.view.own",
+        "application.create.all",
+    ]);
+    let created = service
+        .create_application(CreateApplicationCommand {
+            actor_user_id: Uuid::nil(),
+            application_type: ApplicationType::AgentFlow,
+            name: "Original".into(),
+            description: "original".into(),
+            icon: None,
+            icon_type: None,
+            icon_background: None,
+        })
+        .await
+        .unwrap();
+
+    let error = service
+        .update_application(UpdateApplicationCommand {
+            actor_user_id: Uuid::nil(),
+            application_id: created.id,
+            name: "Updated".into(),
+            description: "updated".into(),
+            tag_ids: Vec::new(),
+        })
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("permission_denied"));
+}
+
+#[tokio::test]
+async fn update_application_replaces_basic_metadata_and_tags() {
+    let service = ApplicationService::for_tests_with_permissions(vec![
+        "application.view.own",
+        "application.create.all",
+        "application.edit.own",
+    ]);
+    let created = service
+        .create_application(CreateApplicationCommand {
+            actor_user_id: Uuid::nil(),
+            application_type: ApplicationType::AgentFlow,
+            name: "Original".into(),
+            description: "original".into(),
+            icon: None,
+            icon_type: None,
+            icon_background: None,
+        })
+        .await
+        .unwrap();
+    let tag = service
+        .create_application_tag(CreateApplicationTagCommand {
+            actor_user_id: Uuid::nil(),
+            name: "客服".into(),
+        })
+        .await
+        .unwrap();
+
+    let updated = service
+        .update_application(UpdateApplicationCommand {
+            actor_user_id: Uuid::nil(),
+            application_id: created.id,
+            name: "Updated".into(),
+            description: "updated".into(),
+            tag_ids: vec![tag.id],
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(updated.name, "Updated");
+    assert_eq!(updated.description, "updated");
+    assert_eq!(updated.tags.len(), 1);
+    assert_eq!(updated.tags[0].name, "客服");
 }

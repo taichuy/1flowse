@@ -267,6 +267,22 @@ function seedStyleBoundaryApplicationFetch() {
       );
     }
 
+    if (url.endsWith('/api/console/applications/catalog')) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            types: [{ value: 'agent_flow', label: 'AgentFlow' }],
+            tags: []
+          },
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
     if (url.includes('/api/console/applications/app-1')) {
       return new Response(
         JSON.stringify({
@@ -278,7 +294,9 @@ function seedStyleBoundaryApplicationFetch() {
             icon: 'RobotOutlined',
             icon_type: 'iconfont',
             icon_background: '#E6F7F2',
+            created_by: 'user-1',
             updated_at: '2026-04-15T09:00:00Z',
+            tags: [],
             sections: {
               orchestration: {
                 status: 'planned',
@@ -330,7 +348,9 @@ function seedStyleBoundaryApplicationFetch() {
               icon: 'RobotOutlined',
               icon_type: 'iconfont',
               icon_background: '#E6F7F2',
-              updated_at: '2026-04-15T09:00:00Z'
+              created_by: 'user-1',
+              updated_at: '2026-04-15T09:00:00Z',
+              tags: []
             }
           ],
           meta: null

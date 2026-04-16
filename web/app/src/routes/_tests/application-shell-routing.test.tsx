@@ -9,9 +9,13 @@ import { resetAuthStore, useAuthStore } from '../../state/auth-store';
 
 const applicationApi = vi.hoisted(() => ({
   applicationsQueryKey: ['applications'],
+  applicationCatalogQueryKey: ['applications', 'catalog'],
   applicationDetailQueryKey: (applicationId: string) => ['applications', applicationId],
   fetchApplications: vi.fn(),
+  fetchApplicationCatalog: vi.fn(),
   createApplication: vi.fn(),
+  updateApplication: vi.fn(),
+  createApplicationTag: vi.fn(),
   fetchApplicationDetail: vi.fn()
 }));
 
@@ -60,6 +64,11 @@ describe('application shell routing', () => {
     authenticate();
     applicationApi.fetchApplications.mockReset();
     applicationApi.fetchApplications.mockResolvedValue([]);
+    applicationApi.fetchApplicationCatalog.mockReset();
+    applicationApi.fetchApplicationCatalog.mockResolvedValue({
+      types: [{ value: 'agent_flow', label: 'AgentFlow' }],
+      tags: []
+    });
     applicationApi.fetchApplicationDetail.mockReset();
     applicationApi.fetchApplicationDetail.mockResolvedValue({
       id: 'app-1',
@@ -69,7 +78,9 @@ describe('application shell routing', () => {
       icon: 'RobotOutlined',
       icon_type: 'iconfont',
       icon_background: '#E6F7F2',
+      created_by: 'user-1',
       updated_at: '2026-04-15T09:00:00Z',
+      tags: [],
       sections: {
         orchestration: {
           status: 'planned',

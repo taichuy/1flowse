@@ -1,82 +1,419 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button, Checkbox, Empty, Flex, Input, Result, Select, Space, Tag, Typography } from 'antd';
+import {
+  AppstoreAddOutlined,
+  AppstoreOutlined,
+  BlockOutlined,
+  EditOutlined,
+  FileTextOutlined,
+  ImportOutlined,
+  RobotOutlined,
+  SearchOutlined,
+  TagOutlined
+} from '@ant-design/icons';
+import type { ReactNode } from 'react';
 import { useState } from 'react';
 
-import { useQuery } from '@tanstack/react-query';
-import { Button, Empty, Input, Result, Select, Space, Typography } from 'antd';
-
 import { useAuthStore } from '../../../state/auth-store';
-import { applicationsQueryKey, fetchApplications } from '../api/applications';
-import { ApplicationCardGrid } from '../components/ApplicationCardGrid';
+import {
+  applicationCatalogQueryKey,
+  applicationsQueryKey,
+  createApplicationTag,
+  fetchApplicationCatalog,
+  fetchApplications,
+  type Application,
+  type ApplicationTagCatalogEntry,
+  updateApplication
+} from '../api/applications';
 import { ApplicationCreateModal } from '../components/ApplicationCreateModal';
+import { ApplicationEditModal } from '../components/ApplicationEditModal';
+import { ApplicationTagManagerModal } from '../components/ApplicationTagManagerModal';
+
+type ApplicationTypeFilter = 'all' | Application['application_type'];
+
+interface ApplicationTypeTab {
+  key: ApplicationTypeFilter;
+  label: string;
+  icon: ReactNode;
+}
+
+function applicationTypeIcon(applicationType: Application['application_type']) {
+  if (applicationType === 'workflow') {
+    return <BlockOutlined />;
+  }
+
+  return <RobotOutlined />;
+}
+
+function mergeTagCatalog(
+  currentTags: ApplicationTagCatalogEntry[],
+  optimisticTags: ApplicationTagCatalogEntry[]
+) {
+  const merged = new Map<string, ApplicationTagCatalogEntry>();
+  for (const tag of currentTags) {
+    merged.set(tag.id, tag);
+  }
+  for (const tag of optimisticTags) {
+    if (!merged.has(tag.id)) {
+      merged.set(tag.id, tag);
+    }
+  }
+
+  return Array.from(merged.values()).sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function toApplicationTypeTabs(
+  types: Array<{ value: Application['application_type']; label: string }>
+): ApplicationTypeTab[] {
+  return [
+    { key: 'all', label: '全部', icon: <AppstoreOutlined /> },
+    ...types.map((type) => ({
+      key: type.value,
+      label: type.label,
+      icon: applicationTypeIcon(type.value)
+    }))
+  ];
+}
 
 export function ApplicationListPage() {
   const actor = useAuthStore((state) => state.actor);
   const me = useAuthStore((state) => state.me);
   const csrfToken = useAuthStore((state) => state.csrfToken);
+  const queryClient = useQueryClient();
+
   const [keyword, setKeyword] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'agent_flow' | 'workflow'>('all');
+  const [typeFilter, setTypeFilter] = useState<ApplicationTypeFilter>('all');
+  const [tagFilter, setTagFilter] = useState<string | undefined>(undefined);
   const [createOpen, setCreateOpen] = useState(false);
+  const [myCreated, setMyCreated] = useState(false);
+  const [editingApplicationId, setEditingApplicationId] = useState<string | null>(null);
+  const [taggingApplicationId, setTaggingApplicationId] = useState<string | null>(null);
+  const [optimisticTags, setOptimisticTags] = useState<ApplicationTagCatalogEntry[]>([]);
+
   const applicationsQuery = useQuery({
     queryKey: applicationsQueryKey,
     queryFn: fetchApplications
   });
+  const applicationCatalogQuery = useQuery({
+    queryKey: applicationCatalogQueryKey,
+    queryFn: fetchApplicationCatalog
+  });
+
+  const updateApplicationMutation = useMutation({
+    mutationFn: ({
+      applicationId,
+      input
+    }: {
+      applicationId: string;
+      input: { name: string; description: string; tag_ids: string[] };
+    }) => updateApplication(applicationId, input, csrfToken ?? ''),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: applicationsQueryKey }),
+        queryClient.invalidateQueries({ queryKey: applicationCatalogQueryKey })
+      ]);
+      setOptimisticTags([]);
+    }
+  });
+
+  const createApplicationTagMutation = useMutation({
+    mutationFn: (input: { name: string }) => createApplicationTag(input, csrfToken ?? ''),
+    onSuccess: async (createdTag) => {
+      setOptimisticTags((current) =>
+        current.some((tag) => tag.id === createdTag.id) ? current : [...current, createdTag]
+      );
+      await queryClient.invalidateQueries({ queryKey: applicationCatalogQueryKey });
+    }
+  });
+
   const isRoot = actor?.effective_display_role === 'root';
   const canCreate = isRoot || Boolean(me?.permissions.includes('application.create.all'));
+  const canEditAny = isRoot || Boolean(me?.permissions.includes('application.edit.all'));
+  const canEditOwn = Boolean(me?.permissions.includes('application.edit.own'));
   const normalizedKeyword = keyword.trim().toLowerCase();
 
-  if (applicationsQuery.isPending) {
+  if (applicationsQuery.isPending || applicationCatalogQuery.isPending) {
     return <Result status="info" title="正在加载应用" />;
   }
 
-  if (applicationsQuery.isError) {
+  if (applicationsQuery.isError || applicationCatalogQuery.isError) {
     return <Result status="error" title="应用列表加载失败" />;
   }
 
-  const visibleApplications = (applicationsQuery.data ?? []).filter((application) => {
+  const applications = applicationsQuery.data ?? [];
+  const catalog = applicationCatalogQuery.data ?? { types: [], tags: [] };
+  const availableTags = mergeTagCatalog(catalog.tags, optimisticTags);
+  const typeTabs = toApplicationTypeTabs(catalog.types);
+  const typeLabels = new Map(
+    catalog.types.map((type) => [type.value, type.label] as const)
+  );
+  const editingApplication =
+    applications.find((application) => application.id === editingApplicationId) ?? null;
+  const taggingApplication =
+    applications.find((application) => application.id === taggingApplicationId) ?? null;
+
+  const visibleApplications = applications.filter((application) => {
     const matchesType = typeFilter === 'all' || application.application_type === typeFilter;
     const matchesKeyword =
       normalizedKeyword.length === 0 ||
       application.name.toLowerCase().includes(normalizedKeyword) ||
       application.description.toLowerCase().includes(normalizedKeyword);
+    const matchesTag =
+      !tagFilter || application.tags.some((tag) => tag.id === tagFilter);
+    const matchesCreatedBy = !myCreated || application.created_by === actor?.id;
 
-    return matchesType && matchesKeyword;
+    return matchesType && matchesKeyword && matchesTag && matchesCreatedBy;
   });
 
+  const canEditApplication = (application: Application) =>
+    canEditAny || (canEditOwn && application.created_by === actor?.id);
+
+  const handleUpdateApplication = async (
+    application: Application,
+    input: { name: string; description: string; tag_ids: string[] }
+  ) => {
+    await updateApplicationMutation.mutateAsync({
+      applicationId: application.id,
+      input
+    });
+  };
+
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <div>
-        <Typography.Title level={2}>工作台</Typography.Title>
-        <Typography.Paragraph>浏览、创建并进入当前工作区可见的应用。</Typography.Paragraph>
+    <div style={{ padding: '24px 0', width: '100%', maxWidth: 1240, margin: '0 auto' }}>
+      <Flex justify="space-between" align="center" wrap="wrap" gap={16} style={{ marginBottom: 24 }}>
+        <Space size="small" wrap>
+          {typeTabs.map((tab) => (
+            <Button
+              key={tab.key}
+              type={typeFilter === tab.key ? 'primary' : 'default'}
+              icon={tab.icon}
+              aria-label={tab.label}
+              onClick={() => setTypeFilter(tab.key)}
+            >
+              {tab.label}
+            </Button>
+          ))}
+        </Space>
+
+        <Space size="middle" wrap>
+          <Checkbox checked={myCreated} onChange={(event) => setMyCreated(event.target.checked)}>
+            我创建的
+          </Checkbox>
+          <Select
+            allowClear
+            value={tagFilter}
+            placeholder="全部标签"
+            options={availableTags.map((tag) => ({
+              value: tag.id,
+              label: `${tag.name} (${tag.application_count})`
+            }))}
+            style={{ width: 180 }}
+            suffixIcon={<TagOutlined />}
+            onChange={(value) => setTagFilter(value)}
+          />
+          <Input
+            value={keyword}
+            prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
+            placeholder="搜索应用"
+            style={{ width: 220, borderRadius: 8 }}
+            onChange={(event) => setKeyword(event.target.value)}
+          />
+        </Space>
+      </Flex>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+          gap: 16
+        }}
+      >
+        {canCreate && (
+          <div
+            style={{
+              background: 'linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%)',
+              borderRadius: 18,
+              padding: 20,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              border: '1px solid #dbe7f3'
+            }}
+          >
+            <Typography.Text style={{ color: '#64748b', fontSize: 13 }}>创建应用</Typography.Text>
+            <Button
+              type="text"
+              icon={<AppstoreAddOutlined />}
+              style={{ justifyContent: 'flex-start' }}
+              onClick={() => setCreateOpen(true)}
+            >
+              创建空白应用
+            </Button>
+            <Button
+              type="text"
+              icon={<FileTextOutlined />}
+              style={{ justifyContent: 'flex-start' }}
+              disabled
+            >
+              从应用模板创建
+            </Button>
+            <Button
+              type="text"
+              icon={<ImportOutlined />}
+              style={{ justifyContent: 'flex-start' }}
+              disabled
+            >
+              导入 DSL 文件
+            </Button>
+          </div>
+        )}
+
+        {visibleApplications.map((application) => {
+          const canEdit = canEditApplication(application);
+          const typeLabel = typeLabels.get(application.application_type) ?? application.application_type;
+
+          return (
+            <div
+              key={application.id}
+              style={{
+                background: '#ffffff',
+                borderRadius: 18,
+                padding: 18,
+                border: '1px solid #e2e8f0',
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 250,
+                boxShadow: '0 12px 32px rgba(15, 23, 42, 0.06)'
+              }}
+            >
+              <Flex align="flex-start" gap={12} style={{ marginBottom: 16 }}>
+                <div
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 12,
+                    background: '#eef6ff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 20,
+                    color: '#2563eb'
+                  }}
+                >
+                  {applicationTypeIcon(application.application_type)}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Typography.Title level={5} style={{ margin: 0, color: '#0f172a' }}>
+                    {application.name}
+                  </Typography.Title>
+                  <Typography.Text type="secondary">
+                    {typeLabel} · 编辑于{' '}
+                    {new Date(application.updated_at).toLocaleString('zh-CN', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </Typography.Text>
+                </div>
+              </Flex>
+
+              <Typography.Paragraph style={{ color: '#334155', minHeight: 44 }}>
+                {application.description || '当前应用尚未填写简介。'}
+              </Typography.Paragraph>
+
+              <Flex wrap gap={8} style={{ minHeight: 32, marginBottom: 16 }}>
+                {application.tags.length === 0 ? (
+                  <Tag bordered={false} color="default">
+                    暂无标签
+                  </Tag>
+                ) : (
+                  application.tags.map((tag) => (
+                    <Tag key={tag.id} bordered={false} color="blue">
+                      {tag.name}
+                    </Tag>
+                  ))
+                )}
+              </Flex>
+
+              <Flex justify="space-between" align="center" style={{ marginTop: 'auto' }}>
+                <Space size="small" wrap>
+                  <Button
+                    size="small"
+                    icon={<TagOutlined />}
+                    aria-label={`管理标签-${application.name}`}
+                    onClick={() => setTaggingApplicationId(application.id)}
+                    disabled={!canEdit}
+                  >
+                    管理标签
+                  </Button>
+                  <Button
+                    size="small"
+                    icon={<EditOutlined />}
+                    aria-label={`编辑应用-${application.name}`}
+                    onClick={() => setEditingApplicationId(application.id)}
+                    disabled={!canEdit}
+                  >
+                    编辑应用
+                  </Button>
+                </Space>
+                <a href={`/applications/${application.id}/orchestration`}>
+                  <Button type="primary">进入应用</Button>
+                </a>
+              </Flex>
+            </div>
+          );
+        })}
       </div>
 
-      <Space wrap>
-        <Input.Search
-          aria-label="搜索应用"
-          placeholder="按名称或简介搜索"
-          onChange={(event) => setKeyword(event.target.value)}
-        />
-        <Select
-          aria-label="应用类型"
-          value={typeFilter}
-          options={[
-            { value: 'all', label: '全部类型' },
-            { value: 'agent_flow', label: 'AgentFlow' },
-            { value: 'workflow', label: 'Workflow' }
-          ]}
-          onChange={setTypeFilter}
-          style={{ minWidth: 160 }}
-        />
-        {canCreate ? (
-          <Button type="primary" onClick={() => setCreateOpen(true)}>
-            新建应用
-          </Button>
-        ) : null}
-      </Space>
-
       {visibleApplications.length === 0 ? (
-        <Empty description="当前没有可见应用" />
-      ) : (
-        <ApplicationCardGrid applications={visibleApplications} />
-      )}
+        <div style={{ marginTop: 24 }}>
+          <Empty description="当前筛选条件下暂无应用" />
+        </div>
+      ) : null}
+
+      <ApplicationEditModal
+        open={Boolean(editingApplication)}
+        application={editingApplication}
+        saving={updateApplicationMutation.isPending}
+        onCancel={() => setEditingApplicationId(null)}
+        onSubmit={(values) => {
+          if (!editingApplication) {
+            return;
+          }
+
+          void handleUpdateApplication(editingApplication, {
+            name: values.name,
+            description: values.description,
+            tag_ids: editingApplication.tags.map((tag) => tag.id)
+          }).then(() => setEditingApplicationId(null));
+        }}
+      />
+
+      <ApplicationTagManagerModal
+        open={Boolean(taggingApplication)}
+        application={taggingApplication}
+        catalogTags={availableTags}
+        saving={updateApplicationMutation.isPending}
+        creating={createApplicationTagMutation.isPending}
+        onCancel={() => setTaggingApplicationId(null)}
+        onCreateTag={async (name) => {
+          const createdTag = await createApplicationTagMutation.mutateAsync({ name });
+          return { id: createdTag.id, name: createdTag.name };
+        }}
+        onSubmit={(tagIds) => {
+          if (!taggingApplication) {
+            return;
+          }
+
+          void handleUpdateApplication(taggingApplication, {
+            name: taggingApplication.name,
+            description: taggingApplication.description,
+            tag_ids: tagIds
+          }).then(() => setTaggingApplicationId(null));
+        }}
+      />
 
       <ApplicationCreateModal
         open={createOpen}
@@ -86,6 +423,6 @@ export function ApplicationListPage() {
           window.location.assign(`/applications/${applicationId}/orchestration`);
         }}
       />
-    </Space>
+    </div>
   );
 }

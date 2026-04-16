@@ -11,7 +11,8 @@ pub mod scope;
 
 pub use application::{
     ApplicationApiSection, ApplicationLogsSection, ApplicationMonitoringSection,
-    ApplicationOrchestrationSection, ApplicationRecord, ApplicationSections, ApplicationType,
+    ApplicationOrchestrationSection, ApplicationRecord, ApplicationSections, ApplicationTag,
+    ApplicationTagCatalogEntry, ApplicationType,
 };
 pub use audit::AuditLogRecord;
 pub use auth::{

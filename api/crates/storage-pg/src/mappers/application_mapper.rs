@@ -1,8 +1,9 @@
 use anyhow::{anyhow, Result};
 use domain::{
     ApplicationApiSection, ApplicationLogsSection, ApplicationMonitoringSection,
-    ApplicationRecord, ApplicationSections, ApplicationType,
+    ApplicationRecord, ApplicationSections, ApplicationTag, ApplicationType,
 };
+use serde_json::Value;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -22,6 +23,7 @@ pub struct StoredApplicationRow {
     pub updated_at: OffsetDateTime,
     pub current_flow_id: Option<Uuid>,
     pub current_draft_id: Option<Uuid>,
+    pub tags: Value,
 }
 
 pub struct PgApplicationMapper;
@@ -41,6 +43,7 @@ impl PgApplicationMapper {
             icon_background: row.icon_background,
             created_by: row.created_by,
             updated_at: row.updated_at,
+            tags: serde_json::from_value::<Vec<ApplicationTag>>(row.tags)?,
             sections: flow_sections(
                 application_type,
                 row.current_flow_id,

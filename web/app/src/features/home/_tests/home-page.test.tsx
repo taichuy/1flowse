@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('../../applications/api/applications', () => ({
   applicationsQueryKey: ['applications'],
+  applicationCatalogQueryKey: ['applications', 'catalog'],
   fetchApplications: vi.fn().mockResolvedValue([
     {
       id: 'app-1',
@@ -12,9 +13,15 @@ vi.mock('../../applications/api/applications', () => ({
       icon: 'RobotOutlined',
       icon_type: 'iconfont',
       icon_background: '#E6F7F2',
-      updated_at: '2026-04-15T09:00:00Z'
+      created_by: 'user-1',
+      updated_at: '2026-04-15T09:00:00Z',
+      tags: []
     }
   ]),
+  fetchApplicationCatalog: vi.fn().mockResolvedValue({
+    types: [{ value: 'agent_flow', label: 'AgentFlow' }],
+    tags: []
+  }),
   createApplication: vi.fn()
 }));
 
@@ -54,7 +61,8 @@ describe('HomePage', () => {
       </AppProviders>
     );
 
-    expect(await screen.findByRole('heading', { name: '工作台' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '全部' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'AgentFlow' })).toBeInTheDocument();
     expect(await screen.findByText('Support Agent')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '进入应用' })).toBeInTheDocument();
     expect(screen.queryByText(/api-server ok/i)).not.toBeInTheDocument();

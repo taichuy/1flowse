@@ -4,25 +4,41 @@ vi.mock('@1flowse/api-client', () => ({
   createConsoleApplication: vi.fn().mockResolvedValue({
     id: 'app-1'
   }),
+  createConsoleApplicationTag: vi.fn().mockResolvedValue({
+    id: 'tag-1'
+  }),
   getConsoleApplication: vi.fn().mockResolvedValue({
     id: 'app-1'
   }),
+  getConsoleApplicationCatalog: vi.fn().mockResolvedValue({
+    types: [],
+    tags: []
+  }),
   listConsoleApplications: vi.fn().mockResolvedValue([]),
+  updateConsoleApplication: vi.fn().mockResolvedValue({
+    id: 'app-1'
+  }),
   getDefaultApiBaseUrl: vi.fn().mockReturnValue('http://127.0.0.1:7800')
 }));
 
 import {
   createConsoleApplication,
+  createConsoleApplicationTag,
   getConsoleApplication,
+  getConsoleApplicationCatalog,
   getDefaultApiBaseUrl,
-  listConsoleApplications
+  listConsoleApplications,
+  updateConsoleApplication
 } from '@1flowse/api-client';
 
 import {
   createApplication,
+  createApplicationTag,
+  fetchApplicationCatalog,
   fetchApplicationDetail,
   fetchApplications,
-  getApplicationsApiBaseUrl
+  getApplicationsApiBaseUrl,
+  updateApplication
 } from '../api/applications';
 
 afterEach(() => {
@@ -58,13 +74,40 @@ describe('applications api', () => {
     ).toBe('http://127.0.0.1:7800');
 
     await fetchApplications();
+    await fetchApplicationCatalog();
     await fetchApplicationDetail('app-1');
     await createApplication(input, 'csrf-123');
+    await updateApplication(
+      'app-1',
+      {
+        name: 'Support Agent Pro',
+        description: 'updated support',
+        tag_ids: ['tag-1']
+      },
+      'csrf-123'
+    );
+    await createApplicationTag({ name: '客服' }, 'csrf-123');
 
     expect(listConsoleApplications).toHaveBeenCalledWith('http://127.0.0.1:7800');
+    expect(getConsoleApplicationCatalog).toHaveBeenCalledWith('http://127.0.0.1:7800');
     expect(getConsoleApplication).toHaveBeenCalledWith('app-1', 'http://127.0.0.1:7800');
     expect(createConsoleApplication).toHaveBeenCalledWith(
       input,
+      'csrf-123',
+      'http://127.0.0.1:7800'
+    );
+    expect(updateConsoleApplication).toHaveBeenCalledWith(
+      'app-1',
+      {
+        name: 'Support Agent Pro',
+        description: 'updated support',
+        tag_ids: ['tag-1']
+      },
+      'csrf-123',
+      'http://127.0.0.1:7800'
+    );
+    expect(createConsoleApplicationTag).toHaveBeenCalledWith(
+      { name: '客服' },
       'csrf-123',
       'http://127.0.0.1:7800'
     );

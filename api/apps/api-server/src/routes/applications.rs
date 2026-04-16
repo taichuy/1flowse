@@ -3,11 +3,14 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use control_plane::{
-    application::{ApplicationService, CreateApplicationCommand},
+    application::{
+        ApplicationService, CreateApplicationCommand, CreateApplicationTagCommand,
+        UpdateApplicationCommand,
+    },
     errors::ControlPlaneError,
 };
 use serde::{Deserialize, Serialize};
@@ -32,6 +35,44 @@ pub struct CreateApplicationBody {
     pub icon_background: Option<String>,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct PatchApplicationBody {
+    pub name: String,
+    pub description: String,
+    #[serde(default)]
+    pub tag_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateApplicationTagBody {
+    pub name: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ApplicationTagResponse {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ApplicationTagCatalogResponse {
+    pub id: String,
+    pub name: String,
+    pub application_count: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ApplicationTypeOptionResponse {
+    pub value: String,
+    pub label: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ApplicationCatalogResponse {
+    pub types: Vec<ApplicationTypeOptionResponse>,
+    pub tags: Vec<ApplicationTagCatalogResponse>,
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ApplicationSummaryResponse {
     pub id: String,
@@ -41,7 +82,9 @@ pub struct ApplicationSummaryResponse {
     pub icon: Option<String>,
     pub icon_type: Option<String>,
     pub icon_background: Option<String>,
+    pub created_by: String,
     pub updated_at: String,
+    pub tags: Vec<ApplicationTagResponse>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -96,17 +139,51 @@ pub struct ApplicationDetailResponse {
     pub icon: Option<String>,
     pub icon_type: Option<String>,
     pub icon_background: Option<String>,
+    pub created_by: String,
     pub updated_at: String,
+    pub tags: Vec<ApplicationTagResponse>,
     pub sections: ApplicationSectionsResponse,
 }
 
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
+        .route("/applications/catalog", get(get_application_catalog))
+        .route("/applications/tags", post(create_application_tag))
         .route(
             "/applications",
             get(list_applications).post(create_application),
         )
-        .route("/applications/:id", get(get_application))
+        .route("/applications/:id", get(get_application).patch(patch_application))
+}
+
+fn to_application_tag(tag: domain::ApplicationTag) -> ApplicationTagResponse {
+    ApplicationTagResponse {
+        id: tag.id.to_string(),
+        name: tag.name,
+    }
+}
+
+fn to_application_tag_catalog_entry(
+    tag: domain::ApplicationTagCatalogEntry,
+) -> ApplicationTagCatalogResponse {
+    ApplicationTagCatalogResponse {
+        id: tag.id.to_string(),
+        name: tag.name,
+        application_count: tag.application_count,
+    }
+}
+
+fn application_type_catalog() -> Vec<ApplicationTypeOptionResponse> {
+    vec![
+        ApplicationTypeOptionResponse {
+            value: "agent_flow".to_string(),
+            label: "AgentFlow".to_string(),
+        },
+        ApplicationTypeOptionResponse {
+            value: "workflow".to_string(),
+            label: "工作流".to_string(),
+        },
+    ]
 }
 
 fn to_application_summary(application: domain::ApplicationRecord) -> ApplicationSummaryResponse {
@@ -118,7 +195,13 @@ fn to_application_summary(application: domain::ApplicationRecord) -> Application
         icon: application.icon,
         icon_type: application.icon_type,
         icon_background: application.icon_background,
+        created_by: application.created_by.to_string(),
         updated_at: application.updated_at.format(&Rfc3339).unwrap(),
+        tags: application
+            .tags
+            .into_iter()
+            .map(to_application_tag)
+            .collect(),
     }
 }
 
@@ -169,7 +252,13 @@ fn to_application_detail(application: domain::ApplicationRecord) -> ApplicationD
         icon: application.icon,
         icon_type: application.icon_type,
         icon_background: application.icon_background,
+        created_by: application.created_by.to_string(),
         updated_at: application.updated_at.format(&Rfc3339).unwrap(),
+        tags: application
+            .tags
+            .into_iter()
+            .map(to_application_tag)
+            .collect(),
         sections: to_sections_response(application.sections),
     }
 }
@@ -206,6 +295,30 @@ pub async fn list_applications(
             .map(to_application_summary)
             .collect(),
     )))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/catalog",
+    responses(
+        (status = 200, body = ApplicationCatalogResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_application_catalog(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<ApplicationCatalogResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let tags = ApplicationService::new(state.store.clone())
+        .list_application_tags(context.user.id)
+        .await?;
+
+    Ok(Json(ApiSuccess::new(ApplicationCatalogResponse {
+        types: application_type_catalog(),
+        tags: tags.into_iter().map(to_application_tag_catalog_entry).collect(),
+    })))
 }
 
 #[utoipa::path(
@@ -246,6 +359,38 @@ pub async fn create_application(
 }
 
 #[utoipa::path(
+    post,
+    path = "/api/console/applications/tags",
+    request_body = CreateApplicationTagBody,
+    responses(
+        (status = 201, body = ApplicationTagCatalogResponse),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn create_application_tag(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Json(body): Json<CreateApplicationTagBody>,
+) -> Result<(StatusCode, Json<ApiSuccess<ApplicationTagCatalogResponse>>), ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+
+    let created = ApplicationService::new(state.store.clone())
+        .create_application_tag(CreateApplicationTagCommand {
+            actor_user_id: context.user.id,
+            name: body.name,
+        })
+        .await?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(ApiSuccess::new(to_application_tag_catalog_entry(created))),
+    ))
+}
+
+#[utoipa::path(
     get,
     path = "/api/console/applications/{id}",
     params(
@@ -269,4 +414,51 @@ pub async fn get_application(
         .await?;
 
     Ok(Json(ApiSuccess::new(to_application_detail(application))))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/console/applications/{id}",
+    params(
+        ("id" = String, Path, description = "Application id")
+    ),
+    request_body = PatchApplicationBody,
+    responses(
+        (status = 200, body = ApplicationDetailResponse),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn patch_application(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(body): Json<PatchApplicationBody>,
+) -> Result<Json<ApiSuccess<ApplicationDetailResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+
+    let tag_ids = body
+        .tag_ids
+        .into_iter()
+        .map(|value| {
+            value
+                .parse::<Uuid>()
+                .map_err(|_| ControlPlaneError::InvalidInput("tag_ids"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let updated = ApplicationService::new(state.store.clone())
+        .update_application(UpdateApplicationCommand {
+            actor_user_id: context.user.id,
+            application_id: id,
+            name: body.name,
+            description: body.description,
+            tag_ids,
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_application_detail(updated))))
 }
