@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowse/flow-schema';
 
+import { NodeConfigTab } from '../components/detail/tabs/NodeConfigTab';
 import { NodeDetailPanel } from '../components/detail/NodeDetailPanel';
 import { AgentFlowEditorStoreProvider } from '../store/editor/provider';
 
@@ -35,5 +36,19 @@ describe('NodeDetailPanel', () => {
     expect(screen.getByRole('tab', { name: '上次运行' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '关闭节点详情' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'LLM' })).toBeInTheDocument();
+  });
+
+  test('shows node summary, read-only output contract and direct relations in config tab', () => {
+    render(
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(screen.getByText('节点说明')).toBeInTheDocument();
+    expect(screen.getByText('输出契约')).toBeInTheDocument();
+    expect(screen.getByText('上游节点')).toBeInTheDocument();
+    expect(screen.getByText('下游节点')).toBeInTheDocument();
+    expect(screen.getByText('模型输出')).toBeInTheDocument();
   });
 });

@@ -717,7 +717,7 @@ git commit -m "feat: add node detail actions and duplication"
 - Modify: `web/app/src/features/agent-flow/_tests/node-detail-panel.test.tsx`
 - Modify: `web/app/src/features/agent-flow/_tests/node-inspector.test.tsx`
 
-- [ ] **Step 1: Write the failing config-tab composition tests**
+- [x] **Step 1: Write the failing config-tab composition tests**
 
 ```tsx
 // web/app/src/features/agent-flow/_tests/node-detail-panel.test.tsx
@@ -768,7 +768,7 @@ test('keeps issue-driven focus working after the inspector loses its header chro
 });
 ```
 
-- [ ] **Step 2: Run the focused tests and confirm failure**
+- [x] **Step 2: Run the focused tests and confirm failure**
 
 Run:
 
@@ -780,7 +780,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: FAIL because `NodeConfigTab` 仍是空壳，且 summary / output / relations cards 尚未存在。
 
-- [ ] **Step 3: Implement the config-tab composition and relation helpers**
+- [x] **Step 3: Implement the config-tab composition and relation helpers**
 
 ```ts
 // web/app/src/features/agent-flow/lib/document/relations.ts
@@ -998,7 +998,7 @@ export interface NodeDefinition {
 }
 ```
 
-- [ ] **Step 4: Re-run the focused tests and confirm the config composition passes**
+- [x] **Step 4: Re-run the focused tests and confirm the config composition passes**
 
 Run:
 
@@ -1010,7 +1010,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: PASS with the summary, output contract and direct relation cards rendering around the stripped-down inspector.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add \

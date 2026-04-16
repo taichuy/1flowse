@@ -1,6 +1,5 @@
 import type { FlowBinding, FlowNodeDocument } from '@1flowse/flow-schema';
-import { Collapse, Input, InputNumber, Typography, Button } from 'antd';
-import { CloseOutlined } from '@ant-design/icons';
+import { Collapse, Input, InputNumber, Typography } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ConditionGroupField } from '../bindings/ConditionGroupField';
@@ -28,7 +27,9 @@ function getVisibleSections(
     fields: NodeDefinitionField[];
   }>
 ) {
-  return sections.filter((section) => section.key !== 'basics');
+  return sections.filter(
+    (section) => section.key !== 'basics' && section.key !== 'outputs'
+  );
 }
 
 function getOutputValue(node: FlowNodeDocument, outputKey: string): string {
@@ -137,7 +138,6 @@ export function NodeInspector() {
   }
 
   const activeNode = selectedNode;
-  const activeDefinition = definition;
 
   function updateField(fieldKey: string, value: unknown) {
     inspectorInteractions.updateField(fieldKey, value);
@@ -266,42 +266,7 @@ export function NodeInspector() {
   }
 
   return (
-    <aside ref={rootRef} className="agent-flow-editor__inspector">
-      <div className="agent-flow-editor__inspector-header">
-        <div className="agent-flow-editor__inspector-header-main">
-          <Typography.Text
-            className="agent-flow-editor__inspector-node-type"
-            type="secondary"
-          >
-            {activeDefinition.label}
-          </Typography.Text>
-          <div data-field-key="alias">
-            <Input
-              aria-label="节点别名"
-              className="agent-flow-editor__inspector-title-input"
-              placeholder="输入节点别名"
-              value={activeNode.alias}
-              onChange={(event) => updateField('alias', event.target.value)}
-            />
-          </div>
-          <div data-field-key="description">
-            <Input.TextArea
-              aria-label="节点简介"
-              autoSize={{ minRows: 1, maxRows: 3 }}
-              className="agent-flow-editor__inspector-description-input"
-              placeholder="添加节点简介..."
-              value={activeNode.description ?? ''}
-              onChange={(event) => updateField('description', event.target.value)}
-            />
-          </div>
-        </div>
-        <Button
-          type="text"
-          icon={<CloseOutlined />}
-          onClick={inspectorInteractions.closeInspector}
-          aria-label="Close Inspector"
-        />
-      </div>
+    <section ref={rootRef} className="agent-flow-node-detail__inspector">
       <Collapse
         activeKey={activeSectionKeys}
         className="agent-flow-editor__inspector-sections"
@@ -329,6 +294,6 @@ export function NodeInspector() {
           )
         }))}
       />
-    </aside>
+    </section>
   );
 }

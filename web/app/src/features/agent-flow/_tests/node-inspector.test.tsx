@@ -1,9 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import { describe, expect, test } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowse/flow-schema';
 
+import { NodeConfigTab } from '../components/detail/tabs/NodeConfigTab';
 import { NodeInspector } from '../components/inspector/NodeInspector';
 import {
   AgentFlowEditorStoreProvider,
@@ -54,9 +55,25 @@ function DocumentObserver({
   return null;
 }
 
+function FocusIssueSeed() {
+  const focusIssueField = useAgentFlowEditorStore(
+    (state) => state.focusIssueField
+  );
+
+  useEffect(() => {
+    focusIssueField({
+      nodeId: 'node-llm',
+      sectionKey: 'inputs',
+      fieldKey: 'config.model'
+    });
+  }, [focusIssueField]);
+
+  return null;
+}
+
 describe('NodeInspector', () => {
   test(
-    'renders node alias and description in the inspector header while keeping config sections below',
+    'renders config sections without repeating basics once summary content moves out',
     () => {
     render(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
@@ -65,10 +82,10 @@ describe('NodeInspector', () => {
     );
 
     expect(screen.queryByText('Basics')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('节点别名')).toHaveValue('LLM');
-    expect(screen.getByLabelText('节点简介')).toHaveValue('');
+    expect(screen.queryByLabelText('节点别名')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('节点简介')).not.toBeInTheDocument();
     expect(screen.getByText('Inputs')).toBeInTheDocument();
-    expect(screen.getByText('Outputs')).toBeInTheDocument();
+    expect(screen.queryByText('Outputs')).not.toBeInTheDocument();
     expect(screen.getByText('Policy')).toBeInTheDocument();
     expect(screen.getByText('Advanced')).toBeInTheDocument();
     expect(screen.getByLabelText('System Prompt')).toBeInTheDocument();
@@ -76,7 +93,7 @@ describe('NodeInspector', () => {
     10000
   );
 
-  test('updates node fields through inspector interactions instead of mutating document inline', () => {
+  test('updates node fields through summary interactions instead of mutating document inline', () => {
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
     render(
@@ -87,7 +104,7 @@ describe('NodeInspector', () => {
             latestDocument = document;
           }}
         />
-        <NodeInspector />
+        <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
 
@@ -111,5 +128,18 @@ describe('NodeInspector', () => {
         })
       ])
     );
+  });
+
+  test('keeps issue-driven focus working after the inspector loses its header chrome', async () => {
+    render(
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <FocusIssueSeed />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('模型')).toHaveFocus();
+    });
   });
 });
