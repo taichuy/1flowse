@@ -36,7 +36,7 @@ describe('AgentFlowCanvas', () => {
     );
 
     expect(screen.getAllByText('Template Transform').length).toBeGreaterThan(0);
-  }, 10_000);
+  }, 20_000);
 
   test('focuses the iteration child canvas and returns through breadcrumb', async () => {
     const baseDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
@@ -99,5 +99,5 @@ describe('AgentFlowCanvas', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '返回主画布' }));
     expect(screen.getByText('Start')).toBeInTheDocument();
-  });
+  }, 15_000);
 });

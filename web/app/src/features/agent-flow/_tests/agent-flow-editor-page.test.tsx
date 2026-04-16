@@ -1,6 +1,5 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Grid } from 'antd';
-import { useRef, useState } from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowse/flow-schema';
@@ -9,7 +8,6 @@ import * as orchestrationApi from '../api/orchestration';
 import { VersionHistoryDrawer } from '../components/history/VersionHistoryDrawer';
 import { AgentFlowEditorShell } from '../components/editor/AgentFlowEditorShell';
 import { AgentFlowEditorPage } from '../pages/AgentFlowEditorPage';
-import { useEditorAutosave } from '../hooks/useEditorAutosave';
 
 function createInitialState() {
   return {
@@ -23,71 +21,6 @@ function createInitialState() {
     versions: [],
     autosave_interval_seconds: 30
   };
-}
-
-function AutosaveHarness({
-  document,
-  lastSavedDocument,
-  onSave
-}: {
-  document: ReturnType<typeof createDefaultAgentFlowDocument>;
-  lastSavedDocument: ReturnType<typeof createDefaultAgentFlowDocument>;
-  onSave: (input: {
-    document: ReturnType<typeof createDefaultAgentFlowDocument>;
-    change_kind: 'layout' | 'logical';
-    summary: string;
-  }) => Promise<void>;
-}) {
-  const autosave = useEditorAutosave({
-    document,
-    lastSavedDocument,
-    onSave
-  });
-
-  return <span>{autosave.status}</span>;
-}
-
-function ImmediateSaveHarness({
-  onSave
-}: {
-  onSave: (input: {
-    document: ReturnType<typeof createDefaultAgentFlowDocument>;
-    change_kind: 'layout' | 'logical';
-    summary: string;
-  }) => Promise<void>;
-}) {
-  const initialDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-  const [document, setDocument] = useState(initialDocument);
-  const documentRef = useRef(initialDocument);
-  const lastSavedDocumentRef = useRef(initialDocument);
-  const autosave = useEditorAutosave({
-    document,
-    lastSavedDocument: lastSavedDocumentRef.current,
-    getCurrentDocument: () => documentRef.current,
-    getLastSavedDocument: () => lastSavedDocumentRef.current,
-    onSave
-  });
-
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        const nextDocument = {
-          ...documentRef.current,
-          editor: {
-            ...documentRef.current.editor,
-            viewport: { x: 120, y: 48, zoom: 0.85 }
-          }
-        };
-
-        documentRef.current = nextDocument;
-        setDocument(nextDocument);
-        void autosave.saveNow();
-      }}
-    >
-      save latest viewport
-    </button>
-  );
 }
 
 afterEach(() => {
@@ -162,63 +95,6 @@ describe('AgentFlowEditorShell', () => {
     });
   }, 10_000);
 
-  test('sends layout changes without appending history', async () => {
-    vi.useFakeTimers();
-    const lastSavedDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    const layoutChangedDocument = {
-      ...lastSavedDocument,
-      editor: {
-        ...lastSavedDocument.editor,
-        viewport: { x: 120, y: 48, zoom: 0.85 }
-      }
-    };
-    const saveDraft = vi.fn().mockResolvedValue(undefined);
-
-    render(
-      <AutosaveHarness
-        document={layoutChangedDocument}
-        lastSavedDocument={lastSavedDocument}
-        onSave={saveDraft}
-      />
-    );
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_000);
-    });
-
-    expect(saveDraft).toHaveBeenCalledWith(
-      expect.objectContaining({
-        change_kind: 'layout',
-        document: expect.objectContaining({
-          editor: expect.objectContaining({
-            viewport: { x: 120, y: 48, zoom: 0.85 }
-          })
-        })
-      })
-    );
-  });
-
-  test('manual save reads the latest viewport even before the next render commits', async () => {
-    const saveDraft = vi.fn().mockResolvedValue(undefined);
-
-    render(<ImmediateSaveHarness onSave={saveDraft} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'save latest viewport' }));
-
-    await waitFor(() => {
-      expect(saveDraft).toHaveBeenCalledWith(
-        expect.objectContaining({
-          change_kind: 'layout',
-          document: expect.objectContaining({
-            editor: expect.objectContaining({
-              viewport: { x: 120, y: 48, zoom: 0.85 }
-            })
-          })
-        })
-      );
-    });
-  });
-
   test('opens the selected issue target and focuses the node field', async () => {
     render(
       <div style={{ width: 1280, height: 720 }}>
@@ -290,7 +166,7 @@ describe('AgentFlowEditorShell', () => {
   });
 
   test('shows a desktop-only message on small screens', async () => {
-    vi.spyOn(Grid, 'useBreakpoint').mockReturnValueOnce({ lg: false } as never);
+    vi.spyOn(Grid, 'useBreakpoint').mockReturnValue({ lg: false } as never);
     vi.spyOn(orchestrationApi, 'fetchOrchestrationState').mockResolvedValueOnce(
       createInitialState()
     );
@@ -305,5 +181,25 @@ describe('AgentFlowEditorShell', () => {
     );
 
     expect(await screen.findByText('请使用桌面端编辑')).toBeInTheDocument();
+  });
+
+  test('renders provider-backed editor chrome on desktop', async () => {
+    vi.spyOn(Grid, 'useBreakpoint').mockReturnValue({ lg: true } as never);
+    vi.spyOn(orchestrationApi, 'fetchOrchestrationState').mockResolvedValueOnce(
+      createInitialState()
+    );
+
+    render(
+      <AppProviders>
+        <AgentFlowEditorPage
+          applicationId="app-1"
+          applicationName="Support Agent"
+        />
+      </AppProviders>
+    );
+
+    expect(await screen.findByRole('button', { name: '历史版本' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Issues' })).toBeInTheDocument();
+    expect(screen.queryByText('请使用桌面端编辑')).not.toBeInTheDocument();
   });
 });

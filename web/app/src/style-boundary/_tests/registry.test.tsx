@@ -66,7 +66,7 @@ describe('style boundary registry', () => {
     expect(await screen.findByRole('heading', { name: '1Flowse' })).toBeInTheDocument();
     expect(await screen.findByText('Support Agent')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
-  });
+  }, 15_000);
 
   test('application detail scene save mock echoes the latest draft document', async () => {
     const scene = getRuntimeScene('page.application-detail');

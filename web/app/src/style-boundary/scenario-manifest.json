@@ -98,8 +98,11 @@
       "web/app/src/features/applications/lib/application-sections.tsx",
       "web/app/src/features/agent-flow/pages/AgentFlowEditorPage.tsx",
       "web/app/src/features/agent-flow/components/editor/AgentFlowEditorShell.tsx",
+      "web/app/src/features/agent-flow/components/editor/AgentFlowCanvasFrame.tsx",
       "web/app/src/features/agent-flow/components/editor/AgentFlowCanvas.tsx",
       "web/app/src/features/agent-flow/components/editor/agent-flow-editor.css",
+      "web/app/src/features/agent-flow/components/canvas/custom-edge.tsx",
+      "web/app/src/features/agent-flow/components/canvas/custom-connection-line.tsx",
       "web/app/src/style-boundary/registry.tsx",
       "web/app/src/app/router.tsx"
     ],

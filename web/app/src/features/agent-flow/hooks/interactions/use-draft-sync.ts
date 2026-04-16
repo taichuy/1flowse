@@ -48,6 +48,7 @@ export function useDraftSync({
     (state) => state.replaceFromServerState
   );
   const saveInFlightRef = useRef(false);
+  const saveNowRef = useRef<() => Promise<boolean>>(async () => false);
   const hasPendingChanges =
     JSON.stringify(workingDocument) !== JSON.stringify(lastSavedDocument);
 
@@ -98,6 +99,8 @@ export function useDraftSync({
     }
   }
 
+  saveNowRef.current = saveNow;
+
   async function restoreVersionById(versionId: string) {
     if (!restoreVersionOverride && !csrfToken) {
       return;
@@ -136,11 +139,11 @@ export function useDraftSync({
     }
 
     const timer = window.setInterval(() => {
-      void saveNow();
+      void saveNowRef.current();
     }, autosaveIntervalMs);
 
     return () => window.clearInterval(timer);
-  }, [autosaveIntervalMs, hasPendingChanges, setAutosaveStatus, workingDocument]);
+  }, [autosaveIntervalMs, hasPendingChanges, setAutosaveStatus]);
 
   return {
     hasPendingChanges,

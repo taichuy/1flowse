@@ -1,7 +1,7 @@
 ---
 memory_type: project
-topic: agentFlow editor store-centered 重构已进入正式实施计划阶段
-summary: 用户在 `2026-04-16 10` 审阅 `docs/superpowers/specs/1flowse/2026-04-16-agentflow-editor-store-centered-restructure-design.md` 后确认“没什么问题”，并要求生成正式实施计划；计划已落到 `docs/superpowers/plans/2026-04-16-agentflow-editor-store-centered-restructure.md`。
+topic: agentFlow editor store-centered 重构计划已完成实现与验证
+summary: `agent-flow` store-centered 重构已按计划完成，关键提交为 `497a6a6c`、`b35f365f`，最终 `agent-flow` targeted suite、`pnpm --dir web lint`、`pnpm --dir web/app build`、style-boundary 双检查与 `pnpm --dir web test` 全部通过。
 keywords:
   - agent-flow
   - editor
@@ -9,13 +9,15 @@ keywords:
   - restructure
   - plan
   - hooks
+  - verification
+  - completed
 match_when:
-  - 需要继续执行 agentFlow editor store-centered 重构
-  - 需要判断该专题当前处于设计阶段还是计划阶段
-  - 需要找到当前正式执行入口文档
+  - 需要继续维护 agentFlow editor store-centered 重构后的代码
+  - 需要确认该专题是否已经完成
+  - 需要找到本轮重构的执行与验证证据
 created_at: 2026-04-16 10
-updated_at: 2026-04-16 10
-last_verified_at: 2026-04-16 10
+updated_at: 2026-04-16 11
+last_verified_at: 2026-04-16 11
 decision_policy: verify_before_decision
 scope:
   - docs/superpowers/specs/1flowse/2026-04-16-agentflow-editor-store-centered-restructure-design.md
@@ -23,33 +25,33 @@ scope:
   - web/app/src/features/agent-flow
 ---
 
-# agentFlow editor store-centered 重构已进入正式实施计划阶段
+# agentFlow editor store-centered 重构计划已完成实现与验证
 
 ## 时间
 
-`2026-04-16 10`
+`2026-04-16 11`
 
 ## 谁在做什么
 
-- 用户确认 `agent-flow` store-centered 重构设计稿没有原则性问题。
-- AI 根据已确认设计稿生成正式实施计划，供后续直接执行。
+- 用户确认设计稿后要求直接执行计划。
+- AI 已完成 `document transforms + editor store + interaction hooks + presentational canvas` 的重构落地，并完成计划文档回填与阶段提交。
 
 ## 为什么这样做
 
-- 当前重构专题已经完成设计决策，不需要继续停留在 spec 讨论。
-- 后续实施要围绕一份稳定计划推进，避免再次回到“边看 spec 边临场拆任务”的状态。
+- 当前专题不再处于“待执行”状态，后续讨论应基于已落地实现而不是重开计划。
+- 维护该区域时，应优先沿用现有 store-centered 架构，而不是回退到组件内直接拼 `FlowAuthoringDocument`。
 
 ## 为什么要做
 
-- 为 `editor store + document transforms + interaction hooks + presentational UI` 的分层迁移提供直接执行入口。
-- 让后续每个任务都能对照明确文件边界、验证命令和提交粒度推进。
+- 为后续在 `web/app/src/features/agent-flow` 上继续迭代提供稳定内核。
+- 保留本轮验证证据，避免后续误判“重构是否已真正完成”。
 
 ## 截止日期
 
-- 未指定
+- 已完成
 
 ## 决策背后动机
 
-- 本轮不再改变产品范围，只改变前端实现架构。
-- 正式执行入口固定为 `docs/superpowers/plans/2026-04-16-agentflow-editor-store-centered-restructure.md`。
-- 后续若执行该计划，应同步勾选计划文档状态并按任务粒度提交。
+- 关键提交为 `497a6a6c`（Canvas / Node / Edge interaction hooks）与 `b35f365f`（draft sync / inspector / navigation hooks）；最终收尾提交已完成，并已同步回填到计划文档。
+- `useEditorAutosave.ts` 与 `node-registry.tsx` 已删除，`style-boundary` 对 `page.application-detail` 的 impactFiles 已更新。
+- 最终验证已包含 targeted `agent-flow` suite、`pnpm --dir web lint`、`pnpm --dir web/app build`、`pnpm --dir web test` 与 style-boundary page/file 检查。

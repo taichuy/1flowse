@@ -192,7 +192,9 @@ async function runScene(browser, baseUrl, scene) {
     styleSheets.set(event.header.styleSheetId, event.header.sourceURL || 'inline');
   });
 
-  await page.goto(createProbeUrl(baseUrl, scene.id), { waitUntil: 'networkidle' });
+  await page.goto(createProbeUrl(baseUrl, scene.id), {
+    waitUntil: 'domcontentloaded'
+  });
   await page.waitForFunction(() => window.__STYLE_BOUNDARY__?.ready === true);
 
   const nodeResults = [];

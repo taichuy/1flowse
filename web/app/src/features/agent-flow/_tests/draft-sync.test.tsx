@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowse/flow-schema';
 
@@ -33,6 +33,10 @@ beforeEach(() => {
     sessionStatus: 'authenticated',
     csrfToken: 'csrf-token'
   });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('useDraftSync', () => {
@@ -185,5 +189,63 @@ describe('useDraftSync', () => {
       y: 48,
       zoom: 0.85
     });
+  });
+
+  test('autosaves layout changes on interval and preserves layout classification', async () => {
+    vi.useFakeTimers();
+    const layoutChangedDocument = {
+      ...createDefaultAgentFlowDocument({ flowId: 'flow-1' }),
+      editor: {
+        ...createDefaultAgentFlowDocument({ flowId: 'flow-1' }).editor,
+        viewport: { x: 120, y: 48, zoom: 0.85 }
+      }
+    };
+    const saveDraftOverride = vi.fn(async (input) => ({
+      ...createInitialState(input.document),
+      draft: {
+        ...createInitialState(input.document).draft,
+        updated_at: '2026-04-16T10:30:00Z',
+        document: input.document
+      }
+    }));
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        {children}
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const { result } = renderHook(
+      () => ({
+        draftSync: useDraftSync({
+          applicationId: 'app-1',
+          saveDraftOverride
+        }),
+        setWorkingDocument: useAgentFlowEditorStore(
+          (state) => state.setWorkingDocument
+        )
+      }),
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.setWorkingDocument(layoutChangedDocument);
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+
+    expect(saveDraftOverride).toHaveBeenCalledWith(
+      expect.objectContaining({
+        change_kind: 'layout',
+        document: expect.objectContaining({
+          editor: expect.objectContaining({
+            viewport: { x: 120, y: 48, zoom: 0.85 }
+          })
+        })
+      })
+    );
+    expect(['idle', 'saved']).toContain(result.current.draftSync.status);
   });
 });

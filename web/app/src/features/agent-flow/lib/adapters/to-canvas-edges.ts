@@ -1,4 +1,4 @@
-import { MarkerType, type Edge } from '@xyflow/react';
+import { MarkerType } from '@xyflow/react';
 import type { FlowAuthoringDocument, FlowNodeType } from '@1flowse/flow-schema';
 
 import type { AgentFlowCanvasEdge } from '../../components/canvas/node-types';

@@ -34,12 +34,14 @@ function createProps({
   description = '',
   canEnterContainer = false,
   nodeType,
+  showSourceHandle = true,
   showTargetHandle
 }: {
   alias: string;
   description?: string;
   canEnterContainer?: boolean;
   nodeType: 'start' | 'llm';
+  showSourceHandle?: boolean;
   showTargetHandle: boolean;
 }) {
   return {
@@ -66,6 +68,7 @@ function createProps({
       onOpenPicker: vi.fn(),
       onSelectNode: vi.fn(),
       pickerOpen: false,
+      showSourceHandle,
       showTargetHandle,
       typeLabel: alias
     },
