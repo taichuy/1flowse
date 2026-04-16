@@ -55,3 +55,4 @@ scope:
 
 - `2026-04-13 13`：在仓库根误读 `package.json` 失败，随后通过 `rg --files` 确认前端 workspace 根在 `web/`，验证恢复正常。
 - `2026-04-13 14`：为前端浏览器回归方案补查依赖时，再次把 `package.json` 和 `pnpm-lock.yaml` 主观写成仓库根路径，命令直接报不存在；改为限定读取 `web/package.json` 与 `web/pnpm-lock.yaml` 后恢复正常。
+- `2026-04-16 10`：为 `agent-flow` 重构计划核对前端依赖时，在仓库根把 `package.json`、`pnpm-lock.yaml` 混进 `rg` 路径参数，命令返回 `No such file or directory`；改为只读取 `web/app/package.json` 并先用 `rg --files -g 'package.json' -g 'pnpm-lock.yaml' web` 确认真实路径后恢复正常。
