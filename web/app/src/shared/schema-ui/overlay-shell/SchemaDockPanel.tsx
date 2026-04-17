@@ -12,7 +12,8 @@ export function SchemaDockPanel({
   className,
   bodyClassName,
   headerExtra,
-  style
+  style,
+  headerless = false
 }: {
   schema: DockPanelSchema;
   width?: number;
@@ -23,6 +24,7 @@ export function SchemaDockPanel({
   bodyClassName?: string;
   headerExtra?: ReactNode;
   style?: CSSProperties;
+  headerless?: boolean;
 }) {
   const resolvedWidth = width ?? schema.width;
 
@@ -35,15 +37,17 @@ export function SchemaDockPanel({
         ...(resolvedWidth != null ? { width: `${resolvedWidth}px` } : {})
       }}
     >
-      <header>
-        <div>{schema.title}</div>
-        {headerExtra}
-        {onClose ? (
-          <Button aria-label={`关闭${schema.title}`} type="text" onClick={onClose}>
-            关闭
-          </Button>
-        ) : null}
-      </header>
+      {headerless ? null : (
+        <header>
+          <div>{schema.title}</div>
+          {headerExtra}
+          {onClose ? (
+            <Button aria-label={`关闭${schema.title}`} type="text" onClick={onClose}>
+              关闭
+            </Button>
+          ) : null}
+        </header>
+      )}
       <div className={bodyClassName}>{children}</div>
       {footer ? <footer>{footer}</footer> : null}
     </aside>

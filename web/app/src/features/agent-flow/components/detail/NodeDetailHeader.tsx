@@ -1,42 +1,44 @@
 import { BookOutlined, CloseOutlined, HomeOutlined } from '@ant-design/icons';
-import { Button, Divider, Input, Space } from 'antd';
+import { Button, Divider, Space } from 'antd';
 
-import { nodeDefinitions } from '../../lib/node-definitions';
+import type { CanvasNodeSchema } from '../../../../shared/schema-ui/contracts/canvas-node-schema';
+import { SchemaRenderer } from '../../../../shared/schema-ui/runtime/SchemaRenderer';
+import type { SchemaAdapter } from '../../../../shared/schema-ui/registry/create-renderer-registry';
+
+import { agentFlowRendererRegistry } from '../../schema/agent-flow-renderer-registry';
 import { useNodeDetailActions } from '../../hooks/interactions/use-node-detail-actions';
-import { useInspectorInteractions } from '../../hooks/interactions/use-inspector-interactions';
-import { getNodeDefinitionMeta } from '../../lib/node-definitions';
-import { useAgentFlowEditorStore } from '../../store/editor/provider';
-import {
-  selectSelectedNodeId,
-  selectWorkingDocument
-} from '../../store/editor/selectors';
 import { NodeActionMenu } from './NodeActionMenu';
 import { NodeRunButton } from './NodeRunButton';
 
+function findHeaderField(
+  schema: CanvasNodeSchema,
+  path: string
+) {
+  return schema.detail.header.blocks.find(
+    (block) => block.kind === 'field' && block.path === path
+  );
+}
+
 export function NodeDetailHeader({
+  schema,
+  adapter,
   onClose,
   onRunNode,
   runLoading = false
 }: {
+  schema: CanvasNodeSchema;
+  adapter: SchemaAdapter;
   onClose: () => void;
   onRunNode?: (() => void) | undefined;
   runLoading?: boolean;
 }) {
-  const document = useAgentFlowEditorStore(selectWorkingDocument);
-  const selectedNodeId = useAgentFlowEditorStore(selectSelectedNodeId);
-  const selectedNode = selectedNodeId
-    ? document.graph.nodes.find((node) => node.id === selectedNodeId) ?? null
-    : null;
-  const definition = selectedNode ? nodeDefinitions[selectedNode.type] ?? null : null;
-  const definitionMeta = selectedNode
-    ? getNodeDefinitionMeta(selectedNode.type)
-    : null;
+  const definitionMeta = adapter.getDerived('definitionMeta') as
+    | { helpHref?: string | null }
+    | null
+    | undefined;
   const detailActions = useNodeDetailActions();
-  const { updateField } = useInspectorInteractions();
-
-  if (!selectedNode || !definition || !definitionMeta) {
-    return null;
-  }
+  const aliasField = findHeaderField(schema, 'alias');
+  const descriptionField = findHeaderField(schema, 'description');
 
   return (
     <header
@@ -48,16 +50,17 @@ export function NodeDetailHeader({
           <div className="agent-flow-node-detail__icon-wrapper">
             <HomeOutlined />
           </div>
-          <Input
-            aria-label="节点别名"
-            className="agent-flow-editor__inspector-title-input"
-            value={selectedNode.alias}
-            onChange={(event) => updateField('alias', event.target.value)}
-          />
+          {aliasField ? (
+            <SchemaRenderer
+              adapter={adapter}
+              blocks={[aliasField]}
+              registry={agentFlowRendererRegistry}
+            />
+          ) : null}
         </div>
         <Space className="agent-flow-node-detail__actions" size={4}>
           <NodeRunButton onRunNode={onRunNode} loading={runLoading} />
-          {definitionMeta.helpHref ? (
+          {definitionMeta?.helpHref ? (
             <Button
               aria-label="帮助文档"
               href={definitionMeta.helpHref}
@@ -80,14 +83,13 @@ export function NodeDetailHeader({
           />
         </Space>
       </div>
-      <Input.TextArea
-        aria-label="节点简介"
-        autoSize={{ minRows: 1, maxRows: 3 }}
-        className="agent-flow-editor__inspector-description-input"
-        placeholder="添加描述..."
-        value={selectedNode.description ?? ''}
-        onChange={(event) => updateField('description', event.target.value)}
-      />
+      {descriptionField ? (
+        <SchemaRenderer
+          adapter={adapter}
+          blocks={[descriptionField]}
+          registry={agentFlowRendererRegistry}
+        />
+      ) : null}
     </header>
   );
 }

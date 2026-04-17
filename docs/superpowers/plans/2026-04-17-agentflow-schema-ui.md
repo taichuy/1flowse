@@ -835,7 +835,7 @@ git commit -m "feat: add agent-flow node schema registry"
 - Modify: `web/app/src/features/agent-flow/_tests/node-inspector.test.tsx`
 - Modify: `web/app/src/features/agent-flow/_tests/node-detail-panel.test.tsx`
 
-- [ ] **Step 1: Update the failing detail and inspector tests**
+- [x] **Step 1: Update the failing detail and inspector tests**
 
 ```tsx
 // web/app/src/features/agent-flow/_tests/node-detail-panel.test.tsx
@@ -869,7 +869,7 @@ test('renders config sections from node schema instead of hard-coded nodeDefinit
 });
 ```
 
-- [ ] **Step 2: Run the detail/inspector tests and confirm they fail**
+- [x] **Step 2: Run the detail/inspector tests and confirm they fail**
 
 Run:
 
@@ -881,7 +881,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: FAIL because the current detail panel and inspector still hand-wire the old structure.
 
-- [ ] **Step 3: Implement schema-driven detail panel, header and view renderers**
+- [x] **Step 3: Implement schema-driven detail panel, header and view renderers**
 
 ```tsx
 // web/app/src/features/agent-flow/components/detail/NodeDetailPanel.tsx
@@ -966,7 +966,7 @@ export function NodeInspector() {
 }
 ```
 
-- [ ] **Step 4: Run the detail/inspector tests and confirm they pass**
+- [x] **Step 4: Run the detail/inspector tests and confirm they pass**
 
 Run:
 
@@ -978,7 +978,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: PASS with the updated schema-driven assertions green.
 
-- [ ] **Step 5: Commit the schema-driven detail migration**
+- [x] **Step 5: Commit the schema-driven detail migration**
 
 ```bash
 git add \

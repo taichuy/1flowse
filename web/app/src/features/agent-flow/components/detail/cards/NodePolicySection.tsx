@@ -1,4 +1,5 @@
 import { Select, Switch, Typography } from 'antd';
+import type { SchemaAdapter } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 
 import { useInspectorInteractions } from '../../../hooks/interactions/use-inspector-interactions';
 import { useAgentFlowEditorStore } from '../../../store/editor/provider';
@@ -7,13 +8,19 @@ import {
   selectWorkingDocument
 } from '../../../store/editor/selectors';
 
-export function NodePolicySection() {
+export function NodePolicySection({
+  adapter
+}: {
+  adapter?: SchemaAdapter;
+} = {}) {
   const document = useAgentFlowEditorStore(selectWorkingDocument);
   const selectedNodeId = useAgentFlowEditorStore(selectSelectedNodeId);
   const { updateField } = useInspectorInteractions();
-  const selectedNode = selectedNodeId
-    ? document.graph.nodes.find((node) => node.id === selectedNodeId) ?? null
-    : null;
+  const selectedNode =
+    adapter?.getDerived('node') ??
+    (selectedNodeId
+      ? document.graph.nodes.find((node) => node.id === selectedNodeId) ?? null
+      : null);
 
   if (!selectedNode || !selectedNodeId) {
     return null;
@@ -51,7 +58,14 @@ export function NodePolicySection() {
           aria-label="失败重试"
           checked={Boolean(selectedNode.config.retry_enabled)}
           className="agent-flow-node-detail__policy-control"
-          onChange={(checked) => updateField('config.retry_enabled', checked)}
+          onChange={(checked) => {
+            if (adapter) {
+              adapter.setValue('config.retry_enabled', checked);
+              return;
+            }
+
+            updateField('config.retry_enabled', checked);
+          }}
         />
       </div>
       <div
@@ -90,7 +104,14 @@ export function NodePolicySection() {
             }}
             popupMatchSelectWidth={false}
             value={(selectedNode.config.error_policy as string | undefined) ?? 'none'}
-            onChange={(value) => updateField('config.error_policy', value)}
+            onChange={(value) => {
+              if (adapter) {
+                adapter.setValue('config.error_policy', value);
+                return;
+              }
+
+              updateField('config.error_policy', value);
+            }}
           />
         </div>
       </div>

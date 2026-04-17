@@ -1,5 +1,6 @@
 import { Button, Empty, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
+import type { SchemaAdapter } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 
 import { useAgentFlowEditorStore } from '../../../store/editor/provider';
 import {
@@ -7,20 +8,37 @@ import {
   selectWorkingDocument
 } from '../../../store/editor/selectors';
 
-export function NodeOutputContractCard() {
+export function NodeOutputContractCard({
+  adapter
+}: {
+  adapter?: SchemaAdapter;
+} = {}) {
   const document = useAgentFlowEditorStore(selectWorkingDocument);
   const selectedNodeId = useAgentFlowEditorStore(selectSelectedNodeId);
-  const selectedNode = selectedNodeId
-    ? document.graph.nodes.find((node) => node.id === selectedNodeId) ?? null
-    : null;
+  const selectedNode =
+    adapter?.getDerived('node') ??
+    (selectedNodeId
+      ? document.graph.nodes.find((node) => node.id === selectedNodeId) ?? null
+      : null);
 
   if (!selectedNode) {
     return null;
   }
 
   // Use a customized title for the start node
-  const title = selectedNode.type === 'start' ? '输入字段' : '输出变量';
-  const subtitle = selectedNode.type === 'start' ? '设置的输入可在工作流程中使用' : '节点产出的数据字段';
+  const title =
+    'type' in selectedNode && selectedNode.type === 'start'
+      ? '输入字段'
+      : '输出变量';
+  const subtitle =
+    'type' in selectedNode && selectedNode.type === 'start'
+      ? '设置的输入可在工作流程中使用'
+      : '节点产出的数据字段';
+  const outputs =
+    (adapter?.getValue('config.output_contract') as Array<{
+      key: string;
+      valueType: string;
+    }>) ?? selectedNode.outputs;
 
   return (
     <div className="agent-flow-node-detail__section">
@@ -34,9 +52,9 @@ export function NodeOutputContractCard() {
         {subtitle}
       </Typography.Text>
       
-      {selectedNode.outputs.length > 0 ? (
+      {outputs.length > 0 ? (
         <div className="agent-flow-node-detail__list">
-          {selectedNode.outputs.map((output) => (
+          {outputs.map((output) => (
             <div key={output.key} className="agent-flow-node-detail__list-item">
               <div className="agent-flow-node-detail__list-item-left">
                 <span className="agent-flow-node-detail__list-item-icon">{'{x}'}</span>

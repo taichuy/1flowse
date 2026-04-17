@@ -5,6 +5,39 @@ import { describe, expect, test, vi } from 'vitest';
 import { createDefaultAgentFlowDocument } from '@1flowse/flow-schema';
 import { AppProviders } from '../../../app/AppProviders';
 
+const schemaRuntimeSpies = vi.hoisted(() => ({
+  resolveAgentFlowNodeSchema: vi.fn(),
+  createAgentFlowNodeSchemaAdapter: vi.fn()
+}));
+
+vi.mock('../schema/node-schema-registry', async () => {
+  const actual = await vi.importActual<typeof import('../schema/node-schema-registry')>(
+    '../schema/node-schema-registry'
+  );
+
+  return {
+    ...actual,
+    resolveAgentFlowNodeSchema: vi.fn((...args) => {
+      schemaRuntimeSpies.resolveAgentFlowNodeSchema(...args);
+      return actual.resolveAgentFlowNodeSchema(...args);
+    })
+  };
+});
+
+vi.mock('../schema/node-schema-adapter', async () => {
+  const actual = await vi.importActual<typeof import('../schema/node-schema-adapter')>(
+    '../schema/node-schema-adapter'
+  );
+
+  return {
+    ...actual,
+    createAgentFlowNodeSchemaAdapter: vi.fn((...args) => {
+      schemaRuntimeSpies.createAgentFlowNodeSchemaAdapter(...args);
+      return actual.createAgentFlowNodeSchemaAdapter(...args);
+    })
+  };
+});
+
 import { createNodeDocument } from '../lib/document/node-factory';
 import { NodeDetailPanel } from '../components/detail/NodeDetailPanel';
 import { NodeConfigTab } from '../components/detail/tabs/NodeConfigTab';
@@ -115,6 +148,20 @@ function renderWithProviders(ui: ReactNode) {
 }
 
 describe('NodeInspector', () => {
+  test('reads config sections through the node schema registry and adapter bridge', () => {
+    schemaRuntimeSpies.resolveAgentFlowNodeSchema.mockClear();
+    schemaRuntimeSpies.createAgentFlowNodeSchemaAdapter.mockClear();
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <NodeInspector />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(schemaRuntimeSpies.resolveAgentFlowNodeSchema).toHaveBeenCalledWith('llm');
+    expect(schemaRuntimeSpies.createAgentFlowNodeSchemaAdapter).toHaveBeenCalledTimes(1);
+  });
+
   test(
     'renders config sections as always-open blocks without repeating basics once summary content moves out',
     () => {

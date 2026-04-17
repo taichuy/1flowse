@@ -1,5 +1,6 @@
 import { Typography } from 'antd';
 import { HomeOutlined, PlusOutlined } from '@ant-design/icons';
+import type { SchemaAdapter } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 
 import {
   getDirectDownstreamNodes
@@ -11,16 +12,23 @@ import {
 } from '../../../store/editor/selectors';
 import { useNodeInteractions } from '../../../hooks/interactions/use-node-interactions';
 
-export function NodeRelationsCard() {
+export function NodeRelationsCard({
+  adapter
+}: {
+  adapter?: SchemaAdapter;
+} = {}) {
   const document = useAgentFlowEditorStore(selectWorkingDocument);
   const selectedNodeId = useAgentFlowEditorStore(selectSelectedNodeId);
   const { openNodePicker } = useNodeInteractions();
+  const downstreamNodes =
+    (adapter?.getDerived('downstreamNodes') as Array<{
+      id: string;
+      alias: string;
+    }>) ?? (selectedNodeId ? getDirectDownstreamNodes(document, selectedNodeId) : []);
 
   if (!selectedNodeId) {
     return null;
   }
-
-  const downstreamNodes = getDirectDownstreamNodes(document, selectedNodeId);
 
   return (
     <div className="agent-flow-node-detail__section">
@@ -45,9 +53,16 @@ export function NodeRelationsCard() {
               {node.alias}
             </div>
           ))}
-          <div 
+          <div
             className="agent-flow-node-detail__relation-add"
-            onClick={() => openNodePicker(selectedNodeId)}
+            onClick={() => {
+              if (adapter) {
+                adapter.dispatch('openNodePicker', { nodeId: selectedNodeId });
+                return;
+              }
+
+              openNodePicker(selectedNodeId);
+            }}
           >
             <PlusOutlined /> 添加并行节点
           </div>
