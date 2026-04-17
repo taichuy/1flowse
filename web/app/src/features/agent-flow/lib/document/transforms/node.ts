@@ -73,6 +73,57 @@ export function moveNodes(
   };
 }
 
+function collectNodeIdsToRemove(
+  document: FlowAuthoringDocument,
+  rootNodeId: string
+) {
+  const queue = [rootNodeId];
+  const collectedIds: string[] = [];
+
+  while (queue.length > 0) {
+    const currentNodeId = queue.shift();
+
+    if (!currentNodeId || collectedIds.includes(currentNodeId)) {
+      continue;
+    }
+
+    collectedIds.push(currentNodeId);
+
+    for (const candidate of document.graph.nodes) {
+      if (candidate.containerId === currentNodeId) {
+        queue.push(candidate.id);
+      }
+    }
+  }
+
+  return collectedIds;
+}
+
+export function removeNodeSubgraph(
+  document: FlowAuthoringDocument,
+  payload: { nodeId: string }
+): FlowAuthoringDocument {
+  const node = getNodeById(document, payload.nodeId);
+
+  if (!node) {
+    return document;
+  }
+
+  const removedNodeIds = new Set(collectNodeIdsToRemove(document, payload.nodeId));
+
+  return {
+    ...document,
+    graph: {
+      ...document.graph,
+      nodes: document.graph.nodes.filter((candidate) => !removedNodeIds.has(candidate.id)),
+      edges: document.graph.edges.filter(
+        (edge) =>
+          !removedNodeIds.has(edge.source) && !removedNodeIds.has(edge.target)
+      )
+    }
+  };
+}
+
 export function updateNodeField(
   document: FlowAuthoringDocument,
   payload: {

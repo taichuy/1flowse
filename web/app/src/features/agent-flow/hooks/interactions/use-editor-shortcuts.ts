@@ -1,10 +1,12 @@
 import { removeEdge } from '../../lib/document/transforms/edge';
 import { useEffect } from 'react';
 
+import { useNodeDetailActions } from './use-node-detail-actions';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 
 export function useEditorShortcuts() {
   const workingDocument = useAgentFlowEditorStore((state) => state.workingDocument);
+  const selectedNodeId = useAgentFlowEditorStore((state) => state.selectedNodeId);
   const selectedEdgeId = useAgentFlowEditorStore((state) => state.selectedEdgeId);
   const setSelection = useAgentFlowEditorStore((state) => state.setSelection);
   const setWorkingDocument = useAgentFlowEditorStore(
@@ -14,6 +16,7 @@ export function useEditorShortcuts() {
     (state) => state.setInteractionState
   );
   const setPanelState = useAgentFlowEditorStore((state) => state.setPanelState);
+  const detailActions = useNodeDetailActions();
 
   useEffect(() => {
     function isEditableTarget(target: EventTarget | null) {
@@ -29,24 +32,31 @@ export function useEditorShortcuts() {
     }
 
     function handleKeyDown(event: KeyboardEvent) {
-      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedEdgeId) {
+      if (event.key === 'Delete' || event.key === 'Backspace') {
         if (isEditableTarget(event.target)) {
           return;
         }
 
         event.preventDefault();
 
-        const nextDocument = removeEdge(workingDocument, {
-          edgeId: selectedEdgeId
-        });
-
-        if (nextDocument !== workingDocument) {
-          setWorkingDocument(nextDocument);
+        if (selectedNodeId) {
+          detailActions.deleteSelectedNode();
+          return;
         }
 
-        setSelection({
-          selectedEdgeId: null
-        });
+        if (selectedEdgeId) {
+          const nextDocument = removeEdge(workingDocument, {
+            edgeId: selectedEdgeId
+          });
+
+          if (nextDocument !== workingDocument) {
+            setWorkingDocument(nextDocument);
+          }
+
+          setSelection({
+            selectedEdgeId: null
+          });
+        }
 
         return;
       }
@@ -82,6 +92,8 @@ export function useEditorShortcuts() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
+    detailActions,
+    selectedNodeId,
     selectedEdgeId,
     setInteractionState,
     setPanelState,

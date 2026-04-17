@@ -1,4 +1,5 @@
 import { duplicateNodeSubgraph, getDuplicatedNodeId } from '../../lib/document/transforms/duplicate';
+import { removeNodeSubgraph } from '../../lib/document/transforms/node';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 import {
   selectSelectedNodeId,
@@ -49,6 +50,34 @@ export function useNodeDetailActions() {
         selectedNodeId: duplicatedNodeId,
         selectedNodeIds: [duplicatedNodeId],
         selectedEdgeId: null
+      });
+    },
+    deleteSelectedNode() {
+      if (!selectedNodeId) {
+        return;
+      }
+
+      const nextDocument = removeNodeSubgraph(document, { nodeId: selectedNodeId });
+
+      if (nextDocument === document) {
+        return;
+      }
+
+      setWorkingDocument(nextDocument);
+      setSelection({
+        selectedNodeId: null,
+        selectedNodeIds: [],
+        selectedEdgeId: null,
+        focusedFieldKey: null,
+        openInspectorSectionKey: null
+      });
+      setInteractionState({
+        pendingLocateNodeId: null,
+        connectingPayload: {
+          sourceNodeId: null,
+          sourceHandleId: null,
+          sourceNodeType: null
+        }
       });
     }
   };

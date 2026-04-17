@@ -1,18 +1,83 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
+import { createDefaultAgentFlowDocument } from '@1flowse/flow-schema';
+
 import { NodeActionMenu } from '../components/detail/NodeActionMenu';
+import { useNodeDetailActions } from '../hooks/interactions/use-node-detail-actions';
+import {
+  AgentFlowEditorStoreProvider,
+  useAgentFlowEditorStore
+} from '../store/editor/provider';
+
+function createInitialState() {
+  return {
+    flow_id: 'flow-1',
+    draft: {
+      id: 'draft-1',
+      flow_id: 'flow-1',
+      updated_at: '2026-04-16T10:00:00Z',
+      document: createDefaultAgentFlowDocument({ flowId: 'flow-1' })
+    },
+    autosave_interval_seconds: 30,
+    versions: []
+  };
+}
 
 describe('NodeActionMenu', () => {
-  test('exposes locate and copy actions only', async () => {
-    render(<NodeActionMenu onLocate={vi.fn()} onCopy={vi.fn()} />);
+  test('exposes locate, copy and delete actions', async () => {
+    const onDelete = vi.fn();
+
+    render(
+      <NodeActionMenu
+        onLocate={vi.fn()}
+        onCopy={vi.fn()}
+        onDelete={onDelete}
+      />
+    );
 
     fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
 
     expect(await screen.findByRole('menuitem', { name: '定位节点' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: '复制节点' })).toBeInTheDocument();
-    expect(
-      screen.queryByRole('menuitem', { name: '删除节点' })
-    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: '删除节点' }));
+
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  test('deletes the selected node from the editor store', () => {
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        {children}
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const { result } = renderHook(
+      () => {
+        const actions = useNodeDetailActions();
+
+        return {
+          ...actions,
+          nodes: useAgentFlowEditorStore((state) => state.workingDocument.graph.nodes),
+          selectedNodeId: useAgentFlowEditorStore((state) => state.selectedNodeId)
+        };
+      },
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.deleteSelectedNode();
+    });
+
+    expect(result.current.selectedNodeId).toBe(null);
+    expect(result.current.nodes).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'node-llm'
+        })
+      ])
+    );
   });
 });

@@ -68,4 +68,57 @@ describe('useEditorShortcuts', () => {
       ])
     );
   });
+
+  test('removes the selected node when pressing Delete', () => {
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        {children}
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const { result } = renderHook(
+      () => {
+        useEditorShortcuts();
+
+        return {
+          nodes: useAgentFlowEditorStore((state) => state.workingDocument.graph.nodes),
+          edges: useAgentFlowEditorStore((state) => state.workingDocument.graph.edges),
+          selectedNodeId: useAgentFlowEditorStore((state) => state.selectedNodeId),
+          setSelection: useAgentFlowEditorStore((state) => state.setSelection)
+        };
+      },
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.setSelection({
+        selectedNodeId: 'node-llm',
+        selectedNodeIds: ['node-llm'],
+        selectedEdgeId: null
+      });
+    });
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }));
+    });
+
+    expect(result.current.selectedNodeId).toBe(null);
+    expect(result.current.nodes).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'node-llm'
+        })
+      ])
+    );
+    expect(result.current.edges).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'edge-start-llm'
+        }),
+        expect.objectContaining({
+          id: 'edge-llm-answer'
+        })
+      ])
+    );
+  });
 });

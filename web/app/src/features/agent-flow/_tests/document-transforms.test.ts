@@ -12,7 +12,11 @@ import {
   reconnectEdge,
   validateConnection
 } from '../lib/document/transforms/edge';
-import { moveNodes, updateNodeField } from '../lib/document/transforms/node';
+import {
+  moveNodes,
+  removeNodeSubgraph,
+  updateNodeField
+} from '../lib/document/transforms/node';
 import { setViewport } from '../lib/document/transforms/viewport';
 
 function createNestedContainerDocument() {
@@ -174,8 +178,70 @@ describe('agent flow document transforms', () => {
     expect(
       next.graph.edges.some(
         (edge) =>
-          edge.source.includes('-copy') && edge.target.includes('-copy')
+      edge.source.includes('-copy') && edge.target.includes('-copy')
       )
     ).toBe(true);
+  });
+
+  test('removes a selected node together with connected edges', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    const next = removeNodeSubgraph(document, {
+      nodeId: 'node-llm'
+    });
+
+    expect(next.graph.nodes).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'node-llm'
+        })
+      ])
+    );
+    expect(next.graph.edges).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'edge-start-llm'
+        }),
+        expect.objectContaining({
+          id: 'edge-llm-answer'
+        })
+      ])
+    );
+    expect(next.graph.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'node-start'
+        }),
+        expect.objectContaining({
+          id: 'node-answer'
+        })
+      ])
+    );
+  });
+
+  test('removes nested container children when deleting a container node', () => {
+    const document = createNestedContainerDocument();
+
+    const next = removeNodeSubgraph(document, {
+      nodeId: 'node-iteration-1'
+    });
+
+    expect(next.graph.nodes).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'node-iteration-1'
+        }),
+        expect.objectContaining({
+          id: 'node-inner-answer-1'
+        })
+      ])
+    );
+    expect(next.graph.edges).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'edge-iteration-answer'
+        })
+      ])
+    );
   });
 });

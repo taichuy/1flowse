@@ -3,10 +3,12 @@ import { Button, Dropdown } from 'antd';
 
 export function NodeActionMenu({
   onLocate,
-  onCopy
+  onCopy,
+  onDelete
 }: {
   onLocate: () => void;
   onCopy: () => void;
+  onDelete: () => void;
 }) {
   return (
     <Dropdown
@@ -22,6 +24,12 @@ export function NodeActionMenu({
             key: 'copy',
             label: '复制节点',
             onClick: onCopy
+          },
+          {
+            key: 'delete',
+            label: '删除节点',
+            danger: true,
+            onClick: onDelete
           }
         ]
       }}

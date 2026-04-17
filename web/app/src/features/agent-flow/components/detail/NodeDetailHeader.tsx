@@ -67,6 +67,7 @@ export function NodeDetailHeader({
           <NodeActionMenu
             onLocate={detailActions.locateSelectedNode}
             onCopy={detailActions.duplicateSelectedNode}
+            onDelete={detailActions.deleteSelectedNode}
           />
           <Divider type="vertical" className="agent-flow-node-detail__divider" />
           <Button
