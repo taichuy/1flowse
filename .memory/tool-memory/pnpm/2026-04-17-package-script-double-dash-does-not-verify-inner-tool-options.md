@@ -17,8 +17,8 @@ match_when:
   - 想执行 `pnpm --dir web/app test -- --help`
   - 想确认 package script 对底层 CLI 的参数解析
 created_at: 2026-04-17 23
-updated_at: 2026-04-17 23
-last_verified_at: 2026-04-17 23
+updated_at: 2026-04-18 00
+last_verified_at: 2026-04-18 00
 decision_policy: reference_on_failure
 scope:
   - pnpm
@@ -48,6 +48,11 @@ turbo run test --concurrency=50% -- --dry-run=text
 
 - 结果 `--dry-run=text` 被继续透传到内层任务，不是仅对外层 `turbo run` 做 dry-run 验证。
 - 执行 `pnpm --dir web/app test -- --help` 时，也不是单纯查看帮助，而是留下了一个挂起的 `pnpm` / `vitest` 进程，需要手动 `kill` 清掉。
+- 执行 `pnpm --dir web test -- --run web/app/src/features/agent-flow/_tests/node-inspector.test.tsx ...` 时，`turbo` 会把额外的 `--run` 继续下沉给 `web/app` 里的 `vitest --run ...`，最终报错：
+
+```text
+Error: Expected a single value for option "--run", received [true, true]
+```
 
 ## 触发条件
 
@@ -77,8 +82,11 @@ pnpm --dir web/app exec vitest run --maxWorkers=50% --minWorkers=1 --help
   - 改用 `pnpm --dir web exec turbo run test --concurrency=50% --dry-run=text` 后，可以稳定拿到纯 dry-run 结果；
   - `pnpm --dir web/app test -- --help` 留下挂起进程；
   - 改用 `pnpm --dir web/app exec vitest run --maxWorkers=50% --minWorkers=1 --help` 后，可直接验证参数被接受。
+- `2026-04-18 00` 已验证：
+  - `pnpm --dir web test -- --run <file>` 会让 `web/app` 的脚本形成 `vitest --run ... --run <file>`，直接触发重复参数报错；
+  - `pnpm --dir web/app test --run <file>` 同样会变成重复 `--run`；
+  - 改用 `pnpm --dir web/app exec vitest run <file>` 后，可以稳定只跑目标测试文件。
 
 ## 后续避免建议
 
 - 以后凡是“我要验证脚本里的某个 CLI 选项是否生效”，优先直跑底层工具，不要先走 package script。
-
