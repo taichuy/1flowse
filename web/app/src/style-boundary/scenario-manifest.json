@@ -152,31 +152,21 @@
         ]
       },
       {
-        "id": "editor-splitter",
-        "selector": ".agent-flow-editor__splitter",
-        "propertyAssertions": [
-          {
-            "property": "display",
-            "expected": "flex"
-          }
-        ]
-      },
-      {
-        "id": "editor-detail-shell",
-        "selector": ".agent-flow-editor__detail-panel-shell",
+        "id": "editor-detail-dock",
+        "selector": ".agent-flow-editor__detail-dock",
         "propertyAssertions": [
           {
             "property": "display",
             "expected": "flex"
           },
           {
-            "property": "margin-top",
+            "property": "top",
             "expected": "97px"
           }
         ]
       },
       {
-        "id": "editor-detail-panel",
+        "id": "editor-detail-content",
         "selector": ".agent-flow-node-detail",
         "propertyAssertions": [
           {

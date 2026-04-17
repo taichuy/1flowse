@@ -3,8 +3,8 @@ import type {
   SaveConsoleApplicationDraftInput
 } from '@1flowse/api-client';
 import type { FlowAuthoringDocument } from '@1flowse/flow-schema';
-import { Button, Splitter, Typography } from 'antd';
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Button, Typography } from 'antd';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useContainerNavigation } from '../../hooks/interactions/use-container-navigation';
 import { useDraftSync } from '../../hooks/interactions/use-draft-sync';
@@ -13,10 +13,7 @@ import { useNodeDetailActions } from '../../hooks/interactions/use-node-detail-a
 import {
   NODE_DETAIL_DEFAULT_WIDTH,
   NODE_DETAIL_MIN_CANVAS_WIDTH,
-  NODE_DETAIL_MIN_WIDTH,
-  clampNodeDetailWidth,
-  getMaxNodeDetailWidth,
-  getNodeDetailWidthFromSplitter
+  clampNodeDetailWidth
 } from '../../lib/detail-panel-width';
 import { validateDocument } from '../../lib/validate-document';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
@@ -74,7 +71,6 @@ export function AgentFlowCanvasFrame({
     useRef<(() => FlowAuthoringDocument['editor']['viewport']) | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [bodyWidth, setBodyWidth] = useState(0);
-  const [bodyViewportTop, setBodyViewportTop] = useState(0);
   const navigation = useContainerNavigation();
   const draftSync = useDraftSync({
     applicationId,
@@ -119,26 +115,20 @@ export function AgentFlowCanvasFrame({
       return;
     }
 
-    const syncBodyMetrics = () => {
-      const rect = element.getBoundingClientRect();
-      setBodyWidth(rect.width);
-      setBodyViewportTop(Math.max(rect.top, 0));
-    };
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0];
 
-    const resizeObserver = new ResizeObserver(() => {
-      syncBodyMetrics();
+      if (!entry) {
+        return;
+      }
+
+      setBodyWidth(entry.contentRect.width);
     });
 
     resizeObserver.observe(element);
-    window.addEventListener('resize', syncBodyMetrics);
-    window.addEventListener('scroll', syncBodyMetrics);
-    syncBodyMetrics();
+    setBodyWidth(element.getBoundingClientRect().width);
 
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', syncBodyMetrics);
-      window.removeEventListener('scroll', syncBodyMetrics);
-    };
+    return () => resizeObserver.disconnect();
   }, []);
 
   useEditorShortcuts();
@@ -147,19 +137,6 @@ export function AgentFlowCanvasFrame({
     nodeDetailWidth,
     bodyWidth || NODE_DETAIL_DEFAULT_WIDTH + NODE_DETAIL_MIN_CANVAS_WIDTH
   );
-  const detailPanelShellStyle = useMemo(
-    () =>
-      ({
-        '--agent-flow-body-top-offset': `${bodyViewportTop}px`
-      }) as CSSProperties,
-    [bodyViewportTop]
-  );
-
-  function syncNodeDetailWidth(sizes: number[]) {
-    setPanelState({
-      nodeDetailWidth: getNodeDetailWidthFromSplitter(sizes, bodyWidth)
-    });
-  }
 
   function getDocumentWithLatestViewport(currentDocument: FlowAuthoringDocument) {
     const viewport = viewportGetterRef.current?.() ?? viewportSnapshotRef.current;
@@ -219,61 +196,27 @@ export function AgentFlowCanvasFrame({
         className="agent-flow-editor__body agent-flow-editor__shell"
         data-testid="agent-flow-editor-body"
       >
+        <AgentFlowCanvas
+          issueCountByNodeId={issueCountByNodeId}
+          onViewportSnapshotChange={(viewport) => {
+            viewportSnapshotRef.current = viewport;
+          }}
+          onViewportGetterReady={(getter) => {
+            viewportGetterRef.current = getter;
+          }}
+        />
         {selectedNodeId ? (
           <div
-            className="agent-flow-editor__splitter-shell"
-            data-testid="agent-flow-editor-splitter"
+            className="agent-flow-editor__detail-dock"
+            data-testid="agent-flow-editor-detail-dock"
+            style={{ width: `${boundedNodeDetailWidth}px` }}
           >
-            <Splitter
-              className="agent-flow-editor__splitter"
-              layout="horizontal"
-              onResize={syncNodeDetailWidth}
-              onResizeEnd={syncNodeDetailWidth}
-            >
-              <Splitter.Panel
-                className="agent-flow-editor__canvas-panel"
-                min={NODE_DETAIL_MIN_CANVAS_WIDTH}
-              >
-                <AgentFlowCanvas
-                  issueCountByNodeId={issueCountByNodeId}
-                  onViewportSnapshotChange={(viewport) => {
-                    viewportSnapshotRef.current = viewport;
-                  }}
-                  onViewportGetterReady={(getter) => {
-                    viewportGetterRef.current = getter;
-                  }}
-                />
-              </Splitter.Panel>
-              <Splitter.Panel
-                className="agent-flow-editor__detail-panel"
-                min={NODE_DETAIL_MIN_WIDTH}
-                max={getMaxNodeDetailWidth(bodyWidth || boundedNodeDetailWidth)}
-                size={boundedNodeDetailWidth}
-              >
-                <div
-                  className="agent-flow-editor__detail-panel-shell"
-                  data-testid="agent-flow-editor-detail-shell"
-                  style={detailPanelShellStyle}
-                >
-                  <NodeDetailPanel
-                    onClose={detailActions.closeDetail}
-                    onRunNode={undefined}
-                  />
-                </div>
-              </Splitter.Panel>
-            </Splitter>
+            <NodeDetailPanel
+              onClose={detailActions.closeDetail}
+              onRunNode={undefined}
+            />
           </div>
-        ) : (
-          <AgentFlowCanvas
-            issueCountByNodeId={issueCountByNodeId}
-            onViewportSnapshotChange={(viewport) => {
-              viewportSnapshotRef.current = viewport;
-            }}
-            onViewportGetterReady={(getter) => {
-              viewportGetterRef.current = getter;
-            }}
-          />
-        )}
+        ) : null}
       </div>
       {issues.some((issue) => issue.scope === 'global') ? (
         <Typography.Text type="danger">

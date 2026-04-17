@@ -209,7 +209,7 @@ describe('AgentFlowEditorShell', () => {
     expect(screen.queryByText('请使用桌面端编辑')).not.toBeInTheDocument();
   }, 20_000);
 
-  test('renders node detail inside a docked splitter panel on orchestration page', async () => {
+  test('renders node detail inside a docked overlay panel on orchestration page', async () => {
     vi.spyOn(Grid, 'useBreakpoint').mockReturnValue({ lg: true } as never);
     vi.spyOn(orchestrationApi, 'fetchOrchestrationState').mockResolvedValueOnce(
       createInitialState()
@@ -224,15 +224,14 @@ describe('AgentFlowEditorShell', () => {
       </AppProviders>
     );
 
-    expect(
-      await screen.findByTestId('agent-flow-editor-splitter')
-    ).toBeInTheDocument();
-    expect(screen.getByTestId('agent-flow-editor-detail-shell')).toBeInTheDocument();
-    expect(screen.getByLabelText('节点详情')).toBeInTheDocument();
+    const detailDock = await screen.findByTestId('agent-flow-editor-detail-dock');
+
+    expect(detailDock).toBeInTheDocument();
+    expect(within(detailDock).getByLabelText('节点详情')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '配置' })).toBeInTheDocument();
   }, 20_000);
 
-  test('keeps last-run content inside the same docked detail panel shell', async () => {
+  test('keeps last-run content inside the same docked detail panel dock', async () => {
     vi.spyOn(Grid, 'useBreakpoint').mockReturnValue({ lg: true } as never);
     vi.spyOn(orchestrationApi, 'fetchOrchestrationState').mockResolvedValueOnce(
       createInitialState()
@@ -247,15 +246,13 @@ describe('AgentFlowEditorShell', () => {
       </AppProviders>
     );
 
-    const splitter = await screen.findByTestId('agent-flow-editor-splitter');
-    const detailShell = screen.getByTestId('agent-flow-editor-detail-shell');
+    const detailDock = await screen.findByTestId('agent-flow-editor-detail-dock');
 
     fireEvent.click(screen.getByRole('tab', { name: '上次运行' }));
 
     expect(screen.getByText('运行摘要')).toBeInTheDocument();
-    expect(splitter).toBeInTheDocument();
-    expect(detailShell).toContainElement(screen.getByLabelText('节点详情'));
-    expect(screen.getByLabelText('节点详情')).toBeInTheDocument();
+    expect(detailDock).toBeInTheDocument();
+    expect(within(detailDock).getByLabelText('节点详情')).toBeInTheDocument();
     expect(screen.queryByText('请使用桌面端编辑')).not.toBeInTheDocument();
   }, 20_000);
 });

@@ -54,23 +54,14 @@
   min-height: 0;
 }
 
-.agent-flow-editor__detail-panel {
+.agent-flow-editor__detail-dock {
+  position: absolute;
+  top: var(--agent-flow-secondary-top);
+  right: 16px;
+  z-index: 10;
   display: flex;
-  align-items: flex-start;
-  overflow: hidden;
-}
-
-.agent-flow-editor__detail-panel-shell {
-  display: flex;
-  flex: 1;
-  align-self: flex-start;
-  min-width: 0;
+  height: min(85vh, calc(100% - var(--agent-flow-secondary-top) - 24px));
   min-height: 0;
-  height: calc(
-    100dvh - var(--agent-flow-body-top-offset, 0px) - var(--agent-flow-secondary-top) -
-      16px
-  );
-  margin-top: var(--agent-flow-secondary-top);
   overflow: hidden;
 }
 
