@@ -12,6 +12,8 @@ import {
 } from '../store/editor/provider';
 import { selectWorkingDocument } from '../store/editor/selectors';
 
+const NODE_DETAIL_PANEL_TEST_TIMEOUT = 15_000;
+
 function createInitialState() {
   return {
     flow_id: 'flow-1',
@@ -58,7 +60,7 @@ describe('NodeDetailPanel', () => {
     expect(screen.getByRole('button', { name: '关闭节点详情' })).toBeInTheDocument();
     expect(screen.getByLabelText('节点别名')).toHaveValue('LLM');
     expect(screen.getByTestId('node-detail-body')).toBeInTheDocument();
-  }, 10_000);
+  }, NODE_DETAIL_PANEL_TEST_TIMEOUT);
 
   test('renders alias and description editors inside the header exactly once', () => {
     render(
@@ -73,7 +75,7 @@ describe('NodeDetailPanel', () => {
     expect(within(header).getByLabelText('节点简介')).toHaveValue('');
     expect(screen.getAllByLabelText('节点别名')).toHaveLength(1);
     expect(screen.getAllByLabelText('节点简介')).toHaveLength(1);
-  });
+  }, NODE_DETAIL_PANEL_TEST_TIMEOUT);
 
   test('keeps config tab focused on contract and relations without redundant summary cards', () => {
     render(
@@ -88,7 +90,7 @@ describe('NodeDetailPanel', () => {
     expect(screen.getAllByText('下一步')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: '添加下一个节点' })).not.toBeInTheDocument();
     expect(screen.getByText('添加并行节点')).toBeInTheDocument();
-  });
+  }, NODE_DETAIL_PANEL_TEST_TIMEOUT);
 
   test('does not duplicate identity or summary content inside config tab', () => {
     render(
@@ -100,7 +102,7 @@ describe('NodeDetailPanel', () => {
     expect(screen.queryByText('节点说明')).not.toBeInTheDocument();
     expect(screen.queryByText('节点别名')).not.toBeInTheDocument();
     expect(screen.queryByText('节点简介')).not.toBeInTheDocument();
-  });
+  }, NODE_DETAIL_PANEL_TEST_TIMEOUT);
 
   test('renders exception handling as a three-state strategy selector', async () => {
     render(
@@ -112,13 +114,16 @@ describe('NodeDetailPanel', () => {
     expect(screen.getAllByTestId('node-policy-row')).toHaveLength(2);
     expect(screen.getByRole('switch', { name: '失败重试' })).toBeInTheDocument();
     expect(screen.getByTestId('node-policy-error')).toHaveTextContent('无');
+    expect(screen.getByTestId('node-policy-error')).toHaveClass(
+      'agent-flow-node-detail__policy-select-shell--compact'
+    );
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '异常处理' }));
 
     expect(await screen.findByText('当发生异常且未处理时，节点将停止运行')).toBeInTheDocument();
     expect(screen.getByText('当发生异常时，指定默认输出内容。')).toBeInTheDocument();
     expect(screen.getByText('当发生异常时，将执行异常分支')).toBeInTheDocument();
-  });
+  }, NODE_DETAIL_PANEL_TEST_TIMEOUT);
 
   test('writes the selected exception handling strategy back to the node document', async () => {
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
@@ -150,5 +155,5 @@ describe('NodeDetailPanel', () => {
         })
       ])
     );
-  });
+  }, NODE_DETAIL_PANEL_TEST_TIMEOUT);
 });

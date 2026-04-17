@@ -25,22 +25,42 @@ export function ConditionGroupField({
   options,
   onChange
 }: ConditionGroupFieldProps) {
+  function appendCondition() {
+    onChange({
+      ...value,
+      conditions: [...value.conditions, { left: [], comparator: 'exists' }]
+    });
+  }
+
   return (
-    <div className="agent-flow-binding-list">
-      <Select
-        aria-label={`${ariaLabel}-operator`}
-        options={[
-          { label: 'AND', value: 'and' },
-          { label: 'OR', value: 'or' }
-        ]}
-        value={value.operator}
-        onChange={(operator) =>
-          onChange({
-            ...value,
-            operator: operator as 'and' | 'or'
-          })
-        }
-      />
+    <div className="agent-flow-binding-list agent-flow-condition-group">
+      <div
+        className="agent-flow-condition-group__toolbar"
+        data-testid="condition-group-toolbar"
+      >
+        <Select
+          aria-label={`${ariaLabel}-operator`}
+          className="agent-flow-condition-group__operator"
+          options={[
+            { label: 'AND', value: 'and' },
+            { label: 'OR', value: 'or' }
+          ]}
+          value={value.operator}
+          onChange={(operator) =>
+            onChange({
+              ...value,
+              operator: operator as 'and' | 'or'
+            })
+          }
+        />
+        <Button
+          className="agent-flow-condition-group__add"
+          type="dashed"
+          onClick={appendCondition}
+        >
+          新增条件
+        </Button>
+      </div>
       {value.conditions.map((condition, index) => (
         <div key={`${condition.comparator}-${index}`} className="agent-flow-binding-row">
           <SelectorField
@@ -115,20 +135,6 @@ export function ConditionGroupField({
           </Button>
         </div>
       ))}
-      <Button
-        type="dashed"
-        onClick={() =>
-          onChange({
-            ...value,
-            conditions: [
-              ...value.conditions,
-              { left: [], comparator: 'exists' }
-            ]
-          })
-        }
-      >
-        新增条件
-      </Button>
     </div>
   );
 }

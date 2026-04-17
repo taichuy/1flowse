@@ -46,6 +46,24 @@ function createInitialStateWithCodeNode() {
   };
 }
 
+function createInitialStateWithLoopNode() {
+  const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+  document.graph.nodes.push(createNodeDocument('loop', 'node-loop', 720, 240));
+
+  return {
+    flow_id: 'flow-1',
+    draft: {
+      id: 'draft-1',
+      flow_id: 'flow-1',
+      updated_at: '2026-04-16T10:00:00Z',
+      document
+    },
+    autosave_interval_seconds: 30,
+    versions: []
+  };
+}
+
 function SelectionSeed({ nodeId }: { nodeId: string }) {
   const setSelection = useAgentFlowEditorStore((state) => state.setSelection);
 
@@ -176,5 +194,29 @@ describe('NodeInspector', () => {
     expect(screen.getAllByText('输出契约').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: '新增输出变量' })).toBeInTheDocument();
     expect(screen.queryByLabelText('代码结果')).not.toBeInTheDocument();
+  });
+
+  test('renders loop number fields in compact inline rows while keeping condition groups stacked', () => {
+    render(
+      <AgentFlowEditorStoreProvider initialState={createInitialStateWithLoopNode()}>
+        <SelectionSeed nodeId="node-loop" />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(screen.getByText('Inputs')).toBeInTheDocument();
+    expect(screen.getByText('Policy')).toBeInTheDocument();
+    const toolbar = screen.getByTestId('condition-group-toolbar');
+
+    expect(
+      within(toolbar).getByRole('combobox', { name: '入口条件-operator' })
+    ).toBeInTheDocument();
+    expect(within(toolbar).getByRole('button', { name: '新增条件' })).toBeInTheDocument();
+    expect(screen.getByTestId('inspector-field-config.max_rounds')).toHaveClass(
+      'agent-flow-editor__inspector-field--inline'
+    );
+    expect(
+      screen.getByTestId('inspector-field-bindings.entry_condition')
+    ).not.toHaveClass('agent-flow-editor__inspector-field--inline');
   });
 });

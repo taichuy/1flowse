@@ -55,14 +55,14 @@ export function NodePolicySection() {
         />
       </div>
       <div
-        className="agent-flow-node-detail__policy-row agent-flow-node-detail__policy-row--stacked"
+        className="agent-flow-node-detail__policy-row agent-flow-node-detail__policy-row--select"
         data-testid="node-policy-row"
       >
         <Typography.Text className="agent-flow-node-detail__policy-label">
           异常处理
         </Typography.Text>
         <div
-          className="agent-flow-node-detail__policy-select-shell"
+          className="agent-flow-node-detail__policy-select-shell agent-flow-node-detail__policy-select-shell--compact"
           data-testid="node-policy-error"
         >
           <Select

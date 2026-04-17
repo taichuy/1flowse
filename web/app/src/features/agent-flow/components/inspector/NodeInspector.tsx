@@ -81,6 +81,14 @@ function asBinding<T extends FlowBinding['kind']>(
     : null;
 }
 
+function isInlineField(field: NodeDefinitionField) {
+  return (
+    field.editor === 'text' ||
+    field.editor === 'number' ||
+    field.editor === 'selector'
+  );
+}
+
 export function NodeInspector() {
   const rootRef = useRef<HTMLElement | null>(null);
   const document = useAgentFlowEditorStore(selectWorkingDocument);
@@ -293,11 +301,26 @@ export function NodeInspector() {
               {section.fields.map((field) => (
                 <div
                   key={field.key}
-                  className="agent-flow-editor__inspector-field"
+                  className={[
+                    'agent-flow-editor__inspector-field',
+                    isInlineField(field)
+                      ? 'agent-flow-editor__inspector-field--inline'
+                      : null
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                   data-field-key={field.key}
+                  data-testid={`inspector-field-${field.key}`}
                 >
-                  <Typography.Text strong>{field.label}</Typography.Text>
-                  {renderField(field)}
+                  <Typography.Text
+                    strong
+                    className="agent-flow-editor__inspector-field-label"
+                  >
+                    {field.label}
+                  </Typography.Text>
+                  <div className="agent-flow-editor__inspector-field-control">
+                    {renderField(field)}
+                  </div>
                 </div>
               ))}
             </div>
