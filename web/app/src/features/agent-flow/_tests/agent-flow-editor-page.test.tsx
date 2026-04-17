@@ -7,6 +7,7 @@ import { AppProviders } from '../../../app/AppProviders';
 import * as orchestrationApi from '../api/orchestration';
 import { VersionHistoryDrawer } from '../components/history/VersionHistoryDrawer';
 import { AgentFlowEditorShell } from '../components/editor/AgentFlowEditorShell';
+import { NODE_DETAIL_DEFAULT_WIDTH } from '../lib/detail-panel-width';
 import { AgentFlowEditorPage } from '../pages/AgentFlowEditorPage';
 
 function createInitialState() {
@@ -305,7 +306,7 @@ describe('AgentFlowEditorShell', () => {
 
     const detailDock = await screen.findByTestId('agent-flow-editor-detail-dock');
 
-    expect(detailDock).toHaveStyle('width: 520px');
+    expect(detailDock).toHaveStyle(`width: ${NODE_DETAIL_DEFAULT_WIDTH}px`);
 
     fireEvent.mouseDown(
       screen.getByRole('separator', { name: '调整节点详情宽度' }),
@@ -314,6 +315,8 @@ describe('AgentFlowEditorShell', () => {
     fireEvent.mouseMove(window, { clientX: 780 });
     fireEvent.mouseUp(window);
 
-    expect(detailDock).toHaveStyle('width: 600px');
+    expect(detailDock).toHaveStyle(
+      `width: ${NODE_DETAIL_DEFAULT_WIDTH + 80}px`
+    );
   }, 20_000);
 });

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { createDefaultAgentFlowDocument } from '@1flowse/flow-schema';
 
+import { NODE_DETAIL_DEFAULT_WIDTH } from '../lib/detail-panel-width';
 import { createAgentFlowEditorStore } from '../store/editor';
 
 describe('agent flow editor store', () => {
@@ -95,7 +96,7 @@ describe('agent flow editor store', () => {
     });
 
     expect(store.getState().nodeDetailTab).toBe('config');
-    expect(store.getState().nodeDetailWidth).toBe(520);
+    expect(store.getState().nodeDetailWidth).toBe(NODE_DETAIL_DEFAULT_WIDTH);
 
     store.getState().setPanelState({
       nodeDetailTab: 'lastRun',

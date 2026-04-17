@@ -12,8 +12,8 @@ match_when:
   - 输出出现 `printf: --: 无效的选项`
   - 需要在批量扫描文件时打印 markdown 风格分隔头
 created_at: 2026-04-14 00
-updated_at: 2026-04-14 00
-last_verified_at: 2026-04-14 00
+updated_at: 2026-04-17 15
+last_verified_at: 2026-04-17 15
 decision_policy: reference_on_failure
 scope:
   - bash
@@ -61,3 +61,4 @@ scope:
 ## 复现记录
 
 - `2026-04-14 00`：在批量读取 `.memory` 目录的 YAML front matter 时，使用 `printf '--- %s ---\n' "$f"` 打印分隔头，触发 `printf: --: 无效的选项`；改为 `printf -- '--- %s ---\n' "$f"` 可避免同类报错。
+- `2026-04-17 15`：在扫描 `.memory/project-memory` 和 `.memory/tool-memory` front matter 时，再次用 `printf '--- %s ---\n' '{}'` 打印文件头，命中同样的 `printf: --: 无效的选项`；后续这类批量扫描命令固定改成 `printf -- ...` 或直接避免用 `printf` 输出 `---` 起始格式串。
