@@ -1224,7 +1224,7 @@ Actual on `2026-04-17`:
 - `node scripts/node/check-style-boundary.js page page.home` PASS
 - `node scripts/node/check-style-boundary.js page page.application-detail` still times out at `.app-shell-header`; treat this as the current verification-chain risk, not as proof that schema UI migration regressed
 
-- [ ] **Step 7: Commit the cross-feature schema migration**
+- [x] **Step 7: Commit the cross-feature schema migration**
 
 ```bash
 git add \
