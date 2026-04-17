@@ -107,7 +107,7 @@
 - Create: `web/app/src/shared/schema-ui/registry/create-renderer-registry.ts`
 - Create: `web/app/src/shared/schema-ui/_tests/schema-runtime.test.tsx`
 
-- [ ] **Step 1: Write the failing shared runtime tests**
+- [x] **Step 1: Write the failing shared runtime tests**
 
 ```tsx
 // web/app/src/shared/schema-ui/_tests/schema-runtime.test.tsx
@@ -187,7 +187,7 @@ describe('schema runtime', () => {
 });
 ```
 
-- [ ] **Step 2: Run the targeted shared runtime test and confirm it fails**
+- [x] **Step 2: Run the targeted shared runtime test and confirm it fails**
 
 Run:
 
@@ -197,7 +197,7 @@ pnpm --dir web/app exec vitest run src/shared/schema-ui/_tests/schema-runtime.te
 
 Expected: FAIL with missing `schema-ui` modules and exports.
 
-- [ ] **Step 3: Implement the contracts, rule evaluator and base renderer runtime**
+- [x] **Step 3: Implement the contracts, rule evaluator and base renderer runtime**
 
 ```ts
 // web/app/src/shared/schema-ui/contracts/canvas-node-schema.ts
@@ -380,7 +380,7 @@ export function SchemaRenderer({
 }
 ```
 
-- [ ] **Step 4: Run the shared runtime test and confirm it passes**
+- [x] **Step 4: Run the shared runtime test and confirm it passes**
 
 Run:
 
@@ -390,7 +390,7 @@ pnpm --dir web/app exec vitest run src/shared/schema-ui/_tests/schema-runtime.te
 
 Expected: PASS with 2 tests passed.
 
-- [ ] **Step 5: Commit the shared schema runtime baseline**
+- [x] **Step 5: Commit the shared schema runtime baseline**
 
 ```bash
 git add \
