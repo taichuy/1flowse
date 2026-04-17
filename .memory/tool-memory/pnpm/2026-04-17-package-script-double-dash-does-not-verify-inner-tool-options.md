@@ -1,7 +1,7 @@
 ---
 memory_type: tool
 topic: 用 pnpm package script 验证内层工具参数时，双横线参数会继续透传给脚本命令
-summary: 需要验证 `turbo` 或 `vitest` 的命令行选项时，不要用 `pnpm <script> -- ...` 方式；在当前仓库中，这会把参数继续透传给脚本命令本体，而不是只作用于外层验证动作，可能误触发真实任务或留下挂起进程。更稳的做法是直接用 `pnpm exec <tool> ...` 验证底层命令。
+summary: 需要验证 `turbo` 或 `vitest` 的命令行选项时，不要用 `pnpm <script> -- ...` 方式；在当前仓库中，这会把参数继续透传给脚本命令本体，而不是只作用于外层验证动作，可能误触发真实任务或留下挂起进程。更稳的做法是直接用最短可执行的 `pnpm exec <tool> ...` 验证底层命令；只有不在目标包目录时再补 `--dir`。
 keywords:
   - pnpm
   - script
@@ -66,10 +66,19 @@ Error: Expected a single value for option "--run", received [true, true]
 
 ## 解法
 
-- 需要验证底层工具参数时，直接用 `pnpm exec` 调目标工具，不要绕 package script：
+- 需要验证底层工具参数时，直接用 `pnpm exec` 调目标工具，不要绕 package script。
+- 推荐优先写“当前目录下最短正确命令”，这样比 `pnpm --dir ... test -- --run ...` 更不容易把模型带回 package script 路径：
+
+```bash
+cd web/app
+pnpm exec vitest run src/features/agent-flow/_tests/node-inspector.test.tsx
+```
+
+- 只有当前不在目标包目录时，才补 `--dir`：
 
 ```bash
 pnpm --dir web exec turbo run test --concurrency=50% --dry-run=text
+pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/node-inspector.test.tsx
 pnpm --dir web/app exec vitest run --maxWorkers=50% --minWorkers=1 --help
 ```
 
@@ -90,3 +99,4 @@ pnpm --dir web/app exec vitest run --maxWorkers=50% --minWorkers=1 --help
 ## 后续避免建议
 
 - 以后凡是“我要验证脚本里的某个 CLI 选项是否生效”，优先直跑底层工具，不要先走 package script。
+- 如果已经在目标包目录，默认优先写最短的 `pnpm exec vitest run ...`，只有跨目录调用时才补 `--dir`。
