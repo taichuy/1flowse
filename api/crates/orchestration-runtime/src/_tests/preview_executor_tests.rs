@@ -69,5 +69,8 @@ fn preview_executor_resolves_bindings_and_renders_prompt_for_target_node() {
 
     assert_eq!(outcome.target_node_id, "node-llm");
     assert_eq!(outcome.resolved_inputs["user_prompt"], "退款流程是什么？");
-    assert_eq!(outcome.rendered_templates["system_prompt"], "You are helpful.");
+    assert_eq!(
+        outcome.rendered_templates["system_prompt"],
+        "You are helpful."
+    );
 }

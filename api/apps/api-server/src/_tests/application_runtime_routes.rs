@@ -6,11 +6,7 @@ use axum::{
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
-async fn seed_agent_flow_application(
-    app: &axum::Router,
-    cookie: &str,
-    csrf: &str,
-) -> String {
+async fn seed_agent_flow_application(app: &axum::Router, cookie: &str, csrf: &str) -> String {
     let response = app
         .clone()
         .oneshot(
@@ -102,7 +98,9 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
         .clone()
         .oneshot(
             Request::builder()
-                .uri(format!("/api/console/applications/{application_id}/logs/runs"))
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs"
+                ))
                 .header("cookie", &cookie)
                 .body(Body::empty())
                 .unwrap(),

@@ -46,7 +46,9 @@ async fn application_orchestration_routes_bootstrap_save_and_restore() {
         .clone()
         .oneshot(
             Request::builder()
-                .uri(format!("/api/console/applications/{application_id}/orchestration"))
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration"
+                ))
                 .header("cookie", &cookie)
                 .body(Body::empty())
                 .unwrap(),

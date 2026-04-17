@@ -1,9 +1,7 @@
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
-use crate::{
-    compiled_plan::{CompiledBinding, CompiledNode, CompiledPlan},
-};
+use crate::compiled_plan::{CompiledBinding, CompiledNode, CompiledPlan};
 
 pub struct NodePreviewOutcome {
     pub target_node_id: String,
@@ -61,7 +59,10 @@ fn resolve_inputs(node: &CompiledNode, input_payload: &Value) -> Result<Map<Stri
         resolved.insert(
             binding_key.clone(),
             resolve_binding(binding, input_payload).map_err(|error| {
-                anyhow!("failed to resolve binding {binding_key} for {}: {error}", node.node_id)
+                anyhow!(
+                    "failed to resolve binding {binding_key} for {}: {error}",
+                    node.node_id
+                )
             })?,
         );
     }
@@ -69,7 +70,10 @@ fn resolve_inputs(node: &CompiledNode, input_payload: &Value) -> Result<Map<Stri
     Ok(resolved)
 }
 
-fn render_templates(node: &CompiledNode, resolved_inputs: &Map<String, Value>) -> Map<String, Value> {
+fn render_templates(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+) -> Map<String, Value> {
     node.bindings
         .iter()
         .filter_map(|(binding_key, binding)| {
@@ -118,13 +122,15 @@ fn resolve_binding(binding: &CompiledBinding, input_payload: &Value) -> Result<V
                     .ok_or_else(|| anyhow!("named_bindings entry missing selector"))?
                     .iter()
                     .map(|segment| {
-                        segment
-                            .as_str()
-                            .map(str::to_string)
-                            .ok_or_else(|| anyhow!("named_bindings selector segment must be a string"))
+                        segment.as_str().map(str::to_string).ok_or_else(|| {
+                            anyhow!("named_bindings selector segment must be a string")
+                        })
                     })
                     .collect::<Result<Vec<_>>>()?;
-                object.insert(name.to_string(), lookup_selector_value(input_payload, &selector)?);
+                object.insert(
+                    name.to_string(),
+                    lookup_selector_value(input_payload, &selector)?,
+                );
             }
 
             Ok(Value::Object(object))
@@ -165,10 +171,7 @@ fn render_template(template: &str, input_payload: &Value) -> String {
         };
         let token_end = token_start + end_offset;
         let token = template[token_start..token_end].trim();
-        let replacement = token
-            .split('.')
-            .map(str::to_string)
-            .collect::<Vec<_>>();
+        let replacement = token.split('.').map(str::to_string).collect::<Vec<_>>();
 
         if replacement.len() >= 2 {
             match lookup_selector_value(input_payload, &replacement) {

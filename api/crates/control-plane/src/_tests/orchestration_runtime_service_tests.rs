@@ -21,10 +21,8 @@ async fn start_node_debug_preview_creates_run_node_run_and_events() {
 
     assert_eq!(outcome.flow_run.status, domain::FlowRunStatus::Succeeded);
     assert_eq!(outcome.node_run.status, domain::NodeRunStatus::Succeeded);
-    assert!(
-        outcome
-            .events
-            .iter()
-            .any(|event| event.event_type == "node_preview_completed")
-    );
+    assert!(outcome
+        .events
+        .iter()
+        .any(|event| event.event_type == "node_preview_completed"));
 }

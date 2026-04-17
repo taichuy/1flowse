@@ -5,9 +5,7 @@ use sqlx::{Postgres, Row, Transaction};
 use uuid::Uuid;
 
 use crate::{
-    mappers::flow_mapper::{
-        PgFlowMapper, StoredFlowDraftRow, StoredFlowRow, StoredFlowVersionRow,
-    },
+    mappers::flow_mapper::{PgFlowMapper, StoredFlowDraftRow, StoredFlowRow, StoredFlowVersionRow},
     repositories::PgControlPlaneStore,
 };
 
@@ -382,11 +380,12 @@ async fn insert_version(
     summary: &str,
     document: &serde_json::Value,
 ) -> Result<()> {
-    let next_sequence: i64 =
-        sqlx::query_scalar("select coalesce(max(sequence), 0) + 1 from flow_versions where flow_id = $1")
-            .bind(flow_id)
-            .fetch_one(&mut **tx)
-            .await?;
+    let next_sequence: i64 = sqlx::query_scalar(
+        "select coalesce(max(sequence), 0) + 1 from flow_versions where flow_id = $1",
+    )
+    .bind(flow_id)
+    .fetch_one(&mut **tx)
+    .await?;
 
     sqlx::query(
         r#"

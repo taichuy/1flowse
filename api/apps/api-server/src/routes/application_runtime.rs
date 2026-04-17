@@ -136,7 +136,7 @@ fn format_time(value: time::OffsetDateTime) -> String {
 }
 
 fn format_optional_time(value: Option<time::OffsetDateTime>) -> Option<String> {
-    value.map(|timestamp| format_time(timestamp))
+    value.map(format_time)
 }
 
 fn to_flow_run_summary_response(summary: domain::ApplicationRunSummary) -> FlowRunSummaryResponse {
@@ -228,7 +228,11 @@ fn to_application_run_detail_response(
             .into_iter()
             .map(to_checkpoint_response)
             .collect(),
-        events: detail.events.into_iter().map(to_run_event_response).collect(),
+        events: detail
+            .events
+            .into_iter()
+            .map(to_run_event_response)
+            .collect(),
     }
 }
 
@@ -369,7 +373,9 @@ pub async fn get_application_run_detail(
         .await?
         .ok_or(ControlPlaneError::NotFound("flow_run"))?;
 
-    Ok(Json(ApiSuccess::new(to_application_run_detail_response(detail))))
+    Ok(Json(ApiSuccess::new(to_application_run_detail_response(
+        detail,
+    ))))
 }
 
 #[utoipa::path(

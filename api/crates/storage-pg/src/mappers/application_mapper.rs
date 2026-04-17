@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use domain::{
-    ApplicationApiSection, ApplicationLogsSection, ApplicationMonitoringSection,
-    ApplicationRecord, ApplicationSections, ApplicationTag, ApplicationType,
+    ApplicationApiSection, ApplicationLogsSection, ApplicationMonitoringSection, ApplicationRecord,
+    ApplicationSections, ApplicationTag, ApplicationType,
 };
 use serde_json::Value;
 use time::OffsetDateTime;
@@ -44,11 +44,7 @@ impl PgApplicationMapper {
             created_by: row.created_by,
             updated_at: row.updated_at,
             tags: serde_json::from_value::<Vec<ApplicationTag>>(row.tags)?,
-            sections: flow_sections(
-                application_type,
-                row.current_flow_id,
-                row.current_draft_id,
-            ),
+            sections: flow_sections(application_type, row.current_flow_id, row.current_draft_id),
         })
     }
 }

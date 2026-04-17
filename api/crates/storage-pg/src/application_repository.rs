@@ -1,10 +1,10 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use control_plane::errors::ControlPlaneError;
 use control_plane::ports::{
     ApplicationRepository, ApplicationVisibility, AuthRepository, CreateApplicationInput,
     CreateApplicationTagInput, UpdateApplicationInput,
 };
-use control_plane::errors::ControlPlaneError;
 use sqlx::Row;
 use uuid::Uuid;
 

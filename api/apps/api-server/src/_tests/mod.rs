@@ -1,6 +1,6 @@
-mod application_runtime_routes;
-mod application_routes;
 mod application_orchestration_routes;
+mod application_routes;
+mod application_runtime_routes;
 mod auth_routes;
 mod config_tests;
 mod docs_routes;

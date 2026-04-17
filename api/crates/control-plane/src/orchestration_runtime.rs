@@ -79,7 +79,8 @@ where
                 started_at,
             )?)
             .await?;
-        let events = persist_preview_events(&self.repository, &flow_run, &node_run, &preview).await?;
+        let events =
+            persist_preview_events(&self.repository, &flow_run, &node_run, &preview).await?;
         let finished_at = OffsetDateTime::now_utc();
         let node_run = self
             .repository
@@ -279,7 +280,9 @@ impl InMemoryOrchestrationRuntimeRepository {
         actor_user_id: Uuid,
         name: &str,
     ) -> Result<domain::ApplicationRecord> {
-        self.flow.seed_application_for_actor(actor_user_id, name).await
+        self.flow
+            .seed_application_for_actor(actor_user_id, name)
+            .await
     }
 }
 
@@ -299,8 +302,13 @@ impl ApplicationRepository for InMemoryOrchestrationRuntimeRepository {
         actor_user_id: Uuid,
         visibility: ApplicationVisibility,
     ) -> Result<Vec<domain::ApplicationRecord>> {
-        ApplicationRepository::list_applications(&self.flow, workspace_id, actor_user_id, visibility)
-            .await
+        ApplicationRepository::list_applications(
+            &self.flow,
+            workspace_id,
+            actor_user_id,
+            visibility,
+        )
+        .await
     }
 
     async fn create_application(
@@ -331,8 +339,13 @@ impl ApplicationRepository for InMemoryOrchestrationRuntimeRepository {
         actor_user_id: Uuid,
         visibility: ApplicationVisibility,
     ) -> Result<Vec<domain::ApplicationTagCatalogEntry>> {
-        ApplicationRepository::list_application_tags(&self.flow, workspace_id, actor_user_id, visibility)
-            .await
+        ApplicationRepository::list_application_tags(
+            &self.flow,
+            workspace_id,
+            actor_user_id,
+            visibility,
+        )
+        .await
     }
 
     async fn create_application_tag(
@@ -356,8 +369,13 @@ impl FlowRepository for InMemoryOrchestrationRuntimeRepository {
         application_id: Uuid,
         actor_user_id: Uuid,
     ) -> Result<domain::FlowEditorState> {
-        FlowRepository::get_or_create_editor_state(&self.flow, workspace_id, application_id, actor_user_id)
-            .await
+        FlowRepository::get_or_create_editor_state(
+            &self.flow,
+            workspace_id,
+            application_id,
+            actor_user_id,
+        )
+        .await
     }
 
     async fn save_draft(
@@ -652,10 +670,9 @@ pub struct SeededPreviewApplication {
 #[cfg(test)]
 impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository> {
     pub fn for_tests() -> Self {
-        Self::new(InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
-            "application.view.all",
-            "application.create.all",
-        ]))
+        Self::new(InMemoryOrchestrationRuntimeRepository::with_permissions(
+            vec!["application.view.all", "application.create.all"],
+        ))
     }
 
     pub async fn seed_application_with_flow(&self, name: &str) -> SeededPreviewApplication {

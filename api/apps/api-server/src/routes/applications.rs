@@ -153,7 +153,10 @@ pub fn router() -> Router<Arc<ApiState>> {
             "/applications",
             get(list_applications).post(create_application),
         )
-        .route("/applications/:id", get(get_application).patch(patch_application))
+        .route(
+            "/applications/:id",
+            get(get_application).patch(patch_application),
+        )
 }
 
 fn to_application_tag(tag: domain::ApplicationTag) -> ApplicationTagResponse {
@@ -317,7 +320,10 @@ pub async fn get_application_catalog(
 
     Ok(Json(ApiSuccess::new(ApplicationCatalogResponse {
         types: application_type_catalog(),
-        tags: tags.into_iter().map(to_application_tag_catalog_entry).collect(),
+        tags: tags
+            .into_iter()
+            .map(to_application_tag_catalog_entry)
+            .collect(),
     })))
 }
 

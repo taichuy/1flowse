@@ -62,9 +62,9 @@ async fn application_routes_create_list_and_detail() {
                 .header("cookie", &cookie)
                 .body(Body::empty())
                 .unwrap(),
-    )
-    .await
-    .unwrap();
+        )
+        .await
+        .unwrap();
     assert_eq!(detail.status(), StatusCode::OK);
 }
 
@@ -116,11 +116,11 @@ async fn application_routes_support_catalog_tags_and_patching_metadata() {
     assert_eq!(catalog.status(), StatusCode::OK);
     let catalog_body = to_bytes(catalog.into_body(), usize::MAX).await.unwrap();
     let catalog_payload: Value = serde_json::from_slice(&catalog_body).unwrap();
-    assert_eq!(catalog_payload["data"]["types"].as_array().unwrap().len(), 2);
     assert_eq!(
-        catalog_payload["data"]["tags"].as_array().unwrap().len(),
-        0
+        catalog_payload["data"]["types"].as_array().unwrap().len(),
+        2
     );
+    assert_eq!(catalog_payload["data"]["tags"].as_array().unwrap().len(), 0);
 
     let create_tag = app
         .clone()
@@ -144,7 +144,10 @@ async fn application_routes_support_catalog_tags_and_patching_metadata() {
     assert_eq!(create_tag.status(), StatusCode::CREATED);
     let create_tag_body = to_bytes(create_tag.into_body(), usize::MAX).await.unwrap();
     let create_tag_payload: Value = serde_json::from_slice(&create_tag_body).unwrap();
-    let tag_id = create_tag_payload["data"]["id"].as_str().unwrap().to_string();
+    let tag_id = create_tag_payload["data"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     let patch = app
         .clone()

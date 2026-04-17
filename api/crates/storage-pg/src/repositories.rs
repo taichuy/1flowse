@@ -169,8 +169,13 @@ impl PgControlPlaneStore {
         application_id: Uuid,
         actor_user_id: Uuid,
     ) -> Result<FlowEditorState> {
-        FlowRepository::get_or_create_editor_state(self, workspace_id, application_id, actor_user_id)
-            .await
+        FlowRepository::get_or_create_editor_state(
+            self,
+            workspace_id,
+            application_id,
+            actor_user_id,
+        )
+        .await
     }
 
     pub async fn save_flow_draft(
