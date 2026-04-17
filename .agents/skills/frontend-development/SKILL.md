@@ -1,6 +1,6 @@
 ---
 name: frontend-development
-description: Use when building or changing 1Flowse frontend pages, workspace flows, interactions, visual structure, or component boundaries and need to preserve the project's page recipes, interaction contracts, and UI consistency
+description: Use when building or changing 1Flowse frontend pages, workspace flows, node development, schema UI, interactions, visual structure, or component boundaries and need to preserve the project's page recipes, interaction contracts, and UI consistency
 ---
 
 # Frontend Development
@@ -13,6 +13,8 @@ description: Use when building or changing 1Flowse frontend pages, workspace flo
 
 - 新增或修改 `overview / orchestration / api / logs / monitoring` 页面
 - 改动壳层列表、抽屉、编排画布、Inspector、节点组件
+- 新增节点类型、调整节点详情、节点卡片、节点运行态或节点定义目录结构
+- 改动 `schema ui` 合同、runtime、renderer registry、overlay shell 或节点 schema adapter
 - 调整页面级流程、交互流、视觉方案
 - 评估是否拆文件、拆组件、拆 hooks
 - 页面状态开始散落，或同一文件同时承载展示、状态、协议、路由变化
@@ -37,6 +39,8 @@ description: Use when building or changing 1Flowse frontend pages, workspace flo
 - 组件上提要克制：默认先放 `features/*/components`，只有被多个 feature 真实复用且语义稳定后才进入 `shared/ui`
 - 请求分层固定区分：`web/packages/api-client` 负责底层 client；`features/*/api` 负责当前 feature 消费；`shared/api` 只在多 feature 共享编排时出现
 - 工具分层固定区分：`shared/utils` 只放纯函数；`features/*/lib` 只放 feature 内部 helper、mapper、view model
+- `schema ui` 固定三层：`shared/schema-ui` 放合同、runtime、registry、overlay shell；`features/*/schema` 放 feature 自己的 schema registry、adapter、renderer；`features/*/lib/node-definitions` 放节点定义真值，不把三层重新混回一个文件
+- 节点开发固定按“节点定义 -> schema fragments/registry -> renderer -> consumer”链路推进；新增节点时优先新增独立节点定义文件，不回到单一大表
 - 样式改动固定按四层判断：`theme token -> first-party wrapper -> explicit slot -> stop`
 - 风格和 UI 质量本身就是验收项，不接受“功能先通、样式以后再说”
 - 第三方组件允许主题化，不允许无边界递归覆盖内部样式链
@@ -58,6 +62,7 @@ description: Use when building or changing 1Flowse frontend pages, workspace flo
 - Visual baseline and layer rules: `references/visual-baseline.md`
 - Workspace recipes and interaction rules: `references/workspace-rules.md`
 - Directory, API, and utility placement rules: `references/placement-rules.md`
+- Node development and schema UI changes must preserve the split between `node-definitions`, `schema registry/adapter`, and renderer consumers
 - Ask-first gate: `references/communication-gate.md`
 - Browser verification defaults: `references/browser-verification.md`
 - Before/during/after review: `references/review-checklist.md`
@@ -70,6 +75,8 @@ description: Use when building or changing 1Flowse frontend pages, workspace flo
 - 把外部灵感稿直接当成当前项目规范
 - 页面根组件堆满状态、请求、弹窗和协议转换逻辑
 - 把协议拼装、数据转换、渲染混写
+- 把节点定义、schema contract、renderer registry、consumer UI 再次堆回同一文件
+- 新增节点时继续往集中式 `node-definitions` 大文件追加，而不是按节点拆到独立文件
 - 把第三方组件内部 DOM 当成自家 DOM 递归覆盖
 - 为了修单点视觉问题，裸写 `.ant-*` 或跨多个内部 slot 写后代选择器
 - 只改导航文案，不同步 `route id / path / selected state` 真值层
