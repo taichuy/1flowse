@@ -6,12 +6,32 @@ use uuid::Uuid;
 #[serde(rename_all = "snake_case")]
 pub enum FlowRunMode {
     DebugNodePreview,
+    DebugFlowRun,
 }
 
 impl FlowRunMode {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::DebugNodePreview => "debug_node_preview",
+            Self::DebugFlowRun => "debug_flow_run",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CallbackTaskStatus {
+    Pending,
+    Completed,
+    Cancelled,
+}
+
+impl CallbackTaskStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Completed => "completed",
+            Self::Cancelled => "cancelled",
         }
     }
 }
@@ -140,6 +160,20 @@ pub struct CheckpointRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallbackTaskRecord {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub node_run_id: Uuid,
+    pub callback_kind: String,
+    pub status: CallbackTaskStatus,
+    pub request_payload: serde_json::Value,
+    pub response_payload: Option<serde_json::Value>,
+    pub external_ref_payload: Option<serde_json::Value>,
+    pub created_at: OffsetDateTime,
+    pub completed_at: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunEventRecord {
     pub id: Uuid,
     pub flow_run_id: Uuid,
@@ -165,6 +199,7 @@ pub struct ApplicationRunDetail {
     pub flow_run: FlowRunRecord,
     pub node_runs: Vec<NodeRunRecord>,
     pub checkpoints: Vec<CheckpointRecord>,
+    pub callback_tasks: Vec<CallbackTaskRecord>,
     pub events: Vec<RunEventRecord>,
 }
 

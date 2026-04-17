@@ -31,9 +31,9 @@ pub use modeling::{
     ModelFieldRecord,
 };
 pub use orchestration::{
-    ApplicationRunDetail, ApplicationRunSummary, CheckpointRecord, CompiledPlanRecord, FlowRunMode,
-    FlowRunRecord, FlowRunStatus, NodeDebugPreviewResult, NodeLastRun, NodeRunRecord,
-    NodeRunStatus, RunEventRecord,
+    ApplicationRunDetail, ApplicationRunSummary, CallbackTaskRecord, CallbackTaskStatus,
+    CheckpointRecord, CompiledPlanRecord, FlowRunMode, FlowRunRecord, FlowRunStatus,
+    NodeDebugPreviewResult, NodeLastRun, NodeRunRecord, NodeRunStatus, RunEventRecord,
 };
 pub use resource::runtime_model_resource_code;
 pub use scope::{ScopeContext, TenantRecord, WorkspaceRecord, SYSTEM_SCOPE_ID};

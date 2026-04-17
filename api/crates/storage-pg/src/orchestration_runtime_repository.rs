@@ -1,16 +1,19 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use control_plane::ports::{
-    AppendRunEventInput, CompleteFlowRunInput, CompleteNodeRunInput, CreateFlowRunInput,
-    CreateNodeRunInput, OrchestrationRuntimeRepository, UpsertCompiledPlanInput,
+    AppendRunEventInput, CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput,
+    CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
+    OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateNodeRunInput,
+    UpsertCompiledPlanInput,
 };
 use sqlx::{postgres::PgRow, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 use crate::{
     mappers::orchestration_runtime_mapper::{
-        PgOrchestrationRuntimeMapper, StoredApplicationRunSummaryRow, StoredCheckpointRow,
-        StoredCompiledPlanRow, StoredFlowRunRow, StoredNodeRunRow, StoredRunEventRow,
+        PgOrchestrationRuntimeMapper, StoredApplicationRunSummaryRow, StoredCallbackTaskRow,
+        StoredCheckpointRow, StoredCompiledPlanRow, StoredFlowRunRow, StoredNodeRunRow,
+        StoredRunEventRow,
     },
     repositories::PgControlPlaneStore,
 };
@@ -64,6 +67,33 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         map_compiled_plan_record(row)
     }
 
+    async fn get_compiled_plan(
+        &self,
+        compiled_plan_id: Uuid,
+    ) -> Result<Option<domain::CompiledPlanRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                id,
+                flow_id,
+                flow_draft_id,
+                schema_version,
+                document_updated_at,
+                plan,
+                created_by,
+                created_at,
+                updated_at
+            from flow_compiled_plans
+            where id = $1
+            "#,
+        )
+        .bind(compiled_plan_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_compiled_plan_record).transpose()
+    }
+
     async fn create_flow_run(&self, input: &CreateFlowRunInput) -> Result<domain::FlowRunRecord> {
         let row = sqlx::query(
             r#"
@@ -115,6 +145,14 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         map_flow_run_record(row)
     }
 
+    async fn get_flow_run(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> Result<Option<domain::FlowRunRecord>> {
+        fetch_flow_run_for_application(self, application_id, flow_run_id).await
+    }
+
     async fn create_node_run(&self, input: &CreateNodeRunInput) -> Result<domain::NodeRunRecord> {
         let row = sqlx::query(
             r#"
@@ -157,10 +195,7 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         map_node_run_record(row)
     }
 
-    async fn complete_node_run(
-        &self,
-        input: &CompleteNodeRunInput,
-    ) -> Result<domain::NodeRunRecord> {
+    async fn update_node_run(&self, input: &UpdateNodeRunInput) -> Result<domain::NodeRunRecord> {
         let row = sqlx::query(
             r#"
             update node_runs
@@ -197,10 +232,22 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         map_node_run_record(row)
     }
 
-    async fn complete_flow_run(
+    async fn complete_node_run(
         &self,
-        input: &CompleteFlowRunInput,
-    ) -> Result<domain::FlowRunRecord> {
+        input: &CompleteNodeRunInput,
+    ) -> Result<domain::NodeRunRecord> {
+        self.update_node_run(&UpdateNodeRunInput {
+            node_run_id: input.node_run_id,
+            status: input.status,
+            output_payload: input.output_payload.clone(),
+            error_payload: input.error_payload.clone(),
+            metrics_payload: input.metrics_payload.clone(),
+            finished_at: Some(input.finished_at),
+        })
+        .await
+    }
+
+    async fn update_flow_run(&self, input: &UpdateFlowRunInput) -> Result<domain::FlowRunRecord> {
         let row = sqlx::query(
             r#"
             update flow_runs
@@ -236,6 +283,165 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         .await?;
 
         map_flow_run_record(row)
+    }
+
+    async fn complete_flow_run(
+        &self,
+        input: &CompleteFlowRunInput,
+    ) -> Result<domain::FlowRunRecord> {
+        self.update_flow_run(&UpdateFlowRunInput {
+            flow_run_id: input.flow_run_id,
+            status: input.status,
+            output_payload: input.output_payload.clone(),
+            error_payload: input.error_payload.clone(),
+            finished_at: Some(input.finished_at),
+        })
+        .await
+    }
+
+    async fn get_checkpoint(
+        &self,
+        flow_run_id: Uuid,
+        checkpoint_id: Uuid,
+    ) -> Result<Option<domain::CheckpointRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                id,
+                flow_run_id,
+                node_run_id,
+                status,
+                reason,
+                locator_payload,
+                variable_snapshot,
+                external_ref_payload,
+                created_at
+            from flow_run_checkpoints
+            where flow_run_id = $1
+              and id = $2
+            "#,
+        )
+        .bind(flow_run_id)
+        .bind(checkpoint_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        Ok(row.map(fetch_checkpoint_record))
+    }
+
+    async fn create_checkpoint(
+        &self,
+        input: &CreateCheckpointInput,
+    ) -> Result<domain::CheckpointRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into flow_run_checkpoints (
+                id,
+                flow_run_id,
+                node_run_id,
+                status,
+                reason,
+                locator_payload,
+                variable_snapshot,
+                external_ref_payload
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                status,
+                reason,
+                locator_payload,
+                variable_snapshot,
+                external_ref_payload,
+                created_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.flow_run_id)
+        .bind(input.node_run_id)
+        .bind(&input.status)
+        .bind(&input.reason)
+        .bind(&input.locator_payload)
+        .bind(&input.variable_snapshot)
+        .bind(&input.external_ref_payload)
+        .fetch_one(self.pool())
+        .await?;
+
+        Ok(map_checkpoint_record(row))
+    }
+
+    async fn create_callback_task(
+        &self,
+        input: &CreateCallbackTaskInput,
+    ) -> Result<domain::CallbackTaskRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into flow_run_callback_tasks (
+                id,
+                flow_run_id,
+                node_run_id,
+                callback_kind,
+                status,
+                request_payload,
+                external_ref_payload
+            ) values ($1, $2, $3, $4, 'pending', $5, $6)
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                callback_kind,
+                status,
+                request_payload,
+                response_payload,
+                external_ref_payload,
+                created_at,
+                completed_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.flow_run_id)
+        .bind(input.node_run_id)
+        .bind(&input.callback_kind)
+        .bind(&input.request_payload)
+        .bind(&input.external_ref_payload)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_callback_task_record(row)
+    }
+
+    async fn complete_callback_task(
+        &self,
+        input: &CompleteCallbackTaskInput,
+    ) -> Result<domain::CallbackTaskRecord> {
+        let row = sqlx::query(
+            r#"
+            update flow_run_callback_tasks
+            set status = 'completed',
+                response_payload = $2,
+                completed_at = $3
+            where id = $1
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                callback_kind,
+                status,
+                request_payload,
+                response_payload,
+                external_ref_payload,
+                created_at,
+                completed_at
+            "#,
+        )
+        .bind(input.callback_task_id)
+        .bind(&input.response_payload)
+        .bind(input.completed_at)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_callback_task_record(row)
     }
 
     async fn append_run_event(
@@ -316,6 +522,7 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         Ok(Some(domain::ApplicationRunDetail {
             node_runs: list_node_runs_for_flow_run(self, flow_run.id).await?,
             checkpoints: list_checkpoints_for_flow_run(self, flow_run.id).await?,
+            callback_tasks: list_callback_tasks_for_flow_run(self, flow_run.id).await?,
             events: list_events_for_flow_run(self, flow_run.id).await?,
             flow_run,
         }))
@@ -553,6 +760,35 @@ async fn list_events_for_flow_run(
     Ok(rows.into_iter().map(map_run_event_record).collect())
 }
 
+async fn list_callback_tasks_for_flow_run(
+    store: &PgControlPlaneStore,
+    flow_run_id: Uuid,
+) -> Result<Vec<domain::CallbackTaskRecord>> {
+    let rows = sqlx::query(
+        r#"
+        select
+            id,
+            flow_run_id,
+            node_run_id,
+            callback_kind,
+            status,
+            request_payload,
+            response_payload,
+            external_ref_payload,
+            created_at,
+            completed_at
+        from flow_run_callback_tasks
+        where flow_run_id = $1
+        order by created_at asc, id asc
+        "#,
+    )
+    .bind(flow_run_id)
+    .fetch_all(store.pool())
+    .await?;
+
+    rows.into_iter().map(map_callback_task_record).collect()
+}
+
 async fn list_events_for_node_context(
     store: &PgControlPlaneStore,
     flow_run_id: Uuid,
@@ -646,6 +882,35 @@ fn map_checkpoint_record(row: PgRow) -> domain::CheckpointRecord {
         variable_snapshot: row.get("variable_snapshot"),
         external_ref_payload: row.get("external_ref_payload"),
         created_at: row.get("created_at"),
+    })
+}
+
+fn fetch_checkpoint_record(row: PgRow) -> domain::CheckpointRecord {
+    PgOrchestrationRuntimeMapper::to_checkpoint_record(StoredCheckpointRow {
+        id: row.get("id"),
+        flow_run_id: row.get("flow_run_id"),
+        node_run_id: row.get("node_run_id"),
+        status: row.get("status"),
+        reason: row.get("reason"),
+        locator_payload: row.get("locator_payload"),
+        variable_snapshot: row.get("variable_snapshot"),
+        external_ref_payload: row.get("external_ref_payload"),
+        created_at: row.get("created_at"),
+    })
+}
+
+fn map_callback_task_record(row: PgRow) -> Result<domain::CallbackTaskRecord> {
+    PgOrchestrationRuntimeMapper::to_callback_task_record(StoredCallbackTaskRow {
+        id: row.get("id"),
+        flow_run_id: row.get("flow_run_id"),
+        node_run_id: row.get("node_run_id"),
+        callback_kind: row.get("callback_kind"),
+        status: row.get("status"),
+        request_payload: row.get("request_payload"),
+        response_payload: row.get("response_payload"),
+        external_ref_payload: row.get("external_ref_payload"),
+        created_at: row.get("created_at"),
+        completed_at: row.get("completed_at"),
     })
 }
 

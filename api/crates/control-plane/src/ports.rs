@@ -231,6 +231,16 @@ pub struct CreateNodeRunInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpdateNodeRunInput {
+    pub node_run_id: Uuid,
+    pub status: domain::NodeRunStatus,
+    pub output_payload: serde_json::Value,
+    pub error_payload: Option<serde_json::Value>,
+    pub metrics_payload: serde_json::Value,
+    pub finished_at: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Clone)]
 pub struct CompleteNodeRunInput {
     pub node_run_id: Uuid,
     pub status: domain::NodeRunStatus,
@@ -238,6 +248,15 @@ pub struct CompleteNodeRunInput {
     pub error_payload: Option<serde_json::Value>,
     pub metrics_payload: serde_json::Value,
     pub finished_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateFlowRunInput {
+    pub flow_run_id: Uuid,
+    pub status: domain::FlowRunStatus,
+    pub output_payload: serde_json::Value,
+    pub error_payload: Option<serde_json::Value>,
+    pub finished_at: Option<OffsetDateTime>,
 }
 
 #[derive(Debug, Clone)]
@@ -257,28 +276,89 @@ pub struct AppendRunEventInput {
     pub payload: serde_json::Value,
 }
 
+#[derive(Debug, Clone)]
+pub struct CreateCheckpointInput {
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub status: String,
+    pub reason: String,
+    pub locator_payload: serde_json::Value,
+    pub variable_snapshot: serde_json::Value,
+    pub external_ref_payload: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateCallbackTaskInput {
+    pub flow_run_id: Uuid,
+    pub node_run_id: Uuid,
+    pub callback_kind: String,
+    pub request_payload: serde_json::Value,
+    pub external_ref_payload: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompleteCallbackTaskInput {
+    pub callback_task_id: Uuid,
+    pub response_payload: serde_json::Value,
+    pub completed_at: OffsetDateTime,
+}
+
 #[async_trait]
 pub trait OrchestrationRuntimeRepository: Send + Sync {
     async fn upsert_compiled_plan(
         &self,
         input: &UpsertCompiledPlanInput,
     ) -> anyhow::Result<domain::CompiledPlanRecord>;
+    async fn get_compiled_plan(
+        &self,
+        compiled_plan_id: Uuid,
+    ) -> anyhow::Result<Option<domain::CompiledPlanRecord>>;
     async fn create_flow_run(
         &self,
         input: &CreateFlowRunInput,
     ) -> anyhow::Result<domain::FlowRunRecord>;
+    async fn get_flow_run(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> anyhow::Result<Option<domain::FlowRunRecord>>;
     async fn create_node_run(
         &self,
         input: &CreateNodeRunInput,
+    ) -> anyhow::Result<domain::NodeRunRecord>;
+    async fn update_node_run(
+        &self,
+        input: &UpdateNodeRunInput,
     ) -> anyhow::Result<domain::NodeRunRecord>;
     async fn complete_node_run(
         &self,
         input: &CompleteNodeRunInput,
     ) -> anyhow::Result<domain::NodeRunRecord>;
+    async fn update_flow_run(
+        &self,
+        input: &UpdateFlowRunInput,
+    ) -> anyhow::Result<domain::FlowRunRecord>;
     async fn complete_flow_run(
         &self,
         input: &CompleteFlowRunInput,
     ) -> anyhow::Result<domain::FlowRunRecord>;
+    async fn get_checkpoint(
+        &self,
+        flow_run_id: Uuid,
+        checkpoint_id: Uuid,
+    ) -> anyhow::Result<Option<domain::CheckpointRecord>>;
+    async fn create_checkpoint(
+        &self,
+        input: &CreateCheckpointInput,
+    ) -> anyhow::Result<domain::CheckpointRecord>;
+    async fn create_callback_task(
+        &self,
+        input: &CreateCallbackTaskInput,
+    ) -> anyhow::Result<domain::CallbackTaskRecord>;
+    async fn complete_callback_task(
+        &self,
+        input: &CompleteCallbackTaskInput,
+    ) -> anyhow::Result<domain::CallbackTaskRecord>;
     async fn append_run_event(
         &self,
         input: &AppendRunEventInput,

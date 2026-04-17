@@ -64,6 +64,20 @@ pub struct StoredCheckpointRow {
 }
 
 #[derive(Debug, Clone)]
+pub struct StoredCallbackTaskRow {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub node_run_id: Uuid,
+    pub callback_kind: String,
+    pub status: String,
+    pub request_payload: serde_json::Value,
+    pub response_payload: Option<serde_json::Value>,
+    pub external_ref_payload: Option<serde_json::Value>,
+    pub created_at: OffsetDateTime,
+    pub completed_at: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Clone)]
 pub struct StoredRunEventRow {
     pub id: Uuid,
     pub flow_run_id: Uuid,
@@ -152,6 +166,23 @@ impl PgOrchestrationRuntimeMapper {
         }
     }
 
+    pub fn to_callback_task_record(
+        row: StoredCallbackTaskRow,
+    ) -> Result<domain::CallbackTaskRecord> {
+        Ok(domain::CallbackTaskRecord {
+            id: row.id,
+            flow_run_id: row.flow_run_id,
+            node_run_id: row.node_run_id,
+            callback_kind: row.callback_kind,
+            status: parse_callback_task_status(&row.status)?,
+            request_payload: row.request_payload,
+            response_payload: row.response_payload,
+            external_ref_payload: row.external_ref_payload,
+            created_at: row.created_at,
+            completed_at: row.completed_at,
+        })
+    }
+
     pub fn to_run_event_record(row: StoredRunEventRow) -> domain::RunEventRecord {
         domain::RunEventRecord {
             id: row.id,
@@ -181,7 +212,17 @@ impl PgOrchestrationRuntimeMapper {
 pub fn parse_flow_run_mode(value: &str) -> Result<domain::FlowRunMode> {
     match value {
         "debug_node_preview" => Ok(domain::FlowRunMode::DebugNodePreview),
+        "debug_flow_run" => Ok(domain::FlowRunMode::DebugFlowRun),
         _ => Err(anyhow!("unknown flow run mode: {value}")),
+    }
+}
+
+pub fn parse_callback_task_status(value: &str) -> Result<domain::CallbackTaskStatus> {
+    match value {
+        "pending" => Ok(domain::CallbackTaskStatus::Pending),
+        "completed" => Ok(domain::CallbackTaskStatus::Completed),
+        "cancelled" => Ok(domain::CallbackTaskStatus::Cancelled),
+        _ => Err(anyhow!("unknown callback task status: {value}")),
     }
 }
 
