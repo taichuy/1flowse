@@ -521,16 +521,16 @@ describe('AgentFlowEditorShell', () => {
     const detailDock = await screen.findByTestId('agent-flow-editor-detail-dock');
 
     expect(detailDock).toHaveStyle(`width: ${NODE_DETAIL_DEFAULT_WIDTH}px`);
+    expect(detailDock).toHaveAttribute('data-layout', 'regular');
 
     fireEvent.mouseDown(
       screen.getByRole('separator', { name: '调整节点详情宽度' }),
       { clientX: 860 }
     );
-    fireEvent.mouseMove(window, { clientX: 780 });
+    fireEvent.mouseMove(window, { clientX: 960 });
     fireEvent.mouseUp(window);
 
-    expect(detailDock).toHaveStyle(
-      `width: ${NODE_DETAIL_DEFAULT_WIDTH + 80}px`
-    );
+    expect(detailDock).toHaveStyle('width: 320px');
+    expect(detailDock).toHaveAttribute('data-layout', 'compact');
   }, 20_000);
 });

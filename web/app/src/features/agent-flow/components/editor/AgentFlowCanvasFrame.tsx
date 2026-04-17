@@ -27,7 +27,8 @@ import {
 import {
   NODE_DETAIL_DEFAULT_WIDTH,
   NODE_DETAIL_MIN_CANVAS_WIDTH,
-  clampNodeDetailWidth
+  clampNodeDetailWidth,
+  getNodeDetailLayout
 } from '../../lib/detail-panel-width';
 import { validateDocument } from '../../lib/validate-document';
 import { useAuthStore } from '../../../../state/auth-store';
@@ -211,6 +212,7 @@ export function AgentFlowCanvasFrame({
     nodeDetailWidth,
     canvasFrameWidth
   );
+  const nodeDetailLayout = getNodeDetailLayout(boundedNodeDetailWidth);
 
   function handleNodeDetailResizeStart(
     event: ReactMouseEvent<HTMLDivElement>
@@ -331,6 +333,7 @@ export function AgentFlowCanvasFrame({
         {selectedNodeId ? (
           <div
             className="agent-flow-editor__detail-dock"
+            data-layout={nodeDetailLayout}
             data-testid="agent-flow-editor-detail-dock"
             data-resizing={isResizingNodeDetail ? 'true' : 'false'}
             style={{ width: `${boundedNodeDetailWidth}px` }}
