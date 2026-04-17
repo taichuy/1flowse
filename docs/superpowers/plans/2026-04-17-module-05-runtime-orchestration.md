@@ -1112,12 +1112,40 @@ git add docs/superpowers/plans/2026-04-17-module-05-runtime-orchestration.md \
 git commit -m "feat: connect runtime logs and node last run UI"
 ```
 
+**执行备注（`2026-04-17 18`）**
+- 完成时间：`2026-04-17 18`
+- 实际运行命令：`pnpm --dir web/app exec vitest run src/features/applications/_tests/application-logs-page.test.tsx src/features/agent-flow/_tests/node-last-run-runtime.test.tsx src/features/agent-flow/_tests/node-last-run-tab.test.tsx src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx`
+- 实际运行命令：`pnpm --dir web lint`
+- 实际运行命令：`pnpm --dir web test`
+- 实际运行命令：`pnpm --dir web/app build`
+- 额外调整：为直接渲染 `NodeDetailPanel` / `AgentFlowEditorShell` / `AgentFlowCanvas` / `NodeInspector` 的测试补上 `AppProviders`，避免 `No QueryClient set`。
+- 额外调整：Task 5 实际还同步改了 `agent-flow-canvas.test.tsx`、`node-detail-panel.test.tsx`、`node-inspector.test.tsx`，以匹配 runtime query 接入后的 provider 依赖。
+- 提交：`a7cbff56 feat: connect runtime logs and node last run UI`
+
 ## Task 6: Full Verification And Plan Backfill
 
 **Files:**
+- Modify: `api/apps/api-server/src/_tests/application_orchestration_routes.rs`
+- Modify: `api/apps/api-server/src/_tests/application_routes.rs`
+- Modify: `api/apps/api-server/src/_tests/application_runtime_routes.rs`
+- Modify: `api/apps/api-server/src/_tests/mod.rs`
+- Modify: `api/apps/api-server/src/_tests/support.rs`
+- Modify: `api/apps/api-server/src/routes/application_runtime.rs`
+- Modify: `api/apps/api-server/src/routes/applications.rs`
+- Modify: `api/crates/control-plane/src/_tests/orchestration_runtime_service_tests.rs`
+- Modify: `api/crates/control-plane/src/orchestration_runtime.rs`
+- Modify: `api/crates/orchestration-runtime/src/_tests/preview_executor_tests.rs`
+- Modify: `api/crates/orchestration-runtime/src/preview_executor.rs`
+- Modify: `api/crates/storage-pg/src/application_repository.rs`
+- Modify: `api/crates/storage-pg/src/flow_repository.rs`
+- Modify: `api/crates/storage-pg/src/mappers/application_mapper.rs`
+- Modify: `api/crates/storage-pg/src/repositories.rs`
 - Modify: `docs/superpowers/plans/2026-04-17-module-05-runtime-orchestration.md`
+- Create: `.memory/project-memory/2026-04-17-module-05-runtime-orchestration-implemented.md`
+- Create: `.memory/tool-memory/node/2026-04-17-verify-backend-clippy-redundant-closure.md`
+- Create: `.memory/tool-memory/pnpm/2026-04-17-turbo-cache-replay-mixes-stale-test-logs.md`
 
-- [ ] **Step 1: Run targeted backend behavior tests serially**
+- [x] **Step 1: Run targeted backend behavior tests serially**
 
 Run:
 
@@ -1134,7 +1162,7 @@ cd api && cargo test -p api-server application_routes
 
 Expected: PASS; these commands提供运行时行为证据，不受统一脚本前置格式门禁影响。
 
-- [ ] **Step 2: Format Rust code and run the unified backend gate**
+- [x] **Step 2: Format Rust code and run the unified backend gate**
 
 Run:
 
@@ -1145,7 +1173,7 @@ node scripts/node/verify-backend.js
 
 Expected: PASS. If `verify-backend.js` 先输出 `Diff in ...`，先修完格式再重跑，不要把这类失败误判成逻辑回归。
 
-- [ ] **Step 3: Re-run frontend gates and manual smoke**
+- [x] **Step 3: Re-run frontend gates and manual smoke**
 
 Run:
 
@@ -1164,7 +1192,7 @@ Manual smoke:
 4. 返回 Logs 页，确认最新 run 出现在列表顶部，详情 drawer 能看到 timeline 事件。
 ```
 
-- [ ] **Step 4: Backfill this plan document during execution**
+- [x] **Step 4: Backfill this plan document during execution**
 
 ```md
 - 把已完成步骤改成 `- [x]`
@@ -1174,9 +1202,51 @@ Manual smoke:
   - 若命令调整为更精确的模块路径，也写回这里
 ```
 
-- [ ] **Step 5: Commit the verification and plan-status backfill**
+- [x] **Step 5: Commit the verification and plan-status backfill**
 
 ```bash
-git add docs/superpowers/plans/2026-04-17-module-05-runtime-orchestration.md
+git add api/apps/api-server/src/_tests/application_orchestration_routes.rs \
+  api/apps/api-server/src/_tests/application_routes.rs \
+  api/apps/api-server/src/_tests/application_runtime_routes.rs \
+  api/apps/api-server/src/_tests/mod.rs \
+  api/apps/api-server/src/_tests/support.rs \
+  api/apps/api-server/src/routes/application_runtime.rs \
+  api/apps/api-server/src/routes/applications.rs \
+  api/crates/control-plane/src/_tests/orchestration_runtime_service_tests.rs \
+  api/crates/control-plane/src/orchestration_runtime.rs \
+  api/crates/orchestration-runtime/src/_tests/preview_executor_tests.rs \
+  api/crates/orchestration-runtime/src/preview_executor.rs \
+  api/crates/storage-pg/src/application_repository.rs \
+  api/crates/storage-pg/src/flow_repository.rs \
+  api/crates/storage-pg/src/mappers/application_mapper.rs \
+  api/crates/storage-pg/src/repositories.rs
+git commit -m "fix: satisfy runtime orchestration backend verification"
+
+git add .memory/project-memory/2026-04-17-module-05-runtime-orchestration-implemented.md \
+  .memory/tool-memory/node/2026-04-17-verify-backend-clippy-redundant-closure.md \
+  .memory/tool-memory/pnpm/2026-04-17-turbo-cache-replay-mixes-stale-test-logs.md \
+  docs/superpowers/plans/2026-04-17-module-05-runtime-orchestration.md
 git commit -m "docs: backfill module 05 runtime orchestration execution status"
 ```
+
+**执行备注（`2026-04-17 18`）**
+- 完成时间：`2026-04-17 18`
+- 实际运行命令：`cargo test -p orchestration-runtime`
+- 实际运行命令：`cargo test -p control-plane orchestration_runtime_service_tests`
+- 实际运行命令：`cargo test -p storage-pg orchestration_runtime_repository_tests`
+- 实际运行命令：`cargo test -p storage-pg flow_repository_tests`
+- 实际运行命令：`cargo test -p storage-pg application_repository_tests`
+- 实际运行命令：`cargo test -p api-server application_runtime_routes`
+- 实际运行命令：`cargo test -p api-server application_orchestration_routes`
+- 实际运行命令：`cargo test -p api-server application_routes`
+- 实际运行命令：`cargo fmt --all`
+- 实际运行命令：`node scripts/node/verify-backend.js`
+- 异常处理：首次 `verify-backend.js` 因 `api/apps/api-server/src/routes/application_runtime.rs` 的 `clippy::redundant_closure` 失败；把 `value.map(|timestamp| format_time(timestamp))` 改成 `value.map(format_time)` 后重跑通过。
+- 实际运行命令：`cargo test -p api-server application_runtime_routes`
+- 实际运行命令：`pnpm --dir web lint`
+- 实际运行命令：`pnpm --dir web test`
+- 异常处理：`pnpm --dir web test` 走 Turbo cache replay，日志混入旧的 `No QueryClient set` 失败片段但当前退出码为 `0`；随后改用 `pnpm --dir web/app exec vitest --run` 获取确定性结果。
+- 实际运行命令：`pnpm --dir web/app exec vitest --run`
+- 实际运行命令：`pnpm --dir web/app build`
+- 手工 smoke：当前 CLI 会话没有现成浏览器会话，且仓库未配置 Playwright/Cypress 覆盖这条场景，因此未执行；本轮以运行时页面集成测试和全量前后端 gates 作为交付证据。
+- 提交：`a9b0cfbc fix: satisfy runtime orchestration backend verification`
