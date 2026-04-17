@@ -1,4 +1,6 @@
-import { Button, Drawer, List } from 'antd';
+import { Button, List } from 'antd';
+
+import { SchemaDrawerPanel } from '../../../../shared/schema-ui/overlay-shell/SchemaDrawerPanel';
 
 interface VersionHistoryDrawerProps {
   open: boolean;
@@ -15,6 +17,14 @@ interface VersionHistoryDrawerProps {
   onRestore: (versionId: string) => Promise<unknown>;
 }
 
+const historyDrawerSchema = {
+  schemaVersion: '1.0.0',
+  shellType: 'drawer_panel',
+  title: '历史版本',
+  width: 420,
+  getContainer: false
+} as const;
+
 export function VersionHistoryDrawer({
   open,
   onClose,
@@ -23,14 +33,7 @@ export function VersionHistoryDrawer({
   onRestore
 }: VersionHistoryDrawerProps) {
   return (
-    <Drawer
-      getContainer={false}
-      open={open}
-      placement="right"
-      title="历史版本"
-      width={420}
-      onClose={onClose}
-    >
+    <SchemaDrawerPanel open={open} schema={historyDrawerSchema} onClose={onClose}>
       <List
         dataSource={versions}
         locale={{ emptyText: '当前还没有可恢复的历史版本' }}
@@ -55,6 +58,6 @@ export function VersionHistoryDrawer({
           </List.Item>
         )}
       />
-    </Drawer>
+    </SchemaDrawerPanel>
   );
 }

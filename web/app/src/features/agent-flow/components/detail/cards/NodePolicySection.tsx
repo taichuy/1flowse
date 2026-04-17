@@ -1,3 +1,4 @@
+import type { FlowNodeDocument } from '@1flowse/flow-schema';
 import { Select, Switch, Typography } from 'antd';
 import type { SchemaAdapter } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 
@@ -16,8 +17,8 @@ export function NodePolicySection({
   const document = useAgentFlowEditorStore(selectWorkingDocument);
   const selectedNodeId = useAgentFlowEditorStore(selectSelectedNodeId);
   const { updateField } = useInspectorInteractions();
-  const selectedNode =
-    adapter?.getDerived('node') ??
+  const selectedNode: FlowNodeDocument | null =
+    (adapter?.getDerived('node') as FlowNodeDocument | null | undefined) ??
     (selectedNodeId
       ? document.graph.nodes.find((node) => node.id === selectedNodeId) ?? null
       : null);

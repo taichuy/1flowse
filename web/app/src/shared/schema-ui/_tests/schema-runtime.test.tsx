@@ -7,7 +7,7 @@ import { createRendererRegistry } from '../registry/create-renderer-registry';
 import { evaluateSchemaRule } from '../runtime/rule-evaluator';
 import { SchemaRenderer } from '../runtime/SchemaRenderer';
 
-const registry = createRendererRegistry({
+const view = createRendererRegistry({
   fields: {
     text: ({ block, adapter }) => (
       <input aria-label={block.label} value={String(adapter.getValue(block.path) ?? '')} readOnly />
@@ -76,7 +76,7 @@ describe('schema runtime', () => {
           dispatch: vi.fn()
         }}
         blocks={schema.detail.tabs.config.blocks}
-        registry={registry}
+        registry={view}
       />
     );
 
@@ -103,7 +103,7 @@ describe('schema runtime', () => {
             visibleWhen: { operator: 'eq', path: 'config.mode', value: 'advanced' }
           }
         ]}
-        registry={registry}
+        registry={view}
       />
     );
 

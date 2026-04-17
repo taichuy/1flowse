@@ -30,20 +30,6 @@ export function NodeLastRunTab({
     queryFn: () => fetchNodeLastRun(applicationId!, nodeId!),
     enabled: Boolean(applicationId && nodeId)
   });
-  const runtimeAdapter =
-    schema && adapter
-      ? {
-          ...adapter,
-          getDerived(key: string) {
-            if (key === 'lastRun') {
-              return lastRunQuery.data;
-            }
-
-            return adapter.getDerived(key);
-          }
-        }
-      : null;
-
   if (lastRunQuery.isPending) {
     return <Result status="info" title="正在加载上次运行" />;
   }
@@ -66,6 +52,17 @@ export function NodeLastRunTab({
       </div>
     );
   }
+
+  const runtimeAdapter: SchemaAdapter = {
+    ...adapter,
+    getDerived(key: string) {
+      if (key === 'lastRun') {
+        return lastRunQuery.data;
+      }
+
+      return adapter.getDerived(key);
+    }
+  };
 
   return (
     <div className="agent-flow-node-detail__last-run">

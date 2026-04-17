@@ -5,6 +5,30 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowse/flow-schema';
 import { AppProviders } from '../../../app/AppProviders';
+
+const schemaRuntimeSpies = vi.hoisted(() => ({
+  resolveAgentFlowNodeSchema: vi.fn(),
+  SchemaDrawerPanel: vi.fn()
+}));
+
+vi.mock('../schema/node-schema-registry', async () => {
+  const actual = await vi.importActual<typeof import('../schema/node-schema-registry')>(
+    '../schema/node-schema-registry'
+  );
+
+  return {
+    ...actual,
+    resolveAgentFlowNodeSchema: vi.fn((nodeType) => {
+      schemaRuntimeSpies.resolveAgentFlowNodeSchema(nodeType);
+      return actual.resolveAgentFlowNodeSchema(nodeType);
+    })
+  };
+});
+
+vi.mock('../../../shared/schema-ui/overlay-shell/SchemaDrawerPanel', () => ({
+  SchemaDrawerPanel: schemaRuntimeSpies.SchemaDrawerPanel
+}));
+
 import * as orchestrationApi from '../api/orchestration';
 import * as runtimeApi from '../api/runtime';
 import { VersionHistoryDrawer } from '../components/history/VersionHistoryDrawer';
@@ -36,6 +60,22 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  schemaRuntimeSpies.resolveAgentFlowNodeSchema.mockClear();
+  schemaRuntimeSpies.SchemaDrawerPanel.mockReset();
+  schemaRuntimeSpies.SchemaDrawerPanel.mockImplementation(
+    ({
+      children,
+      schema
+    }: {
+      children?: ReactNode;
+      schema: { title: string };
+    }) => (
+      <div data-testid="mock-schema-drawer">
+        <div data-testid="mock-schema-drawer-title">{schema.title}</div>
+        {children}
+      </div>
+    )
+  );
   resetAuthStore();
   useAuthStore.getState().setAuthenticated({
     csrfToken: 'csrf-123',
@@ -144,6 +184,29 @@ beforeEach(() => {
 });
 
 describe('AgentFlowEditorShell', () => {
+  test('renders node cards through node schema card blocks and keeps debug overlay actions', async () => {
+    schemaRuntimeSpies.resolveAgentFlowNodeSchema.mockClear();
+
+    renderShell(
+      <div style={{ width: 1280, height: 720 }}>
+        <AgentFlowEditorShell
+          applicationId="app-1"
+          applicationName="Support Agent"
+          initialState={createInitialState()}
+        />
+      </div>
+    );
+
+    expect(
+      await screen.findByText('Start', { selector: '.agent-flow-node-card__title' })
+    ).toBeInTheDocument();
+    expect(schemaRuntimeSpies.resolveAgentFlowNodeSchema).toHaveBeenCalledWith('start');
+    expect(schemaRuntimeSpies.resolveAgentFlowNodeSchema).toHaveBeenCalledWith('llm');
+    expect(schemaRuntimeSpies.resolveAgentFlowNodeSchema).toHaveBeenCalledWith('answer');
+    expect(screen.getByRole('button', { name: '历史版本' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '调试整流' })).toBeInTheDocument();
+  }, 20_000);
+
   test('renders the default three nodes and overlay controls', async () => {
     renderShell(
       <div style={{ width: 1280, height: 720 }}>
@@ -273,6 +336,7 @@ describe('AgentFlowEditorShell', () => {
   }, 20_000);
 
   test('restores a history version into the current draft', async () => {
+    schemaRuntimeSpies.SchemaDrawerPanel.mockClear();
     const versions = [
       {
         id: 'version-1',
@@ -305,6 +369,18 @@ describe('AgentFlowEditorShell', () => {
       />
     );
 
+    expect(schemaRuntimeSpies.SchemaDrawerPanel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        open: true,
+        schema: expect.objectContaining({
+          title: '历史版本',
+          width: 420,
+          getContainer: false
+        }),
+        onClose: expect.any(Function)
+      }),
+      undefined
+    );
     fireEvent.click(screen.getByRole('button', { name: '恢复版本 1' }));
 
     expect(restoreVersion).toHaveBeenCalledWith('version-1');

@@ -17,9 +17,9 @@ vi.mock('../schema/node-schema-registry', async () => {
 
   return {
     ...actual,
-    resolveAgentFlowNodeSchema: vi.fn((...args) => {
-      schemaRuntimeSpies.resolveAgentFlowNodeSchema(...args);
-      return actual.resolveAgentFlowNodeSchema(...args);
+    resolveAgentFlowNodeSchema: vi.fn((nodeType) => {
+      schemaRuntimeSpies.resolveAgentFlowNodeSchema(nodeType);
+      return actual.resolveAgentFlowNodeSchema(nodeType);
     })
   };
 });
@@ -31,9 +31,9 @@ vi.mock('../schema/node-schema-adapter', async () => {
 
   return {
     ...actual,
-    createAgentFlowNodeSchemaAdapter: vi.fn((...args) => {
-      schemaRuntimeSpies.createAgentFlowNodeSchemaAdapter(...args);
-      return actual.createAgentFlowNodeSchemaAdapter(...args);
+    createAgentFlowNodeSchemaAdapter: vi.fn((input) => {
+      schemaRuntimeSpies.createAgentFlowNodeSchemaAdapter(input);
+      return actual.createAgentFlowNodeSchemaAdapter(input);
     })
   };
 });

@@ -62,6 +62,8 @@
       "web/app/src/features/home/pages/HomePage.tsx",
       "web/app/src/features/applications/pages/ApplicationListPage.tsx",
       "web/app/src/features/applications/components/ApplicationCardGrid.tsx",
+      "web/app/src/shared/schema-ui/contracts/overlay-shell-schema.ts",
+      "web/app/src/shared/schema-ui/overlay-shell/SchemaModalPanel.tsx",
       "web/app/src/features/applications/components/ApplicationCreateModal.tsx",
       "web/app/src/app/router.tsx"
     ],
@@ -93,14 +95,23 @@
       "web/app/src/shared/ui/section-page-layout/SectionPageLayout.tsx",
       "web/app/src/shared/ui/section-page-layout/SectionSidebarNav.tsx",
       "web/app/src/shared/ui/section-page-layout/section-page-layout.css",
+      "web/app/src/shared/schema-ui/contracts/canvas-node-schema.ts",
+      "web/app/src/shared/schema-ui/contracts/overlay-shell-schema.ts",
+      "web/app/src/shared/schema-ui/runtime/SchemaRenderer.tsx",
+      "web/app/src/shared/schema-ui/overlay-shell/SchemaDockPanel.tsx",
+      "web/app/src/shared/schema-ui/overlay-shell/SchemaDrawerPanel.tsx",
       "web/app/src/features/applications/pages/ApplicationDetailPage.tsx",
       "web/app/src/features/applications/components/ApplicationSectionState.tsx",
       "web/app/src/features/applications/lib/application-sections.tsx",
       "web/app/src/features/agent-flow/pages/AgentFlowEditorPage.tsx",
+      "web/app/src/features/agent-flow/schema/node-schema-registry.ts",
+      "web/app/src/features/agent-flow/schema/node-schema-adapter.ts",
+      "web/app/src/features/agent-flow/schema/agent-flow-renderer-registry.ts",
       "web/app/src/features/agent-flow/components/editor/AgentFlowEditorShell.tsx",
       "web/app/src/features/agent-flow/components/editor/AgentFlowCanvasFrame.tsx",
       "web/app/src/features/agent-flow/components/editor/AgentFlowCanvas.tsx",
       "web/app/src/features/agent-flow/components/editor/agent-flow-editor.css",
+      "web/app/src/features/agent-flow/components/canvas/node-types.tsx",
       "web/app/src/features/agent-flow/components/detail/NodeDetailPanel.tsx",
       "web/app/src/features/agent-flow/components/detail/NodeDetailHeader.tsx",
       "web/app/src/features/agent-flow/components/detail/NodeActionMenu.tsx",
@@ -115,8 +126,11 @@
       "web/app/src/features/agent-flow/components/detail/last-run/NodeRunSummaryCard.tsx",
       "web/app/src/features/agent-flow/components/detail/last-run/NodeRunIOCard.tsx",
       "web/app/src/features/agent-flow/components/detail/last-run/NodeRunMetadataCard.tsx",
+      "web/app/src/features/agent-flow/components/history/VersionHistoryDrawer.tsx",
+      "web/app/src/features/agent-flow/components/nodes/AgentFlowNodeCard.tsx",
       "web/app/src/features/agent-flow/components/canvas/custom-edge.tsx",
       "web/app/src/features/agent-flow/components/canvas/custom-connection-line.tsx",
+      "web/app/src/features/agent-flow/lib/adapters/to-canvas-nodes.ts",
       "web/app/src/style-boundary/registry.tsx",
       "web/app/src/app/router.tsx"
     ],
@@ -165,7 +179,7 @@
           },
           {
             "property": "width",
-            "expected": "520px"
+            "expected": "320px"
           }
         ]
       },

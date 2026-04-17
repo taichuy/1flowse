@@ -1,3 +1,4 @@
+import type { FlowNodeDocument } from '@1flowse/flow-schema';
 import { Button, Empty, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { SchemaAdapter } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
@@ -15,8 +16,8 @@ export function NodeOutputContractCard({
 } = {}) {
   const document = useAgentFlowEditorStore(selectWorkingDocument);
   const selectedNodeId = useAgentFlowEditorStore(selectSelectedNodeId);
-  const selectedNode =
-    adapter?.getDerived('node') ??
+  const selectedNode: FlowNodeDocument | null =
+    (adapter?.getDerived('node') as FlowNodeDocument | null | undefined) ??
     (selectedNodeId
       ? document.graph.nodes.find((node) => node.id === selectedNodeId) ?? null
       : null);
@@ -26,19 +27,11 @@ export function NodeOutputContractCard({
   }
 
   // Use a customized title for the start node
-  const title =
-    'type' in selectedNode && selectedNode.type === 'start'
-      ? '输入字段'
-      : '输出变量';
-  const subtitle =
-    'type' in selectedNode && selectedNode.type === 'start'
-      ? '设置的输入可在工作流程中使用'
-      : '节点产出的数据字段';
+  const title = selectedNode.type === 'start' ? '输入字段' : '输出变量';
+  const subtitle = selectedNode.type === 'start' ? '设置的输入可在工作流程中使用' : '节点产出的数据字段';
   const outputs =
-    (adapter?.getValue('config.output_contract') as Array<{
-      key: string;
-      valueType: string;
-    }>) ?? selectedNode.outputs;
+    (adapter?.getValue('config.output_contract') as FlowNodeDocument['outputs'] | undefined) ??
+    selectedNode.outputs;
 
   return (
     <div className="agent-flow-node-detail__section">

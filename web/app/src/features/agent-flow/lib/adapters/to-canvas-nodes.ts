@@ -1,6 +1,7 @@
 import type { FlowAuthoringDocument } from '@1flowse/flow-schema';
 
 import type { AgentFlowCanvasNode, AgentFlowCanvasNodeData } from '../../components/canvas/node-types';
+import { resolveAgentFlowNodeSchema } from '../../schema/node-schema-registry';
 
 function nodeTypeLabel(nodeType: AgentFlowCanvasNodeData['nodeType']) {
   if (nodeType === 'llm') {
@@ -40,6 +41,7 @@ export function toCanvasNodes(
       data: {
         nodeId: node.id,
         nodeType: node.type,
+        nodeSchema: resolveAgentFlowNodeSchema(node.type),
         typeLabel: nodeTypeLabel(node.type),
         alias: node.alias,
         description: node.description,

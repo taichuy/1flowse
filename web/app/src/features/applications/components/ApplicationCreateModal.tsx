@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Modal, Radio, Space, Typography } from 'antd';
+import { Button, Form, Input, Radio, Space, Typography } from 'antd';
 
+import { SchemaModalPanel } from '../../../shared/schema-ui/overlay-shell/SchemaModalPanel';
 import { applicationsQueryKey, createApplication } from '../api/applications';
 
 interface ApplicationCreateModalProps {
@@ -15,6 +16,13 @@ interface ApplicationCreateFormValues {
   name: string;
   description: string;
 }
+
+const applicationCreateShell = {
+  schemaVersion: '1.0.0',
+  shellType: 'modal_panel',
+  title: '新建应用',
+  destroyOnHidden: true
+} as const;
 
 export function ApplicationCreateModal({
   open,
@@ -46,13 +54,7 @@ export function ApplicationCreateModal({
   });
 
   return (
-    <Modal
-      open={open}
-      title="新建应用"
-      onCancel={onClose}
-      footer={null}
-      destroyOnHidden
-    >
+    <SchemaModalPanel open={open} schema={applicationCreateShell} onClose={onClose}>
       <Form<ApplicationCreateFormValues>
         form={form}
         layout="vertical"
@@ -92,6 +94,6 @@ export function ApplicationCreateModal({
           创建应用
         </Button>
       </Form>
-    </Modal>
+    </SchemaModalPanel>
   );
 }

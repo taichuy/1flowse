@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { AgentFlowNodeCard } from '../components/nodes/AgentFlowNodeCard';
+import { resolveAgentFlowNodeSchema } from '../schema/node-schema-registry';
 
 vi.mock('@xyflow/react', () => ({
   Handle: ({
@@ -44,6 +45,7 @@ describe('AgentFlowNodeCard', () => {
           data: {
             nodeId: 'node-llm',
             nodeType: 'llm',
+            nodeSchema: resolveAgentFlowNodeSchema('llm'),
             typeLabel: 'LLM',
             alias: 'LLM',
             description: '',

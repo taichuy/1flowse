@@ -1,6 +1,7 @@
 import type { FlowNodeType } from '@1flowse/flow-schema';
 import type { EdgeTypes, Node, NodeTypes } from '@xyflow/react';
 
+import type { CanvasNodeSchema } from '../../../../shared/schema-ui/contracts/canvas-node-schema';
 import { AgentFlowNodeCard } from '../nodes/AgentFlowNodeCard';
 import {
   AgentFlowCustomEdge,
@@ -10,6 +11,7 @@ import {
 export interface AgentFlowCanvasNodeData extends Record<string, unknown> {
   nodeId: string;
   nodeType: FlowNodeType;
+  nodeSchema: CanvasNodeSchema;
   typeLabel: string;
   alias: string;
   description?: string;

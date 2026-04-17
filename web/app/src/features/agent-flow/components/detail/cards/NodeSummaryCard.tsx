@@ -1,3 +1,4 @@
+import type { FlowNodeDocument } from '@1flowse/flow-schema';
 import { Card, Typography } from 'antd';
 import type { SchemaAdapter } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 import {
@@ -17,20 +18,20 @@ export function NodeSummaryCard({
 } = {}) {
   const document = useAgentFlowEditorStore(selectWorkingDocument);
   const selectedNodeId = useAgentFlowEditorStore(selectSelectedNodeId);
-  const selectedNode =
-    adapter?.getDerived('node') ??
+  const selectedNode: FlowNodeDocument | null =
+    (adapter?.getDerived('node') as FlowNodeDocument | null | undefined) ??
     (selectedNodeId
       ? document.graph.nodes.find((node) => node.id === selectedNodeId) ?? null
       : null);
   const definition =
-    selectedNode && 'type' in selectedNode
-      ? nodeDefinitions[(selectedNode as { type: keyof typeof nodeDefinitions }).type] ??
+    selectedNode
+      ? nodeDefinitions[selectedNode.type] ??
         null
       : null;
   const definitionMeta =
-    selectedNode && 'type' in selectedNode
-      ? adapter?.getDerived('definitionMeta') ??
-        getNodeDefinitionMeta((selectedNode as { type: Parameters<typeof getNodeDefinitionMeta>[0] }).type)
+    selectedNode
+      ? ((adapter?.getDerived('definitionMeta') as ReturnType<typeof getNodeDefinitionMeta> | null | undefined) ??
+        getNodeDefinitionMeta(selectedNode.type))
       : null;
 
   if (!selectedNode || !definition || !definitionMeta) {

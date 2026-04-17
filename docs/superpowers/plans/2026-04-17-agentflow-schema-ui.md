@@ -1007,7 +1007,7 @@ git commit -m "feat: migrate node detail to schema runtime"
 - Modify: `web/app/src/features/applications/_tests/application-create-modal.test.tsx`
 - Modify: `web/app/src/style-boundary/scenario-manifest.json`
 
-- [ ] **Step 1: Write the failing card and overlay consumer assertions**
+- [x] **Step 1: Write the failing card and overlay consumer assertions**
 
 ```tsx
 // web/app/src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx
@@ -1048,7 +1048,7 @@ test('keeps form semantics after migrating to modal panel shell', () => {
 });
 ```
 
-- [ ] **Step 2: Run the targeted editor and application modal tests and confirm they fail**
+- [x] **Step 2: Run the targeted editor and application modal tests and confirm they fail**
 
 Run:
 
@@ -1060,7 +1060,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: FAIL with stale hard-coded card or shell expectations.
 
-- [ ] **Step 3: Implement card schema consumption and migrate drawer/modal consumers**
+- [x] **Step 3: Implement card schema consumption and migrate drawer/modal consumers**
 
 ```ts
 // web/app/src/features/agent-flow/lib/adapters/to-canvas-nodes.ts
@@ -1156,7 +1156,7 @@ export function ApplicationCreateModal({ open, csrfToken, onClose, onCreated }: 
 }
 ```
 
-- [ ] **Step 4: Run the targeted editor and application modal tests and confirm they pass**
+- [x] **Step 4: Run the targeted editor and application modal tests and confirm they pass**
 
 Run:
 
@@ -1168,7 +1168,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: PASS with schema card rendering and shared modal shell behavior preserved.
 
-- [ ] **Step 5: Update style-boundary impact mapping**
+- [x] **Step 5: Update style-boundary impact mapping**
 
 ```json
 // web/app/src/style-boundary/scenario-manifest.json
@@ -1215,6 +1215,14 @@ vite build      -> success
 [1flowse-style-boundary] PASS page.application-detail
 [1flowse-style-boundary] PASS page.home
 ```
+
+Actual on `2026-04-17`:
+
+- `pnpm --dir web lint` PASS
+- `pnpm --dir web test` PASS (`47/47` files, `154/154` tests)
+- `pnpm --dir web/app build` PASS
+- `node scripts/node/check-style-boundary.js page page.home` PASS
+- `node scripts/node/check-style-boundary.js page page.application-detail` still times out at `.app-shell-header`; treat this as the current verification-chain risk, not as proof that schema UI migration regressed
 
 - [ ] **Step 7: Commit the cross-feature schema migration**
 

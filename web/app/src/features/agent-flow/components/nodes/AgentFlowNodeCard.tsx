@@ -1,14 +1,54 @@
 import { Tooltip } from 'antd';
 import { Position, type NodeProps } from '@xyflow/react';
 
+import { SchemaRenderer } from '../../../../shared/schema-ui/runtime/SchemaRenderer';
 import { CanvasHandle } from '../canvas/CanvasHandle';
 import { NodePickerPopover } from '../node-picker/NodePickerPopover';
 import type { AgentFlowCanvasNode } from '../canvas/node-types';
+import { agentFlowRendererRegistry } from '../../schema/agent-flow-renderer-registry';
 
 export function AgentFlowNodeCard({
   data,
   selected
 }: NodeProps<AgentFlowCanvasNode>) {
+  const cardAdapter = {
+    getValue(path: string) {
+      if (path === 'alias') {
+        return data.alias;
+      }
+
+      if (path === 'description') {
+        return data.description;
+      }
+
+      return null;
+    },
+    setValue: () => undefined,
+    getDerived(key: string) {
+      if (key === 'node') {
+        return {
+          id: data.nodeId,
+          type: data.nodeType,
+          alias: data.alias,
+          description: data.description,
+          config: {},
+          outputs: []
+        };
+      }
+
+      if (key === 'issueCount') {
+        return data.issueCount;
+      }
+
+      if (key === 'typeLabel') {
+        return data.typeLabel;
+      }
+
+      return null;
+    },
+    dispatch: () => undefined
+  } as const;
+
   return (
     <>
       {data.showTargetHandle ? (
@@ -35,16 +75,11 @@ export function AgentFlowNodeCard({
           }
         }}
       >
-        <div className="agent-flow-node-card__eyebrow">
-          <span>{data.alias === data.typeLabel ? 'Node' : data.typeLabel}</span>
-          {data.issueCount > 0 ? (
-            <span className="agent-flow-node-card__badge">{data.issueCount}</span>
-          ) : null}
-        </div>
-        <div className="agent-flow-node-card__title">{data.alias}</div>
-        {data.description?.trim().length ? (
-          <div className="agent-flow-node-card__description">{data.description}</div>
-        ) : null}
+        <SchemaRenderer
+          adapter={cardAdapter}
+          blocks={data.nodeSchema.card.blocks}
+          registry={agentFlowRendererRegistry}
+        />
       </div>
       {data.showSourceHandle ? (
         <NodePickerPopover

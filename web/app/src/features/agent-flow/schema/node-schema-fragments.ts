@@ -3,8 +3,7 @@ import type { FlowNodeType } from '@1flowse/flow-schema';
 import type {
   SchemaBlock,
   SchemaFieldBlock,
-  SchemaSectionBlock,
-  SchemaViewBlock
+  SchemaSectionBlock
 } from '../../../shared/schema-ui/contracts/canvas-node-schema';
 import {
   getNodeDefinitionSections,
