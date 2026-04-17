@@ -88,7 +88,7 @@
 - Create: `api/crates/orchestration-runtime/src/_tests/execution_engine_tests.rs`
 - Modify: `api/crates/orchestration-runtime/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write the failing execution engine tests**
+- [x] **Step 1: Write the failing execution engine tests**
 
 ```rust
 // api/crates/orchestration-runtime/src/_tests/execution_engine_tests.rs
@@ -291,7 +291,7 @@ fn tool_node_emits_waiting_callback_stop_reason() {
 }
 ```
 
-- [ ] **Step 2: Run the targeted runtime tests and confirm they fail**
+- [x] **Step 2: Run the targeted runtime tests and confirm they fail**
 
 Run:
 
@@ -301,7 +301,7 @@ cd api && cargo test -p orchestration-runtime execution_engine_tests
 
 Expected: FAIL with missing `execution_engine` / `execution_state` modules and missing shared binding runtime helpers.
 
-- [ ] **Step 3: Implement shared binding runtime and flow debug executor**
+- [x] **Step 3: Implement shared binding runtime and flow debug executor**
 
 ```rust
 // api/crates/orchestration-runtime/src/execution_state.rs
@@ -624,7 +624,7 @@ fn execute_from(
 }
 ```
 
-- [ ] **Step 4: Run the runtime tests and ensure they pass**
+- [x] **Step 4: Run the runtime tests and ensure they pass**
 
 Run:
 
@@ -635,7 +635,7 @@ cd api && cargo test -p orchestration-runtime preview_executor_tests
 
 Expected: PASS. `preview_executor_tests` 也应继续通过，证明 resolver 抽取后没有打坏第一份计划里的单节点 preview。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/crates/orchestration-runtime/src/binding_runtime.rs \
@@ -648,6 +648,14 @@ git add api/crates/orchestration-runtime/src/binding_runtime.rs \
 git commit -m "feat: add stateful flow debug executor"
 ```
 
+执行备注：
+- 完成时间：`2026-04-17 21`
+- 实际红灯命令：`cd api && cargo test -p orchestration-runtime execution_engine_tests`
+- 实际绿灯命令：`cd api && cargo test -p orchestration-runtime execution_engine_tests`
+- 实际绿灯命令：`cd api && cargo test -p orchestration-runtime preview_executor_tests`
+- 提交：`9e3f491a feat: add stateful flow debug executor`
+- 调整说明：测试与实现按当前 `CompiledPlan / CompiledNode / CompiledOutput` 结构落地，并把 preview executor 改为复用共享 binding runtime
+
 ## Task 2: Extend Runtime Domain And Repository For Resume State
 
 **Files:**
@@ -659,7 +667,7 @@ git commit -m "feat: add stateful flow debug executor"
 - Modify: `api/crates/storage-pg/src/mappers/orchestration_runtime_mapper.rs`
 - Modify: `api/crates/storage-pg/src/_tests/orchestration_runtime_repository_tests.rs`
 
-- [ ] **Step 1: Write the failing repository tests**
+- [x] **Step 1: Write the failing repository tests**
 
 ```rust
 // api/crates/storage-pg/src/_tests/orchestration_runtime_repository_tests.rs
@@ -744,7 +752,7 @@ async fn orchestration_runtime_repository_returns_callback_tasks_with_run_detail
 }
 ```
 
-- [ ] **Step 2: Run the targeted repository tests and confirm they fail**
+- [x] **Step 2: Run the targeted repository tests and confirm they fail**
 
 Run:
 
@@ -754,7 +762,7 @@ cd api && cargo test -p storage-pg orchestration_runtime_repository_tests
 
 Expected: FAIL with missing `debug_flow_run` mode parsing, missing `callback_tasks` table and missing repository methods for checkpoints / callback tasks / generic updates.
 
-- [ ] **Step 3: Add domain records, generic update DTOs and PostgreSQL schema**
+- [x] **Step 3: Add domain records, generic update DTOs and PostgreSQL schema**
 
 ```rust
 // api/crates/domain/src/orchestration.rs
@@ -907,7 +915,7 @@ create index flow_run_callback_tasks_flow_created_idx
     on flow_run_callback_tasks (flow_run_id, created_at desc, id desc);
 ```
 
-- [ ] **Step 4: Run repository tests and mapper regression tests**
+- [x] **Step 4: Run repository tests and mapper regression tests**
 
 Run:
 
@@ -919,7 +927,7 @@ cd api && cargo test -p storage-pg application_repository_tests
 
 Expected: PASS. `flow_repository_tests` 和 `application_repository_tests` 需要继续通过，证明 run detail 聚合字段扩展没有打坏应用详情和 flow 读取链路。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/crates/domain/src/orchestration.rs \
@@ -932,6 +940,15 @@ git add api/crates/domain/src/orchestration.rs \
 git commit -m "feat: persist runtime checkpoints and callback tasks"
 ```
 
+执行备注：
+- 完成时间：`2026-04-17 21`
+- 实际红灯命令：`cd api && cargo test -p storage-pg orchestration_runtime_repository_tests`
+- 实际绿灯命令：`cd api && cargo test -p storage-pg orchestration_runtime_repository_tests`
+- 实际绿灯命令：`cd api && cargo test -p storage-pg flow_repository_tests`
+- 实际绿灯命令：`cd api && cargo test -p storage-pg application_repository_tests`
+- 提交：`ea511eb3 feat: persist runtime checkpoints and callback tasks`
+- 调整说明：在 `ports` 中保留原有 `complete_*` 接口，同时新增 `update_* / checkpoint / callback task / lookup` 端口，避免打坏第一轮 preview 流程
+
 ## Task 3: Implement Control-Plane Whole-Flow Debug Run And Resume Commands
 
 **Files:**
@@ -939,7 +956,7 @@ git commit -m "feat: persist runtime checkpoints and callback tasks"
 - Create: `api/crates/control-plane/src/_tests/orchestration_runtime_resume_tests.rs`
 - Modify: `api/crates/control-plane/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write the failing service tests**
+- [x] **Step 1: Write the failing service tests**
 
 ```rust
 // api/crates/control-plane/src/_tests/orchestration_runtime_resume_tests.rs
@@ -1004,7 +1021,7 @@ async fn complete_callback_task_updates_task_and_requeues_waiting_run() {
 }
 ```
 
-- [ ] **Step 2: Run the targeted service tests and confirm they fail**
+- [x] **Step 2: Run the targeted service tests and confirm they fail**
 
 Run:
 
@@ -1014,7 +1031,7 @@ cd api && cargo test -p control-plane orchestration_runtime_resume_tests
 
 Expected: FAIL with missing `StartFlowDebugRunCommand` / `ResumeFlowRunCommand` / `CompleteCallbackTaskCommand` and missing persistence helpers for waiting states.
 
-- [ ] **Step 3: Implement debug run start, resume and callback completion service**
+- [x] **Step 3: Implement debug run start, resume and callback completion service**
 
 ```rust
 // api/crates/control-plane/src/orchestration_runtime.rs
@@ -1126,7 +1143,7 @@ where
 }
 ```
 
-- [ ] **Step 4: Run runtime and control-plane tests**
+- [x] **Step 4: Run runtime and control-plane tests**
 
 Run:
 
@@ -1137,7 +1154,7 @@ cd api && cargo test -p control-plane orchestration_runtime_resume_tests
 
 Expected: PASS. 原有 `orchestration_runtime_service_tests` 继续证明 single-node preview 没被打坏，新测试证明 waiting/resume 路径成立。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/crates/control-plane/src/orchestration_runtime.rs \
@@ -1145,6 +1162,14 @@ git add api/crates/control-plane/src/orchestration_runtime.rs \
   api/crates/control-plane/src/_tests/mod.rs
 git commit -m "feat: add flow debug run resume service"
 ```
+
+执行备注：
+- 完成时间：`2026-04-17 21`
+- 实际红灯命令：`cd api && cargo test -p control-plane orchestration_runtime_resume_tests`
+- 实际绿灯命令：`cd api && cargo test -p control-plane orchestration_runtime_service_tests`
+- 实际绿灯命令：`cd api && cargo test -p control-plane orchestration_runtime_resume_tests`
+- 提交：`e2b7fd8b feat: add flow debug run resume service`
+- 调整说明：补了 in-memory runtime repository 的 checkpoint / callback task 存储与 seed helper，保证 control-plane 单测能覆盖 `waiting_human` 和 `waiting_callback` 两条恢复路径
 
 ## Task 4: Expose Console Runtime Write APIs And Client Contracts
 
@@ -1155,7 +1180,7 @@ git commit -m "feat: add flow debug run resume service"
 - Modify: `web/packages/api-client/src/console-application-runtime.ts`
 - Modify: `web/packages/api-client/src/index.ts`
 
-- [ ] **Step 1: Write the failing route tests**
+- [x] **Step 1: Write the failing route tests**
 
 ```rust
 // api/apps/api-server/src/_tests/application_runtime_routes.rs
@@ -1221,7 +1246,7 @@ async fn application_runtime_routes_start_debug_run_and_resume_waiting_human() {
 }
 ```
 
-- [ ] **Step 2: Run the route tests and confirm they fail**
+- [x] **Step 2: Run the route tests and confirm they fail**
 
 Run:
 
@@ -1231,7 +1256,7 @@ cd api && cargo test -p api-server application_runtime_routes
 
 Expected: FAIL with missing whole-flow debug run route, missing resume body DTO and missing client contract fields for `debug_flow_run` / `callback_tasks`.
 
-- [ ] **Step 3: Implement runtime routes, response DTOs and api-client exports**
+- [x] **Step 3: Implement runtime routes, response DTOs and api-client exports**
 
 ```rust
 // api/apps/api-server/src/routes/application_runtime.rs
@@ -1362,7 +1387,7 @@ export function completeConsoleCallbackTask(
 }
 ```
 
-- [ ] **Step 4: Run API and contract tests**
+- [x] **Step 4: Run API and contract tests**
 
 Run:
 
@@ -1373,7 +1398,7 @@ cd api && cargo test -p api-server openapi_alignment
 
 Expected: PASS. `openapi_alignment` 也要通过，证明新增 DTO 已进入 canonical OpenAPI。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/apps/api-server/src/routes/application_runtime.rs \
@@ -1383,6 +1408,14 @@ git add api/apps/api-server/src/routes/application_runtime.rs \
   web/packages/api-client/src/index.ts
 git commit -m "feat: expose runtime resume console apis"
 ```
+
+执行备注：
+- 完成时间：`2026-04-17 21`
+- 实际红灯命令：`cd api && cargo test -p api-server application_runtime_routes`
+- 实际绿灯命令：`cd api && cargo test -p api-server application_runtime_routes`
+- 实际绿灯命令：`cd api && cargo test -p api-server openapi_alignment`
+- 提交：`949c340b feat: expose runtime resume console apis`
+- 调整说明：新增了 route DTO、`callback_tasks` response 字段和 api-client runtime 写接口，同时保持旧的 node preview 路由和 logs 查询兼容
 
 ## Task 5: Connect Editor Debug Run Trigger And Logs Resume Actions
 
@@ -1398,7 +1431,7 @@ git commit -m "feat: expose runtime resume console apis"
 - Modify: `web/app/src/features/applications/_tests/application-logs-page.test.tsx`
 - Modify: `web/app/src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx`
 
-- [ ] **Step 1: Write the failing frontend tests**
+- [x] **Step 1: Write the failing frontend tests**
 
 ```tsx
 // web/app/src/features/applications/_tests/application-run-resume-card.test.tsx
@@ -1481,7 +1514,7 @@ test('starts whole-flow debug run from overlay action', async () => {
 });
 ```
 
-- [ ] **Step 2: Run the targeted frontend tests and confirm they fail**
+- [x] **Step 2: Run the targeted frontend tests and confirm they fail**
 
 Run:
 
@@ -1494,7 +1527,7 @@ pnpm --dir web test -- --run \
 
 Expected: FAIL with missing `startFlowDebugRun`, missing `ApplicationRunResumeCard` and missing overlay resume action wiring.
 
-- [ ] **Step 3: Implement editor trigger, runtime mutations and logs resume card**
+- [x] **Step 3: Implement editor trigger, runtime mutations and logs resume card**
 
 ```ts
 // web/app/src/features/agent-flow/api/runtime.ts
@@ -1717,7 +1750,7 @@ export function ApplicationRunResumeCard({
 />
 ```
 
-- [ ] **Step 4: Run feature tests and frontend gates**
+- [x] **Step 4: Run feature tests and frontend gates**
 
 Run:
 
@@ -1732,7 +1765,7 @@ pnpm --dir web/app build
 
 Expected: PASS. `build` 必须通过，证明 overlay props 和 runtime client types 扩展没有把应用详情页或 editor 壳层打坏。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/app/src/features/agent-flow/api/runtime.ts \
@@ -1748,6 +1781,15 @@ git add web/app/src/features/agent-flow/api/runtime.ts \
 git commit -m "feat: wire debug run resume actions in console"
 ```
 
+执行备注：
+- 完成时间：`2026-04-17 21`
+- 实际红灯命令：`cd web/app && pnpm exec vitest run src/features/applications/_tests/application-run-resume-card.test.tsx src/features/applications/_tests/application-logs-page.test.tsx src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx`
+- 实际绿灯命令：`cd web/app && pnpm exec vitest run src/features/applications/_tests/application-run-resume-card.test.tsx src/features/applications/_tests/application-logs-page.test.tsx src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx`
+- 实际绿灯命令：`pnpm --dir web lint`
+- 实际绿灯命令：`pnpm --dir web/app build`
+- 提交：`da1bb079 feat: wire debug run resume actions in console`
+- 调整说明：定向前端测试使用 `pnpm --dir web/app exec vitest run ...`，避开 `web/app` package script 无法按文件范围收窄的已知问题；`web lint` 当前仍存在仓库既有 warning，但退出码为 `0`
+
 ## Task 6: Full Verification And Plan Backfill
 
 **Files:**
@@ -1761,7 +1803,7 @@ git commit -m "feat: wire debug run resume actions in console"
 - Modify: `docs/superpowers/plans/2026-04-17-module-05-stateful-debug-run-and-resume.md`
 - Create: `.memory/project-memory/2026-04-17-module-05-stateful-debug-run-plan-implemented.md`
 
-- [ ] **Step 1: Run targeted backend behavior tests serially**
+- [x] **Step 1: Run targeted backend behavior tests serially**
 
 Run:
 
@@ -1776,7 +1818,17 @@ cd api && cargo test -p api-server application_runtime_routes
 
 Expected: PASS. 这些命令先给出 whole-flow debug run 与 resume 行为证据，不受统一脚本前置格式门禁干扰。
 
-- [ ] **Step 2: Format Rust code and run the unified backend gate**
+执行备注：
+- 完成时间：`2026-04-17 21`
+- 实际绿灯命令：`cd api && cargo test -p orchestration-runtime execution_engine_tests`
+- 实际绿灯命令：`cd api && cargo test -p orchestration-runtime preview_executor_tests`
+- 实际绿灯命令：`cd api && cargo test -p control-plane orchestration_runtime_service_tests`
+- 实际绿灯命令：`cd api && cargo test -p control-plane orchestration_runtime_resume_tests`
+- 实际绿灯命令：`cd api && cargo test -p storage-pg orchestration_runtime_repository_tests`
+- 实际绿灯命令：`cd api && cargo test -p api-server application_runtime_routes`
+- 补充说明：本步骤全程按串行执行，避免再次触发 `cargo` 包缓存 / artifact lock 竞争
+
+- [x] **Step 2: Format Rust code and run the unified backend gate**
 
 Run:
 
@@ -1787,7 +1839,16 @@ node scripts/node/verify-backend.js
 
 Expected: PASS. 若 `verify-backend.js` 先报格式 diff，先修格式再重跑，不要把它误判成 runtime 恢复逻辑失败。
 
-- [ ] **Step 3: Re-run frontend gates and manual smoke**
+执行备注：
+- 完成时间：`2026-04-17 21`
+- 实际红灯命令：`node scripts/node/verify-backend.js`
+- 红灯原因：`clippy::too_many_arguments` 命中 `api/crates/control-plane/src/orchestration_runtime.rs:315`，`persist_flow_debug_outcome` 参数个数超限
+- 修正动作：新增 `PersistFlowDebugOutcomeInput` 收束参数，并回跑 `cd api && cargo test -p control-plane orchestration_runtime_service_tests` 与 `cd api && cargo test -p control-plane orchestration_runtime_resume_tests`
+- 实际绿灯命令：`cd api && cargo fmt --all`
+- 实际绿灯命令：`node scripts/node/verify-backend.js`
+- 补充说明：`cargo fmt --all` 额外格式化了本轮已改动的 runtime / route / test 文件，无行为变化
+
+- [x] **Step 3: Re-run frontend gates and manual smoke**
 
 Run:
 
@@ -1807,7 +1868,17 @@ Manual smoke:
 5. 回填 callback 后确认 run detail 中 `callback_task` 变为 `completed`，事件时间线追加 `flow_run_resumed` / `flow_run_completed`。
 ```
 
-- [ ] **Step 4: Backfill this plan document during execution**
+执行备注：
+- 完成时间：`2026-04-17 21`
+- 实际绿灯命令：`pnpm --dir web lint`
+- 实际绿灯命令：`pnpm --dir web test`
+- 实际绿灯命令：`pnpm --dir web/app build`
+- 自动化结果：全部通过；`web lint` 仍保留仓库既有 warning：`web/app/src/features/agent-flow/store/editor/provider.tsx` 的 `react-refresh/only-export-components`
+- 自动化结果：`pnpm --dir web test` 通过 `44` 个测试文件、`140` 个测试
+- 自动化结果：`pnpm --dir web/app build` 通过，但保留 Vite 既有 large chunk warning
+- 手工 smoke：本轮未在 CLI 会话执行浏览器手工 smoke，因此等待态表单与回填链路主要由路由 / 组件 / service 自动化测试覆盖
+
+- [x] **Step 4: Backfill this plan document during execution**
 
 ```md
 - 把已完成步骤改成 `- [x]`
@@ -1818,7 +1889,12 @@ Manual smoke:
   - 若为等待态 / resume 路径增加了额外测试样例，也写回这里
 ```
 
-- [ ] **Step 5: Commit the verification and plan-status backfill**
+执行备注：
+- 完成时间：`2026-04-17 21`
+- 回填内容：已把 Task 1 到 Task 6 的完成状态、实际命令、验证红绿灯与补充说明写回本计划
+- 回填内容：新增 `Task 6` 对 `clippy` 修正、统一门禁结果、前端全量门禁结果与手工 smoke 未执行说明
+
+- [x] **Step 5: Commit the verification and plan-status backfill**
 
 ```bash
 git add api/crates/orchestration-runtime/src/_tests/execution_engine_tests.rs \
@@ -1834,3 +1910,8 @@ git add docs/superpowers/plans/2026-04-17-module-05-stateful-debug-run-and-resum
   .memory/project-memory/2026-04-17-module-05-stateful-debug-run-plan-implemented.md
 git commit -m "docs: backfill module 05 stateful debug run plan"
 ```
+
+执行备注：
+- 完成时间：`2026-04-17 21`
+- 调整说明：验证阶段没有产生新的独立测试语义 diff；首个收尾提交实际会包含 `api/crates/control-plane/src/orchestration_runtime.rs` 的 `clippy` 修正，以及 `cargo fmt --all` 带来的相关格式化 diff
+- 调整说明：计划状态回填与项目记忆补录将作为第二个收尾提交单独落库
