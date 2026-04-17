@@ -33,6 +33,8 @@
 - 第三方原生组件的交互、布局和图标链路是否仍然成立？
 - 当前样式改动是否能说清 blast radius，且已检查受影响消费者？
 - 本次改动是否已经运行 `node scripts/node/check-style-boundary.js component ... / page ... / file ...` 中至少一种合适模式？
+- 如果需要浏览器级验收、截图或交互复现，是否已默认使用 `Playwright`，而不是 Chrome 浏览器 MCP / `chrome-devtools`？
+- 浏览器级等待、截图和操作是否基于业务 ready signal，而不是页面一打开就直接执行？
 - 如果改动影响共享样式或第三方 slot，`web/app/src/style-boundary/scenario-manifest.json` 是否已经补上对应的页面/组件场景与 `impactFiles` 映射？
 - `boundaryNodes / propertyAssertions` 是否只表达样式边界断言，而没有混入泛视觉主观描述？
 - 若出现“样式边界失败 / 样式扩散失败”，失败截图和样式来源证据是否已进入 `uploads/`，而不是只给口头判断？

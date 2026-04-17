@@ -45,6 +45,8 @@ description: Use when building or changing 1Flowse frontend pages, workspace flo
 - 新增组件或页面样式回归时，必须同步维护 manifest 中的 `impactFiles / boundaryNodes / propertyAssertions`
 - `--file` 模式只信任显式声明的文件影响面映射；映射缺失时报“样式扩散失败”，必须先补场景再继续开发
 - 场景断言只表达边界属性约束；运行失败时应按“样式边界失败”解读，而不是泛 QA 失败
+- 前端浏览器级打开、验收、截图、交互复现默认使用 `Playwright`，不再主动使用 Chrome 浏览器 MCP / `chrome-devtools`
+- 浏览器级验收优先复用项目已有 `Playwright / style-boundary` 链路；等待条件基于业务 ready signal，不做无等待裸截图
 - 信息架构、层级、入口、导航问题：**REQUIRED COMPANION SKILL:** Use `frontend-logic-design`
 - 新页面、新流程、交互流、视觉方案、页面内 AI 协作层：先问人
 - 单点使用且变化原因单一：先别抽象
@@ -57,6 +59,7 @@ description: Use when building or changing 1Flowse frontend pages, workspace flo
 - Workspace recipes and interaction rules: `references/workspace-rules.md`
 - Directory, API, and utility placement rules: `references/placement-rules.md`
 - Ask-first gate: `references/communication-gate.md`
+- Browser verification defaults: `references/browser-verification.md`
 - Before/during/after review: `references/review-checklist.md`
 - Anti-decay patterns: `references/anti-patterns.md`
 - Pressure scenarios: `references/examples.md`
