@@ -1,0 +1,8 @@
+#!/usr/bin/env node
+
+const { main } = require('./plugin/core.js');
+
+main(process.argv.slice(2)).catch((error) => {
+  process.stderr.write(`[1flowse-plugin] ${error.message}\n`);
+  process.exitCode = 1;
+});

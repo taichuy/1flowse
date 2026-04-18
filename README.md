@@ -54,6 +54,29 @@ node scripts/node/mock-ui-sync.js
 
 该命令会先清空 `tmp/mock-ui/`，再把 `web/` 重建到这里，并把 mock 副本的前端默认端口改成 `3210`。
 
+### Plugin CLI Scaffold
+
+```bash
+node scripts/node/plugin.js --help
+```
+
+当前主仓内已提供第一版宿主侧 `plugin CLI`，用于生成 provider 插件源码骨架和本地 demo scaffold。
+
+常用命令：
+
+```bash
+node scripts/node/plugin.js init <plugin-path>
+node scripts/node/plugin.js demo init <plugin-path>
+node scripts/node/plugin.js demo dev <plugin-path> --port 4310
+```
+
+说明：
+
+- `plugin init` 生成 `manifest.yaml`、`provider/`、`models/llm/`、`i18n/`、`readme/`、`demo/`、`scripts/` 等基础结构
+- `plugin demo init` 生成本地静态 demo 页面和示例 runner 配置文件
+- `plugin demo dev` 用 Node 内建静态服务启动 `demo/`，默认地址为 `http://127.0.0.1:4310`
+- 当前 `demo dev` 仍是本地 scaffold，不代表真实 `plugin-runner` debug runtime 已经打通；页面只预留 runner URL 配置位和后续接线边界
+
 ### Backend
 
 ```bash
