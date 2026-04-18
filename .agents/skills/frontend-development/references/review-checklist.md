@@ -34,7 +34,10 @@
 - 当前样式改动是否能说清 blast radius，且已检查受影响消费者？
 - 本次改动是否已经运行 `node scripts/node/check-style-boundary.js component ... / page ... / file ...` 中至少一种合适模式？
 - 如果需要浏览器级验收、截图或交互复现，是否已默认使用 `Playwright`，而不是 Chrome 浏览器 MCP / `chrome-devtools`？
+- 如果当前只知道页面路由、需要自动登录、稳定等待或导出运行态证据，是否优先运行 `node scripts/node/page-debug.js snapshot|open ...`，而不是临时手写一次性 Playwright 脚本？
 - 浏览器级等待、截图和操作是否基于业务 ready signal，而不是页面一打开就直接执行？
+- 页面存在规范化跳转时，是否已用 `--wait-for-url <final-url>` 对齐当前运行态，而不是沿用旧路由假设？
+- 若已运行 `page-debug`，是否检查了 `outputDir` 下的 `meta.json / page.png / console.ndjson`，必要时再看 `index.html / css / js`，而不是只看单张截图？
 - 如果改动影响共享样式或第三方 slot，`web/app/src/style-boundary/scenario-manifest.json` 是否已经补上对应的页面/组件场景与 `impactFiles` 映射？
 - `boundaryNodes / propertyAssertions` 是否只表达样式边界断言，而没有混入泛视觉主观描述？
 - 若出现“样式边界失败 / 样式扩散失败”，失败截图和样式来源证据是否已进入 `uploads/`，而不是只给口头判断？
