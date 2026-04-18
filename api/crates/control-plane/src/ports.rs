@@ -4,6 +4,9 @@ use domain::{
     ModelFieldKind, ModelFieldRecord, PermissionDefinition, RoleTemplate, ScopeContext,
     SessionRecord, TenantRecord, UserRecord, WorkspaceRecord,
 };
+use plugin_framework::provider_contract::{
+    ProviderInvocationInput, ProviderInvocationResult, ProviderModelDescriptor, ProviderStreamEvent,
+};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -628,6 +631,12 @@ pub struct UpdatePluginTaskStatusInput {
     pub detail_json: serde_json::Value,
 }
 
+#[derive(Debug, Clone)]
+pub struct UpdatePluginInstallationEnabledInput {
+    pub installation_id: Uuid,
+    pub enabled: bool,
+}
+
 #[async_trait]
 pub trait PluginRepository: Send + Sync {
     async fn upsert_installation(
@@ -639,6 +648,10 @@ pub trait PluginRepository: Send + Sync {
         installation_id: Uuid,
     ) -> anyhow::Result<Option<domain::PluginInstallationRecord>>;
     async fn list_installations(&self) -> anyhow::Result<Vec<domain::PluginInstallationRecord>>;
+    async fn update_installation_enabled(
+        &self,
+        input: &UpdatePluginInstallationEnabledInput,
+    ) -> anyhow::Result<domain::PluginInstallationRecord>;
     async fn create_assignment(
         &self,
         input: &CreatePluginAssignmentInput,
@@ -655,6 +668,8 @@ pub trait PluginRepository: Send + Sync {
         &self,
         input: &UpdatePluginTaskStatusInput,
     ) -> anyhow::Result<domain::PluginTaskRecord>;
+    async fn get_task(&self, task_id: Uuid) -> anyhow::Result<Option<domain::PluginTaskRecord>>;
+    async fn list_tasks(&self) -> anyhow::Result<Vec<domain::PluginTaskRecord>>;
 }
 
 #[derive(Debug, Clone)]
@@ -740,4 +755,43 @@ pub trait ModelProviderRepository: Send + Sync {
         provider_instance_id: Uuid,
         master_key: &str,
     ) -> anyhow::Result<Option<serde_json::Value>>;
+    async fn get_secret_record(
+        &self,
+        provider_instance_id: Uuid,
+    ) -> anyhow::Result<Option<domain::ModelProviderSecretRecord>>;
+    async fn delete_instance(&self, workspace_id: Uuid, instance_id: Uuid) -> anyhow::Result<()>;
+    async fn count_instance_references(
+        &self,
+        workspace_id: Uuid,
+        instance_id: Uuid,
+    ) -> anyhow::Result<u64>;
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProviderRuntimeInvocationOutput {
+    pub events: Vec<ProviderStreamEvent>,
+    pub result: ProviderInvocationResult,
+}
+
+#[async_trait]
+pub trait ProviderRuntimePort: Send + Sync {
+    async fn ensure_loaded(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+    ) -> anyhow::Result<()>;
+    async fn validate_provider(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        provider_config: serde_json::Value,
+    ) -> anyhow::Result<serde_json::Value>;
+    async fn list_models(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        provider_config: serde_json::Value,
+    ) -> anyhow::Result<Vec<ProviderModelDescriptor>>;
+    async fn invoke_stream(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: ProviderInvocationInput,
+    ) -> anyhow::Result<ProviderRuntimeInvocationOutput>;
 }

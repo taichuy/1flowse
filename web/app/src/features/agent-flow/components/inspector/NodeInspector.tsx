@@ -33,6 +33,14 @@ function shouldRenderSectionTitle(title: string) {
   return title !== 'Inputs';
 }
 
+function resolveFocusableFieldKey(fieldKey: string) {
+  if (fieldKey === 'config.model') {
+    return 'config.provider_instance_id';
+  }
+
+  return fieldKey;
+}
+
 export function useNodeSchemaRuntime(enabled = true) {
   const document = useAgentFlowEditorStore(selectWorkingDocument);
   const selectedNodeId = useAgentFlowEditorStore(selectSelectedNodeId);
@@ -90,8 +98,9 @@ export function NodeInspector({
     }
 
     const timer = window.setTimeout(() => {
+      const resolvedFieldKey = resolveFocusableFieldKey(focusFieldKey);
       const focusTarget = rootRef.current?.querySelector<HTMLElement>(
-        `[data-field-key="${focusFieldKey}"] [aria-label]`
+        `[data-field-key="${resolvedFieldKey}"] [aria-label]`
       );
       focusTarget?.focus();
       setSelection({

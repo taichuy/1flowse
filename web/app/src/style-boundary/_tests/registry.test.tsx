@@ -110,7 +110,7 @@ describe('style boundary registry', () => {
   }, 15_000);
 
   test(
-    'renders the settings scene with mocked api docs data',
+    'renders the settings scene with mocked model provider data',
     async () => {
       const scene = getRuntimeScene('page.settings');
 
@@ -123,19 +123,17 @@ describe('style boundary registry', () => {
       expect(
         await screen.findByRole(
           'heading',
-          { name: 'API 文档', level: 3 },
+          { name: '模型供应商', level: 4 },
           { timeout: 5000 }
         )
       ).toBeInTheDocument();
       expect(
-        await screen.findByRole('combobox', { name: '接口分类' }, { timeout: 5000 })
+        await screen.findByRole('heading', { name: '可用供应商', level: 5 }, { timeout: 5000 })
       ).toBeInTheDocument();
+      expect(await screen.findByText('OpenAI Compatible')).toBeInTheDocument();
+      expect(await screen.findByText('OpenAI Production')).toBeInTheDocument();
       expect(
-        await screen.findByRole(
-          'button',
-          { name: /get \/api\/console\/members/i },
-          { timeout: 5000 }
-        )
+        await screen.findByRole('button', { name: '新建实例' }, { timeout: 5000 })
       ).toBeInTheDocument();
     },
     15000

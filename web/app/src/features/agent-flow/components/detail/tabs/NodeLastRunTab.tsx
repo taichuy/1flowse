@@ -14,6 +14,24 @@ import { NodeRunIOCard } from '../last-run/NodeRunIOCard';
 import { NodeRunMetadataCard } from '../last-run/NodeRunMetadataCard';
 import { NodeRunSummaryCard } from '../last-run/NodeRunSummaryCard';
 
+function isNodeLastRun(value: unknown): value is NonNullable<
+  Awaited<ReturnType<typeof fetchNodeLastRun>>
+> {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  return Boolean(
+    candidate.flow_run &&
+      typeof candidate.flow_run === 'object' &&
+      candidate.node_run &&
+      typeof candidate.node_run === 'object' &&
+      Array.isArray(candidate.events)
+  );
+}
+
 export function NodeLastRunTab({
   applicationId,
   nodeId,
@@ -34,6 +52,10 @@ export function NodeLastRunTab({
     return <Result status="info" title="正在加载上次运行" />;
   }
 
+  if (lastRunQuery.isError) {
+    return <Result status="error" title="上次运行加载失败" />;
+  }
+
   if (!lastRunQuery.data) {
     return (
       <Empty
@@ -43,12 +65,18 @@ export function NodeLastRunTab({
     );
   }
 
+  if (!isNodeLastRun(lastRunQuery.data)) {
+    return <Result status="warning" title="上次运行数据异常" />;
+  }
+
+  const lastRun = lastRunQuery.data;
+
   if (!schema || !adapter) {
     return (
       <div className="agent-flow-node-detail__last-run">
-        <NodeRunSummaryCard lastRun={lastRunQuery.data} />
-        <NodeRunIOCard lastRun={lastRunQuery.data} />
-        <NodeRunMetadataCard lastRun={lastRunQuery.data} />
+        <NodeRunSummaryCard lastRun={lastRun} />
+        <NodeRunIOCard lastRun={lastRun} />
+        <NodeRunMetadataCard lastRun={lastRun} />
       </div>
     );
   }
@@ -57,7 +85,7 @@ export function NodeLastRunTab({
     ...adapter,
     getDerived(key: string) {
       if (key === 'lastRun') {
-        return lastRunQuery.data;
+        return lastRun;
       }
 
       return adapter.getDerived(key);

@@ -40,7 +40,9 @@ fn map_instance(row: sqlx::postgres::PgRow) -> Result<domain::ModelProviderInsta
     })
 }
 
-fn map_catalog_cache(row: sqlx::postgres::PgRow) -> Result<domain::ModelProviderCatalogCacheRecord> {
+fn map_catalog_cache(
+    row: sqlx::postgres::PgRow,
+) -> Result<domain::ModelProviderCatalogCacheRecord> {
     PgModelProviderMapper::to_catalog_cache_record(StoredModelProviderCatalogCacheRow {
         provider_instance_id: row.get("provider_instance_id"),
         model_discovery_mode: row.get("model_discovery_mode"),
@@ -369,11 +371,86 @@ impl ModelProviderRepository for PgControlPlaneStore {
         })
         .transpose()
     }
+
+    async fn get_secret_record(
+        &self,
+        provider_instance_id: Uuid,
+    ) -> Result<Option<domain::ModelProviderSecretRecord>> {
+        let row = sqlx::query(
+            r#"
+            select provider_instance_id, encrypted_secret_json, secret_version, updated_at
+            from model_provider_instance_secrets
+            where provider_instance_id = $1
+            "#,
+        )
+        .bind(provider_instance_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_secret).transpose()
+    }
+
+    async fn delete_instance(&self, workspace_id: Uuid, instance_id: Uuid) -> Result<()> {
+        let deleted = sqlx::query_scalar::<_, Uuid>(
+            r#"
+            delete from model_provider_instances
+            where workspace_id = $1
+              and id = $2
+            returning id
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(instance_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        if deleted.is_some() {
+            Ok(())
+        } else {
+            bail!(ControlPlaneError::NotFound("model_provider_instance"));
+        }
+    }
+
+    async fn count_instance_references(
+        &self,
+        workspace_id: Uuid,
+        instance_id: Uuid,
+    ) -> Result<u64> {
+        let pattern = format!("%{instance_id}%");
+        let count: i64 = sqlx::query_scalar(
+            r#"
+            select count(*)::bigint
+            from (
+                select 1
+                from flow_drafts fd
+                join flows f on f.id = fd.flow_id
+                join applications a on a.id = f.application_id
+                where a.workspace_id = $1
+                  and fd.document::text like $2
+                union all
+                select 1
+                from flow_versions fv
+                join flows f on f.id = fv.flow_id
+                join applications a on a.id = f.application_id
+                where a.workspace_id = $1
+                  and fv.document::text like $2
+            ) refs
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(pattern)
+        .fetch_one(self.pool())
+        .await?;
+
+        Ok(count as u64)
+    }
 }
 
 fn encrypt_secret_json(secret_json: &Value, master_key: &str) -> Result<Value> {
     if master_key.is_empty() {
-        bail!(ControlPlaneError::InvalidInput("provider_secret_master_key"));
+        bail!(ControlPlaneError::InvalidInput(
+            "provider_secret_master_key"
+        ));
     }
 
     let plaintext = serde_json::to_vec(secret_json)?;
@@ -385,7 +462,9 @@ fn encrypt_secret_json(secret_json: &Value, master_key: &str) -> Result<Value> {
 
 fn decrypt_secret_json(encrypted_secret_json: &Value, master_key: &str) -> Result<Value> {
     if master_key.is_empty() {
-        bail!(ControlPlaneError::InvalidInput("provider_secret_master_key"));
+        bail!(ControlPlaneError::InvalidInput(
+            "provider_secret_master_key"
+        ));
     }
 
     let algorithm = encrypted_secret_json
@@ -393,7 +472,9 @@ fn decrypt_secret_json(encrypted_secret_json: &Value, master_key: &str) -> Resul
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("missing secret encryption algorithm"))?;
     if algorithm != "xor_v1" {
-        bail!(anyhow!("unsupported secret encryption algorithm: {algorithm}"));
+        bail!(anyhow!(
+            "unsupported secret encryption algorithm: {algorithm}"
+        ));
     }
     let ciphertext = encrypted_secret_json
         .get("ciphertext")
@@ -404,14 +485,15 @@ fn decrypt_secret_json(encrypted_secret_json: &Value, master_key: &str) -> Resul
 }
 
 fn xor_hex(bytes: &[u8], key: &[u8]) -> String {
-    bytes.iter()
+    bytes
+        .iter()
         .enumerate()
         .map(|(index, byte)| format!("{:02x}", byte ^ key[index % key.len()]))
         .collect::<String>()
 }
 
 fn xor_hex_decode(ciphertext: &str, key: &[u8]) -> Result<Vec<u8>> {
-    if ciphertext.len() % 2 != 0 {
+    if !ciphertext.len().is_multiple_of(2) {
         bail!(anyhow!("invalid ciphertext length"));
     }
 

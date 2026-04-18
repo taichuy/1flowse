@@ -387,10 +387,5 @@ async fn provider_load_rejects_source_tree_root() {
     .await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(
-        payload["message"]
-            .as_str()
-            .unwrap()
-            .contains("source tree")
-    );
+    assert!(payload["message"].as_str().unwrap().contains("source tree"));
 }

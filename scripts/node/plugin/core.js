@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
+const os = require('node:os');
 
 const DEFAULT_DEMO_HOST = '127.0.0.1';
 const DEFAULT_DEMO_PORT = 4310;
@@ -91,6 +92,43 @@ function writeFile(targetPath, content) {
 
 function writeKeepFile(targetPath) {
   writeFile(targetPath, '');
+}
+
+function copyTree(sourcePath, targetPath) {
+  const stats = fs.statSync(sourcePath);
+  if (stats.isDirectory()) {
+    fs.mkdirSync(targetPath, { recursive: true });
+    for (const entry of fs.readdirSync(sourcePath)) {
+      copyTree(path.join(sourcePath, entry), path.join(targetPath, entry));
+    }
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.copyFileSync(sourcePath, targetPath);
+}
+
+function createDemoPackageRoot(pluginPath) {
+  const packageRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), `1flowse-plugin-demo-${sanitizeCode(getPluginName(pluginPath))}-`)
+  );
+
+  for (const entry of fs.readdirSync(pluginPath)) {
+    if (entry === 'demo' || entry === 'scripts') {
+      continue;
+    }
+    copyTree(path.join(pluginPath, entry), path.join(packageRoot, entry));
+  }
+
+  return packageRoot;
+}
+
+function removeDirIfExists(targetPath) {
+  if (!targetPath || !fs.existsSync(targetPath)) {
+    return;
+  }
+
+  fs.rmSync(targetPath, { recursive: true, force: true });
 }
 
 function createManifestTemplate({ pluginCode, pluginName }) {
@@ -724,6 +762,7 @@ async function startDemoServer(options) {
   const port = resolvePort(options.port);
   const runnerUrl = options.runnerUrl || DEFAULT_RUNNER_URL;
   const silent = Boolean(options.silent);
+  const packageRoot = createDemoPackageRoot(pluginPath);
 
   const server = http.createServer((request, response) => {
     const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
@@ -734,6 +773,7 @@ async function startDemoServer(options) {
           {
             providerCode: pluginCode,
             pluginPath,
+            packageRoot,
             runnerUrl,
           },
           null,
@@ -754,23 +794,35 @@ async function startDemoServer(options) {
     response.end(fs.readFileSync(staticPath));
   });
 
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, host, resolve);
-  });
+  try {
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, host, resolve);
+    });
+  } catch (error) {
+    removeDirIfExists(packageRoot);
+    throw error;
+  }
 
   const address = server.address();
   const resolvedPort = typeof address === 'object' && address ? address.port : port;
   const baseUrl = `http://${host}:${resolvedPort}`;
   log(`Demo server ready at ${baseUrl}`, { silent });
   log(`Runner URL set to ${runnerUrl}`, { silent });
+  let closed = false;
 
   return {
     server,
     baseUrl,
     close: () =>
       new Promise((resolve, reject) => {
+        if (closed) {
+          resolve();
+          return;
+        }
+        closed = true;
         server.close((error) => {
+          removeDirIfExists(packageRoot);
           if (error) {
             reject(error);
             return;

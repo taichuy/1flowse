@@ -51,6 +51,7 @@ dependencies = [
  "domain",
  "observability",
  "plugin-framework",
+ "plugin-runner",
  "publish-gateway",
  "rand_core",
  "runtime-core",
@@ -345,6 +346,7 @@ dependencies = [
  "async-trait",
  "domain",
  "orchestration-runtime",
+ "plugin-framework",
  "runtime-core",
  "serde",
  "serde_json",
@@ -1263,8 +1265,11 @@ name = "orchestration-runtime"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "plugin-framework",
  "serde",
  "serde_json",
+ "tokio",
  "uuid",
 ]
 

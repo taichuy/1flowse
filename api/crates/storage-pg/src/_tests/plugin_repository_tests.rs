@@ -1,6 +1,6 @@
 use control_plane::ports::{
-    CreatePluginAssignmentInput, CreatePluginTaskInput, PluginRepository, UpdatePluginTaskStatusInput,
-    UpsertPluginInstallationInput,
+    CreatePluginAssignmentInput, CreatePluginTaskInput, PluginRepository,
+    UpdatePluginTaskStatusInput, UpsertPluginInstallationInput,
 };
 use domain::{PluginTaskKind, PluginTaskStatus, PluginVerificationStatus};
 use serde_json::json;
@@ -24,7 +24,11 @@ async fn isolated_database_url() -> String {
     format!("{}?options=-csearch_path%3D{schema}", base_database_url())
 }
 
-async fn seed_store() -> (PgControlPlaneStore, domain::WorkspaceRecord, domain::UserRecord) {
+async fn seed_store() -> (
+    PgControlPlaneStore,
+    domain::WorkspaceRecord,
+    domain::UserRecord,
+) {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();
     let store = PgControlPlaneStore::new(pool);

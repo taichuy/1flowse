@@ -1,4 +1,5 @@
 import type { ConsoleApplicationOrchestrationState } from '@1flowse/api-client';
+import type { FlowAuthoringDocument } from '@1flowse/flow-schema';
 import { createStore } from 'zustand/vanilla';
 
 import { NODE_DETAIL_DEFAULT_WIDTH } from '../../lib/detail-panel-width';
@@ -41,7 +42,11 @@ export interface AgentFlowEditorState
     InteractionSlice,
     SyncSlice {
   autosaveIntervalMs: number;
-  setWorkingDocument: (document: DocumentSlice['workingDocument']) => void;
+  setWorkingDocument: (
+    update:
+      | FlowAuthoringDocument
+      | ((document: FlowAuthoringDocument) => FlowAuthoringDocument)
+  ) => void;
   setSelection: (payload: Partial<SelectionSlice>) => void;
   setViewportState: (payload: Partial<ViewportSlice>) => void;
   setPanelState: (
@@ -119,12 +124,17 @@ export function createAgentFlowEditorStore(
     lastChangeKind: null,
     lastChangeSummary: null,
     autosaveIntervalMs: state.autosave_interval_seconds * 1000,
-    setWorkingDocument: (workingDocument) =>
-      set((current) => ({
-        workingDocument,
-        viewport: workingDocument.editor.viewport,
-        isDirty: hasDocumentChanged(workingDocument, current.lastSavedDocument)
-      })),
+    setWorkingDocument: (update) =>
+      set((current) => {
+        const workingDocument =
+          typeof update === 'function' ? update(current.workingDocument) : update;
+
+        return {
+          workingDocument,
+          viewport: workingDocument.editor.viewport,
+          isDirty: hasDocumentChanged(workingDocument, current.lastSavedDocument)
+        };
+      }),
     setSelection: (payload) =>
       set((current) => ({
         ...current,

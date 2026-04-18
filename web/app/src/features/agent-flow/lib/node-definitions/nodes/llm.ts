@@ -13,7 +13,12 @@ export const llmNodeDefinition: NodeDefinition = {
       key: 'inputs',
       title: 'Inputs',
       fields: [
-        { key: 'config.model', label: '模型', editor: 'llm_model', required: true },
+        {
+          key: 'config.provider_instance_id',
+          label: '模型',
+          editor: 'llm_model',
+          required: true
+        },
         {
           key: 'bindings.system_prompt',
           label: 'System Prompt',

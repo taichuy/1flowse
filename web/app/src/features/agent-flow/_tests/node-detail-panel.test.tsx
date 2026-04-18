@@ -10,6 +10,13 @@ const schemaRuntimeSpies = vi.hoisted(() => ({
   createAgentFlowNodeSchemaAdapter: vi.fn()
 }));
 
+const modelProviderOptionsApi = vi.hoisted(() => ({
+  modelProviderOptionsQueryKey: ['model-providers', 'options'] as const,
+  fetchModelProviderOptions: vi.fn()
+}));
+
+vi.mock('../api/model-provider-options', () => modelProviderOptionsApi);
+
 vi.mock('../schema/node-schema-registry', async () => {
   const actual = await vi.importActual<typeof import('../schema/node-schema-registry')>(
     '../schema/node-schema-registry'
@@ -96,6 +103,10 @@ function renderWithProviders(ui: ReactNode) {
 }
 
 describe('NodeDetailPanel', () => {
+  modelProviderOptionsApi.fetchModelProviderOptions.mockResolvedValue({
+    instances: []
+  });
+
   test('builds node detail from the schema registry and node schema adapter', () => {
     schemaRuntimeSpies.resolveAgentFlowNodeSchema.mockClear();
     schemaRuntimeSpies.createAgentFlowNodeSchemaAdapter.mockClear();

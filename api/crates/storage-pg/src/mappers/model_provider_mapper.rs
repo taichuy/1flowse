@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Result};
 use domain::{
-    ModelProviderCatalogCacheRecord, ModelProviderCatalogRefreshStatus,
-    ModelProviderCatalogSource, ModelProviderDiscoveryMode, ModelProviderInstanceRecord,
-    ModelProviderInstanceStatus, ModelProviderSecretRecord, ModelProviderValidationStatus,
+    ModelProviderCatalogCacheRecord, ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource,
+    ModelProviderDiscoveryMode, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
+    ModelProviderSecretRecord, ModelProviderValidationStatus,
 };
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -49,7 +49,9 @@ pub struct StoredModelProviderSecretRow {
 pub struct PgModelProviderMapper;
 
 impl PgModelProviderMapper {
-    pub fn to_instance_record(row: StoredModelProviderInstanceRow) -> Result<ModelProviderInstanceRecord> {
+    pub fn to_instance_record(
+        row: StoredModelProviderInstanceRow,
+    ) -> Result<ModelProviderInstanceRecord> {
         Ok(ModelProviderInstanceRecord {
             id: row.id,
             workspace_id: row.workspace_id,
@@ -88,7 +90,9 @@ impl PgModelProviderMapper {
         })
     }
 
-    pub fn to_secret_record(row: StoredModelProviderSecretRow) -> Result<ModelProviderSecretRecord> {
+    pub fn to_secret_record(
+        row: StoredModelProviderSecretRow,
+    ) -> Result<ModelProviderSecretRecord> {
         Ok(ModelProviderSecretRecord {
             provider_instance_id: row.provider_instance_id,
             encrypted_secret_json: row.encrypted_secret_json,

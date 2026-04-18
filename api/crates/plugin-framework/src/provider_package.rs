@@ -102,7 +102,9 @@ impl ProviderPackage {
 
         let provider = ProviderDefinition {
             provider_code: raw_provider.provider_code.clone(),
-            display_name: raw_provider.display_name.unwrap_or_else(|| manifest.display_name.clone()),
+            display_name: raw_provider
+                .display_name
+                .unwrap_or_else(|| manifest.display_name.clone()),
             protocol: raw_provider
                 .protocol
                 .unwrap_or_else(|| raw_provider.provider_code.clone()),
@@ -224,7 +226,10 @@ fn load_predefined_models(models_dir: &Path) -> FrameworkResult<Vec<ProviderMode
         if path.file_name().and_then(|value| value.to_str()) == Some("_position.yaml") {
             continue;
         }
-        if !matches!(path.extension().and_then(|value| value.to_str()), Some("yaml" | "yml")) {
+        if !matches!(
+            path.extension().and_then(|value| value.to_str()),
+            Some("yaml" | "yml")
+        ) {
             continue;
         }
 

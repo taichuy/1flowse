@@ -221,7 +221,10 @@ describe('AgentFlowEditorShell', () => {
     expect(
       await screen.findByText('Start', { selector: '.agent-flow-node-card__title' })
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Node 1 LLM' })).toBeInTheDocument();
+    expect(
+      screen.getByText('LLM', { selector: '.agent-flow-node-card__title' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('模型供应商未选择')).toBeInTheDocument();
     expect(
       screen.getByText('Answer', { selector: '.agent-flow-node-card__title' })
     ).toBeInTheDocument();

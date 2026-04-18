@@ -3,18 +3,48 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;
 
-use crate::compiled_plan::{CompiledBinding, CompiledNode, CompiledOutput, CompiledPlan};
+use crate::compiled_plan::{
+    CompileIssue, CompileIssueCode, CompiledBinding, CompiledLlmRuntime, CompiledNode,
+    CompiledOutput, CompiledPlan,
+};
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct FlowCompileContext {
+    pub provider_instances: BTreeMap<String, FlowCompileProviderInstance>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlowCompileProviderInstance {
+    pub provider_instance_id: String,
+    pub provider_code: String,
+    pub protocol: String,
+    pub is_ready: bool,
+    pub available_models: BTreeSet<String>,
+    pub allow_custom_models: bool,
+}
+
+type NodeTopologyBuild = (
+    BTreeMap<String, CompiledNode>,
+    Vec<String>,
+    Vec<CompileIssue>,
+);
 
 pub struct FlowCompiler;
 
 impl FlowCompiler {
-    pub fn compile(flow_id: uuid::Uuid, draft_id: &str, document: &Value) -> Result<CompiledPlan> {
+    pub fn compile(
+        flow_id: uuid::Uuid,
+        draft_id: &str,
+        document: &Value,
+        context: &FlowCompileContext,
+    ) -> Result<CompiledPlan> {
         let schema_version = document
             .get("schemaVersion")
             .and_then(Value::as_str)
             .ok_or_else(|| anyhow!("schemaVersion missing"))?
             .to_string();
-        let (nodes, topological_order) = build_nodes_and_topology(document)?;
+        let (nodes, topological_order, compile_issues) =
+            build_nodes_and_topology(document, context)?;
 
         Ok(CompiledPlan {
             flow_id,
@@ -22,13 +52,15 @@ impl FlowCompiler {
             schema_version,
             topological_order,
             nodes,
+            compile_issues,
         })
     }
 }
 
 fn build_nodes_and_topology(
     document: &Value,
-) -> Result<(BTreeMap<String, CompiledNode>, Vec<String>)> {
+    context: &FlowCompileContext,
+) -> Result<NodeTopologyBuild> {
     let node_values = document
         .get("graph")
         .and_then(|graph| graph.get("nodes"))
@@ -43,9 +75,10 @@ fn build_nodes_and_topology(
 
     let mut nodes = BTreeMap::new();
     let mut node_order = Vec::with_capacity(node_values.len());
+    let mut compile_issues = Vec::new();
 
     for node in node_values {
-        let compiled = compile_node(node)?;
+        let compiled = compile_node(node, context, &mut compile_issues)?;
 
         if nodes.contains_key(&compiled.node_id) {
             bail!("duplicate node id: {}", compiled.node_id);
@@ -156,10 +189,14 @@ fn build_nodes_and_topology(
         );
     }
 
-    Ok((nodes, topological_order))
+    Ok((nodes, topological_order, compile_issues))
 }
 
-fn compile_node(node: &Value) -> Result<CompiledNode> {
+fn compile_node(
+    node: &Value,
+    context: &FlowCompileContext,
+    compile_issues: &mut Vec<CompileIssue>,
+) -> Result<CompiledNode> {
     let node_id = required_string(node, "id")?.to_string();
     let node_type = required_string(node, "type")?.to_string();
     let alias = required_string(node, "alias")?.to_string();
@@ -180,6 +217,9 @@ fn compile_node(node: &Value) -> Result<CompiledNode> {
             .ok_or_else(|| anyhow!("node {node_id} missing outputs"))?,
     )
     .with_context(|| format!("failed to compile outputs for node {node_id}"))?;
+    let llm_runtime = (node_type == "llm")
+        .then(|| compile_llm_runtime(&node_id, &config, context, compile_issues))
+        .flatten();
 
     Ok(CompiledNode {
         node_id,
@@ -191,6 +231,101 @@ fn compile_node(node: &Value) -> Result<CompiledNode> {
         bindings,
         outputs,
         config,
+        llm_runtime,
+    })
+}
+
+fn compile_llm_runtime(
+    node_id: &str,
+    config: &Value,
+    context: &FlowCompileContext,
+    compile_issues: &mut Vec<CompileIssue>,
+) -> Option<CompiledLlmRuntime> {
+    let provider_instance_id = config
+        .get("provider_instance_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let model = config
+        .get("model")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    let Some(provider_instance_id) = provider_instance_id else {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::MissingProviderInstance,
+            message: format!("node {node_id} is missing config.provider_instance_id"),
+        });
+        if model.is_none() {
+            compile_issues.push(CompileIssue {
+                node_id: node_id.to_string(),
+                code: CompileIssueCode::MissingModel,
+                message: format!("node {node_id} is missing config.model"),
+            });
+        }
+        return None;
+    };
+
+    let Some(provider_instance) = context.provider_instances.get(&provider_instance_id) else {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::ProviderInstanceNotFound,
+            message: format!("provider instance not found: {provider_instance_id}"),
+        });
+        if model.is_none() {
+            compile_issues.push(CompileIssue {
+                node_id: node_id.to_string(),
+                code: CompileIssueCode::MissingModel,
+                message: format!("node {node_id} is missing config.model"),
+            });
+        }
+        return None;
+    };
+
+    if !provider_instance.is_ready {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::ProviderInstanceNotReady,
+            message: format!("provider instance {provider_instance_id} is not ready"),
+        });
+    }
+
+    let Some(model) = model else {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::MissingModel,
+            message: format!("node {node_id} is missing config.model"),
+        });
+        return Some(CompiledLlmRuntime {
+            provider_instance_id,
+            provider_code: provider_instance.provider_code.clone(),
+            protocol: provider_instance.protocol.clone(),
+            model: String::new(),
+        });
+    };
+
+    if !provider_instance.allow_custom_models
+        && !provider_instance.available_models.is_empty()
+        && !provider_instance.available_models.contains(&model)
+    {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::ModelNotAvailable,
+            message: format!(
+                "model {model} is not available for provider instance {provider_instance_id}"
+            ),
+        });
+    }
+
+    Some(CompiledLlmRuntime {
+        provider_instance_id,
+        provider_code: provider_instance.provider_code.clone(),
+        protocol: provider_instance.protocol.clone(),
+        model,
     })
 }
 

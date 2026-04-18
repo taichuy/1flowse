@@ -4,6 +4,7 @@ use serde_json::{json, Map, Value};
 use crate::{
     binding_runtime::{render_templated_bindings, resolve_node_inputs},
     compiled_plan::CompiledPlan,
+    execution_engine::{execute_llm_node, ProviderInvoker},
 };
 
 pub struct NodePreviewOutcome {
@@ -11,6 +12,10 @@ pub struct NodePreviewOutcome {
     pub resolved_inputs: Map<String, Value>,
     pub rendered_templates: Map<String, Value>,
     pub output_contract: Vec<Value>,
+    pub node_output: Value,
+    pub error_payload: Option<Value>,
+    pub metrics_payload: Value,
+    pub provider_events: Vec<plugin_framework::provider_contract::ProviderStreamEvent>,
 }
 
 impl NodePreviewOutcome {
@@ -20,15 +25,27 @@ impl NodePreviewOutcome {
             "resolved_inputs": self.resolved_inputs,
             "rendered_templates": self.rendered_templates,
             "output_contract": self.output_contract,
+            "node_output": self.node_output,
+            "error_payload": self.error_payload,
+            "metrics_payload": self.metrics_payload,
+            "provider_events": self.provider_events,
         })
+    }
+
+    pub fn is_failed(&self) -> bool {
+        self.error_payload.is_some()
     }
 }
 
-pub fn run_node_preview(
+pub async fn run_node_preview<I>(
     plan: &CompiledPlan,
     target_node_id: &str,
     input_payload: &Value,
-) -> Result<NodePreviewOutcome> {
+    invoker: &I,
+) -> Result<NodePreviewOutcome>
+where
+    I: ProviderInvoker + ?Sized,
+{
     let node = plan
         .nodes
         .get(target_node_id)
@@ -51,10 +68,33 @@ pub fn run_node_preview(
         })
         .collect();
 
+    let (node_output, error_payload, metrics_payload, provider_events) = if node.node_type == "llm"
+    {
+        let execution =
+            execute_llm_node(node, &resolved_inputs, &rendered_templates, invoker).await?;
+        (
+            execution.output_payload,
+            execution.error_payload,
+            execution.metrics_payload,
+            execution.provider_events,
+        )
+    } else {
+        (
+            Value::Null,
+            None,
+            json!({ "preview_mode": true }),
+            Vec::new(),
+        )
+    };
+
     Ok(NodePreviewOutcome {
         target_node_id: node.node_id.clone(),
         resolved_inputs,
         rendered_templates,
         output_contract,
+        node_output,
+        error_payload,
+        metrics_payload,
+        provider_events,
     })
 }

@@ -52,10 +52,23 @@ const docsApi = vi.hoisted(() => ({
   fetchSettingsApiDocsOperationSpec: vi.fn()
 }));
 
+const modelProvidersApi = vi.hoisted(() => ({
+  settingsModelProviderCatalogQueryKey: ['settings', 'model-providers', 'catalog'],
+  settingsModelProviderInstancesQueryKey: ['settings', 'model-providers', 'instances'],
+  fetchSettingsModelProviderCatalog: vi.fn(),
+  fetchSettingsModelProviderInstances: vi.fn(),
+  createSettingsModelProviderInstance: vi.fn(),
+  updateSettingsModelProviderInstance: vi.fn(),
+  validateSettingsModelProviderInstance: vi.fn(),
+  refreshSettingsModelProviderModels: vi.fn(),
+  deleteSettingsModelProviderInstance: vi.fn()
+}));
+
 vi.mock('../../features/settings/api/members', () => membersApi);
 vi.mock('../../features/settings/api/roles', () => rolesApi);
 vi.mock('../../features/settings/api/permissions', () => permissionsApi);
 vi.mock('../../features/settings/api/api-docs', () => docsApi);
+vi.mock('../../features/settings/api/model-providers', () => modelProvidersApi);
 
 import { AppProviders } from '../../app/AppProviders';
 import { AppRouterProvider } from '../../app/router';
@@ -124,6 +137,8 @@ describe('section shell routing', () => {
       paths: {},
       components: {}
     });
+    modelProvidersApi.fetchSettingsModelProviderCatalog.mockResolvedValue([]);
+    modelProvidersApi.fetchSettingsModelProviderInstances.mockResolvedValue([]);
   });
 
   test(
@@ -160,5 +175,16 @@ describe('section shell routing', () => {
       expect(window.location.pathname).toBe('/settings/roles');
     });
     expect(await screen.findByRole('heading', { name: '角色权限管理', level: 3 })).toBeInTheDocument();
+  });
+
+  test('redirects /settings/docs to /settings/model-providers when model providers is the only visible section', async () => {
+    authenticateWithPermissions(['route_page.view.all', 'state_model.view.all']);
+
+    renderApp('/settings/docs');
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/settings/model-providers');
+    });
+    expect(await screen.findByRole('heading', { name: '模型供应商', level: 4 })).toBeInTheDocument();
   });
 });

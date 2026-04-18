@@ -152,6 +152,8 @@ pub struct ProviderInvocationInput {
     pub protocol: String,
     pub model: String,
     #[serde(default)]
+    pub provider_config: Value,
+    #[serde(default)]
     pub messages: Vec<ProviderMessage>,
     pub system: Option<String>,
     #[serde(default)]

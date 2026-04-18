@@ -24,6 +24,7 @@ use crate::{
     app_state::ApiState,
     error_response::ApiError,
     middleware::{require_csrf::require_csrf, require_session::require_session},
+    provider_runtime::ApiProviderRuntime,
     response::ApiSuccess,
 };
 
@@ -354,13 +355,17 @@ pub async fn start_flow_debug_run(
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    let detail = OrchestrationRuntimeService::new(state.store.clone())
-        .start_flow_debug_run(StartFlowDebugRunCommand {
-            actor_user_id: context.user.id,
-            application_id: id,
-            input_payload: body.input_payload,
-        })
-        .await?;
+    let detail = OrchestrationRuntimeService::new(
+        state.store.clone(),
+        ApiProviderRuntime::new(state.provider_runtime.clone()),
+        state.provider_secret_master_key.clone(),
+    )
+    .start_flow_debug_run(StartFlowDebugRunCommand {
+        actor_user_id: context.user.id,
+        application_id: id,
+        input_payload: body.input_payload,
+    })
+    .await?;
 
     Ok((
         StatusCode::CREATED,
@@ -395,15 +400,19 @@ pub async fn resume_flow_run(
 
     let checkpoint_id = Uuid::parse_str(&body.checkpoint_id)
         .map_err(|_| ControlPlaneError::InvalidInput("checkpoint_id"))?;
-    let detail = OrchestrationRuntimeService::new(state.store.clone())
-        .resume_flow_run(ResumeFlowRunCommand {
-            actor_user_id: context.user.id,
-            application_id: id,
-            flow_run_id: run_id,
-            checkpoint_id,
-            input_payload: body.input_payload,
-        })
-        .await?;
+    let detail = OrchestrationRuntimeService::new(
+        state.store.clone(),
+        ApiProviderRuntime::new(state.provider_runtime.clone()),
+        state.provider_secret_master_key.clone(),
+    )
+    .resume_flow_run(ResumeFlowRunCommand {
+        actor_user_id: context.user.id,
+        application_id: id,
+        flow_run_id: run_id,
+        checkpoint_id,
+        input_payload: body.input_payload,
+    })
+    .await?;
 
     Ok(Json(ApiSuccess::new(to_application_run_detail_response(
         detail,
@@ -435,14 +444,18 @@ pub async fn complete_callback_task(
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    let detail = OrchestrationRuntimeService::new(state.store.clone())
-        .complete_callback_task(CompleteCallbackTaskCommand {
-            actor_user_id: context.user.id,
-            application_id: id,
-            callback_task_id,
-            response_payload: body.response_payload,
-        })
-        .await?;
+    let detail = OrchestrationRuntimeService::new(
+        state.store.clone(),
+        ApiProviderRuntime::new(state.provider_runtime.clone()),
+        state.provider_secret_master_key.clone(),
+    )
+    .complete_callback_task(CompleteCallbackTaskCommand {
+        actor_user_id: context.user.id,
+        application_id: id,
+        callback_task_id,
+        response_payload: body.response_payload,
+    })
+    .await?;
 
     Ok(Json(ApiSuccess::new(to_application_run_detail_response(
         detail,
@@ -474,14 +487,18 @@ pub async fn start_node_debug_preview(
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    let outcome = OrchestrationRuntimeService::new(state.store.clone())
-        .start_node_debug_preview(StartNodeDebugPreviewCommand {
-            actor_user_id: context.user.id,
-            application_id: id,
-            node_id,
-            input_payload: body.input_payload,
-        })
-        .await?;
+    let outcome = OrchestrationRuntimeService::new(
+        state.store.clone(),
+        ApiProviderRuntime::new(state.provider_runtime.clone()),
+        state.provider_secret_master_key.clone(),
+    )
+    .start_node_debug_preview(StartNodeDebugPreviewCommand {
+        actor_user_id: context.user.id,
+        application_id: id,
+        node_id,
+        input_payload: body.input_payload,
+    })
+    .await?;
 
     let response = to_node_last_run_response(domain::NodeLastRun {
         flow_run: outcome.flow_run,

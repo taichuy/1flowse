@@ -98,6 +98,7 @@ test('plugin demo dev serves static demo assets and injected runtime config', as
     silent: true,
   });
 
+  let config;
   try {
     const indexResponse = await request(`${serverHandle.baseUrl}/`);
     assert.equal(indexResponse.statusCode, 200);
@@ -106,12 +107,19 @@ test('plugin demo dev serves static demo assets and injected runtime config', as
     const configResponse = await request(`${serverHandle.baseUrl}/__plugin_demo_config`);
     assert.equal(configResponse.statusCode, 200);
 
-    const config = JSON.parse(configResponse.body);
+    config = JSON.parse(configResponse.body);
     assert.equal(config.runnerUrl, 'http://127.0.0.1:7801');
     assert.equal(config.providerCode, 'acme_openai_compatible');
+    assert.notEqual(config.packageRoot, pluginPath);
+    assert.equal(fs.existsSync(path.join(config.packageRoot, 'manifest.yaml')), true);
+    assert.equal(fs.existsSync(path.join(config.packageRoot, 'provider')), true);
+    assert.equal(fs.existsSync(path.join(config.packageRoot, 'demo')), false);
+    assert.equal(fs.existsSync(path.join(config.packageRoot, 'scripts')), false);
   } finally {
     await serverHandle.close();
   }
+
+  assert.equal(fs.existsSync(config.packageRoot), false);
 });
 
 test('plugin demo dev rejects target without generated demo assets', async () => {

@@ -6,6 +6,7 @@ pub mod error_response;
 pub mod middleware;
 pub mod openapi;
 pub mod openapi_docs;
+pub mod provider_runtime;
 pub mod response;
 pub mod routes;
 pub mod runtime_registry_sync;
@@ -23,6 +24,7 @@ use rand_core::OsRng;
 use serde::Serialize;
 use storage_pg::{connect, run_migrations, PgControlPlaneStore};
 use storage_redis::RedisSessionStore;
+use tokio::sync::RwLock;
 use tower_http::{
     cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer},
     trace::TraceLayer,
@@ -120,8 +122,10 @@ fn console_router(state: Arc<ApiState>) -> Router {
         .nest("/api/console", routes::workspace::router())
         .nest("/api/console", routes::members::router())
         .nest("/api/console", routes::model_definitions::router())
+        .nest("/api/console", routes::model_providers::router())
         .nest("/api/console", routes::roles::router())
         .nest("/api/console", routes::permissions::router())
+        .nest("/api/console", routes::plugins::router())
         .nest("/api/console", routes::session::router())
         .nest("/api/console", routes::workspaces::router())
         .nest("/api/runtime", routes::runtime_models::router())
@@ -177,6 +181,11 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
         Arc::new(ApiState {
             store,
             runtime_engine,
+            provider_runtime: Arc::new(RwLock::new(
+                plugin_runner::provider_host::ProviderHost::default(),
+            )),
+            provider_install_root: config.provider_install_root.clone(),
+            provider_secret_master_key: config.provider_secret_master_key.clone(),
             session_store: SessionStoreHandle::Redis(Box::new(session_store)),
             api_docs,
             cookie_name: config.cookie_name.clone(),

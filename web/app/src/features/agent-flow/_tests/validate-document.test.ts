@@ -87,4 +87,71 @@ describe('validateDocument', () => {
       ])
     );
   });
+
+  test('flags missing llm provider instance and model separately', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    const issues = validateDocument(document);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-llm',
+          fieldKey: 'config.provider_instance_id',
+          title: 'LLM 缺少模型供应商实例'
+        }),
+        expect.objectContaining({
+          nodeId: 'node-llm',
+          fieldKey: 'config.model',
+          title: 'LLM 缺少模型'
+        })
+      ])
+    );
+  });
+
+  test('flags unavailable provider instance and missing model in provider catalog', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+
+    if (!llmNode) {
+      throw new Error('expected default LLM node');
+    }
+
+    llmNode.config.provider_instance_id = 'provider-stale';
+    llmNode.config.model = 'gpt-4.1';
+
+    const issues = validateDocument(document, {
+      instances: [
+        {
+          provider_instance_id: 'provider-ready',
+          provider_code: 'openai_compatible',
+          protocol: 'openai_responses',
+          display_name: 'OpenAI Prod',
+          models: [
+            {
+              model_id: 'gpt-4o-mini',
+              display_name: 'GPT-4o Mini',
+              source: 'catalog',
+              supports_streaming: true,
+              supports_tool_call: true,
+              supports_multimodal: false,
+              context_window: 128000,
+              max_output_tokens: 16384,
+              provider_metadata: {}
+            }
+          ]
+        }
+      ]
+    });
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-llm',
+          fieldKey: 'config.provider_instance_id',
+          title: 'LLM 模型供应商实例不可用'
+        })
+      ])
+    );
+  });
 });

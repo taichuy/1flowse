@@ -46,7 +46,11 @@ export function createAgentFlowNodeSchemaAdapter({
 }: {
   document: FlowAuthoringDocument;
   nodeId: string;
-  setWorkingDocument: (next: FlowAuthoringDocument) => void;
+  setWorkingDocument: (
+    update:
+      | FlowAuthoringDocument
+      | ((document: FlowAuthoringDocument) => FlowAuthoringDocument)
+  ) => void;
   dispatch: (actionKey: string, payload?: unknown) => void;
 }): SchemaAdapter {
   const node = getNode(document, nodeId);
@@ -82,28 +86,30 @@ export function createAgentFlowNodeSchemaAdapter({
     },
     setValue(path: string, value: unknown) {
       if (path === 'config.output_contract' && Array.isArray(value)) {
-        const nextDocument = replaceNodeOutputs(document, nodeId, value);
+        setWorkingDocument((currentDocument) => {
+          const nextDocument = replaceNodeOutputs(currentDocument, nodeId, value);
 
-        setWorkingDocument({
-          ...nextDocument,
-          graph: {
-            ...nextDocument.graph,
-            nodes: nextDocument.graph.nodes.map((candidate) =>
-              candidate.id === nodeId
-                ? {
-                    ...candidate,
-                    config: omitKey(candidate.config, 'output_contract')
-                  }
-                : candidate
-            )
-          }
+          return {
+            ...nextDocument,
+            graph: {
+              ...nextDocument.graph,
+              nodes: nextDocument.graph.nodes.map((candidate) =>
+                candidate.id === nodeId
+                  ? {
+                      ...candidate,
+                      config: omitKey(candidate.config, 'output_contract')
+                    }
+                  : candidate
+              )
+            }
+          };
         });
 
         return;
       }
 
-      setWorkingDocument(
-        updateNodeField(document, {
+      setWorkingDocument((currentDocument) =>
+        updateNodeField(currentDocument, {
           nodeId,
           fieldKey: path,
           value: value as never

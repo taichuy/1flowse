@@ -4,6 +4,7 @@ use axum::{
     Json,
 };
 use control_plane::errors::ControlPlaneError;
+use plugin_framework::error::PluginFrameworkError;
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -35,7 +36,14 @@ impl IntoResponse for ApiError {
             Some(ControlPlaneError::NotFound(name)) => (StatusCode::NOT_FOUND, *name),
             Some(ControlPlaneError::Conflict(name)) => (StatusCode::CONFLICT, *name),
             Some(ControlPlaneError::InvalidInput(name)) => (StatusCode::BAD_REQUEST, *name),
-            None => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
+            Some(ControlPlaneError::UpstreamUnavailable(name)) => (StatusCode::BAD_GATEWAY, *name),
+            None => match self.0.downcast_ref::<PluginFrameworkError>() {
+                Some(PluginFrameworkError::RuntimeContract { .. }) => {
+                    (StatusCode::BAD_GATEWAY, "provider_runtime")
+                }
+                Some(_) => (StatusCode::BAD_REQUEST, "provider_package"),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
+            },
         };
 
         (

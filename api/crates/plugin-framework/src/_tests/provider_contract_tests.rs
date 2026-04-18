@@ -1,6 +1,8 @@
 use plugin_framework::{
     installation::PluginTaskStatus,
-    provider_contract::{ModelDiscoveryMode, ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderUsage},
+    provider_contract::{
+        ModelDiscoveryMode, ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderUsage,
+    },
 };
 
 #[test]
@@ -54,7 +56,10 @@ fn provider_runtime_error_normalizes_common_vendor_failures() {
     assert_eq!(rate_limited.kind, ProviderRuntimeErrorKind::RateLimited);
 
     let unknown = ProviderRuntimeError::normalize("unexpected_shape", "bad payload", None);
-    assert_eq!(unknown.kind, ProviderRuntimeErrorKind::ProviderInvalidResponse);
+    assert_eq!(
+        unknown.kind,
+        ProviderRuntimeErrorKind::ProviderInvalidResponse
+    );
 }
 
 #[test]

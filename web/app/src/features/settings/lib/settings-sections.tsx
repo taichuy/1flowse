@@ -1,6 +1,6 @@
 import type { SectionNavItem } from '../../../shared/ui/section-page-layout/SectionPageLayout';
 
-export type SettingsSectionKey = 'docs' | 'members' | 'roles';
+export type SettingsSectionKey = 'docs' | 'model-providers' | 'members' | 'roles';
 
 export function getVisibleSettingsSections(input: {
   isRoot: boolean;
@@ -12,6 +12,17 @@ export function getVisibleSettingsSections(input: {
       label: 'API 文档',
       to: '/settings/docs',
       visible: input.isRoot || input.permissions.includes('api_reference.view.all')
+    },
+    {
+      key: 'model-providers',
+      label: '模型供应商',
+      to: '/settings/model-providers',
+      visible:
+        input.isRoot ||
+        input.permissions.includes('state_model.view.all') ||
+        input.permissions.includes('state_model.view.own') ||
+        input.permissions.includes('state_model.manage.all') ||
+        input.permissions.includes('state_model.manage.own')
     },
     {
       key: 'members',

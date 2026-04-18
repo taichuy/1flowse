@@ -5,8 +5,8 @@ pub mod audit;
 pub mod auth;
 pub mod base;
 pub mod flow;
-pub mod modeling;
 pub mod model_provider;
+pub mod modeling;
 pub mod orchestration;
 pub mod resource;
 pub mod scope;
@@ -27,16 +27,16 @@ pub use flow::{
     FlowVersionRecord, FlowVersionTrigger, FLOW_AUTOSAVE_INTERVAL_SECONDS, FLOW_HISTORY_LIMIT,
     FLOW_SCHEMA_VERSION,
 };
+pub use model_provider::{
+    ModelProviderCatalogCacheRecord, ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource,
+    ModelProviderDiscoveryMode, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
+    ModelProviderSecretRecord, ModelProviderValidationStatus, PluginAssignmentRecord,
+    PluginInstallationRecord, PluginTaskKind, PluginTaskRecord, PluginTaskStatus,
+    PluginVerificationStatus,
+};
 pub use modeling::{
     DataModelScopeKind, MetadataAvailabilityStatus, ModelDefinitionRecord, ModelFieldKind,
     ModelFieldRecord,
-};
-pub use model_provider::{
-    ModelProviderCatalogCacheRecord, ModelProviderCatalogRefreshStatus,
-    ModelProviderCatalogSource, ModelProviderDiscoveryMode, ModelProviderInstanceRecord,
-    ModelProviderInstanceStatus, ModelProviderSecretRecord, ModelProviderValidationStatus,
-    PluginAssignmentRecord, PluginInstallationRecord, PluginTaskKind, PluginTaskRecord,
-    PluginTaskStatus, PluginVerificationStatus,
 };
 pub use orchestration::{
     ApplicationRunDetail, ApplicationRunSummary, CallbackTaskRecord, CallbackTaskStatus,

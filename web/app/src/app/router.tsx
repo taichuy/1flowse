@@ -206,6 +206,13 @@ const settingsDocsRoute = createRoute({
   component: () => renderSettingsRoute('docs')
 });
 
+const settingsModelProvidersRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/settings/model-providers',
+  notFoundComponent: NotFoundPage,
+  component: () => renderSettingsRoute('model-providers')
+});
+
 const settingsMembersRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: '/settings/members',
@@ -263,6 +270,7 @@ const routeTree = rootRoute.addChildren([
     toolsRoute,
     settingsIndexRoute,
     settingsDocsRoute,
+    settingsModelProvidersRoute,
     settingsMembersRoute,
     settingsRolesRoute,
     meIndexRoute,

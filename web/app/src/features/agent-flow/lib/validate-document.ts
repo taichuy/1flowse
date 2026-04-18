@@ -1,6 +1,7 @@
 import type { FlowAuthoringDocument } from '@1flowse/flow-schema';
 import type { FlowBinding, FlowNodeDocument } from '@1flowse/flow-schema';
 
+import type { AgentFlowModelProviderOptions } from '../api/model-provider-options';
 import type { InspectorSectionKey } from './node-definitions';
 import { findInspectorSectionKey, nodeDefinitions } from './node-definitions';
 import { isSelectorVisible } from './selector-options';
@@ -98,25 +99,35 @@ function pushFieldIssue(
   node: FlowNodeDocument,
   fieldKey: string,
   title: string,
-  message: string
+  message: string,
+  sectionKey?: InspectorSectionKey | null
 ) {
   issues.push({
     id: `${node.id}-${fieldKey}-${issues.length}`,
     scope: 'field',
     level: 'error',
     nodeId: node.id,
-    sectionKey: findInspectorSectionKey(node.type, fieldKey),
+    sectionKey: sectionKey ?? findInspectorSectionKey(node.type, fieldKey),
     fieldKey,
     title,
     message
   });
 }
 
-export function validateDocument(document: FlowAuthoringDocument): AgentFlowIssue[] {
+export function validateDocument(
+  document: FlowAuthoringDocument,
+  providerOptions?: AgentFlowModelProviderOptions | null
+): AgentFlowIssue[] {
   const issues: AgentFlowIssue[] = [];
   const nodeIds = new Set(document.graph.nodes.map((node) => node.id));
   const startNodes = document.graph.nodes.filter((node) => node.type === 'start');
   const answerNodes = document.graph.nodes.filter((node) => node.type === 'answer');
+  const providerInstanceMap = new Map(
+    (providerOptions?.instances ?? []).map((instance) => [
+      instance.provider_instance_id,
+      instance
+    ])
+  );
 
   if (startNodes.length !== 1) {
     issues.push({
@@ -170,16 +181,68 @@ export function validateDocument(document: FlowAuthoringDocument): AgentFlowIssu
       for (const section of definition.sections) {
         for (const field of section.fields) {
           if (field.required && isMissingRequiredField(node, field.key)) {
+            const isMissingProviderInstance =
+              node.type === 'llm' && field.key === 'config.provider_instance_id';
+
             pushFieldIssue(
               issues,
               node,
               field.key,
-              node.type === 'llm' && field.key === 'config.model'
+              isMissingProviderInstance
+                ? 'LLM 缺少模型供应商实例'
+                : node.type === 'llm' && field.key === 'config.model'
                 ? 'LLM 缺少模型'
                 : `${field.label} 未配置`,
-              `请先完善 ${field.label}。`
+              isMissingProviderInstance
+                ? '请先选择模型供应商实例。'
+                : `请先完善 ${field.label}。`
             );
           }
+        }
+      }
+    }
+
+    if (node.type === 'llm') {
+      const providerInstanceId =
+        typeof node.config.provider_instance_id === 'string'
+          ? node.config.provider_instance_id.trim()
+          : '';
+      const model =
+        typeof node.config.model === 'string' ? node.config.model.trim() : '';
+
+      if (model.length === 0) {
+        pushFieldIssue(
+          issues,
+          node,
+          'config.model',
+          'LLM 缺少模型',
+          '请先选择模型。'
+        );
+      }
+
+      if (providerOptions && providerInstanceId.length > 0) {
+        const providerInstance = providerInstanceMap.get(providerInstanceId);
+
+        if (!providerInstance) {
+          pushFieldIssue(
+            issues,
+            node,
+            'config.provider_instance_id',
+            'LLM 模型供应商实例不可用',
+            '当前模型供应商实例不存在、未就绪或你无权访问。',
+            'inputs'
+          );
+        } else if (
+          model.length > 0 &&
+          !providerInstance.models.some((entry) => entry.model_id === model)
+        ) {
+          pushFieldIssue(
+            issues,
+            node,
+            'config.model',
+            'LLM 模型不可用',
+            '当前模型不属于所选模型供应商实例。'
+          );
         }
       }
     }

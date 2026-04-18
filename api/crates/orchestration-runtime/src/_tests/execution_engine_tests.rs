@@ -1,13 +1,82 @@
 use std::collections::BTreeMap;
 
+use anyhow::Result;
+use async_trait::async_trait;
+use plugin_framework::provider_contract::{
+    ProviderFinishReason, ProviderInvocationInput, ProviderInvocationResult, ProviderRuntimeError,
+    ProviderRuntimeErrorKind, ProviderStreamEvent, ProviderUsage,
+};
 use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
-    compiled_plan::{CompiledBinding, CompiledNode, CompiledOutput, CompiledPlan},
-    execution_engine::{resume_flow_debug_run, start_flow_debug_run},
+    compiled_plan::{
+        CompiledBinding, CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan,
+    },
+    execution_engine::{
+        resume_flow_debug_run, start_flow_debug_run, ProviderInvocationOutput, ProviderInvoker,
+    },
     execution_state::ExecutionStopReason,
 };
+
+struct StubProviderInvoker {
+    fail: bool,
+}
+
+#[async_trait]
+impl ProviderInvoker for StubProviderInvoker {
+    async fn invoke_llm(
+        &self,
+        runtime: &CompiledLlmRuntime,
+        _input: ProviderInvocationInput,
+    ) -> Result<ProviderInvocationOutput> {
+        if self.fail {
+            return Ok(ProviderInvocationOutput {
+                events: vec![ProviderStreamEvent::Error {
+                    error: ProviderRuntimeError {
+                        kind: ProviderRuntimeErrorKind::AuthFailed,
+                        message: "invalid api_key".to_string(),
+                        provider_summary: Some("Authorization: Bearer sk-secret-value".to_string()),
+                    },
+                }],
+                result: ProviderInvocationResult {
+                    finish_reason: Some(ProviderFinishReason::Error),
+                    ..ProviderInvocationResult::default()
+                },
+            });
+        }
+
+        Ok(ProviderInvocationOutput {
+            events: vec![
+                ProviderStreamEvent::TextDelta {
+                    delta: format!("echo:{}", runtime.model),
+                },
+                ProviderStreamEvent::UsageSnapshot {
+                    usage: ProviderUsage {
+                        input_tokens: Some(5),
+                        output_tokens: Some(7),
+                        total_tokens: Some(12),
+                        ..ProviderUsage::default()
+                    },
+                },
+                ProviderStreamEvent::Finish {
+                    reason: ProviderFinishReason::Stop,
+                },
+            ],
+            result: ProviderInvocationResult {
+                final_content: Some(format!("echo:{}", runtime.model)),
+                usage: ProviderUsage {
+                    input_tokens: Some(5),
+                    output_tokens: Some(7),
+                    total_tokens: Some(12),
+                    ..ProviderUsage::default()
+                },
+                finish_reason: Some(ProviderFinishReason::Stop),
+                ..ProviderInvocationResult::default()
+            },
+        })
+    }
+}
 
 fn base_plan() -> CompiledPlan {
     let mut nodes = BTreeMap::new();
@@ -27,6 +96,7 @@ fn base_plan() -> CompiledPlan {
                 value_type: "string".to_string(),
             }],
             config: json!({}),
+            llm_runtime: None,
         },
     );
     nodes.insert(
@@ -51,7 +121,16 @@ fn base_plan() -> CompiledPlan {
                 title: "模型输出".to_string(),
                 value_type: "string".to_string(),
             }],
-            config: json!({ "model": "gpt-5.4-mini" }),
+            config: json!({
+                "provider_instance_id": "provider-ready",
+                "model": "gpt-5.4-mini"
+            }),
+            llm_runtime: Some(CompiledLlmRuntime {
+                provider_instance_id: "provider-ready".to_string(),
+                provider_code: "fixture_provider".to_string(),
+                protocol: "openai_compatible".to_string(),
+                model: "gpt-5.4-mini".to_string(),
+            }),
         },
     );
     nodes.insert(
@@ -77,6 +156,7 @@ fn base_plan() -> CompiledPlan {
                 value_type: "string".to_string(),
             }],
             config: json!({}),
+            llm_runtime: None,
         },
     );
     nodes.insert(
@@ -102,6 +182,7 @@ fn base_plan() -> CompiledPlan {
                 value_type: "string".to_string(),
             }],
             config: json!({}),
+            llm_runtime: None,
         },
     );
 
@@ -116,17 +197,20 @@ fn base_plan() -> CompiledPlan {
             "node-answer".to_string(),
         ],
         nodes,
+        compile_issues: Vec::new(),
     }
 }
 
-#[test]
-fn start_flow_debug_run_waits_for_human_input() {
+#[tokio::test]
+async fn start_flow_debug_run_waits_for_human_input() {
     let outcome = start_flow_debug_run(
         &base_plan(),
         &json!({
             "node-start": { "query": "请总结退款政策" }
         }),
+        &StubProviderInvoker { fail: false },
     )
+    .await
     .unwrap();
 
     match outcome.stop_reason {
@@ -139,14 +223,21 @@ fn start_flow_debug_run_waits_for_human_input() {
 
     assert_eq!(outcome.node_traces.len(), 3);
     assert_eq!(outcome.node_traces[1].node_id, "node-llm");
+    assert_eq!(
+        outcome.node_traces[1].output_payload["text"],
+        "echo:gpt-5.4-mini"
+    );
+    assert_eq!(outcome.node_traces[1].provider_events.len(), 3);
 }
 
-#[test]
-fn resume_flow_debug_run_completes_answer_after_human_input() {
+#[tokio::test]
+async fn resume_flow_debug_run_completes_answer_after_human_input() {
     let waiting = start_flow_debug_run(
         &base_plan(),
         &json!({ "node-start": { "query": "退款政策" } }),
+        &StubProviderInvoker { fail: false },
     )
+    .await
     .unwrap();
 
     let checkpoint = waiting.checkpoint_snapshot.clone().unwrap();
@@ -154,7 +245,9 @@ fn resume_flow_debug_run_completes_answer_after_human_input() {
         &base_plan(),
         &checkpoint,
         &json!({ "node-human": { "input": "已审核，可继续" } }),
+        &StubProviderInvoker { fail: false },
     )
+    .await
     .unwrap();
 
     assert!(matches!(
@@ -167,8 +260,8 @@ fn resume_flow_debug_run_completes_answer_after_human_input() {
     );
 }
 
-#[test]
-fn tool_node_emits_waiting_callback_stop_reason() {
+#[tokio::test]
+async fn tool_node_emits_waiting_callback_stop_reason() {
     let mut plan = base_plan();
     plan.topological_order = vec!["node-start".to_string(), "node-tool".to_string()];
     plan.nodes.remove("node-llm");
@@ -190,11 +283,17 @@ fn tool_node_emits_waiting_callback_stop_reason() {
                 value_type: "json".to_string(),
             }],
             config: json!({ "tool_name": "lookup_order" }),
+            llm_runtime: None,
         },
     );
 
-    let outcome =
-        start_flow_debug_run(&plan, &json!({ "node-start": { "query": "order_123" } })).unwrap();
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "order_123" } }),
+        &StubProviderInvoker { fail: false },
+    )
+    .await
+    .unwrap();
 
     match outcome.stop_reason {
         ExecutionStopReason::WaitingCallback(ref pending) => {
@@ -202,5 +301,28 @@ fn tool_node_emits_waiting_callback_stop_reason() {
             assert_eq!(pending.callback_kind, "tool");
         }
         other => panic!("expected waiting_callback, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn provider_error_marks_flow_failed_and_redacts_summary() {
+    let outcome = start_flow_debug_run(
+        &base_plan(),
+        &json!({ "node-start": { "query": "退款政策" } }),
+        &StubProviderInvoker { fail: true },
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(ref failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(failure.error_payload["error_kind"], json!("auth_failed"));
+            assert!(failure.error_payload["provider_summary"]
+                .as_str()
+                .unwrap()
+                .contains("[REDACTED]"));
+        }
+        other => panic!("expected failed stop reason, got {other:?}"),
     }
 }

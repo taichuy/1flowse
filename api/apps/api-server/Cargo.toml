@@ -33,3 +33,4 @@ storage-pg = { path = "../../crates/storage-pg" }
 storage-redis = { path = "../../crates/storage-redis" }
 storage-object = { path = "../../crates/storage-object" }
 observability = { path = "../../crates/observability" }
+plugin-runner = { path = "../plugin-runner" }

@@ -4,7 +4,8 @@ use control_plane::{
     errors::ControlPlaneError,
     ports::{
         CreatePluginAssignmentInput, CreatePluginTaskInput, PluginRepository,
-        UpdatePluginTaskStatusInput, UpsertPluginInstallationInput,
+        UpdatePluginInstallationEnabledInput, UpdatePluginTaskStatusInput,
+        UpsertPluginInstallationInput,
     },
 };
 use sqlx::Row;
@@ -215,6 +216,48 @@ impl PluginRepository for PgControlPlaneStore {
         rows.into_iter().map(map_installation).collect()
     }
 
+    async fn update_installation_enabled(
+        &self,
+        input: &UpdatePluginInstallationEnabledInput,
+    ) -> Result<domain::PluginInstallationRecord> {
+        let row = sqlx::query(
+            r#"
+            update plugin_installations
+            set
+                enabled = $2,
+                updated_at = now()
+            where id = $1
+            returning
+                id,
+                provider_code,
+                plugin_id,
+                plugin_version,
+                contract_version,
+                protocol,
+                display_name,
+                source_kind,
+                verification_status,
+                enabled,
+                install_path,
+                checksum,
+                signature_status,
+                metadata_json,
+                created_by,
+                created_at,
+                updated_at
+            "#,
+        )
+        .bind(input.installation_id)
+        .bind(input.enabled)
+        .fetch_optional(self.pool())
+        .await?;
+
+        match row {
+            Some(row) => map_installation(row),
+            None => bail!(ControlPlaneError::NotFound("plugin_installation")),
+        }
+    }
+
     async fn create_assignment(
         &self,
         input: &CreatePluginAssignmentInput,
@@ -261,10 +304,7 @@ impl PluginRepository for PgControlPlaneStore {
         rows.into_iter().map(map_assignment).collect()
     }
 
-    async fn create_task(
-        &self,
-        input: &CreatePluginTaskInput,
-    ) -> Result<domain::PluginTaskRecord> {
+    async fn create_task(&self, input: &CreatePluginTaskInput) -> Result<domain::PluginTaskRecord> {
         let row = sqlx::query(
             r#"
             insert into plugin_tasks (
@@ -352,5 +392,58 @@ impl PluginRepository for PgControlPlaneStore {
             Some(row) => map_task(row),
             None => bail!(ControlPlaneError::NotFound("plugin_task")),
         }
+    }
+
+    async fn get_task(&self, task_id: Uuid) -> Result<Option<domain::PluginTaskRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                id,
+                installation_id,
+                workspace_id,
+                provider_code,
+                task_kind,
+                status,
+                status_message,
+                detail_json,
+                created_by,
+                created_at,
+                updated_at,
+                finished_at
+            from plugin_tasks
+            where id = $1
+            "#,
+        )
+        .bind(task_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_task).transpose()
+    }
+
+    async fn list_tasks(&self) -> Result<Vec<domain::PluginTaskRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                installation_id,
+                workspace_id,
+                provider_code,
+                task_kind,
+                status,
+                status_message,
+                detail_json,
+                created_by,
+                created_at,
+                updated_at,
+                finished_at
+            from plugin_tasks
+            order by created_at desc, id desc
+            "#,
+        )
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_task).collect()
     }
 }

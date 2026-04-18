@@ -16,6 +16,7 @@ use axum::{
 use control_plane::bootstrap::{BootstrapConfig, BootstrapService};
 use serde_json::Value;
 use sqlx::PgPool;
+use tokio::sync::RwLock;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -86,6 +87,11 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
         std::sync::Arc::new(ApiState {
             store,
             runtime_engine,
+            provider_runtime: std::sync::Arc::new(RwLock::new(
+                plugin_runner::provider_host::ProviderHost::default(),
+            )),
+            provider_install_root: config.provider_install_root.clone(),
+            provider_secret_master_key: config.provider_secret_master_key.clone(),
             session_store: SessionStoreHandle::InMemory(
                 storage_redis::InMemorySessionStore::default(),
             ),

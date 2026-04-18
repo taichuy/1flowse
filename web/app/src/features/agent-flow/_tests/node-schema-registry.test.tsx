@@ -67,9 +67,13 @@ describe('agent-flow node schema registry', () => {
 
     expect(setWorkingDocument).toHaveBeenCalledTimes(1);
 
-    const nextDocument = setWorkingDocument.mock.calls[0]?.[0] as ReturnType<
-      typeof createDefaultAgentFlowDocument
-    >;
+    const update = setWorkingDocument.mock.calls[0]?.[0] as
+      | ReturnType<typeof createDefaultAgentFlowDocument>
+      | ((
+          currentDocument: ReturnType<typeof createDefaultAgentFlowDocument>
+        ) => ReturnType<typeof createDefaultAgentFlowDocument>);
+    const nextDocument =
+      typeof update === 'function' ? update(document) : update;
     const nextNode = getNode(nextDocument, 'node-llm');
 
     expect(nextNode.outputs).toEqual(nextOutputs);

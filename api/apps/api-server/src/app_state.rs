@@ -1,9 +1,11 @@
 use async_trait::async_trait;
 use control_plane::ports::SessionStore;
 use domain::SessionRecord;
+use plugin_runner::provider_host::ProviderHost;
 use runtime_core::runtime_engine::RuntimeEngine;
 use storage_pg::PgControlPlaneStore;
 use storage_redis::{InMemorySessionStore, RedisSessionStore};
+use tokio::sync::RwLock;
 
 use crate::openapi_docs::ApiDocsRegistry;
 
@@ -48,6 +50,9 @@ impl SessionStore for SessionStoreHandle {
 pub struct ApiState {
     pub store: PgControlPlaneStore,
     pub runtime_engine: std::sync::Arc<RuntimeEngine>,
+    pub provider_runtime: std::sync::Arc<RwLock<ProviderHost>>,
+    pub provider_install_root: String,
+    pub provider_secret_master_key: String,
     pub session_store: SessionStoreHandle,
     pub api_docs: std::sync::Arc<ApiDocsRegistry>,
     pub cookie_name: String,

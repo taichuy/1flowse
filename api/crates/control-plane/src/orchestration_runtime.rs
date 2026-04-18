@@ -1,15 +1,25 @@
+use std::collections::{BTreeMap, BTreeSet};
+
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
+use plugin_framework::{
+    provider_contract::{ProviderInvocationInput, ProviderStreamEvent},
+    provider_package::ProviderPackage,
+    ProviderConfigField,
+};
 use serde_json::{json, Value};
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::{
+    errors::ControlPlaneError,
     flow::FlowService,
     ports::{
         AppendRunEventInput, ApplicationRepository, CompleteCallbackTaskInput,
         CompleteFlowRunInput, CompleteNodeRunInput, CreateCallbackTaskInput, CreateCheckpointInput,
-        CreateFlowRunInput, CreateNodeRunInput, FlowRepository, OrchestrationRuntimeRepository,
-        UpdateFlowRunInput, UpdateNodeRunInput, UpsertCompiledPlanInput,
+        CreateFlowRunInput, CreateNodeRunInput, FlowRepository, ModelProviderRepository,
+        OrchestrationRuntimeRepository, PluginRepository, ProviderRuntimePort, UpdateFlowRunInput,
+        UpdateNodeRunInput, UpsertCompiledPlanInput,
     },
 };
 
@@ -56,36 +66,119 @@ struct PersistFlowDebugOutcomeInput<'a> {
     waiting_node_resume: Option<WaitingNodeResumeUpdate>,
 }
 
-pub struct OrchestrationRuntimeService<R> {
+#[derive(Clone)]
+struct RuntimeProviderInvoker<R, H> {
     repository: R,
+    runtime: H,
+    workspace_id: Uuid,
+    provider_secret_master_key: String,
 }
 
-impl<R> OrchestrationRuntimeService<R>
+pub struct OrchestrationRuntimeService<R, H> {
+    repository: R,
+    runtime: H,
+    provider_secret_master_key: String,
+}
+
+impl<R, H> OrchestrationRuntimeService<R, H>
 where
-    R: ApplicationRepository + FlowRepository + OrchestrationRuntimeRepository + Clone,
+    R: ApplicationRepository
+        + FlowRepository
+        + OrchestrationRuntimeRepository
+        + ModelProviderRepository
+        + PluginRepository
+        + Clone,
+    H: ProviderRuntimePort + Clone,
 {
-    pub fn new(repository: R) -> Self {
-        Self { repository }
+    pub fn new(repository: R, runtime: H, provider_secret_master_key: impl Into<String>) -> Self {
+        Self {
+            repository,
+            runtime,
+            provider_secret_master_key: provider_secret_master_key.into(),
+        }
+    }
+
+    fn runtime_invoker(&self, workspace_id: Uuid) -> RuntimeProviderInvoker<R, H> {
+        RuntimeProviderInvoker {
+            repository: self.repository.clone(),
+            runtime: self.runtime.clone(),
+            workspace_id,
+            provider_secret_master_key: self.provider_secret_master_key.clone(),
+        }
+    }
+
+    async fn build_compile_context(
+        &self,
+        workspace_id: Uuid,
+    ) -> Result<orchestration_runtime::compiler::FlowCompileContext> {
+        let instances = self.repository.list_instances(workspace_id).await?;
+        let mut provider_instances = BTreeMap::new();
+
+        for instance in instances {
+            let available_models = self
+                .repository
+                .get_catalog_cache(instance.id)
+                .await?
+                .and_then(|cache| cache.models_json.as_array().cloned())
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|model| {
+                    model
+                        .get("model_id")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
+                .collect::<BTreeSet<_>>();
+
+            provider_instances.insert(
+                instance.id.to_string(),
+                orchestration_runtime::compiler::FlowCompileProviderInstance {
+                    provider_instance_id: instance.id.to_string(),
+                    provider_code: instance.provider_code,
+                    protocol: instance.protocol,
+                    is_ready: instance.status == domain::ModelProviderInstanceStatus::Ready,
+                    available_models,
+                    allow_custom_models: allow_custom_models(&instance.config_json),
+                },
+            );
+        }
+
+        Ok(orchestration_runtime::compiler::FlowCompileContext { provider_instances })
     }
 
     pub async fn start_node_debug_preview(
         &self,
         command: StartNodeDebugPreviewCommand,
     ) -> Result<domain::NodeDebugPreviewResult> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
         let editor_state = FlowService::new(self.repository.clone())
             .get_or_create_editor_state(command.actor_user_id, command.application_id)
             .await?;
+        let application = self
+            .repository
+            .get_application(actor.current_workspace_id, command.application_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("application"))?;
+        let compile_context = self.build_compile_context(application.workspace_id).await?;
 
         let compiled_plan = orchestration_runtime::compiler::FlowCompiler::compile(
             editor_state.flow.id,
             &editor_state.draft.id.to_string(),
             &editor_state.draft.document,
+            &compile_context,
         )?;
+        ensure_compiled_plan_runnable(&compiled_plan)?;
+        let invoker = self.runtime_invoker(application.workspace_id);
         let preview = orchestration_runtime::preview_executor::run_node_preview(
             &compiled_plan,
             &command.node_id,
             &command.input_payload,
-        )?;
+            &invoker,
+        )
+        .await?;
         let started_at = OffsetDateTime::now_utc();
         let compiled_record = self
             .repository
@@ -148,18 +241,33 @@ where
         &self,
         command: StartFlowDebugRunCommand,
     ) -> Result<domain::ApplicationRunDetail> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
         let editor_state = FlowService::new(self.repository.clone())
             .get_or_create_editor_state(command.actor_user_id, command.application_id)
             .await?;
+        let application = self
+            .repository
+            .get_application(actor.current_workspace_id, command.application_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("application"))?;
+        let compile_context = self.build_compile_context(application.workspace_id).await?;
         let compiled_plan = orchestration_runtime::compiler::FlowCompiler::compile(
             editor_state.flow.id,
             &editor_state.draft.id.to_string(),
             &editor_state.draft.document,
+            &compile_context,
         )?;
+        ensure_compiled_plan_runnable(&compiled_plan)?;
+        let invoker = self.runtime_invoker(application.workspace_id);
         let outcome = orchestration_runtime::execution_engine::start_flow_debug_run(
             &compiled_plan,
             &command.input_payload,
-        )?;
+            &invoker,
+        )
+        .await?;
         let compiled_record = self
             .repository
             .upsert_compiled_plan(&build_compiled_plan_input(
@@ -203,6 +311,10 @@ where
         &self,
         command: ResumeFlowRunCommand,
     ) -> Result<domain::ApplicationRunDetail> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
         let flow_run = self
             .repository
             .get_flow_run(command.application_id, command.flow_run_id)
@@ -218,6 +330,11 @@ where
             .get_application_run_detail(command.application_id, command.flow_run_id)
             .await?
             .ok_or_else(|| anyhow!("flow run detail not found"))?;
+        let application = self
+            .repository
+            .get_application(actor.current_workspace_id, command.application_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("application"))?;
         let compiled_record = self
             .repository
             .get_compiled_plan(flow_run.compiled_plan_id)
@@ -237,7 +354,9 @@ where
             &compiled_plan,
             &snapshot,
             &command.input_payload,
-        )?;
+            &self.runtime_invoker(application.workspace_id),
+        )
+        .await?;
 
         self.persist_flow_debug_outcome(PersistFlowDebugOutcomeInput {
             application_id: command.application_id,
@@ -263,6 +382,10 @@ where
         &self,
         command: CompleteCallbackTaskCommand,
     ) -> Result<domain::ApplicationRunDetail> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
         let callback_task = self
             .repository
             .complete_callback_task(&CompleteCallbackTaskInput {
@@ -276,6 +399,11 @@ where
             .get_application_run_detail(command.application_id, callback_task.flow_run_id)
             .await?
             .ok_or_else(|| anyhow!("flow run not found for callback task"))?;
+        let application = self
+            .repository
+            .get_application(actor.current_workspace_id, command.application_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("application"))?;
         let checkpoint = detail
             .checkpoints
             .iter()
@@ -300,7 +428,9 @@ where
             &compiled_plan,
             &snapshot,
             &resume_payload,
-        )?;
+            &self.runtime_invoker(application.workspace_id),
+        )
+        .await?;
 
         self.persist_flow_debug_outcome(PersistFlowDebugOutcomeInput {
             application_id: command.application_id,
@@ -452,12 +582,88 @@ where
                     })
                     .await?;
             }
+            orchestration_runtime::execution_state::ExecutionStopReason::Failed(failure) => {
+                self.repository
+                    .update_flow_run(&UpdateFlowRunInput {
+                        flow_run_id: flow_run.id,
+                        status: domain::FlowRunStatus::Failed,
+                        output_payload: final_flow_output_payload(outcome),
+                        error_payload: Some(failure.error_payload.clone()),
+                        finished_at: Some(OffsetDateTime::now_utc()),
+                    })
+                    .await?;
+                self.repository
+                    .append_run_event(&AppendRunEventInput {
+                        flow_run_id: flow_run.id,
+                        node_run_id: None,
+                        event_type: "flow_run_failed".to_string(),
+                        payload: failure.error_payload.clone(),
+                    })
+                    .await?;
+            }
         }
 
         self.repository
             .get_application_run_detail(application_id, flow_run.id)
             .await?
             .ok_or_else(|| anyhow!("persisted flow run detail not found"))
+    }
+}
+
+#[async_trait]
+impl<R, H> orchestration_runtime::execution_engine::ProviderInvoker for RuntimeProviderInvoker<R, H>
+where
+    R: ModelProviderRepository + PluginRepository + Clone + Send + Sync,
+    H: ProviderRuntimePort + Clone + Send + Sync,
+{
+    async fn invoke_llm(
+        &self,
+        runtime: &orchestration_runtime::compiled_plan::CompiledLlmRuntime,
+        mut input: ProviderInvocationInput,
+    ) -> Result<orchestration_runtime::execution_engine::ProviderInvocationOutput> {
+        let provider_instance_id = Uuid::parse_str(&runtime.provider_instance_id)
+            .map_err(|_| ControlPlaneError::InvalidInput("provider_instance_id"))?;
+        let instance = self
+            .repository
+            .get_instance(self.workspace_id, provider_instance_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("model_provider_instance"))?;
+        if instance.status != domain::ModelProviderInstanceStatus::Ready {
+            return Err(ControlPlaneError::InvalidInput("provider_instance_id").into());
+        }
+        let installation = self
+            .repository
+            .get_installation(instance.installation_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        let assigned = self
+            .repository
+            .list_assignments(self.workspace_id)
+            .await?
+            .into_iter()
+            .any(|assignment| assignment.installation_id == installation.id);
+        if !assigned || !installation.enabled {
+            return Err(ControlPlaneError::InvalidInput("provider_instance_id").into());
+        }
+
+        let package = load_provider_package(&installation.install_path)?;
+        input.provider_config = build_provider_runtime_config(
+            &self.repository,
+            &self.provider_secret_master_key,
+            &package,
+            &instance,
+        )
+        .await?;
+
+        self.runtime
+            .invoke_stream(&installation, input)
+            .await
+            .map(
+                |output| orchestration_runtime::execution_engine::ProviderInvocationOutput {
+                    events: output.events,
+                    result: output.result,
+                },
+            )
     }
 }
 
@@ -528,11 +734,17 @@ fn build_complete_node_run_input(
 ) -> CompleteNodeRunInput {
     CompleteNodeRunInput {
         node_run_id: node_run.id,
-        status: domain::NodeRunStatus::Succeeded,
+        status: if preview.is_failed() {
+            domain::NodeRunStatus::Failed
+        } else {
+            domain::NodeRunStatus::Succeeded
+        },
         output_payload: preview.as_payload(),
-        error_payload: None,
+        error_payload: preview.error_payload.clone(),
         metrics_payload: json!({
             "output_contract_count": preview.output_contract.len(),
+            "provider_events": preview.provider_events.len(),
+            "runtime": preview.metrics_payload,
         }),
         finished_at,
     }
@@ -545,10 +757,73 @@ fn build_complete_flow_run_input(
 ) -> CompleteFlowRunInput {
     CompleteFlowRunInput {
         flow_run_id: flow_run.id,
-        status: domain::FlowRunStatus::Succeeded,
+        status: if preview.is_failed() {
+            domain::FlowRunStatus::Failed
+        } else {
+            domain::FlowRunStatus::Succeeded
+        },
         output_payload: preview.as_payload(),
-        error_payload: None,
+        error_payload: preview.error_payload.clone(),
         finished_at,
+    }
+}
+
+fn ensure_compiled_plan_runnable(
+    compiled_plan: &orchestration_runtime::compiled_plan::CompiledPlan,
+) -> Result<()> {
+    if let Some(issue) = compiled_plan.compile_issues.first() {
+        let field = match issue.code {
+            orchestration_runtime::compiled_plan::CompileIssueCode::MissingProviderInstance
+            | orchestration_runtime::compiled_plan::CompileIssueCode::ProviderInstanceNotFound
+            | orchestration_runtime::compiled_plan::CompileIssueCode::ProviderInstanceNotReady => {
+                "provider_instance_id"
+            }
+            orchestration_runtime::compiled_plan::CompileIssueCode::MissingModel
+            | orchestration_runtime::compiled_plan::CompileIssueCode::ModelNotAvailable => "model",
+        };
+        return Err(ControlPlaneError::InvalidInput(field).into());
+    }
+
+    Ok(())
+}
+
+async fn append_provider_stream_events<R>(
+    repository: &R,
+    flow_run_id: Uuid,
+    node_run_id: Option<Uuid>,
+    events: &[ProviderStreamEvent],
+) -> Result<Vec<domain::RunEventRecord>>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    let mut records = Vec::with_capacity(events.len());
+    for event in events {
+        records.push(
+            repository
+                .append_run_event(&AppendRunEventInput {
+                    flow_run_id,
+                    node_run_id,
+                    event_type: provider_stream_event_type(event).to_string(),
+                    payload: serde_json::to_value(event)?,
+                })
+                .await?,
+        );
+    }
+    Ok(records)
+}
+
+fn provider_stream_event_type(event: &ProviderStreamEvent) -> &'static str {
+    match event {
+        ProviderStreamEvent::TextDelta { .. } => "text_delta",
+        ProviderStreamEvent::ReasoningDelta { .. } => "reasoning_delta",
+        ProviderStreamEvent::ToolCallDelta { .. } => "tool_call_delta",
+        ProviderStreamEvent::ToolCallCommit { .. } => "tool_call_commit",
+        ProviderStreamEvent::McpCallDelta { .. } => "mcp_call_delta",
+        ProviderStreamEvent::McpCallCommit { .. } => "mcp_call_commit",
+        ProviderStreamEvent::UsageDelta { .. } => "usage_delta",
+        ProviderStreamEvent::UsageSnapshot { .. } => "usage_snapshot",
+        ProviderStreamEvent::Finish { .. } => "finish",
+        ProviderStreamEvent::Error { .. } => "error",
     }
 }
 
@@ -561,6 +836,7 @@ async fn persist_preview_events<R>(
 where
     R: OrchestrationRuntimeRepository,
 {
+    let mut events = Vec::new();
     let started = repository
         .append_run_event(&AppendRunEventInput {
             flow_run_id: flow_run.id,
@@ -572,16 +848,31 @@ where
             }),
         })
         .await?;
+    events.push(started);
+    events.extend(
+        append_provider_stream_events(
+            repository,
+            flow_run.id,
+            Some(node_run.id),
+            &preview.provider_events,
+        )
+        .await?,
+    );
     let completed = repository
         .append_run_event(&AppendRunEventInput {
             flow_run_id: flow_run.id,
             node_run_id: Some(node_run.id),
-            event_type: "node_preview_completed".to_string(),
+            event_type: if preview.is_failed() {
+                "node_preview_failed".to_string()
+            } else {
+                "node_preview_completed".to_string()
+            },
             payload: preview.as_payload(),
         })
         .await?;
+    events.push(completed);
 
-    Ok(vec![started, completed])
+    Ok(events)
 }
 
 async fn persist_flow_debug_node_traces<R>(
@@ -603,6 +894,9 @@ where
                 domain::NodeRunStatus::WaitingCallback,
             ))
         }
+        orchestration_runtime::execution_state::ExecutionStopReason::Failed(failure) => {
+            Some((failure.node_id.as_str(), domain::NodeRunStatus::Failed))
+        }
         orchestration_runtime::execution_state::ExecutionStopReason::Completed => None,
     };
     let mut waiting_node_run = None;
@@ -622,7 +916,11 @@ where
             .await?;
         let (status, finished_at) = match waiting_node_id {
             Some((waiting_id, waiting_status)) if waiting_id == trace.node_id => {
-                (waiting_status, None)
+                if waiting_status == domain::NodeRunStatus::Failed {
+                    (waiting_status, Some(started_at))
+                } else {
+                    (waiting_status, None)
+                }
             }
             _ => (domain::NodeRunStatus::Succeeded, Some(started_at)),
         };
@@ -631,18 +929,111 @@ where
                 node_run_id: node_run.id,
                 status,
                 output_payload: trace.output_payload.clone(),
-                error_payload: None,
+                error_payload: trace.error_payload.clone(),
                 metrics_payload: trace.metrics_payload.clone(),
                 finished_at,
             })
             .await?;
+        append_provider_stream_events(
+            repository,
+            flow_run_id,
+            Some(node_run.id),
+            &trace.provider_events,
+        )
+        .await?;
 
-        if finished_at.is_none() {
+        if finished_at.is_none() && status != domain::NodeRunStatus::Failed {
             waiting_node_run = Some(node_run);
         }
     }
 
     Ok(waiting_node_run)
+}
+
+async fn build_provider_runtime_config<R>(
+    repository: &R,
+    master_key: &str,
+    package: &ProviderPackage,
+    instance: &domain::ModelProviderInstanceRecord,
+) -> Result<Value>
+where
+    R: ModelProviderRepository,
+{
+    let secret_json = repository
+        .get_secret_json(instance.id, master_key)
+        .await?
+        .unwrap_or_else(empty_object);
+    validate_required_fields(
+        &package.provider.form_schema,
+        &instance.config_json,
+        &secret_json,
+    )?;
+    merge_json_object(&instance.config_json, &secret_json)
+}
+
+fn allow_custom_models(config_json: &Value) -> bool {
+    config_json
+        .get("validate_model")
+        .and_then(Value::as_bool)
+        .map(|value| !value)
+        .unwrap_or(false)
+}
+
+fn validate_required_fields(
+    form_schema: &[ProviderConfigField],
+    public_config: &Value,
+    secret_config: &Value,
+) -> Result<()> {
+    let public_object = public_config
+        .as_object()
+        .ok_or(ControlPlaneError::InvalidInput("config_json"))?;
+    let secret_object = secret_config
+        .as_object()
+        .ok_or(ControlPlaneError::InvalidInput("config_json"))?;
+    for field in form_schema {
+        if !field.required {
+            continue;
+        }
+        let value = if is_secret_field(&field.field_type) {
+            secret_object.get(&field.key)
+        } else {
+            public_object.get(&field.key)
+        };
+        if value.is_none()
+            || value == Some(&Value::Null)
+            || value == Some(&Value::String(String::new()))
+        {
+            return Err(ControlPlaneError::InvalidInput("config_json").into());
+        }
+    }
+    Ok(())
+}
+
+fn merge_json_object(base: &Value, patch: &Value) -> Result<Value> {
+    let mut merged = base
+        .as_object()
+        .cloned()
+        .ok_or(ControlPlaneError::InvalidInput("config_json"))?;
+    let patch_object = patch
+        .as_object()
+        .ok_or(ControlPlaneError::InvalidInput("config_json"))?;
+    for (key, value) in patch_object {
+        merged.insert(key.clone(), value.clone());
+    }
+    Ok(Value::Object(merged))
+}
+
+fn empty_object() -> Value {
+    Value::Object(serde_json::Map::new())
+}
+
+fn is_secret_field(field_type: &str) -> bool {
+    field_type.trim().eq_ignore_ascii_case("secret")
+}
+
+fn load_provider_package(path: &str) -> Result<ProviderPackage> {
+    ProviderPackage::load_from_dir(path)
+        .map_err(|_| ControlPlaneError::InvalidInput("provider_package").into())
 }
 
 fn checkpoint_snapshot_from_record(
@@ -699,11 +1090,7 @@ use std::{
 };
 
 #[cfg(test)]
-use async_trait::async_trait;
-
-#[cfg(test)]
 use crate::{
-    errors::ControlPlaneError,
     flow::InMemoryFlowRepository,
     ports::{
         ApplicationVisibility, CreateApplicationInput, CreateApplicationTagInput,
@@ -720,6 +1107,11 @@ struct InMemoryOrchestrationRuntimeState {
     checkpoints_by_id: HashMap<Uuid, domain::CheckpointRecord>,
     callback_tasks_by_id: HashMap<Uuid, domain::CallbackTaskRecord>,
     events_by_flow_run_id: HashMap<Uuid, Vec<domain::RunEventRecord>>,
+    installations_by_id: HashMap<Uuid, domain::PluginInstallationRecord>,
+    assignments_by_workspace: HashMap<Uuid, Vec<domain::PluginAssignmentRecord>>,
+    instances_by_id: HashMap<Uuid, domain::ModelProviderInstanceRecord>,
+    caches_by_instance_id: HashMap<Uuid, domain::ModelProviderCatalogCacheRecord>,
+    secret_json_by_instance_id: HashMap<Uuid, Value>,
 }
 
 #[cfg(test)]
@@ -727,14 +1119,101 @@ struct InMemoryOrchestrationRuntimeState {
 pub(crate) struct InMemoryOrchestrationRuntimeRepository {
     flow: InMemoryFlowRepository,
     inner: Arc<Mutex<InMemoryOrchestrationRuntimeState>>,
+    default_provider_instance_id: Uuid,
 }
 
 #[cfg(test)]
 impl InMemoryOrchestrationRuntimeRepository {
     fn with_permissions(permissions: Vec<&str>) -> Self {
+        let flow = InMemoryFlowRepository::with_permissions(permissions);
+        let installation_id = Uuid::now_v7();
+        let provider_instance_id = Uuid::now_v7();
+        let workspace_id = Uuid::nil();
+        let install_path = write_test_provider_package();
+        let now = OffsetDateTime::now_utc();
+        let installation = domain::PluginInstallationRecord {
+            id: installation_id,
+            provider_code: "fixture_provider".to_string(),
+            plugin_id: "fixture_provider@0.1.0".to_string(),
+            plugin_version: "0.1.0".to_string(),
+            contract_version: "1flowse.provider/v1".to_string(),
+            protocol: "openai_compatible".to_string(),
+            display_name: "Fixture Provider".to_string(),
+            source_kind: "test".to_string(),
+            verification_status: domain::PluginVerificationStatus::Valid,
+            enabled: true,
+            install_path,
+            checksum: None,
+            signature_status: None,
+            metadata_json: json!({}),
+            created_by: Uuid::nil(),
+            created_at: now,
+            updated_at: now,
+        };
+        let assignment = domain::PluginAssignmentRecord {
+            id: Uuid::now_v7(),
+            installation_id,
+            workspace_id,
+            assigned_by: Uuid::nil(),
+            created_at: now,
+        };
+        let instance = domain::ModelProviderInstanceRecord {
+            id: provider_instance_id,
+            workspace_id,
+            installation_id,
+            provider_code: "fixture_provider".to_string(),
+            protocol: "openai_compatible".to_string(),
+            display_name: "Fixture".to_string(),
+            status: domain::ModelProviderInstanceStatus::Ready,
+            config_json: json!({
+                "base_url": "https://api.example.com",
+                "validate_model": true,
+            }),
+            last_validated_at: Some(now),
+            last_validation_status: Some(domain::ModelProviderValidationStatus::Succeeded),
+            last_validation_message: Some("validated".to_string()),
+            created_by: Uuid::nil(),
+            updated_by: Uuid::nil(),
+            created_at: now,
+            updated_at: now,
+        };
+        let cache = domain::ModelProviderCatalogCacheRecord {
+            provider_instance_id,
+            model_discovery_mode: domain::ModelProviderDiscoveryMode::Hybrid,
+            refresh_status: domain::ModelProviderCatalogRefreshStatus::Ready,
+            source: domain::ModelProviderCatalogSource::Hybrid,
+            models_json: json!([
+                {
+                    "model_id": "gpt-5.4-mini",
+                    "display_name": "GPT-5.4 Mini",
+                    "source": "dynamic",
+                    "supports_streaming": true,
+                    "supports_tool_call": true,
+                    "supports_multimodal": false,
+                    "context_window": 128000,
+                    "max_output_tokens": 4096,
+                    "provider_metadata": {}
+                }
+            ]),
+            last_error_message: None,
+            refreshed_at: Some(now),
+            updated_at: now,
+        };
+
         Self {
-            flow: InMemoryFlowRepository::with_permissions(permissions),
-            inner: Arc::new(Mutex::new(InMemoryOrchestrationRuntimeState::default())),
+            flow,
+            inner: Arc::new(Mutex::new(InMemoryOrchestrationRuntimeState {
+                installations_by_id: HashMap::from([(installation_id, installation)]),
+                assignments_by_workspace: HashMap::from([(workspace_id, vec![assignment])]),
+                instances_by_id: HashMap::from([(provider_instance_id, instance)]),
+                caches_by_instance_id: HashMap::from([(provider_instance_id, cache)]),
+                secret_json_by_instance_id: HashMap::from([(
+                    provider_instance_id,
+                    json!({ "api_key": "test-secret" }),
+                )]),
+                ..InMemoryOrchestrationRuntimeState::default()
+            })),
+            default_provider_instance_id: provider_instance_id,
         }
     }
 
@@ -746,6 +1225,10 @@ impl InMemoryOrchestrationRuntimeRepository {
         self.flow
             .seed_application_for_actor(actor_user_id, name)
             .await
+    }
+
+    fn default_provider_instance_id(&self) -> Uuid {
+        self.default_provider_instance_id
     }
 }
 
@@ -877,6 +1360,258 @@ impl FlowRepository for InMemoryOrchestrationRuntimeRepository {
             version_id,
         )
         .await
+    }
+}
+
+#[cfg(test)]
+#[async_trait]
+impl PluginRepository for InMemoryOrchestrationRuntimeRepository {
+    async fn upsert_installation(
+        &self,
+        _input: &crate::ports::UpsertPluginInstallationInput,
+    ) -> Result<domain::PluginInstallationRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn get_installation(
+        &self,
+        installation_id: Uuid,
+    ) -> Result<Option<domain::PluginInstallationRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner.installations_by_id.get(&installation_id).cloned())
+    }
+
+    async fn list_installations(&self) -> Result<Vec<domain::PluginInstallationRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner.installations_by_id.values().cloned().collect())
+    }
+
+    async fn update_installation_enabled(
+        &self,
+        _input: &crate::ports::UpdatePluginInstallationEnabledInput,
+    ) -> Result<domain::PluginInstallationRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn create_assignment(
+        &self,
+        _input: &crate::ports::CreatePluginAssignmentInput,
+    ) -> Result<domain::PluginAssignmentRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn list_assignments(
+        &self,
+        workspace_id: Uuid,
+    ) -> Result<Vec<domain::PluginAssignmentRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .assignments_by_workspace
+            .get(&workspace_id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    async fn create_task(
+        &self,
+        _input: &crate::ports::CreatePluginTaskInput,
+    ) -> Result<domain::PluginTaskRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn update_task_status(
+        &self,
+        _input: &crate::ports::UpdatePluginTaskStatusInput,
+    ) -> Result<domain::PluginTaskRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn get_task(&self, _task_id: Uuid) -> Result<Option<domain::PluginTaskRecord>> {
+        Ok(None)
+    }
+
+    async fn list_tasks(&self) -> Result<Vec<domain::PluginTaskRecord>> {
+        Ok(Vec::new())
+    }
+}
+
+#[cfg(test)]
+#[async_trait]
+impl ModelProviderRepository for InMemoryOrchestrationRuntimeRepository {
+    async fn create_instance(
+        &self,
+        _input: &crate::ports::CreateModelProviderInstanceInput,
+    ) -> Result<domain::ModelProviderInstanceRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn update_instance(
+        &self,
+        _input: &crate::ports::UpdateModelProviderInstanceInput,
+    ) -> Result<domain::ModelProviderInstanceRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn get_instance(
+        &self,
+        workspace_id: Uuid,
+        instance_id: Uuid,
+    ) -> Result<Option<domain::ModelProviderInstanceRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .instances_by_id
+            .get(&instance_id)
+            .filter(|record| record.workspace_id == workspace_id)
+            .cloned())
+    }
+
+    async fn list_instances(
+        &self,
+        workspace_id: Uuid,
+    ) -> Result<Vec<domain::ModelProviderInstanceRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .instances_by_id
+            .values()
+            .filter(|record| record.workspace_id == workspace_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn upsert_catalog_cache(
+        &self,
+        _input: &crate::ports::UpsertModelProviderCatalogCacheInput,
+    ) -> Result<domain::ModelProviderCatalogCacheRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn get_catalog_cache(
+        &self,
+        provider_instance_id: Uuid,
+    ) -> Result<Option<domain::ModelProviderCatalogCacheRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .caches_by_instance_id
+            .get(&provider_instance_id)
+            .cloned())
+    }
+
+    async fn upsert_secret(
+        &self,
+        _input: &crate::ports::UpsertModelProviderSecretInput,
+    ) -> Result<domain::ModelProviderSecretRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn get_secret_json(
+        &self,
+        provider_instance_id: Uuid,
+        _master_key: &str,
+    ) -> Result<Option<Value>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .secret_json_by_instance_id
+            .get(&provider_instance_id)
+            .cloned())
+    }
+
+    async fn get_secret_record(
+        &self,
+        provider_instance_id: Uuid,
+    ) -> Result<Option<domain::ModelProviderSecretRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .secret_json_by_instance_id
+            .get(&provider_instance_id)
+            .map(|secret| domain::ModelProviderSecretRecord {
+                provider_instance_id,
+                encrypted_secret_json: secret.clone(),
+                secret_version: 1,
+                updated_at: OffsetDateTime::now_utc(),
+            }))
+    }
+
+    async fn delete_instance(&self, _workspace_id: Uuid, _instance_id: Uuid) -> Result<()> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn count_instance_references(
+        &self,
+        _workspace_id: Uuid,
+        _instance_id: Uuid,
+    ) -> Result<u64> {
+        Ok(0)
+    }
+}
+
+#[cfg(test)]
+#[derive(Clone, Default)]
+pub(crate) struct InMemoryProviderRuntime;
+
+#[cfg(test)]
+#[async_trait]
+impl ProviderRuntimePort for InMemoryProviderRuntime {
+    async fn ensure_loaded(&self, _installation: &domain::PluginInstallationRecord) -> Result<()> {
+        Ok(())
+    }
+
+    async fn validate_provider(
+        &self,
+        _installation: &domain::PluginInstallationRecord,
+        _provider_config: Value,
+    ) -> Result<Value> {
+        Ok(json!({ "ok": true }))
+    }
+
+    async fn list_models(
+        &self,
+        _installation: &domain::PluginInstallationRecord,
+        _provider_config: Value,
+    ) -> Result<Vec<plugin_framework::provider_contract::ProviderModelDescriptor>> {
+        Ok(vec![])
+    }
+
+    async fn invoke_stream(
+        &self,
+        _installation: &domain::PluginInstallationRecord,
+        input: ProviderInvocationInput,
+    ) -> Result<crate::ports::ProviderRuntimeInvocationOutput> {
+        let prompt = input
+            .messages
+            .first()
+            .map(|message| message.content.clone())
+            .unwrap_or_default();
+        Ok(crate::ports::ProviderRuntimeInvocationOutput {
+            events: vec![
+                ProviderStreamEvent::TextDelta {
+                    delta: format!("echo:{}:{}", input.model, prompt),
+                },
+                ProviderStreamEvent::UsageSnapshot {
+                    usage: plugin_framework::provider_contract::ProviderUsage {
+                        input_tokens: Some(5),
+                        output_tokens: Some(7),
+                        total_tokens: Some(12),
+                        ..plugin_framework::provider_contract::ProviderUsage::default()
+                    },
+                },
+                ProviderStreamEvent::Finish {
+                    reason: plugin_framework::provider_contract::ProviderFinishReason::Stop,
+                },
+            ],
+            result: plugin_framework::provider_contract::ProviderInvocationResult {
+                final_content: Some(format!("echo:{}:{}", input.model, prompt)),
+                usage: plugin_framework::provider_contract::ProviderUsage {
+                    input_tokens: Some(5),
+                    output_tokens: Some(7),
+                    total_tokens: Some(12),
+                    ..plugin_framework::provider_contract::ProviderUsage::default()
+                },
+                finish_reason: Some(
+                    plugin_framework::provider_contract::ProviderFinishReason::Stop,
+                ),
+                ..plugin_framework::provider_contract::ProviderInvocationResult::default()
+            },
+        })
     }
 }
 
@@ -1268,6 +2003,92 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
 }
 
 #[cfg(test)]
+fn write_test_provider_package() -> String {
+    use std::fs;
+
+    let root = std::env::temp_dir().join(format!("1flowse-provider-fixture-{}", Uuid::now_v7()));
+    fs::create_dir_all(root.join("provider")).expect("create fixture provider dir");
+    fs::create_dir_all(root.join("models/llm")).expect("create fixture models dir");
+    fs::create_dir_all(root.join("i18n")).expect("create fixture i18n dir");
+    fs::write(
+        root.join("manifest.yaml"),
+        r#"plugin_code: fixture_provider
+display_name: Fixture Provider
+version: 0.1.0
+contract_version: 1flowse.provider/v1
+supported_model_types:
+  - llm
+runner:
+  language: nodejs
+  entrypoint: provider/fixture_provider.js
+"#,
+    )
+    .expect("write manifest");
+    fs::write(
+        root.join("provider/fixture_provider.yaml"),
+        r#"provider_code: fixture_provider
+display_name: Fixture Provider
+protocol: openai_compatible
+help_url: https://example.com/help
+default_base_url: https://api.example.com
+model_discovery: hybrid
+supports_model_fetch_without_credentials: true
+config_schema:
+  - key: base_url
+    type: string
+    required: true
+  - key: api_key
+    type: secret
+    required: true
+  - key: validate_model
+    type: boolean
+    required: false
+"#,
+    )
+    .expect("write provider yaml");
+    fs::write(
+        root.join("provider/fixture_provider.js"),
+        "'use strict'; module.exports = { async validateProviderCredentials() { return { ok: true }; }, async listModels() { return []; }, async invoke() { return { events: [], result: {} }; } };",
+    )
+    .expect("write runtime");
+    fs::write(
+        root.join("models/llm/_position.yaml"),
+        "items:\n  - fixture_chat\n",
+    )
+    .expect("write position");
+    fs::write(
+        root.join("models/llm/fixture_chat.yaml"),
+        r#"model: gpt-5.4-mini
+label: GPT-5.4 Mini
+family: llm
+capabilities:
+  - stream
+  - tool_call
+context_window: 128000
+max_output_tokens: 4096
+provider_metadata:
+  tier: default
+"#,
+    )
+    .expect("write model");
+    fs::write(
+        root.join("i18n/en_US.json"),
+        r#"{
+  "plugin": {
+    "label": "Fixture Provider",
+    "description": "Fixture provider"
+  },
+  "provider": {
+    "label": "Fixture Provider"
+  }
+}"#,
+    )
+    .expect("write i18n");
+
+    root.to_string_lossy().to_string()
+}
+
+#[cfg(test)]
 pub struct SeededPreviewApplication {
     pub actor_user_id: Uuid,
     pub application_id: Uuid,
@@ -1289,11 +2110,16 @@ pub struct SeededWaitingCallbackRun {
 }
 
 #[cfg(test)]
-impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository> {
+impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemoryProviderRuntime> {
     pub fn for_tests() -> Self {
-        Self::new(InMemoryOrchestrationRuntimeRepository::with_permissions(
-            vec!["application.view.all", "application.create.all"],
-        ))
+        Self::new(
+            InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
+                "application.view.all",
+                "application.create.all",
+            ]),
+            InMemoryProviderRuntime,
+            "test-master-key",
+        )
     }
 
     pub async fn seed_application_with_flow(&self, name: &str) -> SeededPreviewApplication {
@@ -1311,6 +2137,28 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository> {
         )
         .await
         .expect("seed flow should succeed");
+        let editor_state = FlowRepository::get_or_create_editor_state(
+            &self.repository,
+            Uuid::nil(),
+            application.id,
+            actor_user_id,
+        )
+        .await
+        .expect("seed flow should succeed");
+        let _ = FlowRepository::save_draft(
+            &self.repository,
+            Uuid::nil(),
+            application.id,
+            actor_user_id,
+            build_ready_provider_flow_document(
+                editor_state.flow.id,
+                self.repository.default_provider_instance_id(),
+            ),
+            domain::FlowChangeKind::Logical,
+            "seed runtime preview flow",
+        )
+        .await
+        .expect("seed preview flow should succeed");
 
         SeededPreviewApplication {
             actor_user_id,
@@ -1372,7 +2220,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository> {
     async fn seed_application_with_document(
         &self,
         name: &str,
-        builder: fn(Uuid) -> Value,
+        builder: fn(Uuid, Uuid) -> Value,
     ) -> SeededPreviewApplication {
         let seeded = self.seed_application_with_flow(name).await;
         let editor_state = FlowRepository::get_or_create_editor_state(
@@ -1388,7 +2236,10 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository> {
             Uuid::nil(),
             seeded.application_id,
             seeded.actor_user_id,
-            builder(editor_state.flow.id),
+            builder(
+                editor_state.flow.id,
+                self.repository.default_provider_instance_id(),
+            ),
             domain::FlowChangeKind::Logical,
             "seed runtime resume flow",
         )
@@ -1400,7 +2251,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository> {
 }
 
 #[cfg(test)]
-fn build_human_input_flow_document(flow_id: Uuid) -> Value {
+fn build_ready_provider_flow_document(flow_id: Uuid, provider_instance_id: Uuid) -> Value {
     json!({
         "schemaVersion": "1flowse.flow/v1",
         "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
@@ -1426,7 +2277,72 @@ fn build_human_input_flow_document(flow_id: Uuid) -> Value {
                     "containerId": null,
                     "position": { "x": 240, "y": 0 },
                     "configVersion": 1,
-                    "config": { "model": "gpt-5.4-mini", "temperature": 0.2 },
+                    "config": {
+                        "provider_instance_id": provider_instance_id.to_string(),
+                        "model": "gpt-5.4-mini",
+                        "temperature": 0.2
+                    },
+                    "bindings": {
+                        "user_prompt": { "kind": "selector", "value": ["node-start", "query"] }
+                    },
+                    "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
+                },
+                {
+                    "id": "node-answer",
+                    "type": "answer",
+                    "alias": "Answer",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 480, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {
+                        "answer_template": { "kind": "selector", "value": ["node-llm", "text"] }
+                    },
+                    "outputs": [{ "key": "answer", "title": "对话输出", "valueType": "string" }]
+                }
+            ],
+            "edges": [
+                { "id": "edge-start-llm", "source": "node-start", "target": "node-llm", "sourceHandle": null, "targetHandle": null, "containerId": null, "points": [] },
+                { "id": "edge-llm-answer", "source": "node-llm", "target": "node-answer", "sourceHandle": null, "targetHandle": null, "containerId": null, "points": [] }
+            ]
+        },
+        "editor": { "viewport": { "x": 0, "y": 0, "zoom": 1 }, "annotations": [], "activeContainerPath": [] }
+    })
+}
+
+#[cfg(test)]
+fn build_human_input_flow_document(flow_id: Uuid, provider_instance_id: Uuid) -> Value {
+    json!({
+        "schemaVersion": "1flowse.flow/v1",
+        "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
+        "graph": {
+            "nodes": [
+                {
+                    "id": "node-start",
+                    "type": "start",
+                    "alias": "Start",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 0, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {},
+                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                },
+                {
+                    "id": "node-llm",
+                    "type": "llm",
+                    "alias": "LLM",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 240, "y": 0 },
+                    "configVersion": 1,
+                    "config": {
+                        "provider_instance_id": provider_instance_id.to_string(),
+                        "model": "gpt-5.4-mini",
+                        "temperature": 0.2
+                    },
                     "bindings": {
                         "user_prompt": { "kind": "selector", "value": ["node-start", "query"] }
                     },
@@ -1472,7 +2388,7 @@ fn build_human_input_flow_document(flow_id: Uuid) -> Value {
 }
 
 #[cfg(test)]
-fn build_callback_flow_document(flow_id: Uuid) -> Value {
+fn build_callback_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> Value {
     json!({
         "schemaVersion": "1flowse.flow/v1",
         "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },

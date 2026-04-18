@@ -12,4 +12,6 @@ pub enum ControlPlaneError {
     Conflict(&'static str),
     #[error("invalid input: {0}")]
     InvalidInput(&'static str),
+    #[error("upstream unavailable: {0}")]
+    UpstreamUnavailable(&'static str),
 }

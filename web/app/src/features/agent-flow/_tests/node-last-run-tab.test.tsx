@@ -69,7 +69,11 @@ describe('NodeLastRunTab', () => {
         },
         error_payload: null,
         metrics_payload: {
-          output_contract_count: 1
+          output_contract_count: 1,
+          provider_instance_id: 'provider-openai-prod',
+          provider_code: 'openai_compatible',
+          protocol: 'openai_responses',
+          finish_reason: 'stop'
         },
         started_at: '2026-04-17T09:00:00Z',
         finished_at: '2026-04-17T09:00:01Z'
@@ -88,5 +92,20 @@ describe('NodeLastRunTab', () => {
     expect(screen.getByText('debug_node_preview')).toBeInTheDocument();
     expect(screen.getByText('user_prompt')).toBeInTheDocument();
     expect(screen.getByText('总结退款政策')).toBeInTheDocument();
+    expect(screen.getByText('provider-openai-prod')).toBeInTheDocument();
+    expect(screen.getByText('openai_compatible')).toBeInTheDocument();
+    expect(screen.getByText('stop')).toBeInTheDocument();
+  });
+
+  test('renders warning state when runtime payload is malformed', async () => {
+    runtimeApi.fetchNodeLastRun.mockResolvedValueOnce({ node_run: null } as never);
+
+    render(
+      <AppProviders>
+        <NodeLastRunTab applicationId="app-1" nodeId="node-llm" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByText('上次运行数据异常')).toBeInTheDocument();
   });
 });

@@ -53,10 +53,23 @@ const docsApi = vi.hoisted(() => ({
   fetchSettingsApiDocsOperationSpec: vi.fn()
 }));
 
+const modelProvidersApi = vi.hoisted(() => ({
+  settingsModelProviderCatalogQueryKey: ['settings', 'model-providers', 'catalog'],
+  settingsModelProviderInstancesQueryKey: ['settings', 'model-providers', 'instances'],
+  fetchSettingsModelProviderCatalog: vi.fn(),
+  fetchSettingsModelProviderInstances: vi.fn(),
+  createSettingsModelProviderInstance: vi.fn(),
+  updateSettingsModelProviderInstance: vi.fn(),
+  validateSettingsModelProviderInstance: vi.fn(),
+  refreshSettingsModelProviderModels: vi.fn(),
+  deleteSettingsModelProviderInstance: vi.fn()
+}));
+
 vi.mock('../api/members', () => membersApi);
 vi.mock('../api/roles', () => rolesApi);
 vi.mock('../api/permissions', () => permissionsApi);
 vi.mock('../api/api-docs', () => docsApi);
+vi.mock('../api/model-providers', () => modelProvidersApi);
 vi.mock('@scalar/api-reference-react', () => ({
   ApiReferenceReact: () => <div data-testid="settings-page-scalar">Scalar</div>
 }));
@@ -144,6 +157,8 @@ describe('SettingsPage', () => {
       paths: {},
       components: {}
     });
+    modelProvidersApi.fetchSettingsModelProviderCatalog.mockResolvedValue([]);
+    modelProvidersApi.fetchSettingsModelProviderInstances.mockResolvedValue([]);
   });
 
   test('shows API 文档 only for root or api_reference.view.all', async () => {
@@ -253,6 +268,17 @@ describe('SettingsPage', () => {
     });
     expect(await screen.findByRole('heading', { name: '设置', level: 4 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '用户管理', level: 4 })).toBeInTheDocument();
+  });
+
+  test('shows 模型供应商 when state_model.view.all is the only visible settings section', async () => {
+    authenticateWithPermissions(['route_page.view.all', 'state_model.view.all']);
+
+    renderApp('/settings');
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/settings/model-providers');
+    });
+    expect(await screen.findByRole('heading', { name: '模型供应商', level: 4 })).toBeInTheDocument();
   });
 
   test('renders the empty settings state when no section is visible', async () => {

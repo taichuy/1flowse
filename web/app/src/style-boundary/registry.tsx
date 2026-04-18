@@ -15,6 +15,90 @@ import type {
   StyleBoundaryRuntimeScene
 } from './types';
 
+const styleBoundaryProviderModels = [
+  {
+    model_id: 'gpt-4o-mini',
+    display_name: 'GPT-4o Mini',
+    source: 'runtime_catalog',
+    supports_streaming: true,
+    supports_tool_call: true,
+    supports_multimodal: false,
+    context_window: 128000,
+    max_output_tokens: 16384,
+    provider_metadata: {}
+  },
+  {
+    model_id: 'gpt-4.1-mini',
+    display_name: 'GPT-4.1 Mini',
+    source: 'runtime_catalog',
+    supports_streaming: true,
+    supports_tool_call: true,
+    supports_multimodal: false,
+    context_window: 1048576,
+    max_output_tokens: 32768,
+    provider_metadata: {}
+  }
+];
+
+const styleBoundaryProviderCatalog = [
+  {
+    installation_id: 'installation-openai-compatible',
+    provider_code: 'openai_compatible',
+    plugin_id: 'openai_compatible@0.1.0',
+    plugin_version: '0.1.0',
+    display_name: 'OpenAI Compatible',
+    protocol: 'openai_responses',
+    help_url: 'https://platform.openai.com/docs/api-reference/responses',
+    default_base_url: 'https://api.openai.com/v1',
+    model_discovery_mode: 'dynamic',
+    supports_model_fetch_without_credentials: false,
+    enabled: true,
+    form_schema: [
+      { key: 'base_url', field_type: 'string', required: true },
+      { key: 'api_key', field_type: 'secret', required: true },
+      { key: 'organization', field_type: 'string', required: false },
+      { key: 'default_headers', field_type: 'json', required: false },
+      { key: 'validate_model', field_type: 'boolean', required: false }
+    ],
+    predefined_models: styleBoundaryProviderModels
+  }
+];
+
+const styleBoundaryProviderInstances = [
+  {
+    id: 'provider-openai-prod',
+    installation_id: 'installation-openai-compatible',
+    provider_code: 'openai_compatible',
+    protocol: 'openai_responses',
+    display_name: 'OpenAI Production',
+    status: 'ready',
+    config_json: {
+      base_url: 'https://api.openai.com/v1',
+      organization: 'workspace-prod',
+      validate_model: true
+    },
+    last_validated_at: '2026-04-18T16:00:00Z',
+    last_validation_status: 'succeeded',
+    last_validation_message: '连接成功，模型目录已同步',
+    catalog_refresh_status: 'succeeded',
+    catalog_last_error_message: null,
+    catalog_refreshed_at: '2026-04-18T16:01:00Z',
+    model_count: styleBoundaryProviderModels.length
+  }
+];
+
+const styleBoundaryProviderOptions = {
+  instances: [
+    {
+      provider_instance_id: 'provider-openai-prod',
+      provider_code: 'openai_compatible',
+      protocol: 'openai_responses',
+      display_name: 'OpenAI Production',
+      models: styleBoundaryProviderModels
+    }
+  ]
+};
+
 function getAccountPopupChildren() {
   const items = createAccountMenuItems() ?? [];
   const firstItem = items[0];
@@ -53,9 +137,12 @@ function seedStyleBoundaryAuth() {
       permissions: [
         'route_page.view.all',
         'application.view.all',
+        'application.edit.own',
         'application.create.all',
         'embedded_app.view.all',
-        'api_reference.view.all'
+        'api_reference.view.all',
+        'state_model.view.all',
+        'state_model.manage.all'
       ]
     }
   });
@@ -63,7 +150,23 @@ function seedStyleBoundaryAuth() {
 
 let styleBoundaryOriginalFetch: typeof globalThis.fetch | null = null;
 
-function seedStyleBoundaryDocsFetch() {
+function createStyleBoundaryAgentFlowDocument() {
+  const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+  const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+
+  if (llmNode) {
+    llmNode.config = {
+      ...llmNode.config,
+      provider_instance_id: 'provider-openai-prod',
+      model: 'gpt-4o-mini',
+      temperature: 0.7
+    };
+  }
+
+  return document;
+}
+
+function seedStyleBoundarySettingsFetch() {
   if (typeof globalThis.fetch !== 'function') {
     return;
   }
@@ -78,6 +181,8 @@ function seedStyleBoundaryDocsFetch() {
         : input instanceof Request
           ? input.url
           : String(input);
+    const method =
+      init?.method ?? (input instanceof Request ? input.method : 'GET');
 
     if (url.includes('/api/console/docs/catalog')) {
       return new Response(
@@ -164,6 +269,54 @@ function seedStyleBoundaryDocsFetch() {
       );
     }
 
+    if (
+      method.toUpperCase() === 'GET' &&
+      url.endsWith('/api/console/model-providers/options')
+    ) {
+      return new Response(
+        JSON.stringify({
+          data: styleBoundaryProviderOptions,
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
+    if (
+      method.toUpperCase() === 'GET' &&
+      url.endsWith('/api/console/model-providers/catalog')
+    ) {
+      return new Response(
+        JSON.stringify({
+          data: styleBoundaryProviderCatalog,
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
+    if (
+      method.toUpperCase() === 'GET' &&
+      url.endsWith('/api/console/model-providers')
+    ) {
+      return new Response(
+        JSON.stringify({
+          data: styleBoundaryProviderInstances,
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
     return originalFetch(input as RequestInfo, init);
   };
 }
@@ -188,7 +341,7 @@ function seedStyleBoundaryApplicationFetch() {
 
   styleBoundaryOriginalFetch ??= globalThis.fetch.bind(globalThis);
   const originalFetch = styleBoundaryOriginalFetch;
-  let currentDraftDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+  let currentDraftDocument = createStyleBoundaryAgentFlowDocument();
 
   globalThis.fetch = async (input, init) => {
     const url =
@@ -199,6 +352,39 @@ function seedStyleBoundaryApplicationFetch() {
           : String(input);
     const method =
       init?.method ?? (input instanceof Request ? input.method : 'GET');
+
+    if (
+      method.toUpperCase() === 'GET' &&
+      url.endsWith('/api/console/model-providers/options')
+    ) {
+      return new Response(
+        JSON.stringify({
+          data: styleBoundaryProviderOptions,
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
+    if (
+      method.toUpperCase() === 'GET' &&
+      url.includes('/api/console/applications/app-1/orchestration/nodes/') &&
+      url.endsWith('/last-run')
+    ) {
+      return new Response(
+        JSON.stringify({
+          data: null,
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
 
     if (
       method.toUpperCase() === 'PUT' &&
@@ -392,8 +578,8 @@ const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
   'page.embedded-apps': () => renderShellScene('/embedded-apps', <EmbeddedAppsPage />),
   'page.tools': () => renderShellScene('/tools', <ToolsPage />),
   'page.settings': () => {
-    seedStyleBoundaryDocsFetch();
-    return renderRouterScene('/settings/docs?category=console&operation=list_members');
+    seedStyleBoundarySettingsFetch();
+    return renderRouterScene('/settings/model-providers');
   },
   'page.me': () => renderRouterScene('/me/profile'),
   'page.sign-in': () => <SignInPage />

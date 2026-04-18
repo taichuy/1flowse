@@ -192,10 +192,14 @@
 - Create: `api/apps/api-server/src/_tests/plugin_routes.rs`
 - Create: `api/apps/api-server/src/_tests/model_provider_routes.rs`
 
-- [ ] 落 `plugins catalog / install / enable / assign / tasks` 和 `model providers catalog / list / create / update / validate / models / refresh / delete / options` 两组控制面 service。
-- [ ] 校验 `view` 与 `manage` 权限边界，保证 secret 永不出现在普通列表响应里，`validate` 和删除冲突都写审计。
-- [ ] 让 `GET /api/console/model-providers/options` 返回 `LLM` 节点直接消费的 `ready provider instances + models` 结构，避免前端自行拼装多接口。
-- [ ] 验证：`cd api && cargo test -p control-plane model_provider_service_tests`，`cd api && cargo test -p control-plane plugin_management_service_tests`，`cd api && cargo test -p api-server plugin_routes`，`cd api && cargo test -p api-server model_provider_routes`
+- [x] 落 `plugins catalog / install / enable / assign / tasks` 和 `model providers catalog / list / create / update / validate / models / refresh / delete / options` 两组控制面 service。
+- [x] 校验 `view` 与 `manage` 权限边界，保证 secret 永不出现在普通列表响应里，`validate` 和删除冲突都写审计。
+- [x] 让 `GET /api/console/model-providers/options` 返回 `LLM` 节点直接消费的 `ready provider instances + models` 结构，避免前端自行拼装多接口。
+- [x] 验证：`cd api && cargo test -p control-plane`，`cd api && cargo test -p api-server`
+
+执行备注（`2026-04-18 15:16`）：
+- `control-plane` 已新增 `PluginManagementService`、`ModelProviderService` 及对应 service tests。
+- `api-server` 已新增 `plugins`、`model-providers` routes、OpenAPI 暴露与 route tests，并接入内嵌 `ProviderHost` runtime adapter。
 
 ## Task 5: Wire Compile-Time Validation And Runtime Consumption
 
@@ -207,10 +211,14 @@
 - Modify: `api/crates/control-plane/src/orchestration_runtime.rs`
 - Modify: `api/crates/domain/src/flow.rs`
 
-- [ ] 让 `compiled plan` 冻结 `provider_instance_id / provider_code / protocol / model` 最小运行元信息，并在编译阶段产出缺失实例、实例失效、模型不可用等 compile issue。
-- [ ] 让调试执行和真实运行都走 `plugin-runner` 的标准 contract，统一消费 `text_delta / tool_call_commit / mcp_call_commit / usage / finish / error`。
-- [ ] 在 `node_run` 诊断里保留 provider 维度的错误类别和原始摘要，但严格脱敏，不回显完整 secret 或认证头。
-- [ ] 验证：`cd api && cargo test -p orchestration-runtime`，`cd api && cargo test -p control-plane orchestration_runtime`
+- [x] 让 `compiled plan` 冻结 `provider_instance_id / provider_code / protocol / model` 最小运行元信息，并在编译阶段产出缺失实例、实例失效、模型不可用等 compile issue。
+- [x] 让调试执行和真实运行都走 `plugin-runner` 的标准 contract，统一消费 `text_delta / tool_call_commit / mcp_call_commit / usage / finish / error`。
+- [x] 在 `node_run` 诊断里保留 provider 维度的错误类别和原始摘要，但严格脱敏，不回显完整 secret 或认证头。
+- [x] 验证：`cd api && cargo test -p orchestration-runtime`，`cd api && cargo test -p control-plane orchestration_runtime`
+
+执行备注（`2026-04-18 16:43`）：
+- `orchestration-runtime` 已新增 provider-aware `CompiledPlan` / `compile_issues`、异步 provider invoker、`llm` 节点真实 runtime 调用、provider 事件与脱敏错误诊断。
+- `control-plane` / `api-server` 已接入 workspace provider compile context、运行时实例/secret 装配、provider stream event 落库，以及 application runtime route/tests 的真实 provider fixture。
 
 ## Task 6: Initialize The Official `openai_compatible` Reference Plugin
 
@@ -229,10 +237,14 @@
 - Create: `../1flowse-official-plugins/models/openai_compatible/demo/app.js`
 - Create: `../1flowse-official-plugins/models/openai_compatible/scripts/demo.runner.example.json`
 
-- [ ] 用现有 `node scripts/node/plugin.js init` 和 `demo init` 生成参考插件骨架，再补齐 `manifest / provider schema / model yaml / i18n / readme`。
-- [ ] 参考插件只覆盖 `base_url + api_key (+ organization/project/api_version/default_headers)` 和 `OpenAI-compatible` 协议，不在首轮引入第二个官方 provider。
-- [ ] 让参考插件能被 Task 2 的 runner host 和 Task 4 的控制面安装链路直接消费，作为端到端验证 fixture。
-- [ ] 验证：`node scripts/node/plugin.js demo init ../1flowse-official-plugins/models/openai_compatible`，`node scripts/node/plugin.js demo dev ../1flowse-official-plugins/models/openai_compatible --port 4310`
+- [x] 用现有 `node scripts/node/plugin.js init` 和 `demo init` 生成参考插件骨架，再补齐 `manifest / provider schema / model yaml / i18n / readme`。
+- [x] 参考插件只覆盖 `base_url + api_key (+ organization/project/api_version/default_headers)` 和 `OpenAI-compatible` 协议，不在首轮引入第二个官方 provider。
+- [x] 让参考插件能被 Task 2 的 runner host 和 Task 4 的控制面安装链路直接消费，作为端到端验证 fixture。
+- [x] 验证：`node scripts/node/plugin.js demo init ../1flowse-official-plugins/models/openai_compatible`，`node scripts/node/plugin.js demo dev ../1flowse-official-plugins/models/openai_compatible --port 4310`
+
+执行备注（`2026-04-18 17:11`）：
+- `../1flowse-official-plugins/models/openai_compatible` 已补齐 `manifest / provider schema / provider runtime / static model yaml / i18n / readme / demo / runner example`，协议收敛为 `OpenAI-compatible`，首轮仅覆盖 `base_url + api_key (+ organization/project/api_version/default_headers)`。
+- `node scripts/node/plugin.js demo init ../1flowse-official-plugins/models/openai_compatible` 已成功重建 demo 骨架，`node scripts/node/plugin.js demo dev ../1flowse-official-plugins/models/openai_compatible --port 4310` 已验证本地 demo 可直接启动并指向 `plugin-runner`。
 
 ## Task 7: Build `Settings / 模型供应商` Page And Client Contract
 
@@ -252,10 +264,15 @@
 - Modify: `web/app/src/features/settings/_tests/settings-page.test.tsx`
 - Modify: `web/app/src/routes/_tests/section-shell-routing.test.tsx`
 
-- [ ] 在 `Settings` 下新增 `model-providers` section，把 catalog 和 instance list 放在同一页面骨架里，不做卡片墙式堆叠。
-- [ ] 表单按 provider schema 驱动，支持保存、验证、查看模型列表和刷新模型缓存，并复用现有 `SectionPageLayout` / `settings` 路由模式。
-- [ ] 前端只消费 `api-client` 合同，不在组件内直接写请求函数；`view` 用户只能看到 metadata 与状态，`manage` 用户才能执行保存、验证、删除。
-- [ ] 验证：`pnpm --dir web/app test -- src/features/settings/_tests/model-providers-page.test.tsx src/features/settings/_tests/settings-page.test.tsx src/routes/_tests/section-shell-routing.test.tsx`
+- [x] 在 `Settings` 下新增 `model-providers` section，把 catalog 和 instance list 放在同一页面骨架里，不做卡片墙式堆叠。
+- [x] 表单按 provider schema 驱动，支持保存、验证、查看模型列表和刷新模型缓存，并复用现有 `SectionPageLayout` / `settings` 路由模式。
+- [x] 前端只消费 `api-client` 合同，不在组件内直接写请求函数；`view` 用户只能看到 metadata 与状态，`manage` 用户才能执行保存、验证、删除。
+- [x] 验证：`pnpm --dir web/app test -- src/features/settings/_tests/model-providers-page.test.tsx src/features/settings/_tests/settings-page.test.tsx src/routes/_tests/section-shell-routing.test.tsx`
+
+执行备注（`2026-04-18 17:11`）：
+- `SettingsPage` 已接入 `model-providers` section，页面骨架固定为左侧 provider catalog + 右侧 instance table，并通过 schema-driven drawer 承载新建/编辑表单，不回退到卡片墙布局。
+- `web/packages/api-client/src/console-model-providers.ts`、`web/packages/api-client/src/console-plugins.ts` 和 `web/app/src/features/settings/api/model-providers.ts` 已把 provider/plugin 控制面 transport、query key 和 mutation 统一收敛到前端合同层。
+- 计划里的 `pnpm --dir web/app test -- ...` 命令已执行并通过；由于 `web/app` 的 `test` script 会落到整包 `vitest --run`，该命令实际跑了完整 `web/app` 测试集，但目标文件 `model-providers-page`、`settings-page`、`section-shell-routing` 均在结果中通过。
 
 ## Task 8: Upgrade `LlmModelField` To Provider-Aware Selection
 
@@ -271,10 +288,15 @@
 - Modify: `web/app/src/features/agent-flow/_tests/node-inspector.test.tsx`
 - Create: `web/app/src/features/agent-flow/_tests/llm-model-provider-field.test.tsx`
 
-- [ ] 把当前硬编码 `openai` 模型列表替换成后端 `options` 合同，选择器固定为“先选 provider instance，再选 model”的两段式。
-- [ ] 节点 document 需要显式持有 `provider_instance_id` 与 `model`，并在 inspector、node card、校验错误态和最后运行诊断里统一展示。
-- [ ] “模型供应商设置”按钮直接跳到 `/settings/model-providers`；当当前节点引用的实例失效或不再 `ready` 时，面板显示正式错误态而不是静默回退。
-- [ ] 验证：`pnpm --dir web/app test -- src/features/agent-flow/_tests/llm-model-provider-field.test.tsx src/features/agent-flow/_tests/node-detail-panel.test.tsx src/features/agent-flow/_tests/node-inspector.test.tsx`
+- [x] 把当前硬编码 `openai` 模型列表替换成后端 `options` 合同，选择器固定为“先选 provider instance，再选 model”的两段式。
+- [x] 节点 document 需要显式持有 `provider_instance_id` 与 `model`，并在 inspector、node card、校验错误态和最后运行诊断里统一展示。
+- [x] “模型供应商设置”按钮直接跳到 `/settings/model-providers`；当当前节点引用的实例失效或不再 `ready` 时，面板显示正式错误态而不是静默回退。
+- [x] 验证：`pnpm --dir web/app test -- src/features/agent-flow/_tests/llm-model-provider-field.test.tsx src/features/agent-flow/_tests/node-detail-panel.test.tsx src/features/agent-flow/_tests/node-inspector.test.tsx`
+
+执行备注（`2026-04-18 17:11`）：
+- `LlmModelField` 已改为通过 `GET /api/console/model-providers/options` 消费 `ready provider instances + models`，交互固定为“先选 provider instance，再选 model”的两段式弹层。
+- `flow-schema` 默认文档、LLM 节点 schema、前端校验、只读 renderer、最后运行元数据和节点运行诊断都已透出 `provider_instance_id + model + provider metadata`，不再静默回退到硬编码 `openai`。
+- 计划里的 `pnpm --dir web/app test -- ...` 命令已执行并通过；与 Task 7 一样，该命令实际跑了完整 `web/app` 测试集，但目标文件 `llm-model-provider-field`、`node-detail-panel`、`node-inspector` 均在结果中通过。
 
 ## Task 9: Sync Frontend File Index And Run Full Verification
 
@@ -283,10 +305,16 @@
 - Modify: `web/app/src/style-boundary/registry.tsx`
 - Modify: `web/app/src/style-boundary/scenario-manifest.json`
 
-- [ ] 按实际落地结果回填本文“Frontend File Index”，逐条写清文件责任和本轮改动，不允许只保留计划态目录猜测。
-- [ ] 把 `page.settings` 和 `page.application-detail` 的 `style-boundary` 场景更新到新页面结构和新 provider-aware 节点 UI。
-- [ ] 跑完整后端、前端和文本校验，确认 `openai_compatible` 参考插件能完成安装、分配、建实例、validate、list models、节点绑定和 debug run 最小链路。
-- [ ] 验证：`node scripts/node/verify-backend.js`，`pnpm --dir web lint`，`pnpm --dir web test`，`pnpm --dir web/app build`，`node scripts/node/check-style-boundary.js page page.settings`，`node scripts/node/check-style-boundary.js page page.application-detail`，`git diff --check`
+- [x] 按实际落地结果回填本文“Frontend File Index”，逐条写清文件责任和本轮改动，不允许只保留计划态目录猜测。
+- [x] 把 `page.settings` 和 `page.application-detail` 的 `style-boundary` 场景更新到新页面结构和新 provider-aware 节点 UI。
+- [x] 跑完整后端、前端和文本校验，确认 `openai_compatible` 参考插件能完成安装、分配、建实例、validate、list models、节点绑定和 debug run 最小链路。
+- [x] 验证：`node scripts/node/verify-backend.js`，`pnpm --dir web lint`，`pnpm --dir web test`，`pnpm --dir web/app build`，`node scripts/node/check-style-boundary.js page page.settings`，`node scripts/node/check-style-boundary.js page page.application-detail`，`git diff --check`
+
+执行备注（`2026-04-18 17:11`）：
+- `Frontend File Index` 已按真实落地结果回填到文件级 owner 与本轮改动，不再停留在计划态占位说明。
+- `node scripts/node/verify-backend.js`、`pnpm --dir web test`、`pnpm --dir web/app build`、`node scripts/node/check-style-boundary.js page page.settings`、`node scripts/node/check-style-boundary.js page page.application-detail`、`git diff --check` 均已通过。
+- `pnpm --dir web lint` 已以退出码 `0` 通过；当前保留 2 条已有 `react-refresh/only-export-components` warning（`NodeInspector.tsx`、`store/editor/provider.tsx`），未阻塞本轮交付。
+- `pnpm --dir web test` 通过时保留了若干现有测试 warning（主要是 `antd Tooltip overlayInnerStyle` deprecation 与一个 `act(...)` 提示），但 49 个测试文件 / 165 个测试全部通过，不影响本轮 provider integration 闭环验证。
 
 ## Frontend File Index
 
@@ -294,16 +322,22 @@
 
 | Path | Responsibility | 本轮改动 |
 | --- | --- | --- |
-| `web/app/src/features/settings/pages/SettingsPage.tsx` | `Settings` 容器页与 section 分发 | 接入 `model-providers` section，并保留现有 docs / members / roles 分发边界 |
-| `web/app/src/features/settings/lib/settings-sections.tsx` | settings rail 导航真值 | 新增 `model-providers` 导航项与权限可见性 |
-| `web/app/src/features/settings/components/model-providers/*` | provider catalog、instance list、schema-driven drawer UI | 新建目录，集中承载模型供应商页面私有组件 |
-| `web/app/src/features/settings/api/model-providers.ts` | settings feature 内的 provider 请求消费层 | 新建查询键、queryFn、mutation 封装 |
-| `web/packages/api-client/src/console-model-providers.ts` | 控制面 provider DTO 与底层 transport 契约 | 新建，禁止在页面组件里直写请求 |
-| `web/app/src/features/agent-flow/components/detail/fields/LlmModelField.tsx` | LLM 节点实例与模型两段式选择器 | 从静态模型选择升级为 provider-aware 交互 |
-| `web/app/src/features/agent-flow/lib/model-options.ts` | 节点 UI 使用的模型 option 适配层 | 从硬编码 `openai` 列表改成后端 options 适配层 |
-| `web/app/src/features/agent-flow/schema/agent-flow-view-renderers.tsx` | node card 与 detail 只读展示 | 展示 provider instance + model + 失效态 |
-| `web/app/src/features/agent-flow/lib/node-definitions/nodes/llm.ts` | LLM 节点 schema 配置入口 | 对齐新的 provider-aware 字段要求 |
-| `web/app/src/features/agent-flow/lib/validate-document.ts` | agentFlow 文档前端校验 | 把缺少 provider instance、实例失效、模型缺失转成正式 issue |
-| `web/packages/flow-schema/src/index.ts` | 默认 flow document 与共享 schema | 默认 LLM 配置补齐 provider-aware 字段形状 |
-| `web/app/src/style-boundary/registry.tsx` | settings / application-detail 场景渲染入口 | 更新 scene seed，使新页面和节点 UI 可回归 |
-| `web/app/src/style-boundary/scenario-manifest.json` | 受影响页面的 style-boundary 映射真值 | 追加 provider 页面与节点 UI 的 impact files |
+| `web/packages/api-client/src/console-plugins.ts` | 控制面 plugin 安装、分配、任务 transport 契约 | 新建 `catalog / install / enable / assign / tasks` client，供模型供应商设置链路消费宿主插件状态 |
+| `web/packages/api-client/src/console-model-providers.ts` | 控制面 provider catalog、instance、models、options 底层 transport 契约 | 新建 DTO、query 和 mutation 合同，覆盖 catalog、instances、validate、models、refresh、delete、options |
+| `web/app/src/features/settings/api/model-providers.ts` | settings feature 内的 provider query/mutation 消费层 | 新建 query key、queryFn 和 mutation wrapper，并把 instance 改动后的 options 缓存失效同步给 agentFlow |
+| `web/app/src/features/settings/pages/SettingsPage.tsx` | `Settings` 容器页与 section 分发 | 新增 `model-providers` section 容器，组合 catalog panel、instances table、schema-driven drawer 和行级管理 mutation |
+| `web/app/src/features/settings/lib/settings-sections.tsx` | settings rail 导航真值 | 新增 `model-providers` section，并按 `state_model.*` 权限控制可见性与默认跳转 |
+| `web/app/src/features/settings/components/model-providers/ModelProviderCatalogPanel.tsx` | provider catalog 展示区 | 新建 provider 元数据、协议、模型发现模式和“从安装项创建实例”入口 |
+| `web/app/src/features/settings/components/model-providers/ModelProviderInstancesTable.tsx` | provider instance 列表与行级操作 | 新建实例状态、模型数量和 `edit / validate / refresh / delete` 行级动作，区分 view-only 与 manage 用户 |
+| `web/app/src/features/settings/components/model-providers/ModelProviderInstanceDrawer.tsx` | provider schema-driven create/edit drawer | 新建按 schema 渲染字段、提交 config/secret、复用 create/edit 模式的表单抽屉 |
+| `web/app/src/features/settings/components/model-providers/model-provider-panel.css` | provider 页面私有样式 | 新建 settings 页面两栏布局、表格、抽屉和正式状态块样式，不回退到卡片墙 |
+| `web/app/src/features/agent-flow/api/model-provider-options.ts` | agentFlow 读取 provider options 的请求消费层 | 新建应用侧 `options` query，对接控制面 `ready provider instances + models` 合同 |
+| `web/packages/flow-schema/src/index.ts` | 默认 flow document 与共享 schema | 默认 LLM 节点 `config` 补齐 `provider_instance_id + model` 真值，避免初始文档与新 contract 脱节 |
+| `web/app/src/features/agent-flow/components/detail/fields/LlmModelField.tsx` | LLM 节点实例与模型两段式选择器 | 从静态模型列表升级为 provider instance -> model 两段式弹层，保留参数调优并补正式错误态与设置跳转 |
+| `web/app/src/features/agent-flow/lib/model-options.ts` | options 到 selector UI 的适配层 | 从硬编码 `openai` 列表改成 provider instance/model mapper、tag 适配和 lookup helper |
+| `web/app/src/features/agent-flow/lib/node-definitions/nodes/llm.ts` | LLM 节点 schema 配置入口 | 把 `config.provider_instance_id` 纳入 schema 要求，并调整模型字段语义为 provider-aware 配置 |
+| `web/app/src/features/agent-flow/lib/validate-document.ts` | agentFlow 文档前端校验 | 新增 provider 实例缺失、实例失效、模型不匹配等正式校验 issue |
+| `web/app/src/features/agent-flow/schema/agent-flow-view-renderers.tsx` | node card 与 detail 只读展示 | 补充 provider instance、model 和失效态展示，避免只读视图继续假定 `openai` |
+| `web/app/src/features/agent-flow/components/detail/last-run/NodeRunMetadataCard.tsx` | 节点最后运行元数据卡片 | 新增 provider instance/code/protocol/finish reason 等运行时诊断字段 |
+| `web/app/src/style-boundary/registry.tsx` | settings / application-detail 场景渲染入口 | 加入 provider catalog、instances、options mock，并 seed provider-aware agentFlow 文档供场景回归 |
+| `web/app/src/style-boundary/scenario-manifest.json` | style-boundary 场景与 impact files 真值 | 追加 provider 页面和 provider-aware agentFlow UI 的影响文件映射与边界断言 |

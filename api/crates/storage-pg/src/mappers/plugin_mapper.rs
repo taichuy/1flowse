@@ -55,7 +55,9 @@ pub struct StoredPluginTaskRow {
 pub struct PgPluginMapper;
 
 impl PgPluginMapper {
-    pub fn to_installation_record(row: StoredPluginInstallationRow) -> Result<PluginInstallationRecord> {
+    pub fn to_installation_record(
+        row: StoredPluginInstallationRow,
+    ) -> Result<PluginInstallationRecord> {
         Ok(PluginInstallationRecord {
             id: row.id,
             provider_code: row.provider_code,

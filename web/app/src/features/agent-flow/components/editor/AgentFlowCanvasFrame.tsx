@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   ConsoleApplicationOrchestrationState,
   SaveConsoleApplicationDraftInput
@@ -24,6 +24,10 @@ import {
   startFlowDebugRun,
   startNodeDebugPreview
 } from '../../api/runtime';
+import {
+  fetchModelProviderOptions,
+  modelProviderOptionsQueryKey
+} from '../../api/model-provider-options';
 import {
   NODE_DETAIL_DEFAULT_WIDTH,
   NODE_DETAIL_MIN_CANVAS_WIDTH,
@@ -91,6 +95,10 @@ export function AgentFlowCanvasFrame({
   const stopNodeDetailResizeRef = useRef<(() => void) | null>(null);
   const [bodyWidth, setBodyWidth] = useState(0);
   const [isResizingNodeDetail, setIsResizingNodeDetail] = useState(false);
+  const modelProviderOptionsQuery = useQuery({
+    queryKey: modelProviderOptionsQueryKey,
+    queryFn: fetchModelProviderOptions
+  });
   const navigation = useContainerNavigation();
   const draftSync = useDraftSync({
     applicationId,
@@ -99,7 +107,14 @@ export function AgentFlowCanvasFrame({
     getCurrentDocument: () => getDocumentWithLatestViewport(documentRef.current),
     getLastSavedDocument: () => lastSavedDocumentRef.current
   });
-  const issues = useMemo(() => validateDocument(workingDocument), [workingDocument]);
+  const issues = useMemo(
+    () =>
+      validateDocument(
+        workingDocument,
+        modelProviderOptionsQuery.isSuccess ? modelProviderOptionsQuery.data : null
+      ),
+    [workingDocument, modelProviderOptionsQuery.data, modelProviderOptionsQuery.isSuccess]
+  );
   const activeContainerId = activeContainerPath.at(-1) ?? null;
   const detailActions = useNodeDetailActions();
   const nodePreviewMutation = useMutation({

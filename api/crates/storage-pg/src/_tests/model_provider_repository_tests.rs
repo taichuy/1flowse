@@ -1,6 +1,7 @@
 use control_plane::ports::{
-    CreateModelProviderInstanceInput, ModelProviderRepository, UpsertModelProviderCatalogCacheInput,
-    UpsertModelProviderSecretInput, UpsertPluginInstallationInput, UpdateModelProviderInstanceInput,
+    CreateModelProviderInstanceInput, ModelProviderRepository, UpdateModelProviderInstanceInput,
+    UpsertModelProviderCatalogCacheInput, UpsertModelProviderSecretInput,
+    UpsertPluginInstallationInput,
 };
 use domain::{
     ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource, ModelProviderDiscoveryMode,
@@ -27,7 +28,12 @@ async fn isolated_database_url() -> String {
     format!("{}?options=-csearch_path%3D{schema}", base_database_url())
 }
 
-async fn seed_store() -> (PgControlPlaneStore, domain::WorkspaceRecord, domain::UserRecord, Uuid) {
+async fn seed_store() -> (
+    PgControlPlaneStore,
+    domain::WorkspaceRecord,
+    domain::UserRecord,
+    Uuid,
+) {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();
     let store = PgControlPlaneStore::new(pool);
@@ -151,7 +157,10 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
     )
     .await
     .unwrap();
-    assert_eq!(cache.refresh_status, ModelProviderCatalogRefreshStatus::Ready);
+    assert_eq!(
+        cache.refresh_status,
+        ModelProviderCatalogRefreshStatus::Ready
+    );
 
     let secret = ModelProviderRepository::upsert_secret(
         &store,
@@ -175,14 +184,11 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
     .unwrap();
     assert!(!stored_secret.to_string().contains("super-secret"));
 
-    let decrypted = ModelProviderRepository::get_secret_json(
-        &store,
-        instance_id,
-        "provider-secret-master-key",
-    )
-    .await
-    .unwrap()
-    .unwrap();
+    let decrypted =
+        ModelProviderRepository::get_secret_json(&store, instance_id, "provider-secret-master-key")
+            .await
+            .unwrap()
+            .unwrap();
     assert_eq!(decrypted["api_key"], "super-secret");
 
     let instances = ModelProviderRepository::list_instances(&store, workspace.id)

@@ -6,8 +6,9 @@ use std::{
 use plugin_framework::{
     error::{FrameworkResult, PluginFrameworkError},
     provider_contract::{
-        ModelDiscoveryMode, ProviderFinishReason, ProviderInvocationInput, ProviderInvocationResult,
-        ProviderModelDescriptor, ProviderModelSource, ProviderRuntimeError, ProviderStreamEvent,
+        ModelDiscoveryMode, ProviderFinishReason, ProviderInvocationInput,
+        ProviderInvocationResult, ProviderModelDescriptor, ProviderModelSource,
+        ProviderRuntimeError, ProviderStreamEvent,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -145,7 +146,10 @@ impl ProviderHost {
                 let dynamic = self
                     .call_runtime(loaded, "listModels", provider_config)
                     .await?;
-                merge_models(&loaded.package.predefined_models, normalize_models(dynamic)?)
+                merge_models(
+                    &loaded.package.predefined_models,
+                    normalize_models(dynamic)?,
+                )
             }
         };
         Ok(ProviderModelsOutput { models })
@@ -207,15 +211,17 @@ impl ProviderHost {
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if stdout.is_empty() {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            return Err(PluginFrameworkError::runtime(ProviderRuntimeError::normalize(
-                method,
-                if stderr.is_empty() {
-                    "provider runtime returned empty output"
-                } else {
-                    stderr.as_str()
-                },
-                None,
-            )));
+            return Err(PluginFrameworkError::runtime(
+                ProviderRuntimeError::normalize(
+                    method,
+                    if stderr.is_empty() {
+                        "provider runtime returned empty output"
+                    } else {
+                        stderr.as_str()
+                    },
+                    None,
+                ),
+            ));
         }
 
         let envelope = serde_json::from_str::<Value>(&stdout)
@@ -235,9 +241,9 @@ impl ProviderHost {
             .and_then(Value::as_str)
             .unwrap_or("provider runtime execution failed");
         let summary = error_object.get("stack").and_then(Value::as_str);
-        Err(PluginFrameworkError::runtime(ProviderRuntimeError::normalize(
-            method, message, summary,
-        )))
+        Err(PluginFrameworkError::runtime(
+            ProviderRuntimeError::normalize(method, message, summary),
+        ))
     }
 }
 

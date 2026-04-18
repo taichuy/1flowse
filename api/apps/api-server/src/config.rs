@@ -31,6 +31,7 @@ pub struct ApiConfig {
     pub cookie_name: String,
     pub session_ttl_days: i64,
     pub cors_allowed_origins: Option<Vec<HeaderValue>>,
+    pub provider_install_root: String,
     pub provider_secret_master_key: String,
     pub bootstrap_workspace_name: String,
     pub bootstrap_root_account: String,
@@ -64,6 +65,15 @@ impl ApiConfig {
         };
         let env = ApiEnvironment::parse(map.get("API_ENV").map(String::as_str))?;
         let cors_allowed_origins = parse_cors_allowed_origins(map.get("API_ALLOWED_ORIGINS"))?;
+        let provider_install_root = map
+            .get("API_PROVIDER_INSTALL_ROOT")
+            .cloned()
+            .unwrap_or_else(|| {
+                std::env::temp_dir()
+                    .join("1flowse-plugin-installed")
+                    .display()
+                    .to_string()
+            });
         let provider_secret_master_key = map
             .get("API_PROVIDER_SECRET_MASTER_KEY")
             .cloned()
@@ -74,8 +84,7 @@ impl ApiConfig {
                 "missing env API_ALLOWED_ORIGINS when API_ENV=production"
             ));
         }
-        if env == ApiEnvironment::Production
-            && !map.contains_key("API_PROVIDER_SECRET_MASTER_KEY")
+        if env == ApiEnvironment::Production && !map.contains_key("API_PROVIDER_SECRET_MASTER_KEY")
         {
             return Err(anyhow!(
                 "missing env API_PROVIDER_SECRET_MASTER_KEY when API_ENV=production"
@@ -95,6 +104,7 @@ impl ApiConfig {
                 .and_then(|value| value.parse::<i64>().ok())
                 .unwrap_or(7),
             cors_allowed_origins,
+            provider_install_root,
             provider_secret_master_key,
             bootstrap_workspace_name: get("BOOTSTRAP_WORKSPACE_NAME")?,
             bootstrap_root_account: get("BOOTSTRAP_ROOT_ACCOUNT")?,
