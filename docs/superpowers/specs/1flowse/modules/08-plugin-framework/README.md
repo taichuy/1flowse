@@ -115,6 +115,34 @@ provider plugin 的发现入口首轮固定为：
 - assignment 负责“哪个 workspace 能用”
 - provider instance 负责“用户是否已经配好凭据和地址”
 
+## 模型发现能力
+
+provider plugin 不只是负责“发请求给供应商”，还必须显式暴露模型发现能力。
+
+这里的正确语义不是：
+
+- 插件加载时把一份最新模型列表直接推给应用
+
+而是：
+
+- 插件加载时注册模型发现能力与静态元信息
+- 宿主在用户打开 provider instance 详情或 `LLM` 模型选择器时，按需向插件拉取最新模型列表
+
+支持的模式固定为：
+
+- `static`
+  - 模型列表完全来自插件包
+- `dynamic`
+  - 模型列表完全来自插件 runtime 接口
+- `hybrid`
+  - 先给静态默认模型，再由 runtime 拉取最新模型补充或覆盖
+
+原因：
+
+- 模型列表可能依赖 `base_url`
+- 模型列表可能依赖 credentials 与账户权限
+- 不同 provider instance 看到的可用模型可能不同
+
 ## 生命周期
 
 本模块必须显式维护两套生命周期。

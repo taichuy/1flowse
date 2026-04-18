@@ -1,7 +1,7 @@
 ---
 memory_type: project
 topic: 模型供应商接入改按统一 contract、插件产物与双层生命周期推进
-summary: 用户于 `2026-04-18 08` 明确否决“只做 OpenAI 单供应商”的收缩方案，并进一步明确长期正确边界应为“`1Flowse` 定义标准 contract，provider 插件自己解决大模型接口接入”；同时用户否决“首批官方 provider 一次接入”，改为首轮只要求一个官方参考 plugin `openai_compatible`，其余 provider 通过同一 contract 独立接入。随后用户又明确：系统安装对象必须是插件产物而非源码目录，provider plugin 需要显式建模注册发现、异步安装任务，以及“插件包 / provider instance”双层生命周期。
+summary: 用户于 `2026-04-18 08` 明确否决“只做 OpenAI 单供应商”的收缩方案，并进一步明确长期正确边界应为“`1Flowse` 定义标准 contract，provider 插件自己解决大模型接口接入”；同时用户否决“首批官方 provider 一次接入”，改为首轮只要求一个官方参考 plugin `openai_compatible`，其余 provider 通过同一 contract 独立接入。随后用户又明确：系统安装对象必须是插件产物而非源码目录，provider plugin 需要显式建模注册发现、异步安装任务，以及“插件包 / provider instance”双层生命周期；最新模型列表也不能只在插件加载时静态推送，而要由插件显式提供模型发现能力并支持按 provider instance 按需拉取。
 keywords:
   - model-provider
   - provider-kernel
@@ -11,6 +11,8 @@ keywords:
   - plugin-artifact
   - plugin-lifecycle
   - provider-instance
+  - model-discovery
+  - model-catalog
   - plugin-framework
   - runtime-orchestration
 match_when:
@@ -49,6 +51,7 @@ scope:
 - 如果这轮只做单一 `OpenAI`，后续接 `Moonshot`、`SiliconFlow`、`Azure OpenAI`、`Anthropic`、`Gemini` 时会重做数据结构、设置页表单和运行时分发。
 - 用户明确要求保留 `OpenAI-compatible` 能力，并认可 Dify 风格的 `base_url + api_key` 配置体验。
 - 用户进一步明确插件安装对象应该是“编译后的产物”，而不是直接让宿主吃源码目录。
+- 用户进一步明确模型列表不能只靠插件加载时静态注册，点击模型供应商或模型选择器时应能拿到最新模型列表。
 
 ## 为什么要做
 
@@ -74,6 +77,12 @@ scope:
 - provider plugin 的发现入口首轮固定为：
   - 官方 registry / artifact storage
   - 本地上传 `pkg`
+- provider plugin 必须显式暴露模型发现能力，支持：
+  - `static`
+  - `dynamic`
+  - `hybrid`
+- 宿主只在插件加载时注册模型发现能力和静态元信息，不直接把最新模型列表推给应用。
+- 最新模型列表按 `provider instance` 按需拉取，并允许宿主做缓存与刷新。
 - provider plugin 的插件包生命周期固定为：
   - `downloaded_or_uploaded -> verified -> installed -> enabled -> assigned`
 - provider instance 生命周期固定为：
