@@ -114,10 +114,10 @@ export function ModelProviderInstancesTable({
                     <Space size={4} wrap>
                       <Button
                         type="link"
-                        aria-label={`编辑 ${instance.display_name}`}
+                        aria-label={`查看 API Key ${instance.display_name}`}
                         onClick={() => onEdit(instance)}
                       >
-                        编辑
+                        查看 API Key
                       </Button>
                       <Button
                         type="link"

@@ -304,7 +304,7 @@ describe('ModelProvidersPage', () => {
     expect(await screen.findByRole('button', { name: '新建实例' })).toBeInTheDocument();
 
     const providerRow = await screen.findByRole('row', { name: /OpenAI Production/ });
-    expect(within(providerRow).getByRole('button', { name: /编辑 OpenAI Production/ })).toBeInTheDocument();
+    expect(within(providerRow).getByRole('button', { name: /查看 API Key OpenAI Production/ })).toBeInTheDocument();
     expect(within(providerRow).getByRole('button', { name: /验证 OpenAI Production/ })).toBeInTheDocument();
     expect(within(providerRow).getByRole('button', { name: /刷新模型 OpenAI Production/ })).toBeInTheDocument();
     expect(within(providerRow).getByRole('button', { name: /删除 OpenAI Production/ })).toBeInTheDocument();

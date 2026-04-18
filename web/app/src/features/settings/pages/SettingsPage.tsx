@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate } from '@tanstack/react-router';
-import { Alert, Button, Result, Tag, Typography } from 'antd';
+import { Alert, Button, Result, Table, Tag, Typography } from 'antd';
 
 import { useAuthStore } from '../../../state/auth-store';
 import { SectionPageLayout } from '../../../shared/ui/section-page-layout/SectionPageLayout';
@@ -313,6 +313,12 @@ function ModelProvidersSection({
   const invalidCount = instances.filter((instance) => instance.status === 'invalid').length;
   const providerCount = catalogEntries.length;
   const officialCount = officialCatalogEntries.length;
+  const overviewRows = [
+    { key: 'providers', label: '已安装供应商', value: String(providerCount) },
+    { key: 'ready', label: '可用实例', value: String(readyCount) },
+    { key: 'invalid', label: '异常实例', value: String(invalidCount) },
+    { key: 'official', label: '可安装供应商', value: String(officialCount) }
+  ];
 
   return (
     <div className="model-provider-panel">
@@ -324,110 +330,104 @@ function ModelProvidersSection({
         {errorMessage ? <Alert type="error" showIcon message={errorMessage} /> : null}
       </div>
 
-      <section className="model-provider-panel__summary">
-        <div className="model-provider-panel__summary-copy">
-          <Typography.Text type="secondary">当前 workspace 概况</Typography.Text>
-          <Typography.Title level={5}>
-            {readyCount > 0 ? `已有 ${readyCount} 个可用模型供应商实例` : '还没有可用的模型供应商实例'}
-          </Typography.Title>
-          <Typography.Paragraph type="secondary">
-            推荐顺序：安装或启用供应商，添加 API 密钥，验证连接，再同步模型目录。
-          </Typography.Paragraph>
-        </div>
-        <div className="model-provider-panel__summary-stats">
-          <div className="model-provider-panel__summary-stat">
-            <span className="model-provider-panel__summary-label">供应商</span>
-            <strong>{providerCount}</strong>
-          </div>
-          <div className="model-provider-panel__summary-stat">
-            <span className="model-provider-panel__summary-label">可用实例</span>
-            <strong>{readyCount}</strong>
-          </div>
-          <div className="model-provider-panel__summary-stat">
-            <span className="model-provider-panel__summary-label">异常实例</span>
-            <strong>{invalidCount}</strong>
-          </div>
-          <div className="model-provider-panel__summary-stat">
-            <span className="model-provider-panel__summary-label">官方目录</span>
-            <strong>{officialCount}</strong>
-          </div>
-        </div>
-      </section>
-
       <div className="model-provider-panel__main">
-        <ModelProviderCatalogPanel
-          entries={catalogEntries}
-          loading={catalogQuery.isLoading}
-          canManage={canManage}
-          onCreate={(entry) => {
-            setDrawerState({
-              mode: 'create',
-              installationId: entry.installation_id
-            });
-          }}
-        />
-
-        <section className="model-provider-panel__instances-shell">
-          <div className="model-provider-panel__section-head">
-            <div>
-              <Typography.Title level={5}>当前实例</Typography.Title>
-              <Typography.Text type="secondary">
-                每个实例对应一组 API 凭据和连接配置。建议先验证，再刷新模型目录。
-              </Typography.Text>
+        <div className="model-provider-panel__left">
+          <section className="model-provider-panel__summary-table">
+            <div className="model-provider-panel__section-head">
+              <div>
+                <Typography.Title level={5}>当前 workspace 概况</Typography.Title>
+                <Typography.Text type="secondary">
+                  只保留当前最关键的供应商和实例统计。
+                </Typography.Text>
+              </div>
             </div>
-            {canManage ? (
-              <Button
-                type="primary"
-                onClick={() => {
-                  setDrawerState({
-                    mode: 'create',
-                    installationId: catalogEntries[0]?.installation_id ?? null
-                  });
-                }}
-                disabled={catalogEntries.length === 0}
-              >
-                新建实例
-              </Button>
-            ) : null}
-          </div>
-          <div className="model-provider-panel__instance-hints">
-            <Tag color="green">ready 可在模型选择器中使用</Tag>
-            <Tag color="gold">刷新模型会更新可选模型目录</Tag>
-            <Tag color="default">编辑密钥不会回显已有 secret</Tag>
-          </div>
-          <ModelProviderInstancesTable
-            instances={instances}
-            loading={instancesQuery.isLoading}
+            <Table
+              rowKey="key"
+              size="small"
+              pagination={false}
+              dataSource={overviewRows}
+              columns={[
+                { title: '项目', dataIndex: 'label' },
+                { title: '数量', dataIndex: 'value', width: 120 }
+              ]}
+            />
+          </section>
+
+          <ModelProviderCatalogPanel
+            entries={catalogEntries}
+            loading={catalogQuery.isLoading}
             canManage={canManage}
-            onEdit={(instance) => {
+            onCreate={(entry) => {
               setDrawerState({
-                mode: 'edit',
-                instanceId: instance.id
+                mode: 'create',
+                installationId: entry.installation_id
               });
             }}
-            onValidate={(instance) => {
-              validateMutation.mutate(instance.id);
-            }}
-            onRefreshModels={(instance) => {
-              refreshMutation.mutate(instance.id);
-            }}
-            onDelete={(instance) => {
-              deleteMutation.mutate(instance.id);
+          />
+
+          <section className="model-provider-panel__instances-shell">
+            <div className="model-provider-panel__section-head">
+              <div>
+                <Typography.Title level={5}>当前实例</Typography.Title>
+                <Typography.Text type="secondary">
+                  每个实例对应一组 API Key 和连接配置。
+                </Typography.Text>
+              </div>
+              {canManage ? (
+                <Button
+                  type="primary"
+                  onClick={() => {
+                    setDrawerState({
+                      mode: 'create',
+                      installationId: catalogEntries[0]?.installation_id ?? null
+                    });
+                  }}
+                  disabled={catalogEntries.length === 0}
+                >
+                  新建实例
+                </Button>
+              ) : null}
+            </div>
+            <div className="model-provider-panel__instance-hints">
+              <Tag color="green">ready 可在模型选择器中使用</Tag>
+              <Tag color="gold">刷新模型会更新模型目录</Tag>
+            </div>
+            <ModelProviderInstancesTable
+              instances={instances}
+              loading={instancesQuery.isLoading}
+              canManage={canManage}
+              onEdit={(instance) => {
+                setDrawerState({
+                  mode: 'edit',
+                  instanceId: instance.id
+                });
+              }}
+              onValidate={(instance) => {
+                validateMutation.mutate(instance.id);
+              }}
+              onRefreshModels={(instance) => {
+                refreshMutation.mutate(instance.id);
+              }}
+              onDelete={(instance) => {
+                deleteMutation.mutate(instance.id);
+              }}
+            />
+          </section>
+        </div>
+
+        <aside className="model-provider-panel__sidebar">
+          <OfficialPluginInstallPanel
+            entries={officialCatalogEntries}
+            loading={officialCatalogQuery.isLoading}
+            canManage={canManage}
+            activePluginId={officialInstallState.pluginId}
+            installState={officialInstallState.status}
+            onInstall={(entry) => {
+              officialInstallMutation.mutate(entry.plugin_id);
             }}
           />
-        </section>
+        </aside>
       </div>
-
-      <OfficialPluginInstallPanel
-        entries={officialCatalogEntries}
-        loading={officialCatalogQuery.isLoading}
-        canManage={canManage}
-        activePluginId={officialInstallState.pluginId}
-        installState={officialInstallState.status}
-        onInstall={(entry) => {
-          officialInstallMutation.mutate(entry.plugin_id);
-        }}
-      />
 
       <ModelProviderInstanceDrawer
         open={drawerState !== null}

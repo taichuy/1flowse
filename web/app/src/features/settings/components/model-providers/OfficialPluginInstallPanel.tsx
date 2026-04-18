@@ -1,4 +1,6 @@
-import { Button, Empty, Modal, Space, Tag, Typography } from 'antd';
+import { useMemo, useState } from 'react';
+
+import { Button, Empty, Modal, Select, Space, Tag, Typography } from 'antd';
 
 import type { SettingsOfficialPluginCatalogEntry } from '../../api/plugins';
 
@@ -70,6 +72,14 @@ export function OfficialPluginInstallPanel({
   onInstall: (entry: SettingsOfficialPluginCatalogEntry) => void;
 }) {
   const [modal, contextHolder] = Modal.useModal();
+  const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null);
+  const visibleEntries = useMemo(() => {
+    if (!selectedPluginId) {
+      return entries;
+    }
+
+    return entries.filter((entry) => entry.plugin_id === selectedPluginId);
+  }, [entries, selectedPluginId]);
 
   return (
     <section className="model-provider-panel__official">
@@ -82,6 +92,19 @@ export function OfficialPluginInstallPanel({
           </Typography.Text>
         </div>
       </div>
+      <Select
+        allowClear
+        showSearch
+        className="model-provider-panel__official-select"
+        placeholder="下拉搜索可安装供应商"
+        optionFilterProp="label"
+        value={selectedPluginId}
+        onChange={(value) => setSelectedPluginId(value ?? null)}
+        options={entries.map((entry) => ({
+          value: entry.plugin_id,
+          label: `${entry.display_name} / ${entry.protocol}`
+        }))}
+      />
 
       {entries.length === 0 ? (
         <div className="model-provider-panel__empty">
@@ -92,7 +115,7 @@ export function OfficialPluginInstallPanel({
         </div>
       ) : (
         <div className="model-provider-panel__official-grid">
-          {entries.map((entry) => {
+          {visibleEntries.map((entry) => {
             const buttonLabel = getInstallButtonLabel(entry, installState, activePluginId);
             const installing =
               activePluginId === entry.plugin_id && installState === 'installing';
@@ -109,12 +132,9 @@ export function OfficialPluginInstallPanel({
                   <div className="model-provider-panel__catalog-item-main">
                     <div className="model-provider-panel__catalog-item-title-row">
                       <Typography.Title level={5}>{entry.display_name}</Typography.Title>
-                      <Typography.Text type="secondary">
-                        latest {entry.latest_version}
-                      </Typography.Text>
                     </div>
                     <Typography.Text type="secondary">
-                      {entry.protocol} · 官方插件
+                      {entry.protocol} · latest {entry.latest_version}
                     </Typography.Text>
                   </div>
                   <Space wrap size={6}>
@@ -124,8 +144,8 @@ export function OfficialPluginInstallPanel({
                 </div>
 
                 <div className="model-provider-panel__catalog-item-meta">
-                  <span>插件标识 {entry.plugin_id}</span>
-                  <span>版本策略 latest {entry.latest_version}</span>
+                  <span>{entry.plugin_id}</span>
+                  <span>版本 {entry.latest_version}</span>
                 </div>
 
                 {entry.help_url ? (
