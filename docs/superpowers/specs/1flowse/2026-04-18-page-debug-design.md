@@ -17,6 +17,7 @@
 - 自动读取本地默认 root 凭据并完成登录
 - 复用认证态，通过 Playwright 直接打开受保护页面
 - 在需要时抓取目标页面当前渲染链路使用到的 `html/css/js`
+- 自动产出页面截图与控制台日志，作为前端问题排查证据
 - 将抓取结果按目录拆分保存，便于离线阅读页面结构、对比当前实现并定位渲染问题
 
 ## 2. 背景与问题
@@ -35,6 +36,7 @@
 
 - 可复用的认证态
 - 可检索的目录化页面快照
+- 页面截图与控制台日志证据
 - 可被 AI 稳定消费的机器输出
 
 项目已经具备可复用前提：
@@ -63,6 +65,7 @@
 - `open` 与 `snapshot` 两类模式
 - 页面就绪判断与等待契约
 - `snapshot` 的输出目录结构、资源分类和 HTML 引用重写
+- 页面截图与控制台日志采集
 - AI 可稳定消费的进程输出协议
 - 脚本级单元测试范围
 
@@ -223,13 +226,17 @@
 - `metaPath`
 - `storageStatePath`
 - `htmlPath`
+- `screenshotPath`
+- `consoleLogPath`
 - `warnings`
 
 其中：
 
 - `snapshot` 成功时 `htmlPath` 必须指向本地 `index.html`
+- `snapshot` 与 `open` 成功时 `screenshotPath` 必须指向本地产出的截图文件
+- `snapshot` 与 `open` 成功时 `consoleLogPath` 必须指向本地控制台日志文件
 - `open` 成功时 `htmlPath` 允许为 `null`
-- `login` 成功时 `outputDir`、`storageStatePath`、`htmlPath` 允许为 `null`
+- `login` 成功时 `outputDir`、`storageStatePath`、`htmlPath`、`screenshotPath`、`consoleLogPath` 允许为 `null`
 
 ## 6. 认证设计
 
@@ -369,6 +376,8 @@ tmp/page-debug/2026-04-18T11-20-35/
   meta.json
   storage-state.json
   index.html
+  page.png
+  console.ndjson
   css/
     001-main.css
     002-inline.css
@@ -390,8 +399,40 @@ tmp/page-debug/2026-04-18T11-20-35/
 - 使用的登录账号
 - `readyState`
 - `storageStatePath`
+- `screenshotPath`
+- `consoleLogPath`
+- 控制台日志条目数
+- `pageerror` 条目数
 - 抓取成功的资源清单
 - 未保存资源清单与原因
+
+### 8.4 调试证据产物
+
+除了 `html/css/js` 目录化快照外，第一版还必须产出两类直接排查证据：
+
+- `page.png`
+- `console.ndjson`
+
+`page.png` 规则：
+
+- 在页面达到最终抓取时机后截取
+- `snapshot` 模式必须生成
+- `open` 模式至少在初次达到页面稳定态后生成一张初始截图
+
+`console.ndjson` 规则：
+
+- 使用结构化逐行 JSON 存储，而不是纯文本拼接
+- 至少记录浏览器 `console` 事件与 `pageerror` 事件
+- 每条记录至少包含：
+  - `timestamp`
+  - `eventType`
+  - `level`
+  - `text`
+  - `url`
+  - `lineNumber`
+  - `columnNumber`
+
+这样 AI 在不重新打开浏览器的情况下，也能直接检索报错、告警和页面首屏状态。
 
 ## 9. 资源抓取规则
 
@@ -467,6 +508,8 @@ HTML 输出使用页面稳定后获取的最终 DOM：
 
 - `meta.json`
 - `storage-state.json`
+- `page.png`
+- `console.ndjson`
 
 这样 AI 可以在本次人工打开后，继续复用认证态做下一步浏览器自动化操作。
 
@@ -482,6 +525,8 @@ HTML 输出使用页面稳定后获取的最终 DOM：
 - 页面重定向回登录页，说明认证态没有真正生效
 - 页面未达到基础稳定态
 - 指定的 `--wait-for-selector` 未出现
+- 截图生成失败
+- 控制台日志文件写入失败
 - 输出目录写入失败
 - 资源抓取部分失败，但页面本身已打开
 
@@ -508,6 +553,8 @@ HTML 输出使用页面稳定后获取的最终 DOM：
 - `.env` 凭据读取与回退规则
 - 成功/失败 JSON 输出结构
 - 页面就绪状态判定
+- 截图与控制台日志输出路径生成
+- 控制台事件序列化
 - 输出目录和文件名生成
 - HTML 引用重写
 - CSS `url(...)` 绝对化
@@ -520,7 +567,9 @@ HTML 输出使用页面稳定后获取的最终 DOM：
 - `login` 能正确读取 root 凭据并登录
 - `open /sign-in` 以外的受保护页面能直接打开
 - `open /settings` 能生成 `storage-state.json`
+- `open /settings` 能生成初始 `page.png` 与 `console.ndjson`
 - `snapshot /settings` 能生成本地目录，并可用本地 `index.html` 复核页面结构
+- `snapshot /settings` 能生成 `page.png` 与 `console.ndjson`
 - `snapshot` 的 `stdout` 能被机器稳定解析并定位到 `outputDir` 与 `htmlPath`
 
 ## 13. 实现约束
@@ -538,4 +587,3 @@ HTML 输出使用页面稳定后获取的最终 DOM：
 
 - 图片与字体本地化
 - 多页面批量抓取
-- 录制页面截图与控制台日志

@@ -1,7 +1,7 @@
 ---
 memory_type: project
 topic: page-debug 本地页面调试脚本设计已确认
-summary: 自 2026-04-18 10 起，页面调试脚本方案已确认采用 `scripts/node/page-debug.js`，默认执行 `snapshot`，输出落在 `tmp/page-debug/<时间戳>/`，抓取范围固定为 `html/css/js`，并补充 AI 友好的页面就绪契约、结构化 JSON 输出和 `storage-state.json` 产物。
+summary: 自 2026-04-18 10 起，页面调试脚本方案已确认采用 `scripts/node/page-debug.js`，默认执行 `snapshot`，输出落在 `tmp/page-debug/<时间戳>/`，抓取范围固定为 `html/css/js`，并补充 AI 友好的页面就绪契约、结构化 JSON 输出、`storage-state.json`、页面截图和控制台日志。
 keywords:
   - page-debug
   - playwright
@@ -12,6 +12,8 @@ keywords:
   - json output
   - storage state
   - ready state
+  - screenshot
+  - console log
 match_when:
   - 需要实现或调整页面调试脚本
   - 需要确认脚本默认行为和输出目录
@@ -60,4 +62,5 @@ scope:
 - 登录方案固定复用 `.env + 现有登录接口 + Playwright context cookie`，不引入数据库旁路逻辑。
 - 脚本主要服务于“开发者给一个路由，AI 直接接手排查”的场景，因此成功和失败都需要稳定的结构化输出。
 - `open` 与 `snapshot` 必须默认生成 `storage-state.json`，便于后续 Playwright 自动化继续复用认证态。
+- `open` 与 `snapshot` 还必须默认生成页面截图和结构化控制台日志，作为前端问题排查证据。
 - 页面抓取前必须先达到基础稳定态；若页面业务数据需要更明确的完成条件，则通过 `--wait-for-selector` 补充等待。
