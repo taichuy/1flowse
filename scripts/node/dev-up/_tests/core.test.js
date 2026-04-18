@@ -133,6 +133,47 @@ test('ensureServiceEnvFile seeds api env defaults and buildServiceEnv loads them
   assert.equal(env.EXTRA_FLAG, 'enabled');
 });
 
+test('ensureServiceEnvFile migrates legacy api-server brand defaults in existing env file', () => {
+  const tempRepoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-legacy-env-'));
+  const apiServerDir = path.join(tempRepoRoot, 'api', 'apps', 'api-server');
+  const envExamplePath = path.join(apiServerDir, '.env.example');
+  const envPath = path.join(apiServerDir, '.env');
+
+  fs.mkdirSync(apiServerDir, { recursive: true });
+  fs.writeFileSync(
+    envExamplePath,
+    [
+      'API_DATABASE_URL=postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase',
+      'API_REDIS_URL=redis://:1flowbase@127.0.0.1:36379',
+      'API_COOKIE_NAME=flowbase_console_session',
+      'BOOTSTRAP_WORKSPACE_NAME=1flowbase',
+    ].join('\n')
+  );
+  fs.writeFileSync(
+    envPath,
+    [
+      'API_DATABASE_URL=postgres://postgres:sevenflows@127.0.0.1:35432/sevenflows',
+      'API_REDIS_URL=redis://:sevenflows@127.0.0.1:36379',
+      'API_COOKIE_NAME=flowse_console_session',
+      'BOOTSTRAP_WORKSPACE_NAME=1Flowse',
+      'BOOTSTRAP_ROOT_PASSWORD=change-me',
+    ].join('\n')
+  );
+
+  const services = getServiceDefinitions(tempRepoRoot);
+  const apiService = services['api-server'];
+
+  assert.equal(ensureServiceEnvFile(apiService), true);
+
+  const env = buildServiceEnv(apiService, {});
+
+  assert.equal(env.API_DATABASE_URL, 'postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase');
+  assert.equal(env.API_REDIS_URL, 'redis://:1flowbase@127.0.0.1:36379');
+  assert.equal(env.API_COOKIE_NAME, 'flowbase_console_session');
+  assert.equal(env.BOOTSTRAP_WORKSPACE_NAME, '1flowbase');
+  assert.equal(env.BOOTSTRAP_ROOT_PASSWORD, 'change-me');
+});
+
 test('getServicePrestartCommands resets api root password in development mode', () => {
   const tempRepoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-prestart-'));
   const apiServerDir = path.join(tempRepoRoot, 'api', 'apps', 'api-server');
