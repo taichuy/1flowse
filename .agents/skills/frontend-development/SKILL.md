@@ -32,25 +32,38 @@ description: Use when building or changing 1flowbase frontend/UI pages, page req
 
 在 1flowbase 中，先守 `DESIGN.md` 的任务域边界、L1 模型和状态语义，再决定组件拆分和视觉抛光。
 
+## General Workflow
+
+1. 先回到 `DESIGN.md` 判断任务域边界、L1 模型、状态语义和现有页面 recipe。
+2. 如果属于页面 / UI 开发需求，先输出面向用户的需求整理；至少覆盖页面目标、主要对象、关键动作、页面交互、关键状态和视觉约束。
+3. 用 `references/communication-gate.md` 判断是默认直接实现，还是先集中提阻塞性产品分歧。
+4. 再落实现：先定主路径、反馈位置和模块协作，再拆组件、落结构、补样式。
+5. 结束前按 `references/review-checklist.md` 做复查；涉及样式边界、浏览器运行态或共享 slot 时，走项目既有验证链路。
+
 ## Quick Reference
 
-- 单一事实源：`./DESIGN.md`
-- Shell Layer 优先复用 `Ant Design`；Editor UI 只做薄封装，不另起一套视觉语言
-- 页面 / UI 开发需求默认先整理需求并显式回复给用户；只有纯局部样式修补、像素级对齐、文案替换或不改页面结构的 UI bugfix 才可跳过完整流程
-- 需求整理至少覆盖：页面目标、主要对象、关键动作、页面结构、关键模块、页面交互、关键状态、视觉约束
-- 先判任务域边界，再判 L1 模型、状态语义和交互流，最后才是 token 和样式
-- 页面先设计主路径、操作反馈和模块协作，再落卡片、区块和装饰；不要把卡片堆积当成页面设计
-- 信息架构、层级、入口、导航问题：**REQUIRED COMPANION SKILL:** Use `frontend-logic-design`
-- 目录落点先判职责：`app-shell / routes / features/* / shared/*`；页面、壳层、路由真值层和请求消费不要重新堆回一个文件
-- 组件上提要克制：默认先放 `features/*/components`，只有被多个 feature 真实复用且语义稳定后才进入 `shared/ui`
-- 请求、工具和 `schema ui` 分层固定：`api-client -> features/*/api -> shared/api`；`shared/schema-ui -> features/*/schema -> features/*/lib/node-definitions`
-- 节点开发固定按“节点定义 -> schema fragments/registry -> renderer -> consumer”推进；新增节点优先新增独立定义文件
-- 样式改动固定按四层判断：`theme token -> first-party wrapper -> explicit slot -> stop`；第三方组件允许主题化，不允许无边界递归覆盖内部样式链
-- 共享样式、导航、菜单、壳层或第三方 slot 覆写改动后，必须运行 `node scripts/node/check-style-boundary.js ...`；新增样式回归场景时同步维护 `web/app/src/style-boundary/scenario-manifest.json`
-- 浏览器级验收优先复用项目已有 `Playwright / page-debug / style-boundary` 链路；等待条件基于业务 ready signal，不做无等待裸截图，也不要临时手写一次性 Playwright 验证脚本
-- 想深入看提炼方法时，读 `references/extraction-framework.md`；想直接套输出骨架时，读 `references/skill-template.md`
-- 单点使用且变化原因单一：先别抽象
-- 先复用现有组件和成熟依赖，再考虑新封装
+### Purpose
+
+- 把前端请求翻译成符合 1flowbase 边界、状态语义和交互语法的实现，而不是自由拼页。
+
+### Requirements
+
+- 单一事实源固定为 `./DESIGN.md`。
+- Shell Layer 优先复用 `Ant Design`；Editor UI 只做薄封装，不另起一套视觉语言。
+- 页面 / UI 开发需求默认先整理需求并显式回复给用户；只有纯局部样式修补、像素级对齐、文案替换或不改页面结构的 UI bugfix 才可跳过完整流程。
+- 需求整理至少覆盖：页面目标、主要对象、关键动作、页面交互、关键状态、视觉约束。
+- 页面先设计主路径、操作反馈和模块协作，再落卡片、区块和装饰。
+- 目录和分层要守住：`app-shell / routes / features/* / shared/*`，以及 `api-client -> features/*/api -> shared/api`、`shared/schema-ui -> features/*/schema -> features/*/lib/node-definitions`。
+
+### Scenario
+
+- `WHEN` 请求属于页面 / UI 开发、页面改版或模块重构 `THEN` 先输出面向用户的需求整理，再默认继续实现。
+- `WHEN` 请求只是纯局部样式修补或不改页面结构的 UI bugfix `THEN` 直接修改，不走完整需求草案。
+- `WHEN` 问题本质是信息架构、层级、入口或导航逻辑 `THEN` 使用 `frontend-logic-design`。
+- `WHEN` 请求带截图、参考图或外部样本 `THEN` 只借结构、层级和节奏，视觉语言与状态语义回到 `DESIGN.md`。
+- `WHEN` 改动共享样式、导航、菜单、壳层或第三方 slot `THEN` 运行 `node scripts/node/check-style-boundary.js ...`，必要时同步维护 `web/app/src/style-boundary/scenario-manifest.json`。
+- `WHEN` 需要浏览器级验收、截图或运行态证据 `THEN` 优先复用项目已有 `Playwright / page-debug / style-boundary` 链路。
+- `WHEN` 处理节点开发或 `schema ui` `THEN` 保持 `node-definitions -> schema fragments/registry -> renderer -> consumer` 这条拆分链路。
 
 ## Implementation
 
