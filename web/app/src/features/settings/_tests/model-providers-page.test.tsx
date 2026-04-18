@@ -300,12 +300,9 @@ describe('ModelProvidersPage', () => {
       expect(
         (await screen.findAllByText('OpenAI Compatible', {}, { timeout: 10000 })).length
       ).toBeGreaterThanOrEqual(1);
-      expect(
-        await screen.findByText('OpenAI Production', {}, { timeout: 10000 })
-      ).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: '新建实例' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /编辑 OpenAI Production/ })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /验证 OpenAI Production/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: '当前实例' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '查看实例' })).not.toBeInTheDocument();
+      expect(screen.queryByText('OpenAI Production')).not.toBeInTheDocument();
     },
     10000
   );
@@ -319,13 +316,12 @@ describe('ModelProvidersPage', () => {
 
     renderApp('/settings/model-providers');
 
-    expect(await screen.findByRole('button', { name: '新建实例' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '查看实例' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '当前实例' })).not.toBeInTheDocument();
 
-    const providerRow = await screen.findByRole('row', { name: /OpenAI Production/ });
-    expect(within(providerRow).getByRole('button', { name: /查看 API Key OpenAI Production/ })).toBeInTheDocument();
-    expect(within(providerRow).getByRole('button', { name: /验证 OpenAI Production/ })).toBeInTheDocument();
-    expect(within(providerRow).getByRole('button', { name: /刷新模型 OpenAI Production/ })).toBeInTheDocument();
-    expect(within(providerRow).getByRole('button', { name: /删除 OpenAI Production/ })).toBeInTheDocument();
+    const catalogRow = await screen.findByRole('row', { name: /OpenAI Compatible/ });
+    expect(within(catalogRow).getByRole('button', { name: '查看实例' })).toBeInTheDocument();
+    expect(within(catalogRow).getByRole('button', { name: '添加 API Key' })).toBeInTheDocument();
   });
 
   test('opens provider instances modal from installed provider row and defaults to the ready instance', async () => {

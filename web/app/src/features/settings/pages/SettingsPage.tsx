@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate } from '@tanstack/react-router';
-import { Alert, Button, Result, Tag, Typography } from 'antd';
+import { Alert, Result, Typography } from 'antd';
 
 import { useAuthStore } from '../../../state/auth-store';
 import { SectionPageLayout } from '../../../shared/ui/section-page-layout/SectionPageLayout';
@@ -12,7 +12,6 @@ import { RolePermissionPanel } from '../components/RolePermissionPanel';
 import { ModelProviderCatalogPanel } from '../components/model-providers/ModelProviderCatalogPanel';
 import { ModelProviderInstanceDrawer } from '../components/model-providers/ModelProviderInstanceDrawer';
 import { ModelProviderInstancesModal } from '../components/model-providers/ModelProviderInstancesModal';
-import { ModelProviderInstancesTable } from '../components/model-providers/ModelProviderInstancesTable';
 import { OfficialPluginInstallPanel } from '../components/model-providers/OfficialPluginInstallPanel';
 import {
   getVisibleSettingsSections,
@@ -433,55 +432,6 @@ function ModelProvidersSection({
               });
             }}
           />
-
-          <section className="model-provider-panel__instances-shell">
-            <div className="model-provider-panel__section-head">
-              <div>
-                <Typography.Title level={5}>当前实例</Typography.Title>
-                <Typography.Text type="secondary">
-                  每个实例对应一组 API Key 和连接配置。
-                </Typography.Text>
-              </div>
-              {canManage ? (
-                <Button
-                  type="primary"
-                  onClick={() => {
-                    setDrawerState({
-                      mode: 'create',
-                      installationId: catalogEntries[0]?.installation_id ?? null
-                    });
-                  }}
-                  disabled={catalogEntries.length === 0}
-                >
-                  新建实例
-                </Button>
-              ) : null}
-            </div>
-            <div className="model-provider-panel__instance-hints">
-              <Tag color="green">ready 可在模型选择器中使用</Tag>
-              <Tag color="gold">刷新模型会更新模型目录</Tag>
-            </div>
-            <ModelProviderInstancesTable
-              instances={instances}
-              loading={instancesQuery.isLoading}
-              canManage={canManage}
-              onEdit={(instance) => {
-                setDrawerState({
-                  mode: 'edit',
-                  instanceId: instance.id
-                });
-              }}
-              onValidate={(instance) => {
-                validateMutation.mutate(instance.id);
-              }}
-              onRefreshModels={(instance) => {
-                refreshMutation.mutate(instance.id);
-              }}
-              onDelete={(instance) => {
-                deleteMutation.mutate(instance.id);
-              }}
-            />
-          </section>
         </div>
 
         <aside className="model-provider-panel__sidebar">
