@@ -1,6 +1,6 @@
 ---
 name: frontend-development
-description: Use when building or changing 1Flowse frontend pages, workspace flows, node development, schema UI, interactions, visual structure, or component boundaries, or when vague/image-led frontend requests must be translated into confirmed design requirements before implementation
+description: Use when building or changing 1Flowse frontend pages, workspace flows, node development, schema UI, interactions, visual structure, or component boundaries, or when vague/image-led frontend requests must be translated into actionable design requirements before implementation
 ---
 
 # Frontend Development
@@ -53,9 +53,9 @@ description: Use when building or changing 1Flowse frontend pages, workspace flo
 - 场景断言只表达边界属性约束；运行失败时应按“样式边界失败”解读，而不是泛 QA 失败
 - 前端浏览器级打开、验收、截图、交互复现默认使用 `Playwright`，不再主动使用 Chrome 浏览器 MCP / `chrome-devtools`
 - 浏览器级验收优先复用项目已有 `Playwright / page-debug / style-boundary` 链路；等待条件基于业务 ready signal，不做无等待裸截图
-- 需求模糊、只给图片或引用外部样本时，先走 `references/requirement-refinement.md`，产出可确认的设计需求草案，再进入实现
+- 需求模糊、只给图片或引用外部样本时，先走 `references/requirement-refinement.md`，先收敛需求再默认继续实现；只有仍有阻塞分歧时再集中提问
 - 信息架构、层级、入口、导航问题：**REQUIRED COMPANION SKILL:** Use `frontend-logic-design`
-- 新页面、新流程、交互流、视觉方案、页面内 AI 协作层：先问人
+- 新页面、新流程、交互流、视觉方案、页面内 AI 协作层：先收敛需求；只有存在无法自行判断的产品级分歧时再问人
 - 单点使用且变化原因单一：先别抽象
 - 先复用现有组件和成熟依赖，再考虑新封装
 
