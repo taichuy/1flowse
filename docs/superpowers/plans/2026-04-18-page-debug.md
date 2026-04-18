@@ -57,7 +57,7 @@
 - Create: `scripts/node/page-debug/core.js`
 - Create: `scripts/node/page-debug/_tests/core.test.js`
 
-- [ ] **Step 1: Write the failing CLI contract tests**
+- [x] **Step 1: Write the failing CLI contract tests**
 
 ```js
 // scripts/node/page-debug/_tests/core.test.js
@@ -157,7 +157,7 @@ test('createSuccessResult exposes machine-readable artifact paths', () => {
 });
 ```
 
-- [ ] **Step 2: Run the CLI contract tests and verify they fail**
+- [x] **Step 2: Run the CLI contract tests and verify they fail**
 
 Run:
 
@@ -169,7 +169,7 @@ Expected:
 
 - FAIL with `Cannot find module '../core.js'`
 
-- [ ] **Step 3: Write the minimal CLI wrapper and core helpers**
+- [x] **Step 3: Write the minimal CLI wrapper and core helpers**
 
 ```js
 // scripts/node/page-debug.js
@@ -318,7 +318,7 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 4: Run the CLI contract tests and verify they pass**
+- [x] **Step 4: Run the CLI contract tests and verify they pass**
 
 Run:
 
@@ -330,12 +330,17 @@ Expected:
 
 - PASS with `4 tests` and `0 failures`
 
-- [ ] **Step 5: Commit the CLI scaffold**
+- [x] **Step 5: Commit the CLI scaffold**
 
 ```bash
 git add scripts/node/page-debug.js scripts/node/page-debug/core.js scripts/node/page-debug/_tests/core.test.js
 git commit -m "feat: scaffold page debug cli contract"
 ```
+
+Execution note (`2026-04-18 11:40 +0800`):
+
+- Red: `rtk node --test scripts/node/page-debug/_tests/core.test.js` failed with `Cannot find module '../core.js'`
+- Green: `rtk node --test scripts/node/page-debug/_tests/core.test.js` passed with `4 tests` and `0 failures`
 
 ## Task 2: Add Root Credential Loading And HTTP Login Storage State Export
 
