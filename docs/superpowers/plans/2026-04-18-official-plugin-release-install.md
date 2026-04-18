@@ -805,7 +805,7 @@ git commit -m "feat: add official provider install panel"
 - No committed source-file changes expected in this task.
 - Local runtime configuration may need temporary edits in `api/apps/api-server/.env` if the official repository source differs from the default.
 
-- [ ] **Step 1: Push the committed main repo and official plugin repo changes**
+- [x] **Step 1: Push the committed main repo and official plugin repo changes**
 
 Run:
 
@@ -816,7 +816,7 @@ git -C ../1flowse-official-plugins push origin HEAD
 
 Expected: Both repositories push successfully without rejected commits.
 
-- [ ] **Step 2: Create and push the official plugin release tag**
+- [x] **Step 2: Create and push the official plugin release tag**
 
 Run:
 
@@ -827,7 +827,7 @@ git -C ../1flowse-official-plugins push origin openai_compatible-v0.1.0
 
 Expected: GitHub Actions `provider-release` starts for the new tag.
 
-- [ ] **Step 3: Wait for the release workflow and confirm the release asset exists**
+- [x] **Step 3: Wait for the release workflow and confirm the release asset exists**
 
 Run:
 
@@ -838,7 +838,7 @@ gh release download openai_compatible-v0.1.0 --repo taichuy/1flowse-official-plu
 
 Expected: `gh release view` shows the release and `gh release download` writes a `.1flowsepkg` file into `/tmp/official-plugin-smoke`.
 
-- [ ] **Step 4: Smoke-test the live install path against the running host**
+- [x] **Step 4: Smoke-test the live install path against the running host**
 
 Run:
 
@@ -865,7 +865,9 @@ curl -s -X POST http://127.0.0.1:7800/api/console/plugins/install-official \
 
 Expected: `official-catalog` returns an entry whose `plugin_id` is `1flowse.openai_compatible`, and `install-official` returns a created installation/task payload whose installation is visible on `/settings/model-providers`.
 
-- [ ] **Step 5: Capture final verification state**
+Execution note: 实际 smoke test 先命中了旧 `api-server` 进程未重启导致的 `404`，随后通过 `node scripts/node/dev-up.js restart --backend-only` 切到新代码版本。重试后 `official-catalog` 返回 `200` 和 `1flowse.openai_compatible` 条目，`install-official` 返回 `201`，installation `source_kind=official_registry`、`checksum=sha256:72384b58abe31a26892cb0c40917286cc1de290fa54304ee3b812e8d6794eb0d`，assign task 直接终态 `success`。安装后二次读取 `official-catalog`，`install_status` 已变为 `assigned`，宿主 `/api/console/plugins/catalog` 也能看到 `assigned_to_current_workspace=true`。
+
+- [x] **Step 5: Capture final verification state**
 
 Run:
 
