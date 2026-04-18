@@ -54,6 +54,7 @@ description: Use when building or changing 1Flowse frontend pages, workspace flo
 - 前端浏览器级打开、验收、截图、交互复现默认使用 `Playwright`，不再主动使用 Chrome 浏览器 MCP / `chrome-devtools`
 - 浏览器级验收优先复用项目已有 `Playwright / page-debug / style-boundary` 链路；等待条件基于业务 ready signal，不做无等待裸截图
 - 需求模糊、只给图片或引用外部样本时，先走 `references/requirement-refinement.md`，先收敛需求再默认继续实现；只有仍有阻塞分歧时再集中提问
+- 想深入看提炼方法时，读 `references/extraction-framework.md`；想直接套输出骨架时，读 `references/skill-template.md`
 - 信息架构、层级、入口、导航问题：**REQUIRED COMPANION SKILL:** Use `frontend-logic-design`
 - 新页面、新流程、交互流、视觉方案、页面内 AI 协作层：先收敛需求；只有存在无法自行判断的产品级分歧时再问人
 - 单点使用且变化原因单一：先别抽象
@@ -67,11 +68,13 @@ description: Use when building or changing 1Flowse frontend pages, workspace flo
 - Directory, API, and utility placement rules: `references/placement-rules.md`
 - Node development and schema UI changes must preserve the split between `node-definitions`, `schema registry/adapter`, and renderer consumers
 - Ask-first gate: `references/communication-gate.md`
-- Requirement refinement for vague or image-led requests: `references/requirement-refinement.md`
+- Requirement refinement workflow for vague or image-led requests: `references/requirement-refinement.md`
+- Requirement extraction framework: `references/extraction-framework.md`
+- Requirement brief template: `references/skill-template.md`
 - Browser verification defaults: `references/browser-verification.md`
 - Before/during/after review: `references/review-checklist.md`
 - Anti-decay patterns: `references/anti-patterns.md`
-- Pressure scenarios: `references/examples.md`
+- Pressure scenarios and examples: `examples/`
 
 ## Common Mistakes
 

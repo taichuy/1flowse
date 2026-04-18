@@ -15,6 +15,10 @@
 
 图片和外部样本只能提供灵感、结构和节奏，不能直接替代当前项目的 `DESIGN.md`、页面 recipe 和状态语义。
 
+想深入看提炼方法时，读 `references/extraction-framework.md`。
+想直接套固定输出骨架时，读 `references/skill-template.md`。
+想看实际写法时，读 `examples/` 下的示例。
+
 ## Hard Rules
 
 - 新页面、新流程、外部视觉母本、图片驱动需求，先收敛需求，再默认实现。
