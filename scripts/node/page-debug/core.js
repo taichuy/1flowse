@@ -1,4 +1,19 @@
+const fs = require('node:fs');
 const path = require('node:path');
+const { createRequire } = require('node:module');
+
+const { loadRootCredentials, loginAndPersistStorageState } = require('./auth.js');
+const { createConsoleCollector, writeEvidence } = require('./evidence.js');
+const { waitForPageReady } = require('./readiness.js');
+const {
+  INLINE_SCRIPT_PREFIX,
+  INLINE_STYLE_PREFIX,
+  assignInlineArtifactPaths,
+  assignLocalResourcePaths,
+  buildMetaPayload,
+  rewriteSnapshotHtml,
+  writeSnapshotArtifacts,
+} = require('./snapshot.js');
 
 const DEFAULT_WEB_BASE_URL = 'http://127.0.0.1:3100';
 const DEFAULT_API_BASE_URL = 'http://127.0.0.1:7800';
@@ -133,8 +148,262 @@ function createSuccessResult({
   };
 }
 
-async function main() {
-  throw new Error('page-debug orchestration is not wired yet');
+function loadPlaywright(repoRoot) {
+  const webRequire = createRequire(path.join(repoRoot, 'web', 'package.json'));
+  return webRequire('playwright');
+}
+
+function writeStdoutJson(payload) {
+  process.stdout.write(`${JSON.stringify(payload)}\n`);
+}
+
+async function captureDomSnapshot(page) {
+  return page.evaluate(
+    ({ stylePrefix, scriptPrefix }) => {
+      const clone = document.documentElement.cloneNode(true);
+      const ownerDocument = clone.ownerDocument || document;
+      const inlineStyles = [];
+      const inlineScripts = [];
+
+      clone.querySelectorAll('style').forEach((node, index) => {
+        const placeholder = `${stylePrefix}${index + 1}__`;
+        inlineStyles.push({ placeholder, content: node.textContent || '' });
+        const link = ownerDocument.createElement('link');
+        link.setAttribute('rel', 'stylesheet');
+        link.setAttribute('href', placeholder);
+        node.replaceWith(link);
+      });
+
+      clone.querySelectorAll('script:not([src])').forEach((node, index) => {
+        const placeholder = `${scriptPrefix}${index + 1}__`;
+        inlineScripts.push({ placeholder, content: node.textContent || '' });
+        const script = ownerDocument.createElement('script');
+        script.setAttribute('src', placeholder);
+        node.replaceWith(script);
+      });
+
+      return {
+        html: '<!DOCTYPE html>\n' + clone.outerHTML,
+        inlineStyles,
+        inlineScripts,
+      };
+    },
+    {
+      stylePrefix: INLINE_STYLE_PREFIX,
+      scriptPrefix: INLINE_SCRIPT_PREFIX,
+    }
+  );
+}
+
+function writeMetaFile(metaPath, meta) {
+  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2) + '\n', 'utf8');
+}
+
+async function runPageDebug(options, deps = {}) {
+  const repoRoot = deps.repoRoot || getRepoRoot();
+  const playwright = deps.playwright || loadPlaywright(repoRoot);
+  const resolveCredentials = deps.loadRootCredentials || loadRootCredentials;
+  const emitStdout = deps.writeStdoutJson || writeStdoutJson;
+  const credentials = resolveCredentials({
+    repoRoot,
+    accountOverride: options.account,
+    passwordOverride: options.password,
+  });
+  const artifacts = createRunArtifacts({
+    repoRoot,
+    mode: options.mode,
+    outDir: options.outDir,
+  });
+  const warnings = [];
+
+  if (artifacts.runDir) {
+    fs.mkdirSync(artifacts.runDir, { recursive: true });
+  }
+
+  if (options.mode === 'login') {
+    await loginAndPersistStorageState({
+      playwright,
+      apiBaseUrl: options.apiBaseUrl,
+      account: credentials.account,
+      password: credentials.password,
+      storageStatePath: null,
+    });
+
+    const result = createSuccessResult({
+      mode: 'login',
+      requestedUrl: null,
+      finalUrl: null,
+      authenticated: true,
+      readyState: 'authenticated_only',
+      artifacts,
+      warnings,
+    });
+    emitStdout(result);
+    return result;
+  }
+
+  await loginAndPersistStorageState({
+    playwright,
+    apiBaseUrl: options.apiBaseUrl,
+    account: credentials.account,
+    password: credentials.password,
+    storageStatePath: artifacts.storageStatePath,
+  });
+
+  const browser = await playwright.chromium.launch({ headless: options.headless });
+  let keepBrowserOpen = options.mode === 'open';
+
+  try {
+    const context = await browser.newContext({ storageState: artifacts.storageStatePath });
+    const page = await context.newPage();
+    const collector = createConsoleCollector();
+    const resourceRecords = [];
+    const resourceTasks = new Set();
+
+    collector.attach(page);
+    page.on('response', (response) => {
+      const captureTask = (async () => {
+        const resourceType = response.request().resourceType();
+        if (!['stylesheet', 'script'].includes(resourceType) || !response.ok()) {
+          return;
+        }
+
+        try {
+          resourceRecords.push({
+            kind: resourceType,
+            originalUrl: response.url(),
+            body: await response.text(),
+          });
+        } catch (error) {
+          warnings.push(
+            `capture_response_failed:${response.url()}:${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      })();
+
+      resourceTasks.add(captureTask);
+      captureTask.finally(() => {
+        resourceTasks.delete(captureTask);
+      });
+    });
+
+    const requestedUrl = resolveTargetUrl(options.webBaseUrl, options.target);
+    await page.goto(requestedUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: options.timeout,
+    });
+
+    const ready = await waitForPageReady({
+      page,
+      requestedUrl: options.target,
+      waitForUrl: options.waitForUrl,
+      waitForSelector: options.waitForSelector,
+      timeout: options.timeout,
+    });
+
+    await Promise.allSettled([...resourceTasks]);
+
+    await writeEvidence({
+      page,
+      screenshotPath: artifacts.screenshotPath,
+      consoleLogPath: artifacts.consoleLogPath,
+      collector,
+    });
+
+    if (options.mode === 'snapshot') {
+      const externalRecords = assignLocalResourcePaths(resourceRecords);
+      const externalStyles = externalRecords.filter((entry) => entry.kind === 'stylesheet');
+      const externalScripts = externalRecords.filter((entry) => entry.kind === 'script');
+      const domSnapshot = await captureDomSnapshot(page);
+      const inlineArtifacts = assignInlineArtifactPaths({
+        inlineStyles: domSnapshot.inlineStyles,
+        inlineScripts: domSnapshot.inlineScripts,
+        externalStyles,
+        externalScripts,
+      });
+      const html = rewriteSnapshotHtml(domSnapshot.html, {
+        externalStyles,
+        externalScripts,
+        inlineStyles: inlineArtifacts.inlineStyles,
+        inlineScripts: inlineArtifacts.inlineScripts,
+      });
+      const meta = buildMetaPayload({
+        requestedUrl: options.target,
+        finalUrl: ready.finalUrl,
+        webBaseUrl: options.webBaseUrl,
+        apiBaseUrl: options.apiBaseUrl,
+        account: credentials.account,
+        readyState: ready.readyState,
+        storageStatePath: artifacts.storageStatePath,
+        screenshotPath: artifacts.screenshotPath,
+        consoleLogPath: artifacts.consoleLogPath,
+        consoleEntries: collector.entries,
+        resources: [...externalRecords, ...inlineArtifacts.inlineStyles, ...inlineArtifacts.inlineScripts],
+        warnings,
+      });
+
+      writeSnapshotArtifacts({
+        runDir: artifacts.runDir,
+        htmlPath: artifacts.htmlPath,
+        metaPath: artifacts.metaPath,
+        html,
+        meta,
+        externalStyles,
+        externalScripts,
+        inlineStyles: inlineArtifacts.inlineStyles,
+        inlineScripts: inlineArtifacts.inlineScripts,
+      });
+    } else {
+      writeMetaFile(
+        artifacts.metaPath,
+        buildMetaPayload({
+          requestedUrl: options.target,
+          finalUrl: ready.finalUrl,
+          webBaseUrl: options.webBaseUrl,
+          apiBaseUrl: options.apiBaseUrl,
+          account: credentials.account,
+          readyState: ready.readyState,
+          storageStatePath: artifacts.storageStatePath,
+          screenshotPath: artifacts.screenshotPath,
+          consoleLogPath: artifacts.consoleLogPath,
+          consoleEntries: collector.entries,
+          resources: [],
+          warnings,
+        })
+      );
+    }
+
+    const result = createSuccessResult({
+      mode: options.mode,
+      requestedUrl: options.target,
+      finalUrl: ready.finalUrl,
+      authenticated: true,
+      readyState: ready.readyState,
+      artifacts,
+      warnings,
+    });
+
+    emitStdout(result);
+    return result;
+  } catch (error) {
+    keepBrowserOpen = false;
+    throw error;
+  } finally {
+    if (!keepBrowserOpen) {
+      await browser.close();
+    }
+  }
+}
+
+async function main(argv = process.argv.slice(2)) {
+  const options = parseCliArgs(argv);
+  if (options.help) {
+    process.stdout.write('用法：node scripts/node/page-debug.js [snapshot|open|login] <route-or-url>\n');
+    return 0;
+  }
+
+  const result = await runPageDebug(options);
+  return result.ok ? 0 : 1;
 }
 
 module.exports = {
@@ -144,7 +413,10 @@ module.exports = {
   createRunArtifacts,
   createSuccessResult,
   getRepoRoot,
+  loadPlaywright,
   main,
   parseCliArgs,
   resolveTargetUrl,
+  runPageDebug,
+  writeStdoutJson,
 };

@@ -7,6 +7,7 @@ const {
   createSuccessResult,
   parseCliArgs,
   resolveTargetUrl,
+  runPageDebug,
 } = require('../core.js');
 
 test('parseCliArgs defaults to snapshot mode for a bare route', () => {
@@ -91,4 +92,47 @@ test('createSuccessResult exposes machine-readable artifact paths', () => {
       warnings: [],
     }
   );
+});
+
+test('runPageDebug login mode returns structured json without launching a browser', async () => {
+  const writes = [];
+  const result = await runPageDebug(
+    {
+      help: false,
+      mode: 'login',
+      target: null,
+      webBaseUrl: 'http://127.0.0.1:3100',
+      apiBaseUrl: 'http://127.0.0.1:7800',
+      outDir: null,
+      headless: true,
+      timeout: 15000,
+      account: 'root',
+      password: 'change-me',
+      waitForSelector: null,
+      waitForUrl: null,
+    },
+    {
+      repoRoot: '/repo',
+      playwright: {
+        request: {
+          newContext: async () => ({
+            post: async () => ({ ok: () => true, status: () => 200, json: async () => ({ data: {} }) }),
+            storageState: async () => {},
+            dispose: async () => {},
+          }),
+        },
+      },
+      loadRootCredentials: () => ({
+        account: 'root',
+        password: 'change-me',
+        envFilePath: '/repo/.env',
+      }),
+      writeStdoutJson: (payload) => writes.push(payload),
+    }
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'login');
+  assert.equal(result.outputDir, null);
+  assert.equal(writes[0].mode, 'login');
 });

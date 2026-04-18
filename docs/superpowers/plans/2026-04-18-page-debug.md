@@ -1111,7 +1111,7 @@ Execution note (`2026-04-18 11:44 +0800`):
 **Files:**
 - Modify: `scripts/node/page-debug/core.js`
 
-- [ ] **Step 1: Add the failing runtime orchestration test**
+- [x] **Step 1: Add the failing runtime orchestration test**
 
 ```js
 // append to scripts/node/page-debug/_tests/core.test.js
@@ -1152,7 +1152,7 @@ test('runPageDebug login mode returns structured json without launching a browse
 });
 ```
 
-- [ ] **Step 2: Run the core tests and verify the new orchestration case fails**
+- [x] **Step 2: Run the core tests and verify the new orchestration case fails**
 
 Run:
 
@@ -1164,7 +1164,7 @@ Expected:
 
 - FAIL with `runPageDebug is not a function`
 
-- [ ] **Step 3: Implement the end-to-end orchestration in `core.js`**
+- [x] **Step 3: Implement the end-to-end orchestration in `core.js`**
 
 ```js
 // scripts/node/page-debug/core.js
@@ -1394,7 +1394,7 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 4: Run automated tests and manual smoke checks**
+- [x] **Step 4: Run automated tests and manual smoke checks**
 
 Run:
 
@@ -1452,9 +1452,19 @@ Expected:
 - stdout 输出单行 JSON
 - 运行目录下存在 `storage-state.json`、`page.png`、`console.ndjson`
 
-- [ ] **Step 5: Commit the integrated page-debug script**
+- [x] **Step 5: Commit the integrated page-debug script**
 
 ```bash
 git add scripts/node/page-debug.js scripts/node/page-debug
 git commit -m "feat: add page debug automation script"
 ```
+
+Execution note (`2026-04-18 11:50 +0800`):
+
+- Red: `rtk node --test scripts/node/page-debug/_tests/core.test.js` failed with `runPageDebug is not a function`
+- Green: `rtk node --test scripts/node/page-debug/_tests/core.test.js scripts/node/page-debug/_tests/auth.test.js scripts/node/page-debug/_tests/readiness.test.js scripts/node/page-debug/_tests/evidence.test.js scripts/node/page-debug/_tests/snapshot.test.js` passed with `17 tests` and `0 failures`
+- Smoke: `rtk node scripts/node/page-debug.js login` returned single-line JSON with `ok: true` and `mode: "login"`
+- Smoke: `rtk node scripts/node/page-debug.js snapshot /settings --wait-for-selector '[data-testid="section-page-layout"]'` succeeded and落盘 `meta.json`、`storage-state.json`、`index.html`、`page.png`、`console.ndjson`、`css/`、`js/`
+- Smoke: current app 实际会把 `/settings` 归一化到 `http://127.0.0.1:3100/settings/docs`；原计划里的 `.../settings/members` 已不再匹配当前运行态
+- Fix during smoke: 新增 `waitForPageReady` 红灯测试后，改为在 `waitForUrl` 场景先 `page.waitForURL(...)`，随后 `rtk node scripts/node/page-debug.js snapshot /settings --wait-for-url http://127.0.0.1:3100/settings/docs --wait-for-selector '[data-testid="section-page-layout"]'` 成功
+- Smoke: `rtk node scripts/node/page-debug.js open /me/profile --wait-for-selector '[data-testid="section-page-layout"]'` 输出单行 JSON，并在运行目录写出 `meta.json`、`storage-state.json`、`page.png`、`console.ndjson`

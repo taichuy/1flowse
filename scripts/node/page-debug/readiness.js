@@ -21,6 +21,10 @@ async function waitForPageReady({ page, requestedUrl, waitForUrl, waitForSelecto
     timeout,
   });
 
+  if (waitForUrl) {
+    await page.waitForURL(waitForUrl, { timeout });
+  }
+
   const baseResult = assertReadyNavigation({
     requestedUrl,
     finalUrl: page.url(),
