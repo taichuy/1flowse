@@ -21,6 +21,9 @@ tmp/*
 # Local backend env
 api/apps/api-server/.env
 
+# 官方维护目录，临时迁过来统一开发，但是不提交到线上仓库他有自己独立的维护仓库
+1flowbase-official-plugins/*
+
 # 仅维护.agent/skills，.claude/skills 自己维护
 .claude/skills
 .aionrs/*
