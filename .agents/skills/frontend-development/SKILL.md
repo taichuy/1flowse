@@ -1,6 +1,6 @@
 ---
 name: frontend-development
-description: Use when building or changing 1Flowse frontend pages, workspace flows, node development, schema UI, interactions, visual structure, or component boundaries and need to preserve the project's page recipes, interaction contracts, and UI consistency
+description: Use when building or changing 1Flowse frontend pages, workspace flows, node development, schema UI, interactions, visual structure, or component boundaries, or when vague/image-led frontend requests must be translated into confirmed design requirements before implementation
 ---
 
 # Frontend Development
@@ -19,6 +19,7 @@ description: Use when building or changing 1Flowse frontend pages, workspace flo
 - 评估是否拆文件、拆组件、拆 hooks
 - 页面状态开始散落，或同一文件同时承载展示、状态、协议、路由变化
 - 同类对象出现不同点击结果、不同状态表达或不同移动端降级
+- 用户需求模糊，只给目标词、截图、参考图或外部样本，需要先把页面需求讲清楚
 - 需要判断该直接做、复用现有实现，还是先问人
 
 **不要用于**
@@ -52,6 +53,7 @@ description: Use when building or changing 1Flowse frontend pages, workspace flo
 - 场景断言只表达边界属性约束；运行失败时应按“样式边界失败”解读，而不是泛 QA 失败
 - 前端浏览器级打开、验收、截图、交互复现默认使用 `Playwright`，不再主动使用 Chrome 浏览器 MCP / `chrome-devtools`
 - 浏览器级验收优先复用项目已有 `Playwright / page-debug / style-boundary` 链路；等待条件基于业务 ready signal，不做无等待裸截图
+- 需求模糊、只给图片或引用外部样本时，先走 `references/requirement-refinement.md`，产出可确认的设计需求草案，再进入实现
 - 信息架构、层级、入口、导航问题：**REQUIRED COMPANION SKILL:** Use `frontend-logic-design`
 - 新页面、新流程、交互流、视觉方案、页面内 AI 协作层：先问人
 - 单点使用且变化原因单一：先别抽象
@@ -65,6 +67,7 @@ description: Use when building or changing 1Flowse frontend pages, workspace flo
 - Directory, API, and utility placement rules: `references/placement-rules.md`
 - Node development and schema UI changes must preserve the split between `node-definitions`, `schema registry/adapter`, and renderer consumers
 - Ask-first gate: `references/communication-gate.md`
+- Requirement refinement for vague or image-led requests: `references/requirement-refinement.md`
 - Browser verification defaults: `references/browser-verification.md`
 - Before/during/after review: `references/review-checklist.md`
 - Anti-decay patterns: `references/anti-patterns.md`
@@ -84,3 +87,4 @@ description: Use when building or changing 1Flowse frontend pages, workspace flo
 - 在 Shell / Canvas 间混用 `Drawer` 和 `Inspector`
 - 把状态色拿去表达类型、装饰或品牌
 - 把真正的信息架构问题误当成样式问题
+- 用户只给了一张图或一句模糊目标，就直接按第三方视觉皮肤开写，没有先把任务目标、可借范围和设计需求确认清楚
