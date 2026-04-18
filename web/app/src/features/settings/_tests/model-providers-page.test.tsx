@@ -442,6 +442,13 @@ describe('ModelProvidersPage', () => {
         )
       );
 
+      const installButtons = await screen.findAllByRole(
+        'button',
+        { name: '安装到当前 workspace' },
+        { timeout: 10000 }
+      );
+      fireEvent.click(installButtons[installButtons.length - 1]!);
+
       await waitFor(() => {
         expect(pluginsApi.installSettingsOfficialPlugin).toHaveBeenCalledWith(
           '1flowbase.openai_compatible',

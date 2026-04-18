@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 
 import {
   Button,
+  Divider,
   Descriptions,
   Drawer,
   Form,
@@ -80,13 +81,21 @@ function renderConfigField(
   entry: SettingsModelProviderCatalogEntry,
   field: SettingsModelProviderCatalogEntry['form_schema'][number]
 ) {
+  const label =
+    field.key === 'base_url'
+      ? 'API Endpoint'
+      : field.key === 'api_key'
+        ? 'API Key'
+        : field.key;
+
   if (field.field_type === 'boolean') {
     return (
       <Form.Item
         key={field.key}
-        label={field.key}
+        label={label}
         name={['config', field.key]}
         valuePropName="checked"
+        extra={field.key === 'validate_model' ? '保存后默认执行模型可用性校验。' : undefined}
       >
         <Switch />
       </Form.Item>
@@ -100,19 +109,25 @@ function renderConfigField(
   return (
     <Form.Item
       key={field.key}
-      label={field.key}
+      label={label}
       name={['config', field.key]}
       rules={
         field.required && (!isSecret || mode === 'create')
-          ? [{ required: true, message: `请填写 ${field.key}` }]
+          ? [{ required: true, message: `请填写 ${label}` }]
           : undefined
       }
       extra={
-        isSecret && mode === 'edit' ? '留空表示保留当前 secret，不会覆盖。' : undefined
+        isSecret
+          ? mode === 'edit'
+            ? '留空表示保留当前密钥，不会覆盖。'
+            : '敏感字段仅用于加密存储，不会在列表和接口中回显。'
+          : field.key === 'base_url'
+            ? '支持输入标准 OpenAI 兼容地址；未填写时会优先使用插件默认值。'
+            : undefined
       }
     >
       {isSecret ? (
-        <Input.Password placeholder="输入新的 secret" />
+        <Input.Password placeholder="输入 API Key" />
       ) : useTextArea ? (
         <Input.TextArea rows={4} placeholder={field.key === 'base_url' ? entry.default_base_url ?? '' : undefined} />
       ) : (
@@ -156,12 +171,12 @@ export function ModelProviderInstanceDrawer({
     });
   }, [catalogEntry, form, instance, open]);
 
-  const title = mode === 'create' ? '新建模型供应商实例' : '编辑模型供应商实例';
+  const title = mode === 'create' ? 'API 密钥授权配置' : '编辑 API 密钥配置';
 
   return (
     <Drawer
       open={open}
-      width={520}
+      width={560}
       forceRender
       title={title}
       onClose={onClose}
@@ -194,12 +209,12 @@ export function ModelProviderInstanceDrawer({
               items={[
                 {
                   key: 'provider',
-                  label: 'Provider',
+                  label: '供应商',
                   children: `${catalogEntry.display_name} (${catalogEntry.provider_code})`
                 },
                 {
                   key: 'protocol',
-                  label: 'Protocol',
+                  label: '协议',
                   children: (
                     <Space wrap size={6}>
                       <Tag>{catalogEntry.protocol}</Tag>
@@ -219,17 +234,18 @@ export function ModelProviderInstanceDrawer({
               type="secondary"
               className="model-provider-panel__drawer-note"
             >
-              普通配置会进入实例元数据；secret 字段只会加密存储，不会回显到列表响应。
+              配置完成后，当前 workspace 内的成员都可以在模型选择器中使用这个实例。密钥仅会加密存储。
             </Typography.Paragraph>
 
             <Form.Item
-              label="实例名称"
+              label="凭据名称"
               name="display_name"
-              rules={[{ required: true, message: '请填写实例名称' }]}
+              rules={[{ required: true, message: '请填写凭据名称' }]}
             >
-              <Input />
+              <Input placeholder="例如：OpenAI Production" />
             </Form.Item>
 
+            <Divider orientation="left">连接配置</Divider>
             {catalogEntry.form_schema.map((field) =>
               renderConfigField(mode, catalogEntry, field)
             )}

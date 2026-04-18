@@ -1,4 +1,4 @@
-import { Button, Empty, Space, Tag, Typography } from 'antd';
+import { Button, Empty, Modal, Space, Tag, Typography } from 'antd';
 
 import type { SettingsOfficialPluginCatalogEntry } from '../../api/plugins';
 
@@ -69,13 +69,16 @@ export function OfficialPluginInstallPanel({
   installState: InstallState;
   onInstall: (entry: SettingsOfficialPluginCatalogEntry) => void;
 }) {
+  const [modal, contextHolder] = Modal.useModal();
+
   return (
     <section className="model-provider-panel__official">
+      {contextHolder}
       <div className="model-provider-panel__section-head">
         <div>
           <Typography.Title level={5}>安装模型供应商</Typography.Title>
           <Typography.Text type="secondary">
-            从官方仓库安装 latest 版本，并自动启用到当前 workspace。
+            从官方目录补充新的供应商，安装完成后会自动分配到当前 workspace。
           </Typography.Text>
         </div>
       </div>
@@ -103,10 +106,15 @@ export function OfficialPluginInstallPanel({
                 className="model-provider-panel__official-card"
               >
                 <div className="model-provider-panel__catalog-item-head">
-                  <div>
-                    <Typography.Title level={5}>{entry.display_name}</Typography.Title>
+                  <div className="model-provider-panel__catalog-item-main">
+                    <div className="model-provider-panel__catalog-item-title-row">
+                      <Typography.Title level={5}>{entry.display_name}</Typography.Title>
+                      <Typography.Text type="secondary">
+                        latest {entry.latest_version}
+                      </Typography.Text>
+                    </div>
                     <Typography.Text type="secondary">
-                      {entry.protocol} · latest {entry.latest_version}
+                      {entry.protocol} · 官方插件
                     </Typography.Text>
                   </div>
                   <Space wrap size={6}>
@@ -132,7 +140,38 @@ export function OfficialPluginInstallPanel({
                       type={installed ? 'default' : 'primary'}
                       loading={installing}
                       disabled={installed}
-                      onClick={() => onInstall(entry)}
+                      onClick={() => {
+                        void modal.confirm({
+                          title: '安装插件',
+                          icon: null,
+                          centered: true,
+                          okText: buttonLabel,
+                          cancelText: '取消',
+                          okButtonProps: {
+                            loading: installing,
+                            disabled: installed
+                          },
+                          content: (
+                            <div className="model-provider-panel__install-confirm">
+                              <div className="model-provider-panel__install-confirm-card">
+                                <Typography.Title level={5}>
+                                  {entry.display_name}
+                                </Typography.Title>
+                                <Typography.Paragraph type="secondary">
+                                  即将安装官方插件 `latest {entry.latest_version}`，完成后会自动启用到当前 workspace。
+                                </Typography.Paragraph>
+                                <div className="model-provider-panel__catalog-item-meta">
+                                  <span>协议 {entry.protocol}</span>
+                                  <span>发现模式 {entry.model_discovery_mode}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ),
+                          onOk: async () => {
+                            onInstall(entry);
+                          }
+                        });
+                      }}
                     >
                       {buttonLabel}
                     </Button>

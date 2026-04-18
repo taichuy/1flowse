@@ -1,7 +1,6 @@
 import { Button, Empty, Space, Table, Tag, Typography } from 'antd';
 
 import type {
-  SettingsModelProviderCatalogEntry,
   SettingsModelProviderInstance
 } from '../../api/model-providers';
 
@@ -20,20 +19,16 @@ function renderStatusTag(status: string) {
 
 export function ModelProviderInstancesTable({
   instances,
-  catalogEntries,
   loading,
   canManage,
-  onCreate,
   onEdit,
   onValidate,
   onRefreshModels,
   onDelete
 }: {
   instances: SettingsModelProviderInstance[];
-  catalogEntries: SettingsModelProviderCatalogEntry[];
   loading?: boolean;
   canManage: boolean;
-  onCreate: () => void;
   onEdit: (instance: SettingsModelProviderInstance) => void;
   onValidate: (instance: SettingsModelProviderInstance) => void;
   onRefreshModels: (instance: SettingsModelProviderInstance) => void;
@@ -41,24 +36,6 @@ export function ModelProviderInstancesTable({
 }) {
   return (
     <section className="model-provider-panel__instances">
-      <div className="model-provider-panel__section-head">
-        <div>
-          <Typography.Title level={5}>实例列表</Typography.Title>
-          <Typography.Text type="secondary">
-            只展示当前 workspace 下的 provider instances。ready 实例会进入 agentFlow 模型选项。
-          </Typography.Text>
-        </div>
-        {canManage ? (
-          <Button
-            type="primary"
-            onClick={onCreate}
-            disabled={catalogEntries.length === 0}
-          >
-            新建实例
-          </Button>
-        ) : null}
-      </div>
-
       <Table<SettingsModelProviderInstance>
         rowKey="id"
         loading={loading}
@@ -132,7 +109,7 @@ export function ModelProviderInstancesTable({
                 {
                   title: '操作',
                   key: 'actions',
-                  width: 260,
+                  width: 280,
                   render: (_: unknown, instance: SettingsModelProviderInstance) => (
                     <Space size={4} wrap>
                       <Button
