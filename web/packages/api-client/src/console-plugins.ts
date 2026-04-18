@@ -27,6 +27,22 @@ export interface ConsolePluginCatalogEntry {
   assigned_to_current_workspace: boolean;
 }
 
+export type ConsoleOfficialPluginInstallStatus =
+  | 'not_installed'
+  | 'installed'
+  | 'assigned';
+
+export interface ConsoleOfficialPluginCatalogEntry {
+  plugin_id: string;
+  provider_code: string;
+  display_name: string;
+  protocol: string;
+  latest_version: string;
+  help_url: string | null;
+  model_discovery_mode: string;
+  install_status: ConsoleOfficialPluginInstallStatus;
+}
+
 export interface ConsolePluginTask {
   id: string;
   installation_id: string | null;
@@ -45,6 +61,10 @@ export interface InstallConsolePluginInput {
   package_root: string;
 }
 
+export interface InstallConsoleOfficialPluginInput {
+  plugin_id: string;
+}
+
 export interface InstallConsolePluginResult {
   installation: ConsolePluginInstallation;
   task: ConsolePluginTask;
@@ -57,6 +77,13 @@ export function listConsolePluginCatalog(baseUrl?: string) {
   });
 }
 
+export function listConsoleOfficialPluginCatalog(baseUrl?: string) {
+  return apiFetch<ConsoleOfficialPluginCatalogEntry[]>({
+    path: '/api/console/plugins/official-catalog',
+    baseUrl
+  });
+}
+
 export function installConsolePlugin(
   input: InstallConsolePluginInput,
   csrfToken: string,
@@ -64,6 +91,20 @@ export function installConsolePlugin(
 ) {
   return apiFetch<InstallConsolePluginResult>({
     path: '/api/console/plugins/install',
+    method: 'POST',
+    body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function installConsoleOfficialPlugin(
+  input: InstallConsoleOfficialPluginInput,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<InstallConsolePluginResult>({
+    path: '/api/console/plugins/install-official',
     method: 'POST',
     body: input,
     csrfToken,

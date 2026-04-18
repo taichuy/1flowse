@@ -99,6 +99,19 @@ const styleBoundaryProviderOptions = {
   ]
 };
 
+const styleBoundaryOfficialPluginCatalog = [
+  {
+    plugin_id: '1flowse.openai_compatible',
+    provider_code: 'openai_compatible',
+    display_name: 'OpenAI Compatible',
+    protocol: 'openai_responses',
+    latest_version: '0.1.0',
+    help_url: 'https://github.com/taichuy/1flowse-official-plugins/tree/main/models/openai_compatible',
+    model_discovery_mode: 'hybrid',
+    install_status: 'assigned'
+  }
+];
+
 function getAccountPopupChildren() {
   const items = createAccountMenuItems() ?? [];
   const firstItem = items[0];
@@ -292,6 +305,22 @@ function seedStyleBoundarySettingsFetch() {
       return new Response(
         JSON.stringify({
           data: styleBoundaryProviderCatalog,
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
+    if (
+      method.toUpperCase() === 'GET' &&
+      url.endsWith('/api/console/plugins/official-catalog')
+    ) {
+      return new Response(
+        JSON.stringify({
+          data: styleBoundaryOfficialPluginCatalog,
           meta: null
         }),
         {

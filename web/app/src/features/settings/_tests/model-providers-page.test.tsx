@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Grid } from 'antd';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -56,6 +56,7 @@ const docsApi = vi.hoisted(() => ({
 const modelProvidersApi = vi.hoisted(() => ({
   settingsModelProviderCatalogQueryKey: ['settings', 'model-providers', 'catalog'],
   settingsModelProviderInstancesQueryKey: ['settings', 'model-providers', 'instances'],
+  settingsModelProviderOptionsQueryKey: ['settings', 'model-providers', 'options'],
   fetchSettingsModelProviderCatalog: vi.fn(),
   fetchSettingsModelProviderInstances: vi.fn(),
   createSettingsModelProviderInstance: vi.fn(),
@@ -65,11 +66,19 @@ const modelProvidersApi = vi.hoisted(() => ({
   deleteSettingsModelProviderInstance: vi.fn()
 }));
 
+const pluginsApi = vi.hoisted(() => ({
+  settingsOfficialPluginsQueryKey: ['settings', 'plugins', 'official-catalog'],
+  fetchSettingsOfficialPluginCatalog: vi.fn(),
+  installSettingsOfficialPlugin: vi.fn(),
+  fetchSettingsPluginTask: vi.fn()
+}));
+
 vi.mock('../api/members', () => membersApi);
 vi.mock('../api/roles', () => rolesApi);
 vi.mock('../api/permissions', () => permissionsApi);
 vi.mock('../api/api-docs', () => docsApi);
 vi.mock('../api/model-providers', () => modelProvidersApi);
+vi.mock('../api/plugins', () => pluginsApi);
 vi.mock('@scalar/api-reference-react', () => ({
   ApiReferenceReact: () => <div data-testid="settings-page-scalar">Scalar</div>
 }));
@@ -203,24 +212,85 @@ describe('ModelProvidersPage', () => {
         model_count: 1
       }
     ]);
-  });
-
-  test('renders catalog and instance metadata for view-only users without manage actions', async () => {
-    authenticateWithPermissions(['route_page.view.all', 'state_model.view.all']);
-
-    renderApp('/settings/model-providers');
-
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/settings/model-providers');
+    pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue([]);
+    pluginsApi.installSettingsOfficialPlugin.mockResolvedValue({
+      installation: {
+        id: 'installation-1',
+        provider_code: 'openai_compatible',
+        plugin_id: 'openai_compatible@0.1.0',
+        plugin_version: '0.1.0',
+        contract_version: '1flowse.provider/v1',
+        protocol: 'openai_compatible',
+        display_name: 'OpenAI Compatible',
+        source_kind: 'official_registry',
+        verification_status: 'valid',
+        enabled: true,
+        install_path: '/tmp/openai-compatible',
+        checksum: 'sha256:abc123',
+        signature_status: 'unsigned',
+        metadata_json: {},
+        created_at: '2026-04-18T21:00:00Z',
+        updated_at: '2026-04-18T21:00:00Z'
+      },
+      task: {
+        id: 'task-1',
+        installation_id: 'installation-1',
+        workspace_id: 'workspace-1',
+        provider_code: 'openai_compatible',
+        task_kind: 'assign',
+        status: 'success',
+        status_message: 'assigned',
+        detail_json: {},
+        created_at: '2026-04-18T21:00:00Z',
+        updated_at: '2026-04-18T21:00:00Z',
+        finished_at: '2026-04-18T21:00:00Z'
+      }
     });
-
-    expect(await screen.findByRole('heading', { name: '模型供应商', level: 4 })).toBeInTheDocument();
-    expect(screen.getByText('OpenAI Compatible')).toBeInTheDocument();
-    expect(screen.getByRole('row', { name: /OpenAI Production/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '新建实例' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /编辑 OpenAI Production/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /验证 OpenAI Production/ })).not.toBeInTheDocument();
+    pluginsApi.fetchSettingsPluginTask.mockResolvedValue({
+      id: 'task-1',
+      installation_id: 'installation-1',
+      workspace_id: 'workspace-1',
+      provider_code: 'openai_compatible',
+      task_kind: 'assign',
+      status: 'success',
+      status_message: 'assigned',
+      detail_json: {},
+      created_at: '2026-04-18T21:00:00Z',
+      updated_at: '2026-04-18T21:00:00Z',
+      finished_at: '2026-04-18T21:00:00Z'
+    });
   });
+
+  test(
+    'renders catalog and instance metadata for view-only users without manage actions',
+    async () => {
+      authenticateWithPermissions(['route_page.view.all', 'state_model.view.all']);
+
+      renderApp('/settings/model-providers');
+
+      await waitFor(() => {
+        expect(window.location.pathname).toBe('/settings/model-providers');
+      });
+      await waitFor(() => {
+        expect(modelProvidersApi.fetchSettingsModelProviderCatalog).toHaveBeenCalled();
+        expect(modelProvidersApi.fetchSettingsModelProviderInstances).toHaveBeenCalled();
+      });
+
+      expect(
+        await screen.findByRole('heading', { name: '模型供应商', level: 4 }, { timeout: 10000 })
+      ).toBeInTheDocument();
+      expect(
+        (await screen.findAllByText('OpenAI Compatible', {}, { timeout: 10000 })).length
+      ).toBeGreaterThanOrEqual(1);
+      expect(
+        await screen.findByText('OpenAI Production', {}, { timeout: 10000 })
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '新建实例' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /编辑 OpenAI Production/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /验证 OpenAI Production/ })).not.toBeInTheDocument();
+    },
+    10000
+  );
 
   test('shows create and row-level manage actions when state_model.manage.all is present', async () => {
     authenticateWithPermissions([
@@ -239,4 +309,156 @@ describe('ModelProvidersPage', () => {
     expect(within(providerRow).getByRole('button', { name: /刷新模型 OpenAI Production/ })).toBeInTheDocument();
     expect(within(providerRow).getByRole('button', { name: /删除 OpenAI Production/ })).toBeInTheDocument();
   });
+
+  test('renders official install cards beneath the installed provider area', async () => {
+    authenticateWithPermissions([
+      'route_page.view.all',
+      'state_model.view.all',
+      'state_model.manage.all'
+    ]);
+    pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue([
+      {
+        plugin_id: '1flowse.openai_compatible',
+        provider_code: 'openai_compatible',
+        display_name: 'OpenAI Compatible',
+        latest_version: '0.1.0',
+        protocol: 'openai_compatible',
+        help_url:
+          'https://github.com/taichuy/1flowse-official-plugins/tree/main/models/openai_compatible',
+        model_discovery_mode: 'hybrid',
+        install_status: 'not_installed'
+      }
+    ]);
+
+    renderApp('/settings/model-providers');
+
+    await waitFor(() => {
+      expect(pluginsApi.fetchSettingsOfficialPluginCatalog).toHaveBeenCalled();
+    });
+    expect(
+      await screen.findByRole('heading', { name: '安装模型供应商' }, { timeout: 10000 })
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole(
+        'button',
+        { name: '安装到当前 workspace' },
+        { timeout: 10000 }
+      )
+    ).toBeInTheDocument();
+  });
+
+  test(
+    'polls install task until the official plugin finishes installing',
+    async () => {
+      authenticateWithPermissions([
+        'route_page.view.all',
+        'state_model.view.all',
+        'state_model.manage.all'
+      ]);
+      pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue([
+        {
+          plugin_id: '1flowse.openai_compatible',
+          provider_code: 'openai_compatible',
+          display_name: 'OpenAI Compatible',
+          latest_version: '0.1.0',
+          protocol: 'openai_compatible',
+          help_url:
+            'https://github.com/taichuy/1flowse-official-plugins/tree/main/models/openai_compatible',
+          model_discovery_mode: 'hybrid',
+          install_status: 'not_installed'
+        }
+      ]);
+      pluginsApi.installSettingsOfficialPlugin.mockResolvedValue({
+        installation: {
+          id: 'installation-1',
+          provider_code: 'openai_compatible',
+          plugin_id: 'openai_compatible@0.1.0',
+          plugin_version: '0.1.0',
+          contract_version: '1flowse.provider/v1',
+          protocol: 'openai_compatible',
+          display_name: 'OpenAI Compatible',
+          source_kind: 'official_registry',
+          verification_status: 'valid',
+          enabled: true,
+          install_path: '/tmp/openai-compatible',
+          checksum: 'sha256:abc123',
+          signature_status: 'unsigned',
+          metadata_json: {},
+          created_at: '2026-04-18T21:00:00Z',
+          updated_at: '2026-04-18T21:00:00Z'
+        },
+        task: {
+          id: 'task-1',
+          installation_id: 'installation-1',
+          workspace_id: 'workspace-1',
+          provider_code: 'openai_compatible',
+          task_kind: 'assign',
+          status: 'running',
+          status_message: null,
+          detail_json: {},
+          created_at: '2026-04-18T21:00:00Z',
+          updated_at: '2026-04-18T21:00:00Z',
+          finished_at: null
+        }
+      });
+      pluginsApi.fetchSettingsPluginTask
+        .mockResolvedValueOnce({
+          id: 'task-1',
+          installation_id: 'installation-1',
+          workspace_id: 'workspace-1',
+          provider_code: 'openai_compatible',
+          task_kind: 'assign',
+          status: 'running',
+          status_message: null,
+          detail_json: {},
+          created_at: '2026-04-18T21:00:00Z',
+          updated_at: '2026-04-18T21:00:00Z',
+          finished_at: null
+        })
+        .mockResolvedValueOnce({
+          id: 'task-1',
+          installation_id: 'installation-1',
+          workspace_id: 'workspace-1',
+          provider_code: 'openai_compatible',
+          task_kind: 'assign',
+          status: 'success',
+          status_message: 'assigned',
+          detail_json: {},
+          created_at: '2026-04-18T21:00:00Z',
+          updated_at: '2026-04-18T21:00:01Z',
+          finished_at: '2026-04-18T21:00:01Z'
+        });
+
+      renderApp('/settings/model-providers');
+      await waitFor(() => {
+        expect(pluginsApi.fetchSettingsOfficialPluginCatalog).toHaveBeenCalled();
+      });
+
+      fireEvent.click(
+        await screen.findByRole(
+          'button',
+          { name: '安装到当前 workspace' },
+          { timeout: 10000 }
+        )
+      );
+
+      await waitFor(() => {
+        expect(pluginsApi.installSettingsOfficialPlugin).toHaveBeenCalledWith(
+          '1flowse.openai_compatible',
+          'csrf-123'
+        );
+        expect(screen.getAllByText('安装中').length).toBeGreaterThanOrEqual(1);
+      });
+
+      await waitFor(() => {
+        expect(pluginsApi.fetchSettingsPluginTask).toHaveBeenCalled();
+      }, { timeout: 4000 });
+
+      await waitFor(() => {
+        expect(pluginsApi.fetchSettingsPluginTask).toHaveBeenCalledTimes(2);
+        expect(screen.getByText('已安装到当前 workspace')).toBeInTheDocument();
+      }, { timeout: 4000 });
+    },
+    15000
+  );
 });

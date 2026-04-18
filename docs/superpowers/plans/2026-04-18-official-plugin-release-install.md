@@ -613,7 +613,7 @@ git commit -m "feat: install official plugins from release assets"
 - Modify: `web/app/src/style-boundary/registry.tsx`
 - Modify: `web/app/src/style-boundary/scenario-manifest.json`
 
-- [ ] **Step 1: Write the failing settings page tests for the official install area**
+- [x] **Step 1: Write the failing settings page tests for the official install area**
 
 Append focused tests to `web/app/src/features/settings/_tests/model-providers-page.test.tsx`:
 
@@ -653,7 +653,7 @@ test('polls install task until the official plugin finishes installing', async (
 });
 ```
 
-- [ ] **Step 2: Run the targeted Vitest file to confirm the new hooks and panel do not exist yet**
+- [x] **Step 2: Run the targeted Vitest file to confirm the new hooks and panel do not exist yet**
 
 Run:
 
@@ -663,7 +663,7 @@ pnpm --dir web/app test -- src/features/settings/_tests/model-providers-page.tes
 
 Expected: FAIL with missing `pluginsApi` mocks, missing `OfficialPluginInstallPanel`, or missing “安装模型供应商” content.
 
-- [ ] **Step 3: Implement official catalog client methods, the install panel, and task polling**
+- [x] **Step 3: Implement official catalog client methods, the install panel, and task polling**
 
 Update `web/packages/api-client/src/console-plugins.ts`:
 
@@ -776,7 +776,7 @@ const pluginTaskQuery = useQuery({
 
 Also update `model-provider-panel.css` and `style-boundary` fixtures to account for the new lower install section and card grid.
 
-- [ ] **Step 4: Run the focused UI tests and the existing settings style boundary check**
+- [x] **Step 4: Run the focused UI tests and the existing settings style boundary check**
 
 Run:
 
@@ -788,7 +788,9 @@ node scripts/node/check-style-boundary.js page page.settings
 
 Expected: PASS. The settings page renders both the installed-provider area and the official install area, install task polling reaches terminal state, and the settings page visual contract still passes.
 
-- [ ] **Step 5: Commit the settings install panel changes**
+Execution note: 额外完成了 `pnpm --dir web lint`、`pnpm --dir web/app build` 和 `pnpm --dir web test`。其中全量 `web test` 在高并发下有一条既有 `agent-flow` 用例 `src/features/agent-flow/_tests/llm-model-provider-field.test.tsx` 命中过 5 秒超时；同文件单独重跑已通过，当前 Task 4 相关设置页与样式边界用例均稳定通过。
+
+- [x] **Step 5: Commit the settings install panel changes**
 
 Run:
 

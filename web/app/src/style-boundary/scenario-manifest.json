@@ -335,12 +335,15 @@
       "web/app/src/features/settings/pages/SettingsPage.tsx",
       "web/app/src/features/settings/lib/settings-sections.tsx",
       "web/app/src/features/settings/api/model-providers.ts",
+      "web/app/src/features/settings/api/plugins.ts",
       "web/app/src/features/settings/components/model-providers/ModelProviderCatalogPanel.tsx",
       "web/app/src/features/settings/components/model-providers/ModelProviderInstancesTable.tsx",
       "web/app/src/features/settings/components/model-providers/ModelProviderInstanceDrawer.tsx",
+      "web/app/src/features/settings/components/model-providers/OfficialPluginInstallPanel.tsx",
       "web/app/src/features/settings/components/model-providers/model-provider-panel.css",
       "web/app/src/app/router.tsx",
-      "web/packages/api-client/src/console-model-providers.ts"
+      "web/packages/api-client/src/console-model-providers.ts",
+      "web/packages/api-client/src/console-plugins.ts"
     ],
     "boundaryNodes": [
       {
@@ -404,6 +407,34 @@
       {
         "id": "model-provider-catalog-item",
         "selector": ".model-provider-panel__catalog-item",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "grid"
+          },
+          {
+            "property": "border-top-left-radius",
+            "expected": "16px"
+          }
+        ]
+      },
+      {
+        "id": "model-provider-official-grid",
+        "selector": ".model-provider-panel__official-grid",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "grid"
+          },
+          {
+            "property": "row-gap",
+            "expected": "14px"
+          }
+        ]
+      },
+      {
+        "id": "model-provider-official-card",
+        "selector": ".model-provider-panel__official-card",
         "propertyAssertions": [
           {
             "property": "display",

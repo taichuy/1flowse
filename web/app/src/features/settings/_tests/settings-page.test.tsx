@@ -56,6 +56,7 @@ const docsApi = vi.hoisted(() => ({
 const modelProvidersApi = vi.hoisted(() => ({
   settingsModelProviderCatalogQueryKey: ['settings', 'model-providers', 'catalog'],
   settingsModelProviderInstancesQueryKey: ['settings', 'model-providers', 'instances'],
+  settingsModelProviderOptionsQueryKey: ['settings', 'model-providers', 'options'],
   fetchSettingsModelProviderCatalog: vi.fn(),
   fetchSettingsModelProviderInstances: vi.fn(),
   createSettingsModelProviderInstance: vi.fn(),
@@ -65,11 +66,19 @@ const modelProvidersApi = vi.hoisted(() => ({
   deleteSettingsModelProviderInstance: vi.fn()
 }));
 
+const pluginsApi = vi.hoisted(() => ({
+  settingsOfficialPluginsQueryKey: ['settings', 'plugins', 'official-catalog'],
+  fetchSettingsOfficialPluginCatalog: vi.fn(),
+  installSettingsOfficialPlugin: vi.fn(),
+  fetchSettingsPluginTask: vi.fn()
+}));
+
 vi.mock('../api/members', () => membersApi);
 vi.mock('../api/roles', () => rolesApi);
 vi.mock('../api/permissions', () => permissionsApi);
 vi.mock('../api/api-docs', () => docsApi);
 vi.mock('../api/model-providers', () => modelProvidersApi);
+vi.mock('../api/plugins', () => pluginsApi);
 vi.mock('@scalar/api-reference-react', () => ({
   ApiReferenceReact: () => <div data-testid="settings-page-scalar">Scalar</div>
 }));
@@ -159,6 +168,53 @@ describe('SettingsPage', () => {
     });
     modelProvidersApi.fetchSettingsModelProviderCatalog.mockResolvedValue([]);
     modelProvidersApi.fetchSettingsModelProviderInstances.mockResolvedValue([]);
+    pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue([]);
+    pluginsApi.installSettingsOfficialPlugin.mockResolvedValue({
+      installation: {
+        id: 'installation-1',
+        provider_code: 'openai_compatible',
+        plugin_id: 'openai_compatible@0.1.0',
+        plugin_version: '0.1.0',
+        contract_version: '1flowse.provider/v1',
+        protocol: 'openai_compatible',
+        display_name: 'OpenAI Compatible',
+        source_kind: 'official_registry',
+        verification_status: 'valid',
+        enabled: true,
+        install_path: '/tmp/openai-compatible',
+        checksum: 'sha256:abc123',
+        signature_status: 'unsigned',
+        metadata_json: {},
+        created_at: '2026-04-18T21:00:00Z',
+        updated_at: '2026-04-18T21:00:00Z'
+      },
+      task: {
+        id: 'task-1',
+        installation_id: 'installation-1',
+        workspace_id: 'workspace-1',
+        provider_code: 'openai_compatible',
+        task_kind: 'assign',
+        status: 'success',
+        status_message: 'assigned',
+        detail_json: {},
+        created_at: '2026-04-18T21:00:00Z',
+        updated_at: '2026-04-18T21:00:00Z',
+        finished_at: '2026-04-18T21:00:00Z'
+      }
+    });
+    pluginsApi.fetchSettingsPluginTask.mockResolvedValue({
+      id: 'task-1',
+      installation_id: 'installation-1',
+      workspace_id: 'workspace-1',
+      provider_code: 'openai_compatible',
+      task_kind: 'assign',
+      status: 'success',
+      status_message: 'assigned',
+      detail_json: {},
+      created_at: '2026-04-18T21:00:00Z',
+      updated_at: '2026-04-18T21:00:00Z',
+      finished_at: '2026-04-18T21:00:00Z'
+    });
   });
 
   test('shows API 文档 only for root or api_reference.view.all', async () => {

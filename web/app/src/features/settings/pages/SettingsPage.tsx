@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate } from '@tanstack/react-router';
@@ -12,6 +12,7 @@ import { RolePermissionPanel } from '../components/RolePermissionPanel';
 import { ModelProviderCatalogPanel } from '../components/model-providers/ModelProviderCatalogPanel';
 import { ModelProviderInstanceDrawer } from '../components/model-providers/ModelProviderInstanceDrawer';
 import { ModelProviderInstancesTable } from '../components/model-providers/ModelProviderInstancesTable';
+import { OfficialPluginInstallPanel } from '../components/model-providers/OfficialPluginInstallPanel';
 import {
   getVisibleSettingsSections,
   type SettingsSectionKey
@@ -28,6 +29,12 @@ import {
   updateSettingsModelProviderInstance,
   validateSettingsModelProviderInstance
 } from '../api/model-providers';
+import {
+  fetchSettingsOfficialPluginCatalog,
+  fetchSettingsPluginTask,
+  installSettingsOfficialPlugin,
+  settingsOfficialPluginsQueryKey
+} from '../api/plugins';
 import '../components/model-providers/model-provider-panel.css';
 
 function hasAnyPermission(permissions: string[], candidates: string[]) {
@@ -36,6 +43,10 @@ function hasAnyPermission(permissions: string[], candidates: string[]) {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : null;
+}
+
+function isTaskTerminal(status: string | null | undefined) {
+  return status === 'success' || status === 'failed' || status === 'canceled' || status === 'timed_out';
 }
 
 function ModelProvidersSection({
@@ -55,13 +66,27 @@ function ModelProvidersSection({
     queryKey: settingsModelProviderCatalogQueryKey,
     queryFn: fetchSettingsModelProviderCatalog
   });
+  const officialCatalogQuery = useQuery({
+    queryKey: settingsOfficialPluginsQueryKey,
+    queryFn: fetchSettingsOfficialPluginCatalog
+  });
   const instancesQuery = useQuery({
     queryKey: settingsModelProviderInstancesQueryKey,
     queryFn: fetchSettingsModelProviderInstances
   });
+  const [officialInstallState, setOfficialInstallState] = useState<{
+    pluginId: string | null;
+    taskId: string | null;
+    status: 'idle' | 'installing' | 'success' | 'failed';
+  }>({
+    pluginId: null,
+    taskId: null,
+    status: 'idle'
+  });
 
   const instances = instancesQuery.data ?? [];
   const catalogEntries = catalogQuery.data ?? [];
+  const officialCatalogEntries = officialCatalogQuery.data ?? [];
   const editingInstance =
     drawerState?.mode === 'edit'
       ? instances.find((instance) => instance.id === drawerState.instanceId) ?? null
@@ -80,13 +105,25 @@ function ModelProvidersSection({
   async function invalidateModelProviderQueries() {
     await Promise.all([
       queryClient.invalidateQueries({
+        queryKey: settingsModelProviderCatalogQueryKey
+      }),
+      queryClient.invalidateQueries({
         queryKey: settingsModelProviderInstancesQueryKey
       }),
       queryClient.invalidateQueries({
         queryKey: settingsModelProviderOptionsQueryKey
+      }),
+      queryClient.invalidateQueries({
+        queryKey: settingsOfficialPluginsQueryKey
       })
     ]);
   }
+
+  const handleOfficialInstallSettled = useEffectEvent(async (status: 'success' | 'failed') => {
+    if (status === 'success') {
+      await invalidateModelProviderQueries();
+    }
+  });
 
   const createMutation = useMutation({
     mutationFn: async (input: { installationId: string; display_name: string; config: Record<string, unknown> }) => {
@@ -162,15 +199,115 @@ function ModelProvidersSection({
     },
     onSuccess: invalidateModelProviderQueries
   });
+  const officialInstallMutation = useMutation({
+    mutationFn: async (pluginId: string) => {
+      if (!csrfToken) {
+        throw new Error('missing csrf token');
+      }
+
+      return installSettingsOfficialPlugin(pluginId, csrfToken);
+    },
+    onMutate: (pluginId) => {
+      setOfficialInstallState({
+        pluginId,
+        taskId: null,
+        status: 'installing'
+      });
+    },
+    onSuccess: async (result, pluginId) => {
+      if (result.task.finished_at || isTaskTerminal(result.task.status)) {
+        const status = result.task.status === 'success' ? 'success' : 'failed';
+        setOfficialInstallState({
+          pluginId,
+          taskId: null,
+          status
+        });
+        await handleOfficialInstallSettled(status);
+        return;
+      }
+
+      setOfficialInstallState({
+        pluginId,
+        taskId: result.task.id,
+        status: 'installing'
+      });
+    },
+    onError: (_error, pluginId) => {
+      setOfficialInstallState({
+        pluginId,
+        taskId: null,
+        status: 'failed'
+      });
+    }
+  });
+  const pluginTaskQuery = useQuery({
+    queryKey: ['settings', 'plugins', 'task', officialInstallState.taskId],
+    queryFn: () => fetchSettingsPluginTask(officialInstallState.taskId!),
+    enabled: Boolean(officialInstallState.taskId)
+  });
+
+  const refetchOfficialInstallTask = useEffectEvent(() => {
+    void pluginTaskQuery.refetch();
+  });
+
+  useEffect(() => {
+    if (!officialInstallState.taskId || pluginTaskQuery.fetchStatus === 'fetching') {
+      return;
+    }
+
+    const task = pluginTaskQuery.data;
+    if (task?.finished_at || isTaskTerminal(task?.status)) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      refetchOfficialInstallTask();
+    }, 1000);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    officialInstallState.taskId,
+    pluginTaskQuery.data,
+    pluginTaskQuery.fetchStatus,
+    refetchOfficialInstallTask
+  ]);
+
+  useEffect(() => {
+    const task = pluginTaskQuery.data;
+    if (!task || !officialInstallState.taskId) {
+      return;
+    }
+
+    if (!task.finished_at && !isTaskTerminal(task.status)) {
+      return;
+    }
+
+    const status = task.status === 'success' ? 'success' : 'failed';
+    setOfficialInstallState((current) => ({
+      pluginId: current.pluginId,
+      taskId: null,
+      status
+    }));
+    void handleOfficialInstallSettled(status);
+  }, [
+    handleOfficialInstallSettled,
+    officialInstallState.taskId,
+    pluginTaskQuery.data
+  ]);
 
   const errorMessage =
     getErrorMessage(catalogQuery.error) ??
+    getErrorMessage(officialCatalogQuery.error) ??
     getErrorMessage(instancesQuery.error) ??
     getErrorMessage(createMutation.error) ??
     getErrorMessage(updateMutation.error) ??
     getErrorMessage(validateMutation.error) ??
     getErrorMessage(refreshMutation.error) ??
-    getErrorMessage(deleteMutation.error);
+    getErrorMessage(deleteMutation.error) ??
+    getErrorMessage(officialInstallMutation.error) ??
+    getErrorMessage(pluginTaskQuery.error);
 
   return (
     <div className="model-provider-panel">
@@ -224,6 +361,17 @@ function ModelProvidersSection({
           }}
         />
       </div>
+
+      <OfficialPluginInstallPanel
+        entries={officialCatalogEntries}
+        loading={officialCatalogQuery.isLoading}
+        canManage={canManage}
+        activePluginId={officialInstallState.pluginId}
+        installState={officialInstallState.status}
+        onInstall={(entry) => {
+          officialInstallMutation.mutate(entry.plugin_id);
+        }}
+      />
 
       <ModelProviderInstanceDrawer
         open={drawerState !== null}
