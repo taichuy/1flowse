@@ -1,21 +1,23 @@
 # 08 插件体系
 
-日期：2026-04-14
-状态：规则已确认，能力未完备
+日期：2026-04-18
+状态：规则已确认，最小实现范围已收口，能力仍未完备
 
 ## 讨论进度
 
-- 状态：`rules_confirmed`
-- 完成情况：插件来源分级、消费边界、信任模型和 `plugin-runner` 宿主方向已收敛；当前代码只落了部分边界约束与基础骨架。
-- 最后更新：2026-04-14 19:45 CST
+- 状态：`rules_confirmed_minimum_runtime_defined`
+- 完成情况：插件来源分级、消费边界、`plugin-runner` 宿主方向、provider plugin 生命周期、注册发现与安装产物边界已收敛。
+- 最后更新：2026-04-18 08 CST
 
 ## 本模块范围
 
 - 插件来源与信任分级
 - 插件消费方式与绑定边界
+- provider plugin 的类型、槽位与生效范围
+- 插件源码仓库与安装产物的边界
+- 注册发现、安装任务、installed registry 与 assignment 规则
 - `plugin-runner` 宿主方向
-- 安装 / 启用 / 分配 / 绑定 / 使用的生命周期规则
-- manifest / schema / RPC 的未来实现基线
+- manifest / schema / runtime contract / RPC 的实现基线
 
 ## 当前代码事实
 
@@ -27,6 +29,7 @@
   - 插件安装任务
   - manifest / schema 校验器
   - 已安装注册表
+  - 插件分配与启用控制面
   - runner `load / unload / invoke` 闭环
   - 管理台与分配 UI
 
@@ -50,32 +53,140 @@
   - `workspace`
   - `model`
 - `capability plugin` 即使已安装和分配，也仍需在具体配置里显式选中。
-- 当前启用链路继续固定为：
-  - 安装
-  - 启用
-  - 分配
-  - 绑定
-  - 使用
+
+## provider plugin 的固定口径
+
+- provider plugin 属于 `runtime extension`
+- 它挂在宿主预定义的 `LLM provider runtime slot`
+- 它不属于 `host-extension`
+- 它也不属于普通 `capability plugin`
+
+原因：
+
+- 它不应扩展系统级 HTTP 接口
+- 它负责接供应商协议并输出标准运行时事件
+- 宿主只负责治理、执行工具和执行 MCP，不负责写死各家 provider 协议
+
+## 源码仓库与安装产物
+
+这里必须严格区分两层：
+
+- `../1flowse-official-plugins`
+  - 源码仓库
+  - 面向插件作者与 CI/CD
+- `1Flowse` 宿主
+  - 安装和运行的是插件产物
+  - 不直接消费源码目录
+
+安装产物至少应包含：
+
+- `manifest`
+- provider schema
+- model index
+- runtime bundle
+- 依赖冻结信息
+- `checksum`
+- `signature`
+- `contract_version`
+
+产物文件名建议固定为：
+
+```text
+<vendor>@<plugin_name>@<version>@<sha256>.1flowsepkg
+```
+
+## 注册发现与安装来源
+
+provider plugin 的发现入口首轮固定为：
+
+- 官方 registry / artifact storage
+- 本地上传 `pkg`
+
+不作为首轮正式能力：
+
+- 直接从源码目录安装
+- 直接从任意 Git 仓库拉源码安装
+- 安装时现场拉第三方依赖
+
+这意味着：
+
+- registry 负责“有什么版本可发现”
+- installed registry 负责“宿主已经装了什么”
+- assignment 负责“哪个 workspace 能用”
+- provider instance 负责“用户是否已经配好凭据和地址”
+
+## 生命周期
+
+本模块必须显式维护两套生命周期。
+
+### 插件包生命周期
+
+- `downloaded_or_uploaded`
+- `verified`
+- `installed`
+- `enabled`
+- `assigned`
+
+固定链路为：
+
+- 安装
+- 启用
+- 分配
+- 配置 provider instance
+- 验证实例
+- 节点显式选择
+- 使用
+
+### provider instance 生命周期
+
+- `draft`
+- `ready`
+- `invalid`
+- `disabled`
+
+这里的关键边界是：
+
+- 用户下载和启用的是插件包
+- 用户真正配置和运行的是 provider instance
+
+## 安装任务与热加载
+
+插件安装和升级应走异步任务，而不是长时间阻塞同步 HTTP 请求。
+
+任务终态至少包括：
+
+- `success`
+- `failed`
+- `canceled`
+- `timed_out`
+
+启用 provider plugin 的正式规则固定为：
+
+- 不重启整个系统
+- 最多只允许 `plugin-runner` 局部 `load / reload`
 
 ## 当前模块的正确口径
 
-本模块当前不能再写成“已完成实现”。
+本模块当前不能写成“已完成实现”。
 
 更准确的说法是：
 
 - 规则已经确认
-- 风险边界已经收口
+- 生命周期和注册发现边界已经收口
+- provider plugin 产物与宿主边界已经收口
 - 基础骨架已经存在
-- 但完整插件产品能力还没做完
+- 但安装任务、已安装注册表、分配 UI、runner 闭环仍未实现
 
 ## 后续实现仍应对齐的设计基线
 
-后续若继续推进插件实现，仍应对齐以下历史已确认结论：
+后续若继续推进插件实现，仍应对齐以下结论：
 
 - 来源分级与启用审批规则
-- `manifest + schema + assets + optional wasm` 的统一包结构
+- provider plugin 属于 `runtime extension`
+- 宿主安装对象是签名后的插件产物，不是源码目录
 - `plugin-runner` 作为共享宿主进程
-- 内部 RPC 方法集与密钥保护
+- 安装 / 启用 / 分配 / 配置 / 验证 / 使用的双层生命周期
+- 异步安装任务与终态规则
 - 升级、禁用、卸载与引用保护策略
 
 这些结论仍然有效，但目前不能被引用成“已有实现”。
@@ -83,4 +194,4 @@
 ## 当前结论摘要
 
 - `08` 保留为独立模块，因为它已经形成稳定扩展边界，不只是未来想法。
-- 但本模块当前状态必须明确为“规则已确认，能力未完备”，避免后续把历史设计稿误当成现成实现。
+- 当前阶段最重要的不是“做多少 provider”，而是先把 provider plugin 的注册发现、生命周期、运行时 contract 和宿主治理边界做对。

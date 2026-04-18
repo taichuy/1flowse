@@ -13,8 +13,8 @@ match_when:
   - 模式字符串被双引号包裹
   - 输出出现 `未找到命令` 且命令名来自搜索模式
 created_at: 2026-04-14 07
-updated_at: 2026-04-14 20
-last_verified_at: 2026-04-14 20
+updated_at: 2026-04-18 08
+last_verified_at: 2026-04-18 08
 decision_policy: reference_on_failure
 scope:
   - bash
@@ -67,3 +67,4 @@ rg -n 'TODO|TBD|missing `permissionKey`' docs/superpowers/plans/2026-04-14-conso
 ## 复现记录
 
 - `2026-04-14 20`：执行 `rg -n "web/app/src/features/settings/api/roles.ts|Extend \`api/crates/storage-pg/src/mappers/role_mapper.rs\`|Placeholder scan:" docs/superpowers/plans/2026-04-14-role-auto-grant-new-permissions.md` 时，bash 先尝试执行 ``api/crates/storage-pg/src/mappers/role_mapper.rs``，报 `/bin/bash: 行 1: api/crates/storage-pg/src/mappers/role_mapper.rs: 权限不够`；随后改回不用反引号或改用单引号包裹模式后恢复正常。
+- `2026-04-18 08`：执行 `rg -n "官方 provider catalog|当前 \`workspace\` 可见的 provider catalog|provider catalog 与实例列表" docs/superpowers/specs/1flowse/2026-04-18-model-provider-integration-design.md -S` 时，bash 先尝试执行 ``workspace``，报 `/bin/bash: 行 1: workspace: 未找到命令`；随后改用单引号包裹整段 pattern 后恢复正常。
