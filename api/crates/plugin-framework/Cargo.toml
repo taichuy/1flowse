@@ -5,8 +5,16 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+ed25519-dalek = { version = "2", features = ["pem"] }
+flate2.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+tar.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+zip = { version = "2", default-features = false, features = ["deflate"] }
 serde_yaml = "0.9"
+
+[dev-dependencies]
+tokio.workspace = true

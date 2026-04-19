@@ -67,7 +67,7 @@
 - Modify: `api/crates/plugin-framework/src/lib.rs`
 - Modify: `api/crates/plugin-framework/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write failing intake tests for verified official, rejected mirror unsigned, and uploaded unsigned flows**
+- [x] **Step 1: Write failing intake tests for verified official, rejected mirror unsigned, and uploaded unsigned flows**
 
 Add tests like these to `api/crates/plugin-framework/src/_tests/package_intake_tests.rs`:
 
@@ -154,7 +154,7 @@ async fn package_intake_marks_uploaded_unsigned_archive_as_unverified() {
 }
 ```
 
-- [ ] **Step 2: Run the `plugin-framework` tests to capture the RED baseline**
+- [x] **Step 2: Run the `plugin-framework` tests to capture the RED baseline**
 
 Run:
 
@@ -164,7 +164,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p plugin-framework package_intake
 
 Expected: FAIL because `package_intake.rs`, `PackageIntakePolicy`, and `intake_package_bytes` do not exist yet.
 
-- [ ] **Step 3: Implement the new intake contract and safe-unpack verification flow**
+- [x] **Step 3: Implement the new intake contract and safe-unpack verification flow**
 
 Create `api/crates/plugin-framework/src/package_intake.rs` with the core API shape:
 
@@ -261,7 +261,7 @@ fn derive_trust_level(
 }
 ```
 
-- [ ] **Step 4: Export the new module and rerun the targeted tests**
+- [x] **Step 4: Export the new module and rerun the targeted tests**
 
 Update `api/crates/plugin-framework/src/lib.rs` and `api/crates/plugin-framework/src/_tests/mod.rs`:
 
@@ -288,7 +288,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p plugin-framework package_intake
 
 Expected: PASS with the three new intake tests green.
 
-- [ ] **Step 5: Commit the package-intake foundation**
+- [x] **Step 5: Commit the package-intake foundation**
 
 ```bash
 git add \

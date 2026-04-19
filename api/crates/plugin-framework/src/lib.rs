@@ -4,6 +4,7 @@ pub mod assignment;
 pub mod capability_kind;
 pub mod error;
 pub mod installation;
+pub mod package_intake;
 pub mod provider_contract;
 pub mod provider_package;
 
@@ -11,6 +12,7 @@ pub use assignment::*;
 pub use capability_kind::*;
 pub use error::*;
 pub use installation::*;
+pub use package_intake::*;
 pub use provider_contract::*;
 pub use provider_package::*;
 
