@@ -7,7 +7,7 @@ description: Use when building or changing 1flowbase frontend/UI pages, page req
 
 ## Overview
 
-1flowbase 前端不是自由拼页，而是基于单一规则源的产品系统：`Ant Design` 壳层 + 薄 `Editor UI` + 固定工作区语法。本 Skill 用来在实现时守住页面边界、L1 详情模型、状态语义和组件职责，减少“写着写着变成另一套产品”的漂移。
+1flowbase 前端不是自由拼页，而是基于单一规则源的产品系统：`Ant Design` 壳层 + 薄 `Editor UI` + 固定工作区语法。本 Skill 用来在实现时守住页面边界、交互架构 gate、L1 详情模型、状态语义和组件职责，减少“写着写着变成另一套产品”的漂移。
 
 ## When to Use
 
@@ -16,6 +16,7 @@ description: Use when building or changing 1flowbase frontend/UI pages, page req
 - 新增节点类型，或调整节点详情、节点卡片、节点运行态、节点定义目录结构
 - 改动 `schema ui` 合同、runtime、renderer registry、overlay shell 或节点 schema adapter
 - 调整页面级流程、交互流、视觉结构或页面模块关系
+- 需要决定入口、层级、下钻路径、`Drawer / Inspector / Page / Dialog` 等交互落点
 - 评估是否拆文件、拆组件、拆 hooks，或处理前端职责边界漂移
 - 页面状态开始散落，或同一文件同时承载展示、状态、协议、路由变化
 - 同类对象出现不同点击结果、不同状态表达或不同移动端降级
@@ -25,7 +26,7 @@ description: Use when building or changing 1flowbase frontend/UI pages, page req
 **不要用于**
 
 - 纯后端接口、状态机、核心业务规则设计
-- 纯信息架构审查且尚未进入实现
+- 纯信息架构审查且不进入前端实现
 
 ## The Iron Law
 
@@ -33,15 +34,17 @@ description: Use when building or changing 1flowbase frontend/UI pages, page req
 
 ## General Workflow
 
-1. 先回到 `DESIGN.md` 判断任务域边界、L1 模型、状态语义和现有页面 recipe。
-2. 如果属于页面 / UI 开发需求，先走 `references/requirement-refinement.md`；需要提炼方法时读 `references/extraction-framework.md`，需要直接套回复骨架时读 `references/skill-template.md`，需要看实际写法时读 `examples/`。随后输出面向用户的需求整理；至少覆盖页面目标、主要对象、关键动作、页面交互、关键状态和视觉约束。
-3. 用 `references/communication-gate.md` 判断是默认直接实现，还是先集中提阻塞性产品分歧。
-4. 再落实现：先定主路径、反馈位置和模块协作，再拆组件、落结构、补样式。
-5. 结束前按 `references/review-checklist.md` 做复查；涉及样式边界、浏览器运行态或共享 slot 时，走项目既有验证链路。
+1. 先跑 `references/interaction-architecture-gate.md`，判断这次是否包含入口、层级、L0 / L1 / L2 / L3、详情容器或同类对象行为统一等交互架构决策；命中就先做 mini 诊断，必要时升级到 `frontend-logic-design`。
+2. 再回到 `DESIGN.md` 判断任务域边界、L1 模型、状态语义和现有页面 recipe。
+3. 如果属于页面 / UI 开发需求，先走 `references/requirement-refinement.md`；需要提炼方法时读 `references/extraction-framework.md`，需要直接套回复骨架时读 `references/skill-template.md`，需要看实际写法时读 `examples/`。随后输出面向用户的需求整理；至少覆盖页面目标、主要对象、关键动作、页面交互、关键状态和视觉约束。
+4. 用 `references/communication-gate.md` 判断是默认直接实现，还是先集中提阻塞性产品分歧。
+5. 再落实现：先定主路径、详情规则、反馈位置和模块协作，再拆组件、落结构、补样式。
+6. 结束前按 `references/review-checklist.md` 做复查；涉及样式边界、浏览器运行态或共享 slot 时，走项目既有验证链路。
 
 ## Quick Reference
 
 - 需求整理工作流与输出要求：[requirement-refinement.md](/home/taichu/git/1flowbase/.agents/skills/frontend-development/references/requirement-refinement.md)
+- 交互架构 gate 与升级条件：[interaction-architecture-gate.md](/home/taichu/git/1flowbase/.agents/skills/frontend-development/references/interaction-architecture-gate.md)
 - 需求提炼方法论：[extraction-framework.md](/home/taichu/git/1flowbase/.agents/skills/frontend-development/references/extraction-framework.md)
 - 面向用户的回复模板：[skill-template.md](/home/taichu/git/1flowbase/.agents/skills/frontend-development/references/skill-template.md)
 - 是否需要先沟通、哪些场景需要升级决策：[communication-gate.md](/home/taichu/git/1flowbase/.agents/skills/frontend-development/references/communication-gate.md)
@@ -51,7 +54,7 @@ description: Use when building or changing 1flowbase frontend/UI pages, page req
 - 浏览器级验证与运行态证据：[browser-verification.md](/home/taichu/git/1flowbase/.agents/skills/frontend-development/references/browser-verification.md)
 - 复查清单与反模式：[review-checklist.md](/home/taichu/git/1flowbase/.agents/skills/frontend-development/references/review-checklist.md)、[anti-patterns.md](/home/taichu/git/1flowbase/.agents/skills/frontend-development/references/anti-patterns.md)
 - 示例与压力场景：`examples/`
-- 信息架构、层级、入口、导航问题：`frontend-logic-design`
+- 命中结构性问题后的完整信息架构诊断：`frontend-logic-design`
 
 ## Implementation
 
@@ -62,7 +65,7 @@ description: Use when building or changing 1flowbase frontend/UI pages, page req
 - API consumption chain: `api-client -> features/*/api -> shared/api`
 - Schema UI split: `shared/schema-ui -> features/*/schema -> features/*/lib/node-definitions`
 - Node implementation chain: `node-definitions -> schema fragments/registry -> renderer -> consumer`
-- Interaction anchor: 先定义主路径、反馈位置和模块协作，再决定卡片、区块和装饰怎么落
+- Interaction anchor: 先过交互架构 gate，定义主路径、详情规则、反馈位置和模块协作，再决定卡片、区块和装饰怎么落
 - Style chain: `theme token -> first-party wrapper -> explicit slot -> stop`
 - Verification chain: 共享样式或第三方 slot 走 `check-style-boundary`；浏览器级证据走 `Playwright / page-debug / style-boundary`
 
@@ -75,6 +78,7 @@ description: Use when building or changing 1flowbase frontend/UI pages, page req
 - 把节点定义、schema contract、renderer registry、consumer UI 再次堆回同一文件
 - 把第三方组件内部 DOM 当成自家 DOM 递归覆盖，或为了修单点视觉问题裸写 `.ant-*`
 - 只改导航文案，不同步 `route id / path / selected state` 真值层
+- 还没过交互架构 gate，就让列表、卡片、抽屉、按钮各自决定点击结果
 - 在 Shell / Canvas 间混用 `Drawer` 和 `Inspector`
 - 把状态色拿去表达类型、装饰或品牌
 - 把真正的信息架构问题误当成样式问题

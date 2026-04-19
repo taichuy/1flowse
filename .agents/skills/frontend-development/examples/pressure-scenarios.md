@@ -60,8 +60,8 @@
 
 结论：
 
-- 先检查是不是入口、层级、交互一致性问题
-- 如果是结构问题，转交 `frontend-logic-design`
+- 先跑 `interaction-architecture-gate`
+- 如果 gate 显示问题落在入口、层级、交互一致性，再升级到 `frontend-logic-design`
 
 ## Scenario 6: External Inspiration Drift
 
@@ -114,7 +114,7 @@
 
 - 先收敛页面目标、核心动作、关键状态和必须模块
 - 新页面把需求收敛后默认继续实现，不等额外确认
-- 如果问题落在入口、层级和交互直觉，补用 `frontend-logic-design`
+- 如果问题落在入口、层级和交互直觉，先跑 `interaction-architecture-gate`，必要时升级到 `frontend-logic-design`
 
 ## Scenario 10: Clear UI Request But No Requirement Reply
 
@@ -131,3 +131,17 @@
 - 至少先给用户一版简版需求整理：任务理解、改动范围、页面交互、关键状态、明确建议
 - 先定义入口、主操作、反馈位置和模块协作，再决定卡片和区块怎么摆
 - 只有纯局部样式修补、像素级调整或不改页面结构的 UI bugfix，才可以不走完整需求回复
+
+## Scenario 11: Dual-Column Page But Detail Rule Is Unclear
+
+症状：
+
+- 你要做一个双栏页面或设置页
+- 左边像导航，右边像内容区，中间又想塞列表详情
+- 你不确定详情该走 `Drawer`、右侧详情区还是独立页面
+
+结论：
+
+- 先跑 `interaction-architecture-gate`
+- 先把首屏主任务、L1 / L2 / L3 和反馈落点说清
+- 如果同类对象会出现多种点击结果，再升级到 `frontend-logic-design`
