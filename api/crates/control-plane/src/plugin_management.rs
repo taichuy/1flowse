@@ -22,11 +22,11 @@ use crate::{
     ports::{
         AuthRepository, CreatePluginAssignmentInput, CreatePluginTaskInput,
         ModelProviderRepository, OfficialPluginSourceEntry, OfficialPluginSourcePort,
-        PluginRepository, ProviderRuntimePort,
-        ReassignModelProviderInstancesInput, UpdatePluginInstallationEnabledInput,
-        UpdatePluginTaskStatusInput, UpsertModelProviderCatalogCacheInput,
-        UpsertPluginInstallationInput,
+        PluginRepository, ProviderRuntimePort, ReassignModelProviderInstancesInput,
+        UpdatePluginInstallationEnabledInput, UpdatePluginTaskStatusInput,
+        UpsertModelProviderCatalogCacheInput, UpsertPluginInstallationInput,
     },
+    state_transition::ensure_plugin_task_transition,
 };
 
 pub struct InstallPluginCommand {
@@ -263,6 +263,24 @@ where
         }
     }
 
+    async fn transition_task(
+        &self,
+        task: &domain::PluginTaskRecord,
+        next_status: domain::PluginTaskStatus,
+        status_message: Option<String>,
+        detail_json: serde_json::Value,
+    ) -> Result<domain::PluginTaskRecord> {
+        ensure_plugin_task_transition(task.status, next_status, "plugin_task_progress")?;
+        self.repository
+            .update_task_status(&UpdatePluginTaskStatusInput {
+                task_id: task.id,
+                status: next_status,
+                status_message,
+                detail_json,
+            })
+            .await
+    }
+
     pub async fn list_catalog(&self, actor_user_id: Uuid) -> Result<Vec<PluginCatalogEntry>> {
         let actor = load_actor_context_for_user(&self.repository, actor_user_id).await?;
         ensure_permission(&actor, "plugin_config.view.all")
@@ -381,11 +399,7 @@ where
                     .then_with(|| right.id.cmp(&left.id))
             });
         }
-        let official_by_provider = self
-            .official_source
-            .list_official_catalog()
-            .await?
-            .entries;
+        let official_by_provider = self.official_source.list_official_catalog().await?.entries;
         let official_by_provider = normalize_official_entries(official_by_provider)
             .into_iter()
             .map(|entry| (entry.provider_code.clone(), entry))
@@ -551,11 +565,7 @@ where
         let current = self
             .load_current_family_installation(actor.current_workspace_id, &command.provider_code)
             .await?;
-        let official_entry = self
-            .official_source
-            .list_official_catalog()
-            .await?
-            .entries;
+        let official_entry = self.official_source.list_official_catalog().await?.entries;
         let official_entry = normalize_official_entries(official_entry)
             .into_iter()
             .find(|entry| entry.provider_code == command.provider_code)
@@ -659,7 +669,8 @@ where
             .map_err(ControlPlaneError::PermissionDenied)?;
 
         let task_id = Uuid::now_v7();
-        self.repository
+        let task = self
+            .repository
             .create_task(&CreatePluginTaskInput {
                 task_id,
                 installation_id: None,
@@ -672,13 +683,13 @@ where
                 actor_user_id: Some(command.actor_user_id),
             })
             .await?;
-        self.repository
-            .update_task_status(&UpdatePluginTaskStatusInput {
-                task_id,
-                status: domain::PluginTaskStatus::Running,
-                status_message: Some("running".to_string()),
-                detail_json: detail_json.clone(),
-            })
+        let running_task = self
+            .transition_task(
+                &task,
+                domain::PluginTaskStatus::Running,
+                Some("running".to_string()),
+                detail_json.clone(),
+            )
             .await?;
 
         let installation_result = async {
@@ -736,30 +747,28 @@ where
         match installation_result {
             Ok(installation) => {
                 let task = self
-                    .repository
-                    .update_task_status(&UpdatePluginTaskStatusInput {
-                        task_id,
-                        status: domain::PluginTaskStatus::Success,
-                        status_message: Some("installed".to_string()),
-                        detail_json: json!({
+                    .transition_task(
+                        &running_task,
+                        domain::PluginTaskStatus::Success,
+                        Some("installed".to_string()),
+                        json!({
                             "installation_id": installation.id,
                             "provider_code": installation.provider_code,
                             "plugin_id": installation.plugin_id,
                             "install_path": installation.install_path,
                         }),
-                    })
+                    )
                     .await?;
                 Ok(InstallPluginResult { installation, task })
             }
             Err(error) => {
                 let _ = self
-                    .repository
-                    .update_task_status(&UpdatePluginTaskStatusInput {
-                        task_id,
-                        status: domain::PluginTaskStatus::Failed,
-                        status_message: Some(error.to_string()),
+                    .transition_task(
+                        &running_task,
+                        domain::PluginTaskStatus::Failed,
+                        Some(error.to_string()),
                         detail_json,
-                    })
+                    )
                     .await;
                 Err(error)
             }
@@ -780,7 +789,8 @@ where
             .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
 
         let task_id = Uuid::now_v7();
-        self.repository
+        let task = self
+            .repository
             .create_task(&CreatePluginTaskInput {
                 task_id,
                 installation_id: Some(command.installation_id),
@@ -793,13 +803,13 @@ where
                 actor_user_id: Some(command.actor_user_id),
             })
             .await?;
-        self.repository
-            .update_task_status(&UpdatePluginTaskStatusInput {
-                task_id,
-                status: domain::PluginTaskStatus::Running,
-                status_message: Some("running".to_string()),
-                detail_json: json!({}),
-            })
+        let running_task = self
+            .transition_task(
+                &task,
+                domain::PluginTaskStatus::Running,
+                Some("running".to_string()),
+                json!({}),
+            )
             .await?;
 
         let enable_result = async {
@@ -829,29 +839,27 @@ where
 
         match enable_result {
             Ok(updated) => {
-                self.repository
-                    .update_task_status(&UpdatePluginTaskStatusInput {
-                        task_id,
-                        status: domain::PluginTaskStatus::Success,
-                        status_message: Some("enabled".to_string()),
-                        detail_json: json!({
-                            "installation_id": updated.id,
-                            "enabled": updated.enabled,
-                        }),
-                    })
-                    .await
+                self.transition_task(
+                    &running_task,
+                    domain::PluginTaskStatus::Success,
+                    Some("enabled".to_string()),
+                    json!({
+                        "installation_id": updated.id,
+                        "enabled": updated.enabled,
+                    }),
+                )
+                .await
             }
             Err(error) => {
                 let _ = self
-                    .repository
-                    .update_task_status(&UpdatePluginTaskStatusInput {
-                        task_id,
-                        status: domain::PluginTaskStatus::Failed,
-                        status_message: Some(error.to_string()),
-                        detail_json: json!({
+                    .transition_task(
+                        &running_task,
+                        domain::PluginTaskStatus::Failed,
+                        Some(error.to_string()),
+                        json!({
                             "installation_id": command.installation_id,
                         }),
-                    })
+                    )
                     .await;
                 Err(error)
             }
@@ -875,7 +883,8 @@ where
         }
 
         let task_id = Uuid::now_v7();
-        self.repository
+        let task = self
+            .repository
             .create_task(&CreatePluginTaskInput {
                 task_id,
                 installation_id: Some(command.installation_id),
@@ -888,13 +897,13 @@ where
                 actor_user_id: Some(command.actor_user_id),
             })
             .await?;
-        self.repository
-            .update_task_status(&UpdatePluginTaskStatusInput {
-                task_id,
-                status: domain::PluginTaskStatus::Running,
-                status_message: Some("running".to_string()),
-                detail_json: json!({}),
-            })
+        let running_task = self
+            .transition_task(
+                &task,
+                domain::PluginTaskStatus::Running,
+                Some("running".to_string()),
+                json!({}),
+            )
             .await?;
 
         let assign_result = async {
@@ -924,30 +933,28 @@ where
 
         match assign_result {
             Ok(()) => {
-                self.repository
-                    .update_task_status(&UpdatePluginTaskStatusInput {
-                        task_id,
-                        status: domain::PluginTaskStatus::Success,
-                        status_message: Some("assigned".to_string()),
-                        detail_json: json!({
-                            "installation_id": command.installation_id,
-                            "workspace_id": actor.current_workspace_id,
-                        }),
-                    })
-                    .await
+                self.transition_task(
+                    &running_task,
+                    domain::PluginTaskStatus::Success,
+                    Some("assigned".to_string()),
+                    json!({
+                        "installation_id": command.installation_id,
+                        "workspace_id": actor.current_workspace_id,
+                    }),
+                )
+                .await
             }
             Err(error) => {
                 let _ = self
-                    .repository
-                    .update_task_status(&UpdatePluginTaskStatusInput {
-                        task_id,
-                        status: domain::PluginTaskStatus::Failed,
-                        status_message: Some(error.to_string()),
-                        detail_json: json!({
+                    .transition_task(
+                        &running_task,
+                        domain::PluginTaskStatus::Failed,
+                        Some(error.to_string()),
+                        json!({
                             "installation_id": command.installation_id,
                             "workspace_id": actor.current_workspace_id,
                         }),
-                    })
+                    )
                     .await;
                 Err(error)
             }
@@ -1044,7 +1051,8 @@ where
         }
 
         let task_id = Uuid::now_v7();
-        self.repository
+        let task = self
+            .repository
             .create_task(&CreatePluginTaskInput {
                 task_id,
                 installation_id: Some(target.id),
@@ -1057,19 +1065,19 @@ where
                 actor_user_id: Some(actor_user_id),
             })
             .await?;
-        self.repository
-            .update_task_status(&UpdatePluginTaskStatusInput {
-                task_id,
-                status: domain::PluginTaskStatus::Running,
-                status_message: Some("running".into()),
-                detail_json: json!({
+        let running_task = self
+            .transition_task(
+                &task,
+                domain::PluginTaskStatus::Running,
+                Some("running".into()),
+                json!({
                     "provider_code": provider_code,
                     "previous_installation_id": current.id,
                     "previous_version": current.plugin_version,
                     "target_installation_id": target.id,
                     "target_version": target.plugin_version,
                 }),
-            })
+            )
             .await?;
 
         let switch_result = async {
@@ -1143,35 +1151,33 @@ where
 
         match switch_result {
             Ok(migrated_instance_count) => {
-                self.repository
-                    .update_task_status(&UpdatePluginTaskStatusInput {
-                        task_id,
-                        status: domain::PluginTaskStatus::Success,
-                        status_message: Some("switched".into()),
-                        detail_json: json!({
-                            "provider_code": provider_code,
-                            "previous_installation_id": current.id,
-                            "previous_version": current.plugin_version,
-                            "target_installation_id": target.id,
-                            "target_version": target.plugin_version,
-                            "migrated_instance_count": migrated_instance_count,
-                        }),
-                    })
-                    .await
+                self.transition_task(
+                    &running_task,
+                    domain::PluginTaskStatus::Success,
+                    Some("switched".into()),
+                    json!({
+                        "provider_code": provider_code,
+                        "previous_installation_id": current.id,
+                        "previous_version": current.plugin_version,
+                        "target_installation_id": target.id,
+                        "target_version": target.plugin_version,
+                        "migrated_instance_count": migrated_instance_count,
+                    }),
+                )
+                .await
             }
             Err(error) => {
                 let _ = self
-                    .repository
-                    .update_task_status(&UpdatePluginTaskStatusInput {
-                        task_id,
-                        status: domain::PluginTaskStatus::Failed,
-                        status_message: Some(error.to_string()),
-                        detail_json: json!({
+                    .transition_task(
+                        &running_task,
+                        domain::PluginTaskStatus::Failed,
+                        Some(error.to_string()),
+                        json!({
                             "provider_code": provider_code,
                             "previous_installation_id": current.id,
                             "target_installation_id": target.id,
                         }),
-                    })
+                    )
                     .await;
                 Err(error)
             }

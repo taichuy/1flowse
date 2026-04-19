@@ -17,6 +17,7 @@ test('verify-backend limits cargo concurrency to half of available CPU', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-verify-backend-'));
   const fakeBinDir = path.join(tempDir, 'bin');
   const logPath = path.join(tempDir, 'cargo.log');
+  const warningOutputDir = path.join(tempDir, 'warnings');
   const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
   const scriptPath = path.join(repoRoot, 'scripts', 'node', 'verify-backend.js');
   const fakeCargoPath = path.join(fakeBinDir, 'cargo');
@@ -28,6 +29,7 @@ test('verify-backend limits cargo concurrency to half of available CPU', () => {
     [
       '#!/usr/bin/env bash',
       'printf "%s\\n" "$*" >> "$VERIFY_BACKEND_LOG"',
+      'printf "warning: backend advisory\\n" >&2',
       'exit 0',
     ].join('\n')
   );
@@ -39,6 +41,7 @@ test('verify-backend limits cargo concurrency to half of available CPU', () => {
       ...process.env,
       PATH: `${fakeBinDir}:${process.env.PATH ?? ''}`,
       VERIFY_BACKEND_LOG: logPath,
+      ONEFLOWBASE_WARNING_OUTPUT_DIR: warningOutputDir,
     },
     encoding: 'utf8',
   });
@@ -54,4 +57,8 @@ test('verify-backend limits cargo concurrency to half of available CPU', () => {
   assert.match(invocations[1], new RegExp(`clippy --workspace --all-targets --jobs ${expectedParallelism} -- -D warnings`));
   assert.match(invocations[2], new RegExp(`test --workspace --jobs ${expectedParallelism} -- --test-threads=${expectedParallelism}`));
   assert.match(invocations[3], new RegExp(`check --workspace --jobs ${expectedParallelism}`));
+
+  const warningLogPath = path.join(warningOutputDir, 'verify-backend.warnings.log');
+  assert.equal(fs.existsSync(warningLogPath), true);
+  assert.match(fs.readFileSync(warningLogPath, 'utf8'), /warning: backend advisory/u);
 });

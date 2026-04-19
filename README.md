@@ -106,19 +106,38 @@ docker compose -f docker/docker-compose.middleware.yaml up -d
 ### Frontend
 
 ```bash
-cd web
-pnpm lint
-pnpm test
-pnpm build
+node scripts/node/test-frontend.js fast
+node scripts/node/test-frontend.js full
 ```
+
+说明：
+
+- `fast` 只跑前端快速验证，当前固定为 `web/app` 的 Vitest。
+- `full` 跑前端全量质量门禁：`lint + full vitest + build + style-boundary`。
+- 前端 package 也暴露了等价入口：`pnpm --dir web test:fast`、`pnpm --dir web verify:full`。
 
 ### Backend
 
 ```bash
+node scripts/node/test-backend.js
 node scripts/node/verify-backend.js
 ```
 
-该脚本会统一执行后端格式化、静态检查、测试和 `check`，并默认把 `cargo` 并发限制在当前系统可用 CPU 的一半，避免全量验证时把机器资源打满。
+说明：
+
+- `node scripts/node/test-backend.js` 是后端纯测试入口，只执行 `cargo test`。
+- `node scripts/node/verify-backend.js` 是后端全量质量门禁，会执行格式化、静态检查、测试和 `check`，并默认把 `cargo` 并发限制在当前系统可用 CPU 的一半，避免全量验证时把机器资源打满。
+
+### Runtime Gate
+
+```bash
+node scripts/node/runtime-gate.js snapshot /
+```
+
+说明：
+
+- `runtime-gate` 当前统一代理到 `page-debug`，用于 release 或 nightly 级运行态烟测。
+- 当前阶段 warning 不阻塞门禁；命令输出中的 warning 会统一落到 `tmp/test-governance/` 供后续治理。
 
 ## Local URLs
 

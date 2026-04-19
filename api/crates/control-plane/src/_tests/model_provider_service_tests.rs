@@ -117,6 +117,14 @@ impl MemoryModelProviderRepository {
         self.references.write().await.insert(instance_id, count);
     }
 
+    async fn set_instance_status(&self, instance_id: Uuid, status: ModelProviderInstanceStatus) {
+        let mut instances = self.instances.write().await;
+        let instance = instances
+            .get_mut(&instance_id)
+            .expect("instance should exist for test");
+        instance.status = status;
+    }
+
     async fn audit_events(&self) -> Vec<String> {
         self.audit_events.read().await.clone()
     }
@@ -798,5 +806,52 @@ async fn model_provider_service_enforces_permissions_and_audits_delete_conflict(
     assert!(matches!(
         error.downcast_ref::<ControlPlaneError>(),
         Some(ControlPlaneError::PermissionDenied("permission_denied"))
+    ));
+}
+
+#[tokio::test]
+async fn model_provider_service_rejects_validating_disabled_instance() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryModelProviderRepository::new(actor_with_permissions(
+        workspace_id,
+        &["state_model.view.all", "state_model.manage.all"],
+    ));
+    let package_root =
+        std::env::temp_dir().join(format!("provider-model-disabled-{}", Uuid::now_v7()));
+    create_provider_fixture(&package_root);
+    let installation_id = repository
+        .seed_installation(&package_root.display().to_string(), true, true)
+        .await;
+    let service = ModelProviderService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        "provider-secret-master-key",
+    );
+
+    let created = service
+        .create_instance(CreateModelProviderInstanceCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id,
+            display_name: "Fixture Prod".to_string(),
+            config_json: json!({
+                "base_url": "https://api.example.com",
+                "api_key": "super-secret"
+            }),
+        })
+        .await
+        .unwrap();
+    repository
+        .set_instance_status(created.instance.id, ModelProviderInstanceStatus::Disabled)
+        .await;
+
+    let error = service
+        .validate_instance(repository.actor.user_id, created.instance.id)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::InvalidStateTransition { resource, from, to, .. })
+            if *resource == "model_provider_instance" && from == "disabled" && to == "ready"
     ));
 }

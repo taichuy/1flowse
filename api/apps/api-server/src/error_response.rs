@@ -36,6 +36,9 @@ impl IntoResponse for ApiError {
             Some(ControlPlaneError::NotFound(name)) => (StatusCode::NOT_FOUND, *name),
             Some(ControlPlaneError::Conflict(name)) => (StatusCode::CONFLICT, *name),
             Some(ControlPlaneError::InvalidInput(name)) => (StatusCode::BAD_REQUEST, *name),
+            Some(ControlPlaneError::InvalidStateTransition { .. }) => {
+                (StatusCode::CONFLICT, "invalid_state_transition")
+            }
             Some(ControlPlaneError::UpstreamUnavailable(name)) => (StatusCode::BAD_GATEWAY, *name),
             None => match self.0.downcast_ref::<PluginFrameworkError>() {
                 Some(PluginFrameworkError::RuntimeContract { .. }) => {

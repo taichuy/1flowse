@@ -1,7 +1,9 @@
+use control_plane::errors::ControlPlaneError;
 use control_plane::orchestration_runtime::{
     CompleteCallbackTaskCommand, OrchestrationRuntimeService, ResumeFlowRunCommand,
     StartFlowDebugRunCommand,
 };
+use domain::FlowRunStatus;
 use serde_json::json;
 
 #[tokio::test]
@@ -70,4 +72,30 @@ async fn complete_callback_task_updates_task_and_requeues_waiting_run() {
 
     assert_eq!(detail.callback_tasks[0].status.as_str(), "completed");
     assert_eq!(detail.flow_run.status.as_str(), "succeeded");
+}
+
+#[tokio::test]
+async fn resume_flow_run_rejects_terminal_flow_status_transition() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_waiting_human_run("Support Agent").await;
+    service
+        .force_flow_run_status(seeded.flow_run_id, FlowRunStatus::Succeeded)
+        .await;
+
+    let error = service
+        .resume_flow_run(ResumeFlowRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            flow_run_id: seeded.flow_run_id,
+            checkpoint_id: seeded.checkpoint_id,
+            input_payload: json!({ "node-human": { "input": "已审核通过" } }),
+        })
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::InvalidStateTransition { resource, from, to, .. })
+            if *resource == "flow_run" && from == "succeeded" && to == "succeeded"
+    ));
 }

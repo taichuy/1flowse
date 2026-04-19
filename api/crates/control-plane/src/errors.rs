@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum ControlPlaneError {
     #[error("not authenticated")]
     NotAuthenticated,
@@ -12,6 +12,13 @@ pub enum ControlPlaneError {
     Conflict(&'static str),
     #[error("invalid input: {0}")]
     InvalidInput(&'static str),
+    #[error("invalid state transition for {resource}: action={action}, from={from}, to={to}")]
+    InvalidStateTransition {
+        resource: &'static str,
+        action: &'static str,
+        from: String,
+        to: String,
+    },
     #[error("upstream unavailable: {0}")]
     UpstreamUnavailable(&'static str),
 }

@@ -1,43 +1,17 @@
 #!/usr/bin/env node
+
 const {
   getCargoParallelism,
-  getRepoRoot,
   runCommandSequence,
+  getRepoRoot,
 } = require('./testing/warning-capture.js');
 
 function buildCommands({ cargoParallelism }) {
   return [
     {
-      label: 'cargo-fmt',
-      command: 'cargo',
-      args: ['fmt', '--all', '--check'],
-      cwd: 'api',
-      env: {
-        CARGO_BUILD_JOBS: String(cargoParallelism),
-      },
-    },
-    {
-      label: 'cargo-clippy',
-      command: 'cargo',
-      args: ['clippy', '--workspace', '--all-targets', '--jobs', String(cargoParallelism), '--', '-D', 'warnings'],
-      cwd: 'api',
-      env: {
-        CARGO_BUILD_JOBS: String(cargoParallelism),
-      },
-    },
-    {
       label: 'cargo-test',
       command: 'cargo',
       args: ['test', '--workspace', '--jobs', String(cargoParallelism), '--', `--test-threads=${cargoParallelism}`],
-      cwd: 'api',
-      env: {
-        CARGO_BUILD_JOBS: String(cargoParallelism),
-      },
-    },
-    {
-      label: 'cargo-check',
-      command: 'cargo',
-      args: ['check', '--workspace', '--jobs', String(cargoParallelism)],
       cwd: 'api',
       env: {
         CARGO_BUILD_JOBS: String(cargoParallelism),
@@ -53,7 +27,7 @@ function main(_argv = [], deps = {}) {
   return runCommandSequence({
     repoRoot,
     env: deps.env || process.env,
-    scope: 'verify-backend',
+    scope: 'test-backend',
     commands: buildCommands({ cargoParallelism }),
     spawnSyncImpl: deps.spawnSyncImpl,
     writeStdout: deps.writeStdout,
@@ -65,7 +39,7 @@ if (require.main === module) {
   try {
     process.exitCode = main(process.argv.slice(2));
   } catch (error) {
-    process.stderr.write(`[1flowbase-verify-backend] ${error.message}\n`);
+    process.stderr.write(`[1flowbase-test-backend] ${error.message}\n`);
     process.exitCode = 1;
   }
 }
