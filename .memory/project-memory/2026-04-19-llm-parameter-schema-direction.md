@@ -1,7 +1,7 @@
 ---
 memory_type: project
 topic: LLM 节点参数改为 model-aware 动态 schema 方向
-summary: 自 `2026-04-19 00` 起，用户进一步明确“LLM 参数 schema 应主要由插件返回；宿主只负责渲染通用 schema ui、保存节点里的 provider 对象与 llm 参数对象，并在运行时把对象一起传给模型供应商插件”。本轮已继续确认：模型选中时一并返回参数 schema 并由宿主缓存；切换模型后参数清空并按新 schema 重建；`response_format` 暂按此前建议处理；禁止插件自定义控件；provider/code/label 仅作缓存且后台应用页需支持刷新更新。
+summary: 自 `2026-04-19 00` 起，用户进一步明确“LLM 参数 schema 应主要由插件返回；宿主只负责渲染通用 schema ui、保存节点里的 provider 对象与 llm 参数对象，并在运行时把对象一起传给模型供应商插件”。当前已继续确认：模型选中时一并返回参数 schema 并由宿主缓存；切换模型后参数清空并按新 schema 重建；`json_schema` 作为重要能力进入一期，但继续保持节点级独立对象，不回落为普通参数字段；禁止插件自定义控件；provider/code/label 仅作缓存且后台应用页需支持刷新更新。
 keywords:
   - llm
   - schema-ui
@@ -37,7 +37,7 @@ scope:
 - 用户已补充确认五项具体策略：
   - 选中模型时一并返回参数 schema，宿主直接记录
   - 切换模型后清空旧参数并按新 schema 重建
-  - `response_format` 暂沿用上一轮建议边界
+  - `json_schema` 进入一期，并作为节点级独立能力处理
   - 不允许插件自定义控件，固定为数字/文本/开关/选择等通用表单控件
   - `provider_code / protocol / label` 只作缓存，后台应用页需要提供刷新按钮更新缓存
 
@@ -50,6 +50,7 @@ scope:
 
 - 让 LLM 节点参数真正由 provider / model schema 决定，宿主不再维护一份越来越大的参数白名单。
 - 让后续不同模型的 reasoning、tool calling、response format 与私有参数都能通过统一对象透传。
+- 尽早把 `json_schema` 纳入一期，避免后续再做第二轮节点结构与运行时返工。
 
 ## 截止日期
 
@@ -62,3 +63,4 @@ scope:
 - 节点配置结构后续应收敛为“模型供应商对象 + LLM 参数对象”，宿主负责保存、校验基础形状并透传给插件。
 - 参数 schema 的刷新时机优先贴近模型选择动作，而不是再拆一条额外接口，降低交互复杂度。
 - “是否开启某参数”后续应优先收敛为节点侧的传值规则，而不是插件 schema 额外维护一套启用状态真值。
+- `json_schema` 虽然提前进入一期，但仍应作为节点级独立对象处理，因为它会影响输出契约与变量树，而不是普通参数表单中的一个简单字段。

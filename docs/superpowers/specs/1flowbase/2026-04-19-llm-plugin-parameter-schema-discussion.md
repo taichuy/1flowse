@@ -16,7 +16,7 @@
 - 宿主 `schema ui` 是否需要新增类型，以及最小应该新增什么
 - 模型供应商对象、`LLM` 参数对象与节点配置对象的真实数据边界
 - 参数“是否开启 / 是否传递”的真值应该放在插件还是应用节点
-- `response_format` 一期是否进入，以及为什么只做最小版
+- `response_format` 与 `json_schema` 一期如何进入，以及为什么仍应作为节点级独立能力
 - 当前讨论已经确认的决策与剩余实现边界
 
 ## 2. 最终方向概述
@@ -30,7 +30,7 @@
   - 保存节点中的模型供应商对象与 `LLM` 参数对象
   - 在运行时把解析后的 provider 配置与节点参数一起发给插件
 - 参数“是否开启 / 是否要传”属于应用中的 `LLM` 节点真值，不属于插件真值
-- `response_format` 一期只支持 `text | json_object`
+- `json_schema` 作为重要能力进入一期，但继续保持节点级独立对象，不回落为普通参数表单字段
 
 一句话总结就是：
 
@@ -72,7 +72,7 @@
 - 在节点里保存：
   - 模型供应商对象
   - `LLM` 参数对象
-  - 最小版 `response_format`
+  - 节点级独立 `response_format`
 - 切换模型时根据新 schema 清空并重建参数对象
 - 根据节点中的 `enabled` 状态筛选最终要传给插件的参数
 - 加载并缓存 provider label / protocol / model label 等展示信息
@@ -82,7 +82,7 @@
 
 - 内建所有 `LLM` 参数语义
 - 让插件直接注入任意 UI 组件
-- 在第一期解决完整 `json_schema` 结构化输出产品设计
+- 把 `json_schema` 降格为普通参数字段直接塞回通用表单
 
 ### 3.3 应用节点负责什么
 
@@ -105,7 +105,7 @@
 
 1. 选中模型时一并返回参数 schema，宿主直接记录并缓存
 2. 切换模型后清空旧参数，并按新 schema 重建
-3. `response_format` 一期采用最小版，只支持 `text | json_object`
+3. `response_format` 一期进入正式范围，并支持 `text | json_object | json_schema`
 4. 不允许插件自定义控件，只允许通用表单控件
 5. `provider_code / protocol / label` 只作为缓存，不作为核心真值
 6. 后台应用页需要提供刷新按钮更新 provider / model 展示缓存
@@ -363,37 +363,59 @@ interface LlmNodeParameters {
 - 插件可以通过 `enabled_by_default` 声明默认开启建议
 - 但最终 `enabled` 的真值必须由节点保存
 
-## 9. `response_format` 一期最小版
+## 9. `response_format / json_schema` 一期正式版
 
 ### 9.1 一期结构
 
 ```ts
-interface LlmNodeResponseFormat {
-  mode: 'text' | 'json_object';
-}
+type LlmNodeResponseFormat =
+  | {
+      mode: 'text';
+    }
+  | {
+      mode: 'json_object';
+    }
+  | {
+      mode: 'json_schema';
+      schema_name?: string;
+      schema: JsonValue;
+      strict?: boolean;
+    };
 ```
 
-### 9.2 为什么一期不直接做 `json_schema`
+### 9.2 为什么 `json_schema` 虽然进入一期，但仍不应回到普通参数表单里
 
-因为 `json_schema` 并不是“多一个字段”这么简单，它会立即牵涉：
+因为 `json_schema` 并不是普通数值参数，它会立即牵涉：
 
 - JSON Schema 编辑体验
 - 输出契约与结构化输出之间的一致性
 - provider 间 `json_schema` 协议差异
 - strict 模式与运行时错误治理
 
-当前运行时已经把 `response_format` 作为独立字段透传，而不是普通参数的一部分，因此它更适合作为单独对象逐期扩展，而不是在一期就做重设计。
+当前运行时已经把 `response_format` 作为独立字段透传，而不是普通参数的一部分，因此即便 `json_schema` 提前进入一期，它仍更适合作为独立对象，而不是普通参数 schema 中的一个简单字段。
 
-### 9.3 二期预留结构
+### 9.3 为什么现在要一起做
 
-```ts
-interface LlmNodeResponseFormat {
-  mode: 'text' | 'json_object' | 'json_schema';
-  schema_name?: string;
-  schema?: JsonValue;
-  strict?: boolean;
-}
-```
+原因是：
+
+- 这是重要能力，后续再补会再次触发节点配置结构调整
+- 它和输出变量、输出契约、后续节点消费关系天然相关，越晚做返工越大
+- `Dify` 的实践已经证明这类能力最终不会停留在普通参数层
+
+### 9.4 一期仍保留的实现边界
+
+一期把 `json_schema` 纳入范围，但边界仍然收紧为：
+
+- 支持节点中保存 `response_format.mode = 'json_schema'`
+- 支持保存 `schema_name / schema / strict`
+- 支持运行时把该对象透传给 provider
+- 支持在节点 UI 中编辑和展示 schema
+
+一期暂不自动解决：
+
+- 从 `json_schema` 自动反推并覆盖节点 `outputs`
+- 复杂 provider 私有 schema 方言转换
+- 高级 schema 生成辅助能力
 
 ## 10. `LLM` 节点配置对象
 
@@ -495,13 +517,29 @@ interface ProviderInvocationRequest {
 
 为准。
 
+### 12.3 仍需确认的关键边界
+
+当前还剩一个关键产品边界需要后续确认：
+
+- `json_schema` 是否要自动同步到节点输出契约
+
+当前建议是：
+
+- 一期先不自动反推
+- 先把 `response_format.json_schema` 和节点输出契约并存
+- 在 UI 上做显式提示，避免误以为两者天然同步
+
+这样做的原因是：
+
+- 自动同步一旦做错，会直接影响后续节点变量引用
+- 先把节点级结构化输出能力做实，比同时做“自动输出契约生成”更稳
+
 ## 13. 当前不做的事
 
 本轮明确不做：
 
 - 插件自定义 React 控件
 - 宿主内建完整 canonical `LLM` 参数白名单
-- `response_format.json_schema` 的完整设计与 UI
 - 输出契约自动从 `json_schema` 反推
 - provider 私有复杂 schema 编辑器
 
@@ -512,7 +550,7 @@ interface ProviderInvocationRequest {
 - 插件返回参数 schema，宿主不内建越来越多的 `LLM` 参数语义
 - 宿主只增加最小动态表单能力，负责通用渲染和对象透传
 - 参数是否开启属于应用节点真值，不属于插件真值
-- `response_format` 一期只做 `text | json_object`，避免过早进入完整结构化输出设计
+- `json_schema` 进入一期，但继续作为节点级独立能力，而不是回落成普通参数字段
 
 ## 15. 附录：Dify `json_schema / structured_output` 对照参考
 
@@ -586,7 +624,7 @@ interface ProviderInvocationRequest {
 - `json_schema` 不只是影响调用参数
 - 它还会影响后续节点可引用的输出结构
 
-这也是为什么本稿建议 `response_format.json_schema` 不要在第一期当成普通表单字段草率落地。
+这也是为什么本稿建议 `json_schema` 虽然进入一期，但不要在实现上被降格成普通表单字段。
 
 参考：
 
@@ -635,7 +673,7 @@ interface ProviderInvocationRequest {
    它会影响节点输出契约与变量树。
 
 3. 插件层可以声明 `response_format / json_schema`，但宿主是否把它做成完整产品能力，仍要单独设计  
-   这和本稿“`response_format` 一期只做 `text | json_object`，`json_schema` 二期再开”的判断一致。
+   这和本稿“`json_schema` 进入一期，但保持节点级独立对象”的判断一致。
 
 ### 15.8 与本稿当前方案的对应关系
 
@@ -643,15 +681,15 @@ interface ProviderInvocationRequest {
 | --- | --- | --- |
 | 参数 schema 来源 | plugin / model declaration 可声明参数模板 | provider/model 返回 `PluginFormSchema` |
 | 是否开启 | 节点保存 `structured_output_enabled` | 节点保存 `enabled` |
-| 结构化 schema 本体 | 节点保存 `structured_output.schema` | 一期不做完整 `json_schema`，二期可单独对象化 |
-| 输出变量联动 | 启用后把 `structured_output` 加入输出变量 | 当前预留为二期能力 |
+| 结构化 schema 本体 | 节点保存 `structured_output.schema` | 一期直接做节点级 `response_format.json_schema` |
+| 输出变量联动 | 启用后把 `structured_output` 加入输出变量 | 当前仍预留为后续边界，不在一期自动反推 |
 | 自定义控件 | 节点自带专门 UI | 当前不开放插件自定义控件 |
-| `response_format` | 参数模板存在，但结构化输出不只靠模板驱动 | 一期只支持 `text | json_object` |
+| `response_format` | 参数模板存在，但结构化输出不只靠模板驱动 | 一期支持 `text | json_object | json_schema`，但 `json_schema` 走节点级独立对象 |
 
 ### 15.9 本稿不直接照抄 Dify 的原因
 
 虽然 `Dify` 有可借鉴实现，但本稿不直接照抄，原因有三点：
 
 - `1flowbase` 当前在推进 plugin-first 的 provider 接入边界，需要比 `Dify` 更明确地区分“插件声明参数”和“节点真值”
-- `1flowbase` 当前的 `schema ui` 正在建设中，第一期更适合先补最小动态表单能力，而不是直接引入完整 JSON Schema 编辑器
+- `1flowbase` 当前的 `schema ui` 正在建设中，因此即便 `json_schema` 进入一期，也仍应以节点级独立对象落地，而不是并回普通参数表单
 - `Dify` 当前 `structured_output` 更像是宿主内建的 `LLM` 节点专有能力，而本稿当前主目标是先把 provider 参数 schema 与节点参数对象边界收干净
