@@ -61,7 +61,7 @@
 - [x] **Step 2: Run `node scripts/node/test-scripts.js`**
 - [x] **Step 3: Run `node scripts/node/verify-repo.js` or an injected command-shape verification path**
 - [x] **Step 4: Update this plan with actual verification results**
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ## Verification Results
 
