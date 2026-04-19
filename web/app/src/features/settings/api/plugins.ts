@@ -3,15 +3,23 @@ import {
   installConsoleOfficialPlugin,
   listConsolePluginFamilies,
   listConsoleOfficialPluginCatalog,
+  uploadConsolePluginPackage,
+  type ConsoleOfficialPluginCatalogResponse,
   switchConsolePluginFamilyVersion,
   upgradeConsolePluginFamilyLatest,
   type ConsolePluginFamilyEntry,
   type ConsoleOfficialPluginCatalogEntry,
+  type ConsolePluginInstallation,
+  type InstallConsolePluginResult,
   type ConsolePluginTask
 } from '@1flowbase/api-client';
 
 export type SettingsPluginFamilyEntry = ConsolePluginFamilyEntry;
 export type SettingsOfficialPluginCatalogEntry = ConsoleOfficialPluginCatalogEntry;
+export type SettingsOfficialPluginCatalogResponse =
+  ConsoleOfficialPluginCatalogResponse;
+export type SettingsPluginInstallation = ConsolePluginInstallation;
+export type SettingsInstallPluginResult = InstallConsolePluginResult;
 export type SettingsPluginTask = ConsolePluginTask;
 
 export const settingsPluginFamiliesQueryKey = [
@@ -39,6 +47,10 @@ export function installSettingsOfficialPlugin(
   csrfToken: string
 ) {
   return installConsoleOfficialPlugin({ plugin_id }, csrfToken);
+}
+
+export function uploadSettingsPluginPackage(file: File, csrfToken: string) {
+  return uploadConsolePluginPackage(file, csrfToken);
 }
 
 export function upgradeSettingsPluginFamilyLatest(

@@ -743,7 +743,7 @@ Actual on 2026-04-19:
 - During the success-path rerun, one test assertion expected `signature_status=unverified`; actual intake semantics returned `signature_status=unsigned` for `trust_mode=allow_unsigned`, so the assertion was corrected and rerun to green.
 - `rtk git diff --check` passed.
 
-- [ ] **Step 6: Commit the official/mirror source work**
+- [x] **Step 6: Commit the official/mirror source work**
 
 ```bash
 git add \
@@ -760,6 +760,9 @@ git add \
   docs/superpowers/plans/2026-04-19-plugin-trust-source-install.md
 git commit -m "feat: add trusted official and mirror plugin source"
 ```
+
+Actual on 2026-04-19:
+- Committed as `0dc05c0d feat: add trusted official and mirror plugin source`.
 
 ### Task 4: Add Browser Upload Install And Keep Legacy Manual Install Compatible
 
@@ -932,7 +935,7 @@ Actual on 2026-04-19:
 - During implementation, the signed upload fixture initially hashed payload contents with the wrong algorithm; after aligning the helper with `plugin-framework`'s `_meta`-excluded payload hash semantics, the upload verification path turned green.
 - `rtk git diff --check` passed.
 
-- [ ] **Step 5: Commit the upload backend**
+- [x] **Step 5: Commit the upload backend**
 
 ```bash
 git add \
@@ -945,10 +948,15 @@ git add \
 git commit -m "feat: add uploaded plugin install flow"
 ```
 
+Actual on 2026-04-19:
+- Committed as `079891e6 feat: add uploaded plugin install flow`.
+
 ### Task 5: Update The Settings Page To Show Source Metadata, Trust Labels, And Upload Install
 
 **Files:**
 - Create: `web/app/src/features/settings/components/model-providers/PluginUploadInstallModal.tsx`
+- Modify: `api/crates/control-plane/src/plugin_management.rs`
+- Modify: `api/apps/api-server/src/routes/plugins.rs`
 - Modify: `web/packages/api-client/src/transport.ts`
 - Modify: `web/packages/api-client/src/_tests/transport.test.ts`
 - Modify: `web/packages/api-client/src/console-plugins.ts`
@@ -958,9 +966,10 @@ git commit -m "feat: add uploaded plugin install flow"
 - Modify: `web/app/src/features/settings/components/model-providers/PluginVersionManagementModal.tsx`
 - Modify: `web/app/src/features/settings/components/model-providers/model-provider-panel.css`
 - Modify: `web/app/src/features/settings/_tests/model-providers-page.test.tsx`
+- Modify: `web/app/src/features/settings/_tests/settings-page.test.tsx`
 - Modify: `web/app/src/style-boundary/scenario-manifest.json`
 
-- [ ] **Step 1: Write failing frontend tests for official-source header, upload modal, and source/trust labels**
+- [x] **Step 1: Write failing frontend tests for official-source header, upload modal, and source/trust labels**
 
 Extend `web/packages/api-client/src/_tests/transport.test.ts` and `web/app/src/features/settings/_tests/model-providers-page.test.tsx` with cases like:
 
@@ -1042,7 +1051,7 @@ test('apiFetch supports FormData bodies without forcing JSON content-type', asyn
 });
 ```
 
-- [ ] **Step 2: Run the targeted frontend tests for the RED baseline**
+- [x] **Step 2: Run the targeted frontend tests for the RED baseline**
 
 Run:
 
@@ -1052,7 +1061,11 @@ rtk pnpm --dir web exec vitest run packages/api-client/src/_tests/transport.test
 
 Expected: FAIL because the API client cannot send `FormData`, the official-catalog query still returns an array, and the settings page has no upload entry or trust labels.
 
-- [ ] **Step 3: Update the client DTOs and transport helpers for the new backend contract**
+Actual on 2026-04-19:
+- `rtk pnpm --dir web exec vitest run packages/api-client/src/_tests/transport.test.ts app/src/features/settings/_tests/model-providers-page.test.tsx` hit the intended RED baseline for `transport.test.ts`, proving `FormData` could not yet pass through `apiFetch`.
+- The combined root-level vitest invocation also hit an existing workspace alias-resolution issue for `app/src/features/settings/_tests/model-providers-page.test.tsx` (`@1flowbase/ui` was not resolved under that runner shape), so the later green reruns were split into package-local commands.
+
+- [x] **Step 3: Update the client DTOs and transport helpers for the new backend contract**
 
 Update `web/packages/api-client/src/transport.ts` and `web/packages/api-client/src/console-plugins.ts`:
 
@@ -1128,7 +1141,7 @@ export function uploadConsolePluginPackage(
 }
 ```
 
-- [ ] **Step 4: Wire the settings page with a dedicated upload modal and separate source/trust tags**
+- [x] **Step 4: Wire the settings page with a dedicated upload modal and separate source/trust tags**
 
 Create `web/app/src/features/settings/components/model-providers/PluginUploadInstallModal.tsx`:
 
@@ -1214,7 +1227,7 @@ Also update `web/app/src/style-boundary/scenario-manifest.json` so `page.setting
 "web/app/src/features/settings/components/model-providers/PluginUploadInstallModal.tsx"
 ```
 
-- [ ] **Step 5: Rerun the targeted frontend tests**
+- [x] **Step 5: Rerun the targeted frontend tests**
 
 Run:
 
@@ -1224,10 +1237,25 @@ rtk pnpm --dir web exec vitest run packages/api-client/src/_tests/transport.test
 
 Expected: PASS, and the page now surfaces source/trust separately while keeping the existing settings-page layout.
 
-- [ ] **Step 6: Commit the settings-page changes**
+Actual on 2026-04-19:
+- `rtk pnpm --dir web --filter @1flowbase/api-client exec vitest run src/_tests/transport.test.ts`
+- `rtk pnpm --dir web --filter @1flowbase/web exec vitest run src/features/settings/_tests/model-providers-page.test.tsx`
+- `rtk pnpm --dir web --filter @1flowbase/web exec vitest run src/features/settings/_tests/settings-page.test.tsx`
+- `rtk cargo test --manifest-path api/Cargo.toml -p control-plane _tests::plugin_management_service_tests::plugin_management_service_lists_provider_families_with_current_and_latest_versions -- --exact`
+- `rtk cargo test --manifest-path api/Cargo.toml -p api-server _tests::plugin_routes::plugin_routes_install_upload_accepts_multipart_package -- --exact`
+- `rtk cargo fmt --manifest-path api/Cargo.toml --all`
+- `rtk git diff --check`
+- The two package-local vitest commands passed and covered the new `FormData` transport path, source metadata header, trust labels, and upload entry.
+- `settings-page.test.tsx` also passed as an extra regression to keep the route-level settings shell stable after the new plugin API mocks.
+- The two backend regressions passed, confirming the response contract changes for `trust_level` did not break existing control-plane/api-server expectations.
+- `rtk cargo fmt --manifest-path api/Cargo.toml --all` and `rtk git diff --check` both passed.
+
+- [x] **Step 6: Commit the settings-page changes**
 
 ```bash
 git add \
+  api/crates/control-plane/src/plugin_management.rs \
+  api/apps/api-server/src/routes/plugins.rs \
   web/packages/api-client/src/transport.ts \
   web/packages/api-client/src/_tests/transport.test.ts \
   web/packages/api-client/src/console-plugins.ts \
@@ -1238,10 +1266,14 @@ git add \
   web/app/src/features/settings/components/model-providers/PluginUploadInstallModal.tsx \
   web/app/src/features/settings/components/model-providers/model-provider-panel.css \
   web/app/src/features/settings/_tests/model-providers-page.test.tsx \
+  web/app/src/features/settings/_tests/settings-page.test.tsx \
   web/app/src/style-boundary/scenario-manifest.json \
   docs/superpowers/plans/2026-04-19-plugin-trust-source-install.md
 git commit -m "feat: expose plugin source trust and upload install"
 ```
+
+Actual on 2026-04-19:
+- Committed in the task-specific changeset with message `feat: expose plugin source trust and upload install`.
 
 ### Task 6: Run Full Verification And Close The Loop
 

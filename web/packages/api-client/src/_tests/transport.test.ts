@@ -68,4 +68,31 @@ describe('apiFetch', () => {
       })
     );
   });
+
+  test('apiFetch supports FormData bodies without forcing JSON content-type', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { ok: true }, meta: null }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+    const formData = new FormData();
+    formData.set('file', new Blob(['hello']), 'hello.1flowbasepkg');
+
+    await apiFetch<{ ok: boolean }>({
+      path: '/api/console/plugins/install-upload',
+      method: 'POST',
+      rawBody: formData,
+      contentType: null,
+      baseUrl: 'http://127.0.0.1:7800'
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/plugins/install-upload',
+      expect.objectContaining({
+        body: formData,
+        headers: {}
+      })
+    );
+  });
 });

@@ -98,6 +98,7 @@ const pluginsApi = vi.hoisted(() => ({
   fetchSettingsPluginFamilies: vi.fn(),
   fetchSettingsOfficialPluginCatalog: vi.fn(),
   installSettingsOfficialPlugin: vi.fn(),
+  uploadSettingsPluginPackage: vi.fn(),
   upgradeSettingsPluginFamilyLatest: vi.fn(),
   switchSettingsPluginFamilyVersion: vi.fn(),
   fetchSettingsPluginTask: vi.fn()
@@ -325,6 +326,7 @@ describe('ModelProvidersPage', () => {
             installation_id: 'installation-2',
             plugin_version: '0.2.0',
             source_kind: 'official_registry',
+            trust_level: 'verified_official',
             created_at: '2026-04-19T09:00:00Z',
             is_current: false
           },
@@ -332,13 +334,19 @@ describe('ModelProvidersPage', () => {
             installation_id: 'installation-1',
             plugin_version: '0.1.0',
             source_kind: 'official_registry',
+            trust_level: 'verified_official',
             created_at: '2026-04-18T09:00:00Z',
             is_current: true
           }
         ]
       }
     ]);
-    pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue([]);
+    pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
+      source_kind: 'official_registry',
+      source_label: '官方源',
+      registry_url: 'https://official.example.com/official-registry.json',
+      entries: []
+    });
     pluginsApi.installSettingsOfficialPlugin.mockResolvedValue({
       installation: {
         id: 'installation-1',
@@ -349,11 +357,14 @@ describe('ModelProvidersPage', () => {
         protocol: 'openai_compatible',
         display_name: 'OpenAI Compatible',
         source_kind: 'official_registry',
+        trust_level: 'verified_official',
         verification_status: 'valid',
         enabled: true,
         install_path: '/tmp/openai-compatible',
         checksum: 'sha256:abc123',
         signature_status: 'unsigned',
+        signature_algorithm: null,
+        signing_key_id: null,
         metadata_json: {},
         created_at: '2026-04-18T21:00:00Z',
         updated_at: '2026-04-18T21:00:00Z'
@@ -485,6 +496,7 @@ describe('ModelProvidersPage', () => {
             installation_id: 'installation-2',
             plugin_version: '0.2.0',
             source_kind: 'official_registry',
+            trust_level: 'verified_official',
             created_at: '2026-04-19T09:00:00Z',
             is_current: true
           },
@@ -492,6 +504,7 @@ describe('ModelProvidersPage', () => {
             installation_id: 'installation-1',
             plugin_version: '0.1.0',
             source_kind: 'official_registry',
+            trust_level: 'verified_official',
             created_at: '2026-04-18T09:00:00Z',
             is_current: false
           }
@@ -757,19 +770,24 @@ describe('ModelProvidersPage', () => {
       'state_model.manage.all'
     ]);
     pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([]);
-    pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue([
-      {
-        plugin_id: '1flowbase.openai_compatible',
-        provider_code: 'openai_compatible',
-        display_name: 'OpenAI Compatible',
-        latest_version: '0.1.0',
-        protocol: 'openai_compatible',
-        help_url:
-          'https://github.com/taichuy/1flowbase-official-plugins/tree/main/models/openai_compatible',
-        model_discovery_mode: 'hybrid',
-        install_status: 'not_installed'
-      }
-    ]);
+    pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
+      source_kind: 'official_registry',
+      source_label: '官方源',
+      registry_url: 'https://official.example.com/official-registry.json',
+      entries: [
+        {
+          plugin_id: '1flowbase.openai_compatible',
+          provider_code: 'openai_compatible',
+          display_name: 'OpenAI Compatible',
+          latest_version: '0.1.0',
+          protocol: 'openai_compatible',
+          help_url:
+            'https://github.com/taichuy/1flowbase-official-plugins/tree/main/models/openai_compatible',
+          model_discovery_mode: 'hybrid',
+          install_status: 'not_installed'
+        }
+      ]
+    });
 
     renderApp('/settings/model-providers');
 
@@ -799,28 +817,33 @@ describe('ModelProvidersPage', () => {
       'state_model.manage.all'
     ]);
     pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([]);
-    pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue([
-      {
-        plugin_id: '1flowbase.openai_compatible@0.1.0',
-        provider_code: 'openai_compatible',
-        display_name: 'OpenAI Compatible',
-        latest_version: '0.1.0',
-        protocol: 'openai_compatible',
-        help_url: 'https://example.com/openai-010',
-        model_discovery_mode: 'hybrid',
-        install_status: 'installed'
-      },
-      {
-        plugin_id: '1flowbase.openai_compatible@0.2.0',
-        provider_code: 'openai_compatible',
-        display_name: 'OpenAI Compatible',
-        latest_version: '0.2.0',
-        protocol: 'openai_compatible',
-        help_url: 'https://example.com/openai-020',
-        model_discovery_mode: 'hybrid',
-        install_status: 'not_installed'
-      }
-    ]);
+    pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
+      source_kind: 'official_registry',
+      source_label: '官方源',
+      registry_url: 'https://official.example.com/official-registry.json',
+      entries: [
+        {
+          plugin_id: '1flowbase.openai_compatible@0.1.0',
+          provider_code: 'openai_compatible',
+          display_name: 'OpenAI Compatible',
+          latest_version: '0.1.0',
+          protocol: 'openai_compatible',
+          help_url: 'https://example.com/openai-010',
+          model_discovery_mode: 'hybrid',
+          install_status: 'installed'
+        },
+        {
+          plugin_id: '1flowbase.openai_compatible@0.2.0',
+          provider_code: 'openai_compatible',
+          display_name: 'OpenAI Compatible',
+          latest_version: '0.2.0',
+          protocol: 'openai_compatible',
+          help_url: 'https://example.com/openai-020',
+          model_discovery_mode: 'hybrid',
+          install_status: 'not_installed'
+        }
+      ]
+    });
 
     renderApp('/settings/model-providers');
 
@@ -841,19 +864,24 @@ describe('ModelProvidersPage', () => {
       'state_model.manage.all'
     ]);
     pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([]);
-    pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue([
-      {
-        plugin_id: '1flowbase.openai_compatible',
-        provider_code: 'openai_compatible',
-        display_name: 'OpenAI Compatible',
-        latest_version: '0.1.0',
-        protocol: 'openai_compatible',
-        help_url:
-          'https://github.com/taichuy/1flowbase-official-plugins/tree/main/models/openai_compatible',
-        model_discovery_mode: 'hybrid',
-        install_status: 'not_installed'
-      }
-    ]);
+    pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
+      source_kind: 'official_registry',
+      source_label: '官方源',
+      registry_url: 'https://official.example.com/official-registry.json',
+      entries: [
+        {
+          plugin_id: '1flowbase.openai_compatible',
+          provider_code: 'openai_compatible',
+          display_name: 'OpenAI Compatible',
+          latest_version: '0.1.0',
+          protocol: 'openai_compatible',
+          help_url:
+            'https://github.com/taichuy/1flowbase-official-plugins/tree/main/models/openai_compatible',
+          model_discovery_mode: 'hybrid',
+          install_status: 'not_installed'
+        }
+      ]
+    });
     pluginsApi.installSettingsOfficialPlugin.mockResolvedValue({
       installation: {
         id: 'installation-1',
@@ -864,11 +892,14 @@ describe('ModelProvidersPage', () => {
         protocol: 'openai_compatible',
         display_name: 'OpenAI Compatible',
         source_kind: 'official_registry',
+        trust_level: 'verified_official',
         verification_status: 'valid',
         enabled: true,
         install_path: '/tmp/openai-compatible',
         checksum: 'sha256:abc123',
         signature_status: 'unsigned',
+        signature_algorithm: null,
+        signing_key_id: null,
         metadata_json: {},
         created_at: '2026-04-18T21:00:00Z',
         updated_at: '2026-04-18T21:00:00Z'
@@ -958,4 +989,67 @@ describe('ModelProvidersPage', () => {
       { timeout: 4000 }
     );
   }, 15000);
+
+  test('renders official source metadata, upload entry, and source trust labels', async () => {
+    authenticateWithPermissions([
+      'route_page.view.all',
+      'state_model.view.all',
+      'state_model.manage.all'
+    ]);
+    pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([
+      {
+        provider_code: 'openai_compatible',
+        display_name: 'OpenAI Compatible',
+        protocol: 'openai_compatible',
+        help_url: 'https://platform.openai.com/docs/api-reference',
+        default_base_url: 'https://api.openai.com/v1',
+        model_discovery_mode: 'hybrid',
+        current_installation_id: 'installation-upload-1',
+        current_version: '0.2.0',
+        latest_version: '0.2.0',
+        has_update: false,
+        installed_versions: [
+          {
+            installation_id: 'installation-upload-1',
+            plugin_version: '0.2.0',
+            source_kind: 'uploaded',
+            trust_level: 'verified_official',
+            created_at: '2026-04-19T14:00:00Z',
+            is_current: true
+          }
+        ]
+      }
+    ]);
+    pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
+      source_kind: 'mirror_registry',
+      source_label: '镜像源',
+      registry_url: 'https://mirror.example.com/official-registry.json',
+      entries: [
+        {
+          plugin_id: '1flowbase.openai_compatible',
+          provider_code: 'openai_compatible',
+          display_name: 'OpenAI Compatible',
+          protocol: 'openai_compatible',
+          latest_version: '0.2.0',
+          help_url: 'https://platform.openai.com/docs/api-reference',
+          model_discovery_mode: 'hybrid',
+          install_status: 'assigned'
+        }
+      ]
+    });
+
+    renderApp('/settings/model-providers');
+
+    expect(await screen.findByText('当前来源：镜像源')).toBeInTheDocument();
+    expect(screen.getByText('优先从镜像源拉取官方插件')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '上传插件' })).toBeInTheDocument();
+
+    const catalogRow = await screen.findByRole('row', {
+      name: /OpenAI Compatible/
+    });
+    fireEvent.click(within(catalogRow).getByRole('button', { name: '版本管理' }));
+
+    expect(await screen.findByText('官方签发')).toBeInTheDocument();
+    expect(await screen.findByText('手工上传')).toBeInTheDocument();
+  });
 });

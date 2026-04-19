@@ -22,6 +22,8 @@ export interface ApiRequestOptions {
   path: string;
   method?: string;
   body?: unknown;
+  rawBody?: BodyInit;
+  contentType?: string | null;
   csrfToken?: string | null;
   baseUrl?: string;
   expectJson?: boolean;
@@ -46,15 +48,25 @@ export async function apiFetch<T>({
   path,
   method = 'GET',
   body,
+  rawBody,
+  contentType,
   csrfToken,
   baseUrl = getDefaultApiBaseUrl(),
   expectJson = true,
   unwrapSuccess = true
 }: ApiRequestOptions): Promise<T> {
+  if (body !== undefined && rawBody !== undefined) {
+    throw new Error('apiFetch does not support body and rawBody at the same time');
+  }
+
   const headers: Record<string, string> = {};
 
   if (body !== undefined) {
     headers['content-type'] = 'application/json';
+  }
+
+  if (contentType !== undefined && contentType !== null) {
+    headers['content-type'] = contentType;
   }
 
   if (csrfToken) {
@@ -65,7 +77,12 @@ export async function apiFetch<T>({
     method,
     credentials: 'include',
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined
+    body:
+      body !== undefined
+        ? JSON.stringify(body)
+        : rawBody !== undefined
+          ? rawBody
+          : undefined
   });
 
   if (!response.ok) {

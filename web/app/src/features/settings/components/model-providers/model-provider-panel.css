@@ -105,6 +105,17 @@
   margin-bottom: 12px;
 }
 
+.model-provider-panel__official-source {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.model-provider-panel__official-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .model-provider-panel__official-grid {
   display: grid;
   gap: 10px;
@@ -222,6 +233,18 @@
   justify-content: flex-end;
 }
 
+.model-provider-panel__version-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.model-provider-panel__upload-modal {
+  display: grid;
+  gap: 16px;
+}
+
 .model-provider-panel__drawer-note {
   margin: 12px 0 18px;
 }
@@ -282,6 +305,11 @@
   .model-provider-panel__catalog-item-head,
   .model-provider-panel__section-head {
     flex-direction: column;
+  }
+
+  .model-provider-panel__official-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .model-provider-panel__instances-modal-head,

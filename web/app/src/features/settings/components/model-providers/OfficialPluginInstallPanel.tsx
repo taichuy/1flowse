@@ -121,6 +121,7 @@ function pickPreferredOfficialEntry(
 }
 
 export function OfficialPluginInstallPanel({
+  sourceMeta,
   entries,
   familiesByProviderCode,
   loading,
@@ -129,8 +130,14 @@ export function OfficialPluginInstallPanel({
   installState,
   upgradingProviderCode,
   onInstall,
+  onOpenUpload,
   onUpgradeLatest
 }: {
+  sourceMeta: {
+    sourceKind: string;
+    sourceLabel: string;
+    registryUrl: string;
+  } | null;
   entries: SettingsOfficialPluginCatalogEntry[];
   familiesByProviderCode: Record<string, SettingsPluginFamilyEntry | undefined>;
   loading?: boolean;
@@ -139,6 +146,7 @@ export function OfficialPluginInstallPanel({
   installState: InstallState;
   upgradingProviderCode: string | null;
   onInstall: (entry: SettingsOfficialPluginCatalogEntry) => void;
+  onOpenUpload: () => void;
   onUpgradeLatest: (entry: SettingsOfficialPluginCatalogEntry) => void;
 }) {
   const [modal, contextHolder] = Modal.useModal();
@@ -183,7 +191,25 @@ export function OfficialPluginInstallPanel({
             从官方目录安装最新版本；如果当前 workspace
             已在使用某个供应商，这里会直接显示升级状态。
           </Typography.Text>
+          {sourceMeta ? (
+            <div className="model-provider-panel__official-source">
+              <Typography.Text strong>
+                当前来源：{sourceMeta.sourceLabel}
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                优先从{sourceMeta.sourceLabel}拉取官方插件
+              </Typography.Text>
+              <Typography.Link href={sourceMeta.registryUrl} target="_blank">
+                查看源清单
+              </Typography.Link>
+            </div>
+          ) : null}
         </div>
+        {canManage ? (
+          <div className="model-provider-panel__official-actions">
+            <Button onClick={onOpenUpload}>上传插件</Button>
+          </div>
+        ) : null}
       </div>
       <Select
         allowClear

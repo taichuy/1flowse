@@ -3,6 +3,7 @@ import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate } from '@tanstack/react-router';
 import { Alert, Result, Typography } from 'antd';
+import type { UploadFile } from 'antd/es/upload/interface';
 
 import { useAuthStore } from '../../../state/auth-store';
 import { SectionPageLayout } from '../../../shared/ui/section-page-layout/SectionPageLayout';
@@ -13,6 +14,7 @@ import { ModelProviderCatalogPanel } from '../components/model-providers/ModelPr
 import { ModelProviderInstanceDrawer } from '../components/model-providers/ModelProviderInstanceDrawer';
 import { ModelProviderInstancesModal } from '../components/model-providers/ModelProviderInstancesModal';
 import { OfficialPluginInstallPanel } from '../components/model-providers/OfficialPluginInstallPanel';
+import { PluginUploadInstallModal } from '../components/model-providers/PluginUploadInstallModal';
 import { PluginVersionManagementModal } from '../components/model-providers/PluginVersionManagementModal';
 import {
   getVisibleSettingsSections,
@@ -44,6 +46,7 @@ import {
   settingsOfficialPluginsQueryKey,
   switchSettingsPluginFamilyVersion,
   type SettingsPluginFamilyEntry,
+  uploadSettingsPluginPackage,
   upgradeSettingsPluginFamilyLatest
 } from '../api/plugins';
 import '../components/model-providers/model-provider-panel.css';
@@ -97,6 +100,17 @@ function parseTaskDetailNumber(detail: Record<string, unknown>, key: string) {
   return typeof value === 'number' ? value : null;
 }
 
+function formatTrustLabel(trustLevel: string) {
+  switch (trustLevel) {
+    case 'verified_official':
+      return '官方签发';
+    case 'checksum_only':
+      return '仅 checksum';
+    default:
+      return '未验签';
+  }
+}
+
 function ModelProvidersSection({ canManage }: { canManage: boolean }) {
   const queryClient = useQueryClient();
   const csrfToken = useAuthStore((state) => state.csrfToken);
@@ -112,6 +126,16 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
   const [versionModalProviderCode, setVersionModalProviderCode] = useState<
     string | null
   >(null);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadFileList, setUploadFileList] = useState<UploadFile[]>([]);
+  const [uploadValidationMessage, setUploadValidationMessage] = useState<
+    string | null
+  >(null);
+  const [uploadResultSummary, setUploadResultSummary] = useState<{
+    displayName: string;
+    version: string;
+    trustLabel: string;
+  } | null>(null);
   const [recentVersionSwitchNotice, setRecentVersionSwitchNotice] = useState<{
     providerCode: string;
     targetVersion: string | null;
@@ -147,7 +171,14 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
   const instances = instancesQuery.data ?? EMPTY_MODEL_PROVIDER_INSTANCES;
   const catalogEntries = catalogQuery.data ?? EMPTY_MODEL_PROVIDER_CATALOG;
   const families = familiesQuery.data ?? [];
-  const officialCatalogEntries = officialCatalogQuery.data ?? [];
+  const officialCatalogEntries = officialCatalogQuery.data?.entries ?? [];
+  const officialSourceMeta = officialCatalogQuery.data
+    ? {
+        sourceKind: officialCatalogQuery.data.source_kind,
+        sourceLabel: officialCatalogQuery.data.source_label,
+        registryUrl: officialCatalogQuery.data.registry_url
+      }
+    : null;
   const catalogEntriesByInstallationId = useMemo(() => {
     const grouped: Record<string, SettingsModelProviderCatalogEntry> = {};
 
@@ -456,6 +487,24 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
       });
     }
   });
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      if (!csrfToken) {
+        throw new Error('missing csrf token');
+      }
+
+      return uploadSettingsPluginPackage(file, csrfToken);
+    },
+    onSuccess: async (result) => {
+      setUploadValidationMessage(null);
+      setUploadResultSummary({
+        displayName: result.installation.display_name,
+        version: result.installation.plugin_version,
+        trustLabel: formatTrustLabel(result.installation.trust_level)
+      });
+      await invalidateModelProviderQueries();
+    }
+  });
   const versionMutation = useMutation({
     mutationFn: async (
       input:
@@ -575,6 +624,8 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     getErrorMessage(officialInstallMutation.error) ??
     getErrorMessage(versionMutation.error) ??
     getErrorMessage(pluginTaskQuery.error);
+  const uploadErrorMessage =
+    uploadValidationMessage ?? getErrorMessage(uploadMutation.error);
 
   const readyCount = instances.filter(
     (instance) => instance.status === 'ready'
@@ -652,6 +703,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
 
         <aside className="model-provider-panel__sidebar">
           <OfficialPluginInstallPanel
+            sourceMeta={officialSourceMeta}
             entries={officialCatalogEntries}
             familiesByProviderCode={familiesByProviderCode}
             loading={officialCatalogQuery.isLoading}
@@ -666,6 +718,11 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
             }
             onInstall={(entry) => {
               officialInstallMutation.mutate(entry.plugin_id);
+            }}
+            onOpenUpload={() => {
+              setUploadModalOpen(true);
+              setUploadValidationMessage(null);
+              setUploadResultSummary(null);
             }}
             onUpgradeLatest={(entry) => {
               versionMutation.mutate({
@@ -809,6 +866,34 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
             providerCode: family.provider_code,
             installationId
           });
+        }}
+      />
+
+      <PluginUploadInstallModal
+        open={uploadModalOpen}
+        submitting={uploadMutation.isPending}
+        resultSummary={uploadResultSummary}
+        errorMessage={uploadErrorMessage}
+        fileList={uploadFileList}
+        onClose={() => {
+          setUploadModalOpen(false);
+          setUploadFileList([]);
+          setUploadValidationMessage(null);
+          setUploadResultSummary(null);
+        }}
+        onChange={(nextFiles) => {
+          setUploadFileList(nextFiles.slice(-1));
+          setUploadValidationMessage(null);
+          setUploadResultSummary(null);
+        }}
+        onSubmit={() => {
+          const file = uploadFileList[0]?.originFileObj;
+          if (!(file instanceof File)) {
+            setUploadValidationMessage('请先选择插件包');
+            return;
+          }
+
+          uploadMutation.mutate(file);
         }}
       />
     </div>

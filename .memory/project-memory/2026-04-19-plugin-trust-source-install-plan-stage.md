@@ -67,4 +67,7 @@ scope:
 - Task 2 已完成：宿主持久化、迁移和 repository 映射已切到 `source_kind + trust_level + signature_status`，并独立提交 `5711a6`。
 - Task 3 已完成：`api-server` 现可解析默认官方源/镜像源，official catalog 已返回 source metadata，official install/upgrade 已统一走 intake + `signature_required` 策略；这一 task 的验证中还确认了 `trust_mode=allow_unsigned` 时成功路径的 `signature_status` 应为 `unsigned`，不是 `unverified`。
 - Task 4 已完成：新增 multipart `/api/console/plugins/install-upload`，上传包统一走 intake + trusted key 校验；签名上传现在可落成 `source_kind=uploaded` 且 `trust_level=verified_official`。legacy `/api/console/plugins/install` 继续只保留内部兼容手工导入，但持久化已固定为 `source_kind=uploaded`、`trust_level=checksum_only`、`signature_status=unsigned`。
-- 下一步直接进入 Task 5：前端设置页展示 source/trust 信息，并接入上传插件入口与 `FormData` transport。
+- Task 5 已完成：设置页现已拆开展示官方源/镜像源来源信息与 trust 标签，并新增浏览器上传插件入口；前端 client 已支持 `FormData` 上传，版本管理弹窗也改为同时展示来源与信任级别。为配合前端消费，`control-plane` / `api-server` 的安装与 family DTO 也补出了 `trust_level`、`signature_algorithm` 与 `signing_key_id`。
+- Task 5 的定向验证已再次跑通：`@1flowbase/api-client` 的 `transport.test.ts`、`@1flowbase/web` 的 `model-providers-page.test.tsx` 和 `settings-page.test.tsx` 均通过；同时补跑了 `control-plane` 的 provider family 回归、`api-server` 的 upload route 回归、`cargo fmt` 与 `git diff --check`，结果均为通过。
+- 在 Task 5 的 RED 阶段，计划里原始的合并 vitest 根命令确实暴露了 transport 缺口，但 `web` 根执行形态还同时碰到既有 `@1flowbase/ui` alias 解析噪音；因此后续 GREEN 验证固定改为 package-local vitest 命令，避免把非目标问题混入这轮实现判断。
+- 下一步进入 Task 6：执行仓库级 backend verify、前端 `lint/test/build`、`style-boundary` 校验，并在最终收尾 commit 中补齐计划文档的全量验证结果。

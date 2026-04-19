@@ -14,8 +14,44 @@ function formatVersionMeta(family: SettingsPluginFamilyEntry) {
   return `当前使用 ${family.current_version}`;
 }
 
-function formatInstalledVersionSummary(sourceKind: string, createdAt: string) {
-  return `${sourceKind} · ${createdAt.slice(0, 10)}`;
+function formatSourceLabel(sourceKind: string) {
+  switch (sourceKind) {
+    case 'official_registry':
+      return '官方源';
+    case 'mirror_registry':
+      return '镜像源';
+    case 'uploaded':
+      return '手工上传';
+    default:
+      return sourceKind;
+  }
+}
+
+function renderTrustTag(trustLevel: string) {
+  switch (trustLevel) {
+    case 'verified_official':
+      return <Tag color="green">官方签发</Tag>;
+    case 'checksum_only':
+      return <Tag color="gold">仅 checksum</Tag>;
+    default:
+      return <Tag>未验签</Tag>;
+  }
+}
+
+function renderInstalledVersionSummary(
+  sourceKind: string,
+  trustLevel: string,
+  createdAt: string
+) {
+  return (
+    <Space wrap size={6}>
+      <Tag>{formatSourceLabel(sourceKind)}</Tag>
+      {renderTrustTag(trustLevel)}
+      <Typography.Text type="secondary">
+        {createdAt.slice(0, 10)}
+      </Typography.Text>
+    </Space>
+  );
 }
 
 export function PluginVersionManagementModal({
@@ -108,14 +144,15 @@ export function PluginVersionManagementModal({
                     <Tag color="green">当前版本</Tag>
                   ) : null}
                 </div>
-                <Typography.Text type="secondary">
+                <div className="model-provider-panel__version-card-meta">
                   {latestInstalledVersion
-                    ? formatInstalledVersionSummary(
+                    ? renderInstalledVersionSummary(
                         latestInstalledVersion.source_kind,
+                        latestInstalledVersion.trust_level,
                         latestInstalledVersion.created_at
                       )
                     : '官方目录最新版本，当前本地尚未下载'}
-                </Typography.Text>
+                </div>
               </div>
               <div className="model-provider-panel__version-card-actions">
                 {family.has_update ? (
@@ -173,12 +210,13 @@ export function PluginVersionManagementModal({
                         ) : null}
                         {isLatest ? <Tag color="gold">最新</Tag> : null}
                       </div>
-                      <Typography.Text type="secondary">
-                        {formatInstalledVersionSummary(
+                      <div className="model-provider-panel__version-card-meta">
+                        {renderInstalledVersionSummary(
                           version.source_kind,
+                          version.trust_level,
                           version.created_at
                         )}
-                      </Typography.Text>
+                      </div>
                     </div>
                     <div className="model-provider-panel__version-card-actions">
                       {version.is_current ? (

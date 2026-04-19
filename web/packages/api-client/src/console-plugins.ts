@@ -9,11 +9,14 @@ export interface ConsolePluginInstallation {
   protocol: string;
   display_name: string;
   source_kind: string;
+  trust_level: string;
   verification_status: string;
   enabled: boolean;
   install_path: string;
   checksum: string | null;
   signature_status: string | null;
+  signature_algorithm: string | null;
+  signing_key_id: string | null;
   metadata_json: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -43,10 +46,18 @@ export interface ConsoleOfficialPluginCatalogEntry {
   install_status: ConsoleOfficialPluginInstallStatus;
 }
 
+export interface ConsoleOfficialPluginCatalogResponse {
+  source_kind: string;
+  source_label: string;
+  registry_url: string;
+  entries: ConsoleOfficialPluginCatalogEntry[];
+}
+
 export interface ConsolePluginInstalledVersion {
   installation_id: string;
   plugin_version: string;
   source_kind: string;
+  trust_level: string;
   created_at: string;
   is_current: boolean;
 }
@@ -107,7 +118,7 @@ export function listConsolePluginFamilies(baseUrl?: string) {
 }
 
 export function listConsoleOfficialPluginCatalog(baseUrl?: string) {
-  return apiFetch<ConsoleOfficialPluginCatalogEntry[]>({
+  return apiFetch<ConsoleOfficialPluginCatalogResponse>({
     path: '/api/console/plugins/official-catalog',
     baseUrl
   });
@@ -136,6 +147,24 @@ export function installConsoleOfficialPlugin(
     path: '/api/console/plugins/install-official',
     method: 'POST',
     body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function uploadConsolePluginPackage(
+  file: File,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  const formData = new FormData();
+  formData.set('file', file);
+
+  return apiFetch<InstallConsolePluginResult>({
+    path: '/api/console/plugins/install-upload',
+    method: 'POST',
+    rawBody: formData,
+    contentType: null,
     csrfToken,
     baseUrl
   });

@@ -115,6 +115,7 @@ pub struct PluginInstalledVersionView {
     pub installation_id: Uuid,
     pub plugin_version: String,
     pub source_kind: String,
+    pub trust_level: String,
     pub created_at: OffsetDateTime,
     pub is_current: bool,
 }
@@ -333,6 +334,7 @@ where
                     installation_id: installation.id,
                     plugin_version: installation.plugin_version.clone(),
                     source_kind: installation.source_kind.clone(),
+                    trust_level: installation.trust_level.clone(),
                     created_at: installation.created_at,
                     is_current: installation.id == current.id,
                 })

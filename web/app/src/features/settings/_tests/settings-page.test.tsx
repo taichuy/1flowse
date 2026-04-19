@@ -68,8 +68,13 @@ const modelProvidersApi = vi.hoisted(() => ({
 
 const pluginsApi = vi.hoisted(() => ({
   settingsOfficialPluginsQueryKey: ['settings', 'plugins', 'official-catalog'],
+  settingsPluginFamiliesQueryKey: ['settings', 'plugins', 'families'],
+  fetchSettingsPluginFamilies: vi.fn(),
   fetchSettingsOfficialPluginCatalog: vi.fn(),
   installSettingsOfficialPlugin: vi.fn(),
+  uploadSettingsPluginPackage: vi.fn(),
+  upgradeSettingsPluginFamilyLatest: vi.fn(),
+  switchSettingsPluginFamilyVersion: vi.fn(),
   fetchSettingsPluginTask: vi.fn()
 }));
 
@@ -168,7 +173,13 @@ describe('SettingsPage', () => {
     });
     modelProvidersApi.fetchSettingsModelProviderCatalog.mockResolvedValue([]);
     modelProvidersApi.fetchSettingsModelProviderInstances.mockResolvedValue([]);
-    pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue([]);
+    pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([]);
+    pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
+      source_kind: 'official_registry',
+      source_label: '官方源',
+      registry_url: 'https://official.example.com/official-registry.json',
+      entries: []
+    });
     pluginsApi.installSettingsOfficialPlugin.mockResolvedValue({
       installation: {
         id: 'installation-1',
@@ -179,11 +190,14 @@ describe('SettingsPage', () => {
         protocol: 'openai_compatible',
         display_name: 'OpenAI Compatible',
         source_kind: 'official_registry',
+        trust_level: 'verified_official',
         verification_status: 'valid',
         enabled: true,
         install_path: '/tmp/openai-compatible',
         checksum: 'sha256:abc123',
         signature_status: 'unsigned',
+        signature_algorithm: null,
+        signing_key_id: null,
         metadata_json: {},
         created_at: '2026-04-18T21:00:00Z',
         updated_at: '2026-04-18T21:00:00Z'
