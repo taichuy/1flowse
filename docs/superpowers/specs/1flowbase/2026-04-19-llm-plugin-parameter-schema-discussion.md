@@ -31,6 +31,7 @@
   - 在运行时把解析后的 provider 配置与节点参数一起发给插件
 - 参数“是否开启 / 是否要传”属于应用中的 `LLM` 节点真值，不属于插件真值
 - `json_schema` 作为重要能力进入一期，但继续保持节点级独立对象，不回落为普通参数表单字段
+- `json_schema` 不反推节点输出契约，不新增结构化输出变量，`LLM` 节点仍只暴露标准 `text` 输出
 
 一句话总结就是：
 
@@ -77,6 +78,7 @@
 - 根据节点中的 `enabled` 状态筛选最终要传给插件的参数
 - 加载并缓存 provider label / protocol / model label 等展示信息
 - 提供后台刷新按钮更新缓存
+- 保持 `LLM` 节点输出定义稳定，不因为 `json_schema` 新增结构化输出变量
 
 宿主不负责：
 
@@ -110,6 +112,7 @@
 5. `provider_code / protocol / label` 只作为缓存，不作为核心真值
 6. 后台应用页需要提供刷新按钮更新 provider / model 展示缓存
 7. 参数“是否开启 / 是否传递”放在应用节点中，不放在插件中
+8. `json_schema` 不自动同步到节点输出契约，仍按普通 `LLM` 文本输出处理
 
 ## 5. 宿主 `schema ui` 的最小新增类型
 
@@ -388,7 +391,6 @@ type LlmNodeResponseFormat =
 因为 `json_schema` 并不是普通数值参数，它会立即牵涉：
 
 - JSON Schema 编辑体验
-- 输出契约与结构化输出之间的一致性
 - provider 间 `json_schema` 协议差异
 - strict 模式与运行时错误治理
 
@@ -399,7 +401,7 @@ type LlmNodeResponseFormat =
 原因是：
 
 - 这是重要能力，后续再补会再次触发节点配置结构调整
-- 它和输出变量、输出契约、后续节点消费关系天然相关，越晚做返工越大
+- 它和模型返回格式、运行时校验、后续消费方式天然相关，越晚做返工越大
 - `Dify` 的实践已经证明这类能力最终不会停留在普通参数层
 
 ### 9.4 一期仍保留的实现边界
@@ -410,10 +412,12 @@ type LlmNodeResponseFormat =
 - 支持保存 `schema_name / schema / strict`
 - 支持运行时把该对象透传给 provider
 - 支持在节点 UI 中编辑和展示 schema
+- `LLM` 节点输出继续只保留标准 `text`
 
 一期暂不自动解决：
 
 - 从 `json_schema` 自动反推并覆盖节点 `outputs`
+- 新增 `structured_output` 这类独立输出变量
 - 复杂 provider 私有 schema 方言转换
 - 高级 schema 生成辅助能力
 
@@ -442,6 +446,16 @@ interface LlmNodeConfig {
 - `config.model_provider`
 - `config.llm_parameters`
 - `config.response_format`
+
+节点输出保持不变：
+
+```ts
+interface LlmNodeOutputs {
+  text: string;
+}
+```
+
+即使启用了 `json_schema`，节点也仍然只暴露 `text` 输出；区别只是该文本应尽可能符合 schema 约束。
 
 ## 11. 运行时透传对象
 
@@ -517,22 +531,19 @@ interface ProviderInvocationRequest {
 
 为准。
 
-### 12.3 仍需确认的关键边界
+### 12.3 已确认的输出边界
 
-当前还剩一个关键产品边界需要后续确认：
+该边界本轮已确认：
 
-- `json_schema` 是否要自动同步到节点输出契约
+- `json_schema` 不自动同步到节点输出契约
+- 不新增 `structured_output` 独立输出变量
+- 仍按普通 `LLM` 生成文本作为节点输出
 
-当前建议是：
+这意味着：
 
-- 一期先不自动反推
-- 先把 `response_format.json_schema` 和节点输出契约并存
-- 在 UI 上做显式提示，避免误以为两者天然同步
-
-这样做的原因是：
-
-- 自动同步一旦做错，会直接影响后续节点变量引用
-- 先把节点级结构化输出能力做实，比同时做“自动输出契约生成”更稳
+- 后续节点仍然通过 `text` 消费 `LLM` 结果
+- 若上层需要解析 JSON，可由后续节点自行处理
+- 一期不把 `json_schema` 变成输出建模系统
 
 ## 13. 当前不做的事
 
@@ -541,6 +552,7 @@ interface ProviderInvocationRequest {
 - 插件自定义 React 控件
 - 宿主内建完整 canonical `LLM` 参数白名单
 - 输出契约自动从 `json_schema` 反推
+- `json_schema` 直接生成新的节点输出变量
 - provider 私有复杂 schema 编辑器
 
 ## 14. 讨论结论
@@ -550,7 +562,7 @@ interface ProviderInvocationRequest {
 - 插件返回参数 schema，宿主不内建越来越多的 `LLM` 参数语义
 - 宿主只增加最小动态表单能力，负责通用渲染和对象透传
 - 参数是否开启属于应用节点真值，不属于插件真值
-- `json_schema` 进入一期，但继续作为节点级独立能力，而不是回落成普通参数字段
+- `json_schema` 进入一期，但继续作为节点级独立能力；它不改变 `LLM` 节点只暴露 `text` 输出的事实
 
 ## 15. 附录：Dify `json_schema / structured_output` 对照参考
 
@@ -559,7 +571,7 @@ interface ProviderInvocationRequest {
 结论先行：
 
 - `Dify` 的实现证明了“是否开启结构化输出”放在节点侧是合理的
-- `Dify` 的实现也证明了 `json_schema` 一旦落地，就不再只是一个普通参数，而会影响输出变量与节点输出结构
+- `Dify` 的实现也证明了 `json_schema` 一旦落地，就不再只是一个普通参数
 - `Dify` 的 plugin / model 声明层虽然有 `response_format / json_schema` 参数模板，但真正的结构化输出产品能力仍主要落在 `LLM` 节点侧，而不是单纯靠通用参数表单驱动
 
 ### 15.1 Dify 的节点侧做法
@@ -625,6 +637,7 @@ interface ProviderInvocationRequest {
 - 它还会影响后续节点可引用的输出结构
 
 这也是为什么本稿建议 `json_schema` 虽然进入一期，但不要在实现上被降格成普通表单字段。
+同时，这也是本稿与 `Dify` 的一个明确分歧点：`1flowbase` 当前决定一期不跟进这类输出变量联动。
 
 参考：
 
@@ -669,8 +682,7 @@ interface ProviderInvocationRequest {
 1. `json_schema / structured_output` 的“是否开启”应由节点保存  
    这和本稿当前方向一致。
 
-2. `json_schema / structured_output` 不能被简单看成普通数值参数  
-   它会影响节点输出契约与变量树。
+2. `json_schema / structured_output` 不能被简单看成普通数值参数。
 
 3. 插件层可以声明 `response_format / json_schema`，但宿主是否把它做成完整产品能力，仍要单独设计  
    这和本稿“`json_schema` 进入一期，但保持节点级独立对象”的判断一致。
@@ -682,7 +694,7 @@ interface ProviderInvocationRequest {
 | 参数 schema 来源 | plugin / model declaration 可声明参数模板 | provider/model 返回 `PluginFormSchema` |
 | 是否开启 | 节点保存 `structured_output_enabled` | 节点保存 `enabled` |
 | 结构化 schema 本体 | 节点保存 `structured_output.schema` | 一期直接做节点级 `response_format.json_schema` |
-| 输出变量联动 | 启用后把 `structured_output` 加入输出变量 | 当前仍预留为后续边界，不在一期自动反推 |
+| 输出变量联动 | 启用后把 `structured_output` 加入输出变量 | 当前明确不做，仍只保留 `text` 输出 |
 | 自定义控件 | 节点自带专门 UI | 当前不开放插件自定义控件 |
 | `response_format` | 参数模板存在，但结构化输出不只靠模板驱动 | 一期支持 `text | json_object | json_schema`，但 `json_schema` 走节点级独立对象 |
 
@@ -692,4 +704,4 @@ interface ProviderInvocationRequest {
 
 - `1flowbase` 当前在推进 plugin-first 的 provider 接入边界，需要比 `Dify` 更明确地区分“插件声明参数”和“节点真值”
 - `1flowbase` 当前的 `schema ui` 正在建设中，因此即便 `json_schema` 进入一期，也仍应以节点级独立对象落地，而不是并回普通参数表单
-- `Dify` 当前 `structured_output` 更像是宿主内建的 `LLM` 节点专有能力，而本稿当前主目标是先把 provider 参数 schema 与节点参数对象边界收干净
+- `1flowbase` 当前明确选择不让 `json_schema` 反推输出契约，而是继续保持 `LLM` 节点标准 `text` 输出
