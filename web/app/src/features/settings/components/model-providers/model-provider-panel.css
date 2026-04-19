@@ -147,6 +147,12 @@
   gap: 8px;
 }
 
+.model-provider-panel__catalog-item-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .model-provider-panel__catalog-item-main .ant-typography {
   margin: 0;
 }

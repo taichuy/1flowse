@@ -857,10 +857,10 @@ describe('ModelProvidersPage', () => {
       expect(pluginsApi.fetchSettingsOfficialPluginCatalog).toHaveBeenCalled();
     });
 
-    expect(
-      await screen.findByText('官方最新 0.2.0，未安装，hybrid')
-    ).toBeInTheDocument();
-    expect(screen.queryByText('官方最新 0.1.0，已安装待分配，hybrid')).not.toBeInTheDocument();
+    expect(await screen.findByText('0.2.0')).toBeInTheDocument();
+    expect(screen.getByText('latest')).toBeInTheDocument();
+    expect(screen.getByText('hybrid')).toBeInTheDocument();
+    expect(screen.queryByText('0.1.0')).not.toBeInTheDocument();
   });
 
   test('polls install task until the official plugin finishes installing', async () => {

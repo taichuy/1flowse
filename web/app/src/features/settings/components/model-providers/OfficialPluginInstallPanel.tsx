@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Empty, Modal, Select, Typography } from 'antd';
+import { Button, Empty, Modal, Select, Tag, Typography } from 'antd';
 
 import type {
   SettingsOfficialPluginCatalogEntry,
@@ -83,37 +83,37 @@ function pickPreferredOfficialEntry(
 const OFFICIAL_PLUGIN_RELEASES_URL =
   'https://github.com/taichuy/1flowbase-official-plugins/releases';
 
-function getStatusLine(
+function getStatusTags(
   entry: SettingsOfficialPluginCatalogEntry,
   family: SettingsPluginFamilyEntry | undefined,
   installState: InstallState,
   activePluginId: string | null
 ) {
+  const tags: string[] = [];
+
   if (family) {
-    return `当前 ${family.current_version}，${
-      family.has_update && family.latest_version
-        ? `官方最新 ${family.latest_version}`
-        : '当前已是官方最新'
-    }，${entry.model_discovery_mode}`;
+    tags.push(family.current_version);
+    tags.push(family.has_update && family.latest_version ? family.latest_version : 'latest');
+    tags.push(entry.model_discovery_mode);
+    return tags;
   }
+
+  tags.push(entry.latest_version);
 
   if (activePluginId === entry.plugin_id && installState === 'installing') {
-    return `官方最新 ${entry.latest_version}，安装中，${entry.model_discovery_mode}`;
+    tags.push('installing');
+  } else if (entry.install_status === 'assigned') {
+    tags.push('active');
+  } else if (entry.install_status === 'installed') {
+    tags.push('installed');
+  } else if (activePluginId === entry.plugin_id && installState === 'failed') {
+    tags.push('failed');
+  } else {
+    tags.push('latest');
   }
 
-  if (entry.install_status === 'assigned') {
-    return `官方最新 ${entry.latest_version}，当前 workspace 已可用，${entry.model_discovery_mode}`;
-  }
-
-  if (entry.install_status === 'installed') {
-    return `官方最新 ${entry.latest_version}，已安装待分配，${entry.model_discovery_mode}`;
-  }
-
-  if (activePluginId === entry.plugin_id && installState === 'failed') {
-    return `官方最新 ${entry.latest_version}，安装失败，${entry.model_discovery_mode}`;
-  }
-
-  return `官方最新 ${entry.latest_version}，未安装，${entry.model_discovery_mode}`;
+  tags.push(entry.model_discovery_mode);
+  return tags;
 }
 
 export function OfficialPluginInstallPanel({
@@ -254,9 +254,16 @@ export function OfficialPluginInstallPanel({
                       {entry.display_name}
                     </Typography.Title>
                   </div>
-                  <Typography.Text type="secondary">
-                    {getStatusLine(entry, family, installState, activePluginId)}
-                  </Typography.Text>
+                  <div className="model-provider-panel__catalog-item-tag-row">
+                    {getStatusTags(
+                      entry,
+                      family,
+                      installState,
+                      activePluginId
+                    ).map((tag) => (
+                      <Tag key={`${entry.plugin_id}-${tag}`}>{tag}</Tag>
+                    ))}
+                  </div>
                   <Typography.Text type="secondary">
                     {entry.plugin_id}
                   </Typography.Text>
