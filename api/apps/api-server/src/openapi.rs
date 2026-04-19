@@ -56,6 +56,7 @@ use utoipa::OpenApi;
         crate::routes::plugins::list_catalog,
         crate::routes::plugins::list_families,
         crate::routes::plugins::list_official_catalog,
+        crate::routes::plugins::install_uploaded_plugin,
         crate::routes::plugins::install_plugin,
         crate::routes::plugins::install_official_plugin,
         crate::routes::plugins::upgrade_latest,

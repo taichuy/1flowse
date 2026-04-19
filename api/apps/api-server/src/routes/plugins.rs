@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Multipart, Path, State},
     http::{HeaderMap, StatusCode},
     routing::{get, post},
     Json, Router,
 };
 use control_plane::plugin_management::{
     AssignPluginCommand, EnablePluginCommand, InstallOfficialPluginCommand, InstallPluginCommand,
-    OfficialPluginCatalogEntry, OfficialPluginCatalogView, PluginCatalogEntry, PluginFamilyView,
-    PluginInstalledVersionView, PluginManagementService, SwitchPluginVersionCommand,
-    UpgradeLatestPluginFamilyCommand,
+    InstallPluginResult, InstallUploadedPluginCommand, OfficialPluginCatalogEntry,
+    OfficialPluginCatalogView, PluginCatalogEntry, PluginFamilyView, PluginInstalledVersionView,
+    PluginManagementService, SwitchPluginVersionCommand, UpgradeLatestPluginFamilyCommand,
 };
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
@@ -150,6 +150,7 @@ pub fn router() -> Router<Arc<ApiState>> {
             post(switch_version),
         )
         .route("/plugins/official-catalog", get(list_official_catalog))
+        .route("/plugins/install-upload", post(install_uploaded_plugin))
         .route("/plugins/install", post(install_plugin))
         .route("/plugins/install-official", post(install_official_plugin))
         .route("/plugins/:installation_id/enable", post(enable_plugin))
@@ -182,6 +183,38 @@ fn parse_uuid(raw: &str, field: &'static str) -> Result<Uuid, ApiError> {
         .map_err(|_| control_plane::errors::ControlPlaneError::InvalidInput(field).into())
 }
 
+async fn read_upload_file(multipart: &mut Multipart) -> Result<(String, Vec<u8>), ApiError> {
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|_| control_plane::errors::ControlPlaneError::InvalidInput("plugin_file"))?
+    {
+        if field.name() != Some("file") {
+            continue;
+        }
+
+        let file_name = field
+            .file_name()
+            .map(str::to_string)
+            .filter(|value| !value.trim().is_empty())
+            .ok_or(control_plane::errors::ControlPlaneError::InvalidInput(
+                "plugin_file_name",
+            ))?;
+        let bytes = field
+            .bytes()
+            .await
+            .map_err(|_| control_plane::errors::ControlPlaneError::InvalidInput("plugin_file"))?;
+        if bytes.is_empty() {
+            return Err(
+                control_plane::errors::ControlPlaneError::InvalidInput("plugin_file").into(),
+            );
+        }
+        return Ok((file_name, bytes.to_vec()));
+    }
+
+    Err(control_plane::errors::ControlPlaneError::InvalidInput("plugin_file").into())
+}
+
 fn to_installation_response(
     installation: domain::PluginInstallationRecord,
 ) -> PluginInstallationResponse {
@@ -202,6 +235,13 @@ fn to_installation_response(
         metadata_json: installation.metadata_json,
         created_at: format_time(installation.created_at),
         updated_at: format_time(installation.updated_at),
+    }
+}
+
+fn to_install_response(result: InstallPluginResult) -> InstallPluginResponse {
+    InstallPluginResponse {
+        installation: to_installation_response(result.installation),
+        task: to_task_response(result.task),
     }
 }
 
@@ -367,10 +407,35 @@ pub async fn install_plugin(
 
     Ok((
         StatusCode::CREATED,
-        Json(ApiSuccess::new(InstallPluginResponse {
-            installation: to_installation_response(result.installation),
-            task: to_task_response(result.task),
-        })),
+        Json(ApiSuccess::new(to_install_response(result))),
+    ))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/plugins/install-upload",
+    operation_id = "plugin_install_upload",
+    responses((status = 201, body = InstallPluginResponse), (status = 400, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn install_uploaded_plugin(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Result<(StatusCode, Json<ApiSuccess<InstallPluginResponse>>), ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let (file_name, package_bytes) = read_upload_file(&mut multipart).await?;
+    let result = service(&state)
+        .install_uploaded_plugin(InstallUploadedPluginCommand {
+            actor_user_id: context.user.id,
+            file_name,
+            package_bytes,
+        })
+        .await?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(ApiSuccess::new(to_install_response(result))),
     ))
 }
 
@@ -397,10 +462,7 @@ pub async fn install_official_plugin(
 
     Ok((
         StatusCode::CREATED,
-        Json(ApiSuccess::new(InstallPluginResponse {
-            installation: to_installation_response(result.installation),
-            task: to_task_response(result.task),
-        })),
+        Json(ApiSuccess::new(to_install_response(result))),
     ))
 }
 

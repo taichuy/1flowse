@@ -5,7 +5,11 @@ use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
+use ed25519_dalek::{Signer, SigningKey};
+use flate2::{write::GzEncoder, Compression};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+use tar::Builder;
 use tower::ServiceExt;
 
 async fn create_member(
@@ -300,6 +304,114 @@ capabilities:
     .unwrap();
 }
 
+fn build_signed_openai_upload_package(version: &str) -> Vec<u8> {
+    let package_root = std::env::temp_dir().join(format!(
+        "plugin-route-upload-openai-{}",
+        uuid::Uuid::now_v7()
+    ));
+    create_openai_compatible_package(&package_root, version);
+
+    let payload_sha256 = sha256_directory_tree(&package_root);
+    let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+    let release = serde_json::json!({
+        "schema_version": 1,
+        "plugin_id": "1flowbase.openai_compatible",
+        "provider_code": "openai_compatible",
+        "version": version,
+        "contract_version": "1flowbase.provider/v1",
+        "artifact_sha256": "sha256:fixture-artifact",
+        "payload_sha256": payload_sha256,
+        "signature_algorithm": "ed25519",
+        "signing_key_id": "official-key-2026-04",
+        "issued_at": "2026-04-19T15:00:00Z"
+    });
+    let release_bytes = serde_json::to_vec(&release).unwrap();
+    let signature = signing_key.sign(&release_bytes).to_bytes();
+    fs::create_dir_all(package_root.join("_meta")).unwrap();
+    fs::write(
+        package_root.join("_meta/official-release.json"),
+        release_bytes,
+    )
+    .unwrap();
+    fs::write(package_root.join("_meta/official-release.sig"), signature).unwrap();
+
+    let bytes = pack_tar_gz(&package_root);
+    let _ = fs::remove_dir_all(&package_root);
+    bytes
+}
+
+fn build_upload_body(boundary: &str, file_name: &str, package_bytes: &[u8]) -> Vec<u8> {
+    let mut body = Vec::new();
+    body.extend_from_slice(
+        format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{file_name}\"\r\nContent-Type: application/octet-stream\r\n\r\n"
+        )
+        .as_bytes(),
+    );
+    body.extend_from_slice(package_bytes);
+    body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+    body
+}
+
+fn pack_tar_gz(root: &Path) -> Vec<u8> {
+    let encoder = GzEncoder::new(Vec::new(), Compression::default());
+    let mut builder = Builder::new(encoder);
+    append_dir_to_tar(&mut builder, root, root);
+    builder.finish().unwrap();
+    builder.into_inner().unwrap().finish().unwrap()
+}
+
+fn append_dir_to_tar(builder: &mut Builder<GzEncoder<Vec<u8>>>, root: &Path, current: &Path) {
+    let mut children = fs::read_dir(current)
+        .unwrap()
+        .map(|entry| entry.unwrap())
+        .collect::<Vec<_>>();
+    children.sort_by_key(|entry| entry.path());
+    for entry in children {
+        let path = entry.path();
+        let relative = path.strip_prefix(root).unwrap();
+        if path.is_dir() {
+            builder.append_dir(relative, &path).unwrap();
+            append_dir_to_tar(builder, root, &path);
+            continue;
+        }
+        builder.append_path_with_name(&path, relative).unwrap();
+    }
+}
+
+fn sha256_directory_tree(root: &Path) -> String {
+    let mut hasher = Sha256::new();
+    hash_dir_recursive(root, root, &mut hasher);
+    format!("sha256:{:x}", hasher.finalize())
+}
+
+fn hash_dir_recursive(root: &Path, current: &Path, hasher: &mut Sha256) {
+    let mut children = fs::read_dir(current)
+        .unwrap()
+        .map(|entry| entry.unwrap())
+        .collect::<Vec<_>>();
+    children.sort_by_key(|entry| entry.path());
+    for entry in children {
+        let path = entry.path();
+        let relative = path
+            .strip_prefix(root)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        if relative.starts_with("_meta/") {
+            continue;
+        }
+        if path.is_dir() {
+            hash_dir_recursive(root, &path, hasher);
+            continue;
+        }
+        hasher.update(relative.as_bytes());
+        hasher.update([0]);
+        hasher.update(fs::read(&path).unwrap());
+        hasher.update([0]);
+    }
+}
+
 #[tokio::test]
 async fn plugin_routes_install_enable_assign_and_query_tasks() {
     let app = test_app().await;
@@ -330,6 +442,14 @@ async fn plugin_routes_install_enable_assign_and_query_tasks() {
         .as_str()
         .unwrap()
         .to_string();
+    assert_eq!(
+        install_payload["data"]["installation"]["source_kind"],
+        "uploaded"
+    );
+    assert_eq!(
+        install_payload["data"]["installation"]["signature_status"],
+        "unsigned"
+    );
     let install_path = install_payload["data"]["installation"]["install_path"]
         .as_str()
         .unwrap()
@@ -545,6 +665,47 @@ async fn plugin_routes_list_official_catalog_with_source_metadata() {
     assert_eq!(
         payload["data"]["entries"][0]["plugin_id"],
         "1flowbase.openai_compatible"
+    );
+}
+
+#[tokio::test]
+async fn plugin_routes_install_upload_accepts_multipart_package() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let boundary = "----1flowbase-test-boundary";
+    let package_bytes = build_signed_openai_upload_package("0.2.0");
+    let body = build_upload_body(
+        boundary,
+        "openai_compatible-0.2.0.1flowbasepkg",
+        &package_bytes,
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/plugins/install-upload")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header(
+                    "content-type",
+                    format!("multipart/form-data; boundary={boundary}"),
+                )
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let payload: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(payload["data"]["installation"]["source_kind"], "uploaded");
+    assert_eq!(
+        payload["data"]["installation"]["signature_status"],
+        "verified"
     );
 }
 

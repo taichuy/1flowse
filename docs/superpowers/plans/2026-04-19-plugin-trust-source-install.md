@@ -764,13 +764,17 @@ git commit -m "feat: add trusted official and mirror plugin source"
 ### Task 4: Add Browser Upload Install And Keep Legacy Manual Install Compatible
 
 **Files:**
+- Modify: `api/Cargo.lock`
 - Modify: `api/crates/control-plane/src/plugin_management.rs`
+- Modify: `api/crates/control-plane/Cargo.toml`
 - Modify: `api/crates/control-plane/src/_tests/plugin_management_service_tests.rs`
+- Modify: `api/apps/api-server/Cargo.toml`
 - Modify: `api/apps/api-server/src/routes/plugins.rs`
 - Modify: `api/apps/api-server/src/openapi.rs`
 - Modify: `api/apps/api-server/src/_tests/plugin_routes.rs`
+- Modify: `api/apps/api-server/src/_tests/support.rs`
 
-- [ ] **Step 1: Write failing service and route tests for multipart upload installs**
+- [x] **Step 1: Write failing service and route tests for multipart upload installs**
 
 Add tests like these:
 
@@ -819,18 +823,22 @@ async fn plugin_routes_install_upload_accepts_multipart_package() {
 }
 ```
 
-- [ ] **Step 2: Run the targeted upload tests to capture the missing endpoint and command**
+- [x] **Step 2: Run the targeted upload tests to capture the missing endpoint and command**
 
 Run:
 
 ```bash
-rtk cargo test --manifest-path api/Cargo.toml -p control-plane plugin_management_service_installs_uploaded_signed_package_as_verified_official -- --exact
-rtk cargo test --manifest-path api/Cargo.toml -p api-server plugin_routes_install_upload_accepts_multipart_package -- --exact
+rtk cargo test --manifest-path api/Cargo.toml -p control-plane _tests::plugin_management_service_tests::plugin_management_service_installs_uploaded_signed_package_as_verified_official -- --exact
+rtk cargo test --manifest-path api/Cargo.toml -p api-server _tests::plugin_routes::plugin_routes_install_upload_accepts_multipart_package -- --exact
 ```
 
 Expected: FAIL because there is no `InstallUploadedPluginCommand`, no multipart route, and no upload endpoint in the router/OpenAPI spec.
 
-- [ ] **Step 3: Add the new upload command and route while preserving the hidden legacy manual path**
+Observed on 2026-04-19:
+- `control-plane` test failed because `InstallUploadedPluginCommand` and `PluginManagementService::install_uploaded_plugin` did not exist yet.
+- route test failed with `404 != 201`, confirming `/api/console/plugins/install-upload` was not wired into the router.
+
+- [x] **Step 3: Add the new upload command and route while preserving the hidden legacy manual path**
 
 Update `api/crates/control-plane/src/plugin_management.rs`:
 
@@ -904,17 +912,25 @@ signature_status: Some("unsigned".into()),
 
 That preserves the compatibility/debug path without inventing a fourth source kind.
 
-- [ ] **Step 4: Rerun the upload tests and confirm the legacy path still works**
+- [x] **Step 4: Rerun the upload tests and confirm the legacy path still works**
 
 Run:
 
 ```bash
-rtk cargo test --manifest-path api/Cargo.toml -p control-plane plugin_management_service_installs_uploaded_signed_package_as_verified_official -- --exact
-rtk cargo test --manifest-path api/Cargo.toml -p api-server plugin_routes_install_upload_accepts_multipart_package -- --exact
-rtk cargo test --manifest-path api/Cargo.toml -p api-server plugin_routes_install_enable_assign_and_query_tasks -- --exact
+rtk cargo test --manifest-path api/Cargo.toml -p control-plane _tests::plugin_management_service_tests::plugin_management_service_installs_uploaded_signed_package_as_verified_official -- --exact
+rtk cargo test --manifest-path api/Cargo.toml -p api-server _tests::plugin_routes::plugin_routes_install_upload_accepts_multipart_package -- --exact
+rtk cargo test --manifest-path api/Cargo.toml -p api-server _tests::plugin_routes::plugin_routes_install_enable_assign_and_query_tasks -- --exact
+rtk git diff --check
 ```
 
 Expected: PASS, including the old `/plugins/install` compatibility flow.
+
+Actual on 2026-04-19:
+- All three targeted tests passed.
+- `plugin_management_service_installs_uploaded_signed_package_as_verified_official` confirmed upload + trusted official signature now lands as `source_kind=uploaded`, `trust_level=verified_official`, `signature_status=verified`.
+- `plugin_routes_install_enable_assign_and_query_tasks` now also asserts the hidden legacy path still persists as `source_kind=uploaded` and `signature_status=unsigned`.
+- During implementation, the signed upload fixture initially hashed payload contents with the wrong algorithm; after aligning the helper with `plugin-framework`'s `_meta`-excluded payload hash semantics, the upload verification path turned green.
+- `rtk git diff --check` passed.
 
 - [ ] **Step 5: Commit the upload backend**
 

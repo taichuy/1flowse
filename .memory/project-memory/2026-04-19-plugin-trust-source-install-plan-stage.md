@@ -14,8 +14,8 @@ match_when:
   - 需要确认 legacy `/api/console/plugins/install` 应如何映射到新来源模型
   - 需要判断本轮是否允许修改 `1flowbase-official-plugins`
 created_at: 2026-04-19 14
-updated_at: 2026-04-19 15
-last_verified_at: 2026-04-19 15
+updated_at: 2026-04-19 16
+last_verified_at: 2026-04-19 16
 decision_policy: verify_before_decision
 scope:
   - docs/superpowers/plans/2026-04-19-plugin-trust-source-install.md
@@ -66,4 +66,5 @@ scope:
 - Task 1 已完成：`plugin-framework` 已落地统一 package intake pipeline，并独立提交 `f9f2b1d0`。
 - Task 2 已完成：宿主持久化、迁移和 repository 映射已切到 `source_kind + trust_level + signature_status`，并独立提交 `5711a6`。
 - Task 3 已完成：`api-server` 现可解析默认官方源/镜像源，official catalog 已返回 source metadata，official install/upgrade 已统一走 intake + `signature_required` 策略；这一 task 的验证中还确认了 `trust_mode=allow_unsigned` 时成功路径的 `signature_status` 应为 `unsigned`，不是 `unverified`。
-- 下一步直接进入 Task 4：补浏览器上传安装入口，并把 legacy `/api/console/plugins/install` 收口为内部兼容手工导入、持久化统一归到 `source_kind=uploaded`。
+- Task 4 已完成：新增 multipart `/api/console/plugins/install-upload`，上传包统一走 intake + trusted key 校验；签名上传现在可落成 `source_kind=uploaded` 且 `trust_level=verified_official`。legacy `/api/console/plugins/install` 继续只保留内部兼容手工导入，但持久化已固定为 `source_kind=uploaded`、`trust_level=checksum_only`、`signature_status=unsigned`。
+- 下一步直接进入 Task 5：前端设置页展示 source/trust 信息，并接入上传插件入口与 `FormData` transport。

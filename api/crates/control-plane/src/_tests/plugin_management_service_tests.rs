@@ -10,7 +10,10 @@ use std::{
 
 use anyhow::Result;
 use async_trait::async_trait;
+use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
+use ed25519_dalek::{pkcs8::EncodePublicKey, Signer, SigningKey};
 use flate2::{write::GzEncoder, Compression};
+use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tar::Builder;
@@ -21,8 +24,8 @@ use crate::{
     errors::ControlPlaneError,
     plugin_management::{
         AssignPluginCommand, EnablePluginCommand, InstallOfficialPluginCommand,
-        InstallPluginCommand, PluginManagementService, SwitchPluginVersionCommand,
-        UpgradeLatestPluginFamilyCommand,
+        InstallPluginCommand, InstallUploadedPluginCommand, PluginManagementService,
+        SwitchPluginVersionCommand, UpgradeLatestPluginFamilyCommand,
     },
     ports::{
         AuthRepository, CreateModelProviderInstanceInput, CreatePluginAssignmentInput,
@@ -539,6 +542,7 @@ struct MemoryOfficialPluginSource {
     source_label: String,
     trust_mode: String,
     include_signature: bool,
+    trusted_public_keys: Vec<plugin_framework::TrustedPublicKey>,
 }
 
 impl Default for MemoryOfficialPluginSource {
@@ -548,6 +552,7 @@ impl Default for MemoryOfficialPluginSource {
             source_label: "官方源".to_string(),
             trust_mode: "allow_unsigned".to_string(),
             include_signature: false,
+            trusted_public_keys: Vec::new(),
         }
     }
 }
@@ -556,6 +561,15 @@ impl MemoryOfficialPluginSource {
     fn unsigned_required() -> Self {
         Self {
             trust_mode: "signature_required".to_string(),
+            ..Self::default()
+        }
+    }
+
+    fn with_trusted_public_keys(
+        trusted_public_keys: Vec<plugin_framework::TrustedPublicKey>,
+    ) -> Self {
+        Self {
+            trusted_public_keys,
             ..Self::default()
         }
     }
@@ -603,8 +617,27 @@ impl OfficialPluginSourcePort for MemoryOfficialPluginSource {
     }
 
     fn trusted_public_keys(&self) -> Vec<plugin_framework::TrustedPublicKey> {
-        Vec::new()
+        self.trusted_public_keys.clone()
     }
+}
+
+#[derive(Serialize)]
+struct OfficialReleaseDocument<'a> {
+    schema_version: u32,
+    plugin_id: String,
+    provider_code: &'a str,
+    version: &'a str,
+    contract_version: &'static str,
+    artifact_sha256: &'a str,
+    payload_sha256: String,
+    signature_algorithm: &'static str,
+    signing_key_id: &'static str,
+    issued_at: &'static str,
+}
+
+struct SignedUploadPackageFixture {
+    package_bytes: Vec<u8>,
+    public_key: plugin_framework::TrustedPublicKey,
 }
 
 #[async_trait]
@@ -822,12 +855,107 @@ runner:
     bytes
 }
 
+fn build_signed_openai_upload_package(version: &str) -> SignedUploadPackageFixture {
+    let package_root =
+        std::env::temp_dir().join(format!("uploaded-plugin-source-{}", Uuid::now_v7()));
+    create_openai_compatible_fixture(&package_root);
+    fs::write(
+        package_root.join("manifest.yaml"),
+        format!(
+            r#"plugin_code: openai_compatible
+display_name: OpenAI Compatible
+version: {version}
+contract_version: 1flowbase.provider/v1
+supported_model_types:
+  - llm
+runner:
+  language: nodejs
+  entrypoint: provider/openai_compatible.js
+"#
+        ),
+    )
+    .unwrap();
+
+    let payload_sha256 = sha256_directory_tree(&package_root);
+    let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+    let public_key = plugin_framework::TrustedPublicKey {
+        key_id: "official-key-2026-04".to_string(),
+        algorithm: "ed25519".to_string(),
+        public_key_pem: signing_key
+            .verifying_key()
+            .to_public_key_pem(LineEnding::LF)
+            .unwrap(),
+    };
+    let release = OfficialReleaseDocument {
+        schema_version: 1,
+        plugin_id: "1flowbase.openai_compatible".to_string(),
+        provider_code: "openai_compatible",
+        version,
+        contract_version: "1flowbase.provider/v1",
+        artifact_sha256: "sha256:fixture-artifact",
+        payload_sha256,
+        signature_algorithm: "ed25519",
+        signing_key_id: "official-key-2026-04",
+        issued_at: "2026-04-19T15:00:00Z",
+    };
+    let release_bytes = serde_json::to_vec(&release).unwrap();
+    let signature = signing_key.sign(&release_bytes).to_bytes();
+    fs::create_dir_all(package_root.join("_meta")).unwrap();
+    fs::write(
+        package_root.join("_meta/official-release.json"),
+        release_bytes,
+    )
+    .unwrap();
+    fs::write(package_root.join("_meta/official-release.sig"), signature).unwrap();
+
+    let package_bytes = pack_tar_gz(&package_root);
+    let _ = fs::remove_dir_all(&package_root);
+
+    SignedUploadPackageFixture {
+        package_bytes,
+        public_key,
+    }
+}
+
 fn pack_tar_gz(root: &Path) -> Vec<u8> {
     let encoder = GzEncoder::new(Vec::new(), Compression::default());
     let mut builder = Builder::new(encoder);
     append_dir_to_tar(&mut builder, root, root);
     builder.finish().unwrap();
     builder.into_inner().unwrap().finish().unwrap()
+}
+
+fn sha256_directory_tree(root: &Path) -> String {
+    let mut hasher = Sha256::new();
+    hash_dir_recursive(root, root, &mut hasher);
+    format!("sha256:{:x}", hasher.finalize())
+}
+
+fn hash_dir_recursive(root: &Path, current: &Path, hasher: &mut Sha256) {
+    let mut children = fs::read_dir(current)
+        .unwrap()
+        .map(|entry| entry.unwrap())
+        .collect::<Vec<_>>();
+    children.sort_by_key(|entry| entry.path());
+    for entry in children {
+        let path = entry.path();
+        let relative = path
+            .strip_prefix(root)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        if relative.starts_with("_meta/") {
+            continue;
+        }
+        if path.is_dir() {
+            hash_dir_recursive(root, &path, hasher);
+            continue;
+        }
+        hasher.update(relative.as_bytes());
+        hasher.update([0]);
+        hasher.update(fs::read(&path).unwrap());
+        hasher.update([0]);
+    }
 }
 
 fn append_dir_to_tar(builder: &mut Builder<GzEncoder<Vec<u8>>>, root: &Path, current: &Path) {
@@ -1451,4 +1579,38 @@ async fn plugin_management_service_rejects_unsigned_signature_required_official_
     assert!(error
         .to_string()
         .contains("requires a valid official signature"));
+}
+
+#[tokio::test]
+async fn plugin_management_service_installs_uploaded_signed_package_as_verified_official() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let fixture = build_signed_openai_upload_package("0.2.0");
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::with_trusted_public_keys(vec![
+            fixture.public_key.clone(),
+        ])),
+        std::env::temp_dir().join(format!("plugin-uploaded-{}", Uuid::now_v7())),
+    );
+
+    let result = service
+        .install_uploaded_plugin(InstallUploadedPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            file_name: "openai_compatible-0.2.0.1flowbasepkg".into(),
+            package_bytes: fixture.package_bytes.clone(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(result.installation.source_kind, "uploaded");
+    assert_eq!(result.installation.trust_level, "verified_official");
+    assert_eq!(
+        result.installation.signature_status.as_deref(),
+        Some("verified")
+    );
 }

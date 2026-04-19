@@ -8,7 +8,7 @@ license.workspace = true
 anyhow.workspace = true
 argon2.workspace = true
 async-trait.workspace = true
-axum.workspace = true
+axum = { workspace = true, features = ["multipart"] }
 axum-extra.workspace = true
 flate2.workspace = true
 rand_core.workspace = true
@@ -38,3 +38,6 @@ storage-redis = { path = "../../crates/storage-redis" }
 storage-object = { path = "../../crates/storage-object" }
 observability = { path = "../../crates/observability" }
 plugin-runner = { path = "../plugin-runner" }
+
+[dev-dependencies]
+ed25519-dalek = { version = "2", features = ["pem"] }

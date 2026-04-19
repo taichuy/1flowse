@@ -9,6 +9,7 @@ use access_control::ensure_permission;
 use anyhow::{Context, Result};
 use plugin_framework::{
     intake_package_bytes, provider_package::ProviderPackage, PackageIntakePolicy,
+    PackageIntakeResult,
 };
 use serde_json::json;
 use time::OffsetDateTime;
@@ -44,6 +45,12 @@ pub struct AssignPluginCommand {
 pub struct InstallOfficialPluginCommand {
     pub actor_user_id: Uuid,
     pub plugin_id: String,
+}
+
+pub struct InstallUploadedPluginCommand {
+    pub actor_user_id: Uuid,
+    pub file_name: String,
+    pub package_bytes: Vec<u8>,
 }
 
 pub struct UpgradeLatestPluginFamilyCommand {
@@ -150,12 +157,12 @@ struct InstallSourceMetadata {
 }
 
 impl InstallSourceMetadata {
-    fn uploaded_or_downloaded() -> Self {
+    fn legacy_manual_import() -> Self {
         Self {
             source_kind: "uploaded".to_string(),
-            trust_level: "unverified".to_string(),
+            trust_level: "checksum_only".to_string(),
             checksum: None,
-            signature_status: None,
+            signature_status: Some("unsigned".to_string()),
             signature_algorithm: None,
             signing_key_id: None,
         }
@@ -357,8 +364,43 @@ where
         &self,
         command: InstallPluginCommand,
     ) -> Result<InstallPluginResult> {
-        self.install_plugin_with_metadata(command, InstallSourceMetadata::uploaded_or_downloaded())
-            .await
+        let package_root = command.package_root.clone();
+        self.install_plugin_with_metadata(
+            command,
+            InstallSourceMetadata::legacy_manual_import(),
+            json!({
+                "install_kind": "legacy_manual_import",
+                "package_root": package_root,
+            }),
+        )
+        .await
+    }
+
+    pub async fn install_uploaded_plugin(
+        &self,
+        command: InstallUploadedPluginCommand,
+    ) -> Result<InstallPluginResult> {
+        let file_name = command.file_name.clone();
+        let intake = intake_package_bytes(
+            &command.package_bytes,
+            &PackageIntakePolicy {
+                source_kind: "uploaded".to_string(),
+                trust_mode: "allow_unsigned".to_string(),
+                expected_artifact_sha256: None,
+                trusted_public_keys: self.official_source.trusted_public_keys(),
+                original_filename: Some(file_name.clone()),
+            },
+        )
+        .await?;
+        self.install_intake_result(
+            command.actor_user_id,
+            intake,
+            json!({
+                "install_kind": "upload",
+                "file_name": file_name,
+            }),
+        )
+        .await
     }
 
     pub async fn install_official_plugin(
@@ -387,22 +429,16 @@ where
             },
         )
         .await?;
-        let package_root = intake.extracted_root.clone();
         let result = async {
             let install = self
-                .install_plugin_with_metadata(
-                    InstallPluginCommand {
-                        actor_user_id: command.actor_user_id,
-                        package_root: package_root.display().to_string(),
-                    },
-                    InstallSourceMetadata {
-                        source_kind: intake.source_kind.clone(),
-                        trust_level: intake.trust_level.clone(),
-                        checksum: intake.checksum.clone(),
-                        signature_status: Some(intake.signature_status.clone()),
-                        signature_algorithm: intake.signature_algorithm.clone(),
-                        signing_key_id: intake.signing_key_id.clone(),
-                    },
+                .install_intake_result(
+                    command.actor_user_id,
+                    intake,
+                    json!({
+                        "install_kind": "official_source",
+                        "plugin_id": command.plugin_id,
+                        "file_name": downloaded.file_name,
+                    }),
                 )
                 .await?;
             self.enable_plugin(EnablePluginCommand {
@@ -424,8 +460,6 @@ where
             Ok::<InstallPluginResult, anyhow::Error>(InstallPluginResult { installation, task })
         }
         .await;
-
-        let _ = fs::remove_dir_all(&package_root);
         result
     }
 
@@ -481,27 +515,18 @@ where
                     },
                 )
                 .await?;
-                let package_root = intake.extracted_root.clone();
-                let install_result = async {
-                    self.install_plugin_with_metadata(
-                        InstallPluginCommand {
-                            actor_user_id: command.actor_user_id,
-                            package_root: package_root.display().to_string(),
-                        },
-                        InstallSourceMetadata {
-                            source_kind: intake.source_kind.clone(),
-                            trust_level: intake.trust_level.clone(),
-                            checksum: intake.checksum.clone(),
-                            signature_status: Some(intake.signature_status.clone()),
-                            signature_algorithm: intake.signature_algorithm.clone(),
-                            signing_key_id: intake.signing_key_id.clone(),
-                        },
-                    )
-                    .await
-                }
-                .await;
-                let _ = fs::remove_dir_all(&package_root);
-                install_result?.installation
+                self.install_intake_result(
+                    command.actor_user_id,
+                    intake,
+                    json!({
+                        "install_kind": "official_upgrade",
+                        "plugin_id": snapshot_entry.plugin_id,
+                        "provider_code": snapshot_entry.provider_code,
+                        "file_name": downloaded.file_name,
+                    }),
+                )
+                .await?
+                .installation
             }
         };
         if current.id == target.id {
@@ -518,10 +543,39 @@ where
         .await
     }
 
+    async fn install_intake_result(
+        &self,
+        actor_user_id: Uuid,
+        intake: PackageIntakeResult,
+        detail_json: serde_json::Value,
+    ) -> Result<InstallPluginResult> {
+        let package_root = intake.extracted_root.clone();
+        let result = self
+            .install_plugin_with_metadata(
+                InstallPluginCommand {
+                    actor_user_id,
+                    package_root: package_root.display().to_string(),
+                },
+                InstallSourceMetadata {
+                    source_kind: intake.source_kind,
+                    trust_level: intake.trust_level,
+                    checksum: intake.checksum,
+                    signature_status: Some(intake.signature_status),
+                    signature_algorithm: intake.signature_algorithm,
+                    signing_key_id: intake.signing_key_id,
+                },
+                detail_json,
+            )
+            .await;
+        let _ = fs::remove_dir_all(&package_root);
+        result
+    }
+
     async fn install_plugin_with_metadata(
         &self,
         command: InstallPluginCommand,
         source_metadata: InstallSourceMetadata,
+        detail_json: serde_json::Value,
     ) -> Result<InstallPluginResult> {
         let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
         ensure_permission(&actor, "plugin_config.configure.all")
@@ -537,9 +591,7 @@ where
                 task_kind: domain::PluginTaskKind::Install,
                 status: domain::PluginTaskStatus::Pending,
                 status_message: Some("pending".to_string()),
-                detail_json: json!({
-                    "package_root": command.package_root,
-                }),
+                detail_json: detail_json.clone(),
                 actor_user_id: Some(command.actor_user_id),
             })
             .await?;
@@ -548,9 +600,7 @@ where
                 task_id,
                 status: domain::PluginTaskStatus::Running,
                 status_message: Some("running".to_string()),
-                detail_json: json!({
-                    "package_root": command.package_root,
-                }),
+                detail_json: detail_json.clone(),
             })
             .await?;
 
@@ -631,9 +681,7 @@ where
                         task_id,
                         status: domain::PluginTaskStatus::Failed,
                         status_message: Some(error.to_string()),
-                        detail_json: json!({
-                            "package_root": command.package_root,
-                        }),
+                        detail_json,
                     })
                     .await;
                 Err(error)

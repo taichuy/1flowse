@@ -15,6 +15,8 @@ use control_plane::ports::{
     DownloadedOfficialPluginPackage, OfficialPluginCatalogSnapshot, OfficialPluginCatalogSource,
     OfficialPluginSourceEntry, OfficialPluginSourcePort,
 };
+use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
+use ed25519_dalek::{pkcs8::EncodePublicKey, SigningKey};
 use flate2::{write::GzEncoder, Compression};
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -74,7 +76,7 @@ impl OfficialPluginSourcePort for InMemoryOfficialPluginSource {
     }
 
     fn trusted_public_keys(&self) -> Vec<plugin_framework::TrustedPublicKey> {
-        Vec::new()
+        vec![official_upload_public_key()]
     }
 }
 
@@ -298,6 +300,18 @@ capabilities:
         r#"{ "plugin": { "label": "OpenAI Compatible" } }"#,
     )
     .unwrap();
+}
+
+fn official_upload_public_key() -> plugin_framework::TrustedPublicKey {
+    let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+    plugin_framework::TrustedPublicKey {
+        key_id: "official-key-2026-04".to_string(),
+        algorithm: "ed25519".to_string(),
+        public_key_pem: signing_key
+            .verifying_key()
+            .to_public_key_pem(LineEnding::LF)
+            .unwrap(),
+    }
 }
 
 fn build_official_provider_package(version: &str) -> Vec<u8> {
