@@ -48,135 +48,184 @@ impl Drop for TempProviderPackage {
 }
 
 fn write_fixture_runtime(package: &TempProviderPackage, dynamic_label: &str) {
+    let validate_output = json!({
+        "ok": true,
+        "result": {
+            "ok": true,
+            "sanitized": {
+                "base_url": "https://api.example.com",
+                "api_key": "***"
+            }
+        }
+    })
+    .to_string();
+    let list_models_output = json!({
+        "ok": true,
+        "result": [
+            {
+                "model_id": "fixture_dynamic",
+                "display_name": dynamic_label,
+                "source": "dynamic",
+                "supports_streaming": true,
+                "supports_tool_call": true,
+                "supports_multimodal": false,
+                "context_window": 64000,
+                "max_output_tokens": 4096,
+                "provider_metadata": {
+                    "tier": "dynamic"
+                }
+            }
+        ]
+    })
+    .to_string();
+    let invoke_output = json!({
+        "ok": true,
+        "result": {
+            "events": [
+                {
+                    "type": "text_delta",
+                    "delta": "echo:fixture_dynamic"
+                },
+                {
+                    "type": "tool_call_commit",
+                    "call": {
+                        "id": "tool-1",
+                        "name": "search_docs",
+                        "arguments": {
+                            "query": "provider host"
+                        }
+                    }
+                },
+                {
+                    "type": "mcp_call_commit",
+                    "call": {
+                        "id": "mcp-1",
+                        "server": "docs",
+                        "method": "search",
+                        "arguments": {
+                            "query": "provider host"
+                        }
+                    }
+                },
+                {
+                    "type": "usage_snapshot",
+                    "usage": {
+                        "input_tokens": 5,
+                        "output_tokens": 7,
+                        "total_tokens": 12
+                    }
+                },
+                {
+                    "type": "finish",
+                    "reason": "stop"
+                }
+            ],
+            "result": {
+                "final_content": "echo:fixture_dynamic",
+                "tool_calls": [
+                    {
+                        "id": "tool-1",
+                        "name": "search_docs",
+                        "arguments": {
+                            "query": "provider host"
+                        }
+                    }
+                ],
+                "mcp_calls": [
+                    {
+                        "id": "mcp-1",
+                        "server": "docs",
+                        "method": "search",
+                        "arguments": {
+                            "query": "provider host"
+                        }
+                    }
+                ],
+                "usage": {
+                    "input_tokens": 5,
+                    "output_tokens": 7,
+                    "total_tokens": 12
+                },
+                "finish_reason": "stop",
+                "provider_metadata": {
+                    "provider_code": "fixture_provider"
+                }
+            }
+        }
+    })
+    .to_string();
+    let error_output = json!({
+        "ok": false,
+        "error": {
+            "kind": "provider_invalid_response",
+            "message": "unknown method",
+            "provider_summary": null
+        }
+    })
+    .to_string();
+
     package.write(
-        "provider/fixture_provider.js",
+        "bin/fixture_provider",
         &format!(
-            r#"'use strict';
+            r#"#!/usr/bin/env bash
+set -euo pipefail
 
-module.exports = {{
-  providerCode: 'fixture_provider',
-
-  async validateProviderCredentials(input) {{
-    return {{
-      ok: true,
-      sanitized: {{
-        base_url: input?.base_url ?? null,
-        api_key: input?.api_key ? '***' : null,
-      }},
-    }};
-  }},
-
-  async listModels() {{
-    return [
-      {{
-        model_id: 'fixture_dynamic',
-        display_name: '{dynamic_label}',
-        source: 'dynamic',
-        supports_streaming: true,
-        supports_tool_call: true,
-        supports_multimodal: false,
-        context_window: 64000,
-        max_output_tokens: 4096,
-        provider_metadata: {{
-          tier: 'dynamic',
-        }},
-      }},
-    ];
-  }},
-
-  async invoke(request) {{
-    return {{
-      events: [
-        {{
-          type: 'text_delta',
-          delta: 'echo:' + request.model,
-        }},
-        {{
-          type: 'tool_call_commit',
-          call: {{
-            id: 'tool-1',
-            name: 'search_docs',
-            arguments: {{
-              query: 'provider host',
-            }},
-          }},
-        }},
-        {{
-          type: 'mcp_call_commit',
-          call: {{
-            id: 'mcp-1',
-            server: 'docs',
-            method: 'search',
-            arguments: {{
-              query: 'provider host',
-            }},
-          }},
-        }},
-        {{
-          type: 'usage_snapshot',
-          usage: {{
-            input_tokens: 5,
-            output_tokens: 7,
-            total_tokens: 12,
-          }},
-        }},
-        {{
-          type: 'finish',
-          reason: 'stop',
-        }},
-      ],
-      result: {{
-        final_content: 'echo:' + request.model,
-        tool_calls: [
-          {{
-            id: 'tool-1',
-            name: 'search_docs',
-            arguments: {{
-              query: 'provider host',
-            }},
-          }},
-        ],
-        mcp_calls: [
-          {{
-            id: 'mcp-1',
-            server: 'docs',
-            method: 'search',
-            arguments: {{
-              query: 'provider host',
-            }},
-          }},
-        ],
-        usage: {{
-          input_tokens: 5,
-          output_tokens: 7,
-          total_tokens: 12,
-        }},
-        finish_reason: 'stop',
-        provider_metadata: {{
-          provider_code: 'fixture_provider',
-        }},
-      }},
-    }};
-  }},
-}};
+payload="$(cat)"
+case "${{payload}}" in
+  *'"method":"validate"'*)
+    printf '%s' '{validate_output}'
+    ;;
+  *'"method":"list_models"'*)
+    printf '%s' '{list_models_output}'
+    ;;
+  *'"method":"invoke"'*)
+    printf '%s' '{invoke_output}'
+    ;;
+  *)
+    printf '%s' '{error_output}'
+    exit 1
+    ;;
+esac
 "#
         ),
     );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = package.path().join("bin/fixture_provider");
+        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).unwrap();
+    }
 }
 
 fn make_fixture_package() -> TempProviderPackage {
     let package = TempProviderPackage::new();
     package.write(
         "manifest.yaml",
-        r#"plugin_code: fixture_provider
-display_name: Fixture Provider
+        r#"schema_version: 2
+plugin_type: model_provider
+plugin_code: fixture_provider
 version: 0.1.0
 contract_version: 1flowbase.provider/v1
-supported_model_types:
-  - llm
-runner:
-  language: nodejs
-  entrypoint: provider/fixture_provider.js
+metadata:
+  author: taichuy
+provider:
+  definition: provider/fixture_provider.yaml
+runtime:
+  kind: executable
+  protocol: stdio-json
+  executable:
+    path: bin/fixture_provider
+limits:
+  memory_bytes: 134217728
+  invoke_timeout_ms: 5000
+capabilities:
+  model_types:
+    - llm
+compat:
+  minimum_host_version: 0.1.0
 "#,
     );
     package.write(

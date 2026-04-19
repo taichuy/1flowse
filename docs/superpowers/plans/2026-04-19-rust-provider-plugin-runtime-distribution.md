@@ -322,7 +322,7 @@ git commit -m "feat: add executable provider package schema"
 - Modify: `api/apps/plugin-runner/src/provider_host.rs`
 - Modify: `api/apps/plugin-runner/tests/provider_runtime_routes.rs`
 
-- [ ] **Step 1: Write the failing `plugin-runner` integration test against an executable fixture**
+- [x] **Step 1: Write the failing `plugin-runner` integration test against an executable fixture**
 
 Replace the Node.js runtime fixture in `api/apps/plugin-runner/tests/provider_runtime_routes.rs` with a temp executable:
 
@@ -392,7 +392,7 @@ compat:
 );
 ```
 
-- [ ] **Step 2: Run the `plugin-runner` route tests to capture the RED baseline**
+- [x] **Step 2: Run the `plugin-runner` route tests to capture the RED baseline**
 
 Run:
 
@@ -402,7 +402,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p plugin-runner provider_runtime_
 
 Expected: FAIL because `plugin-runner` still shells out to `node -e ...`, `PackageLoader` still reads `manifest.runner.entrypoint`, and there is no shared `stdio-json` request envelope.
 
-- [ ] **Step 3: Implement the shared `stdio-json` protocol types and executable child-process client**
+- [x] **Step 3: Implement the shared `stdio-json` protocol types and executable child-process client**
 
 First, add the minimal wire contract to `api/crates/plugin-framework/src/provider_contract.rs`:
 
@@ -496,7 +496,7 @@ let output = call_executable(
 .await?;
 ```
 
-- [ ] **Step 4: Rerun the focused runner and shared-contract test suite**
+- [x] **Step 4: Rerun the focused runner and shared-contract test suite**
 
 Run:
 
@@ -507,7 +507,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p plugin-runner provider_runtime_
 
 Expected: PASS with `plugin-runner` spawning packaged executables, parsing the common request/response envelope, enforcing timeout, and honoring the packaged executable path.
 
-- [ ] **Step 5: Commit the runner runtime cutover**
+- [x] **Step 5: Commit the runner runtime cutover**
 
 ```bash
 git add \

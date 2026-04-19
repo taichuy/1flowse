@@ -25,6 +25,7 @@ pub const DEFAULT_PLUGIN_RUNNER_ADDR: &str = "0.0.0.0:7801";
 
 pub mod package_loader;
 pub mod provider_host;
+pub mod stdio_runtime;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct HealthResponse {

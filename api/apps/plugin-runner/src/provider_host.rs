@@ -1,50 +1,20 @@
 use std::{
     collections::{BTreeMap, HashMap},
-    process::Stdio,
 };
 
 use plugin_framework::{
     error::{FrameworkResult, PluginFrameworkError},
     provider_contract::{
-        ModelDiscoveryMode, ProviderFinishReason, ProviderInvocationInput,
-        ProviderInvocationResult, ProviderModelDescriptor, ProviderModelSource,
-        ProviderRuntimeError, ProviderStreamEvent,
+        ModelDiscoveryMode, ProviderFinishReason, ProviderInvocationInput, ProviderInvocationResult,
+        ProviderModelDescriptor, ProviderModelSource, ProviderStdioMethod, ProviderStdioRequest,
+        ProviderStreamEvent,
     },
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
-use tokio::{io::AsyncWriteExt, process::Command};
+use serde_json::{Map, Value};
 
 use crate::package_loader::{LoadedProviderPackage, PackageLoader};
-
-const NODE_BRIDGE_SCRIPT: &str = r#"
-const fs = require('node:fs');
-
-async function main() {
-  const payload = JSON.parse(fs.readFileSync(0, 'utf8'));
-  const runtime = require(payload.entrypoint);
-  const method = payload.method;
-  if (typeof runtime[method] !== 'function') {
-    throw new Error(`provider runtime does not export ${method}`);
-  }
-
-  const result = await runtime[method](payload.input);
-  process.stdout.write(JSON.stringify({ ok: true, result }));
-}
-
-main().catch((error) => {
-  process.stdout.write(
-    JSON.stringify({
-      ok: false,
-      error: {
-        message: error?.message || String(error),
-        stack: error?.stack || null,
-      },
-    })
-  );
-  process.exit(1);
-});
-"#;
+use crate::stdio_runtime::call_executable;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LoadedProviderSummary {
@@ -123,7 +93,7 @@ impl ProviderHost {
     ) -> FrameworkResult<ProviderValidationOutput> {
         let loaded = self.loaded_package(plugin_id)?;
         let output = self
-            .call_runtime(loaded, "validateProviderCredentials", provider_config)
+            .call_runtime(loaded, ProviderStdioMethod::Validate, provider_config)
             .await?;
         Ok(ProviderValidationOutput { output })
     }
@@ -138,13 +108,13 @@ impl ProviderHost {
             ModelDiscoveryMode::Static => loaded.package.predefined_models.clone(),
             ModelDiscoveryMode::Dynamic => {
                 let dynamic = self
-                    .call_runtime(loaded, "listModels", provider_config)
+                    .call_runtime(loaded, ProviderStdioMethod::ListModels, provider_config)
                     .await?;
                 normalize_models(dynamic)?
             }
             ModelDiscoveryMode::Hybrid => {
                 let dynamic = self
-                    .call_runtime(loaded, "listModels", provider_config)
+                    .call_runtime(loaded, ProviderStdioMethod::ListModels, provider_config)
                     .await?;
                 merge_models(
                     &loaded.package.predefined_models,
@@ -162,7 +132,11 @@ impl ProviderHost {
     ) -> FrameworkResult<ProviderInvokeStreamOutput> {
         let loaded = self.loaded_package(plugin_id)?;
         let output = self
-            .call_runtime(loaded, "invoke", serde_json::to_value(input).unwrap())
+            .call_runtime(
+                loaded,
+                ProviderStdioMethod::Invoke,
+                serde_json::to_value(input).unwrap(),
+            )
             .await?;
         normalize_invoke_output(output)
     }
@@ -178,72 +152,16 @@ impl ProviderHost {
     async fn call_runtime(
         &self,
         loaded: &LoadedProviderPackage,
-        method: &str,
+        method: ProviderStdioMethod,
         input: Value,
     ) -> FrameworkResult<Value> {
-        let payload = json!({
-            "entrypoint": loaded.runtime_entrypoint,
-            "method": method,
-            "input": input,
-        });
-
-        let mut child = Command::new("node")
-            .arg("-e")
-            .arg(NODE_BRIDGE_SCRIPT)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|error| PluginFrameworkError::io(None, error.to_string()))?;
-
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(payload.to_string().as_bytes())
-                .await
-                .map_err(|error| PluginFrameworkError::io(None, error.to_string()))?;
-        }
-
-        let output = child
-            .wait_with_output()
-            .await
-            .map_err(|error| PluginFrameworkError::io(None, error.to_string()))?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if stdout.is_empty() {
-            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            return Err(PluginFrameworkError::runtime(
-                ProviderRuntimeError::normalize(
-                    method,
-                    if stderr.is_empty() {
-                        "provider runtime returned empty output"
-                    } else {
-                        stderr.as_str()
-                    },
-                    None,
-                ),
-            ));
-        }
-
-        let envelope = serde_json::from_str::<Value>(&stdout)
-            .map_err(|error| PluginFrameworkError::serialization(None, error.to_string()))?;
-
-        if envelope.get("ok") == Some(&Value::Bool(true)) {
-            return Ok(envelope.get("result").cloned().unwrap_or(Value::Null));
-        }
-
-        let error_object = envelope
-            .get("error")
-            .and_then(Value::as_object)
-            .cloned()
-            .unwrap_or_default();
-        let message = error_object
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or("provider runtime execution failed");
-        let summary = error_object.get("stack").and_then(Value::as_str);
-        Err(PluginFrameworkError::runtime(
-            ProviderRuntimeError::normalize(method, message, summary),
-        ))
+        let request = ProviderStdioRequest { method, input };
+        call_executable(
+            &loaded.runtime_executable,
+            &request,
+            &loaded.package.manifest.limits,
+        )
+        .await
     }
 }
 

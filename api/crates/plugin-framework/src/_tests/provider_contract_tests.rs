@@ -1,9 +1,11 @@
 use plugin_framework::{
     installation::PluginTaskStatus,
     provider_contract::{
-        ModelDiscoveryMode, ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderUsage,
+        ModelDiscoveryMode, ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderStdioMethod,
+        ProviderStdioRequest, ProviderStdioResponse, ProviderUsage,
     },
 };
+use serde_json::json;
 
 #[test]
 fn model_discovery_mode_accepts_all_supported_wire_values() {
@@ -70,4 +72,30 @@ fn plugin_task_status_marks_only_terminal_states() {
     assert!(PluginTaskStatus::Failed.is_terminal());
     assert!(PluginTaskStatus::Canceled.is_terminal());
     assert!(PluginTaskStatus::TimedOut.is_terminal());
+}
+
+#[test]
+fn provider_stdio_contract_uses_snake_case_methods_and_result_payloads() {
+    let request = ProviderStdioRequest {
+        method: ProviderStdioMethod::ListModels,
+        input: json!({
+            "api_key": "secret"
+        }),
+    };
+
+    let request_payload = serde_json::to_value(&request).unwrap();
+    assert_eq!(request_payload["method"], "list_models");
+    assert_eq!(request_payload["input"]["api_key"], "secret");
+
+    let response: ProviderStdioResponse = serde_json::from_value(json!({
+        "ok": true,
+        "result": [
+            {
+                "model_id": "fixture_dynamic"
+            }
+        ]
+    }))
+    .unwrap();
+    assert!(response.ok);
+    assert_eq!(response.result[0]["model_id"], "fixture_dynamic");
 }

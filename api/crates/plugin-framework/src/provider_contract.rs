@@ -43,6 +43,38 @@ pub enum ProviderModelSource {
     Dynamic,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderStdioMethod {
+    Validate,
+    ListModels,
+    Invoke,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProviderStdioRequest {
+    pub method: ProviderStdioMethod,
+    #[serde(default)]
+    pub input: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProviderStdioError {
+    pub kind: ProviderRuntimeErrorKind,
+    pub message: String,
+    #[serde(default)]
+    pub provider_summary: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProviderStdioResponse {
+    pub ok: bool,
+    #[serde(default)]
+    pub result: Value,
+    #[serde(default)]
+    pub error: Option<ProviderStdioError>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PluginFormOption {
     pub label: String,

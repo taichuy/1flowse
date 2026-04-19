@@ -11,7 +11,7 @@ use plugin_framework::{
 #[derive(Debug, Clone)]
 pub struct LoadedProviderPackage {
     pub package_root: PathBuf,
-    pub runtime_entrypoint: PathBuf,
+    pub runtime_executable: PathBuf,
     pub package: ProviderPackage,
 }
 
@@ -32,17 +32,17 @@ impl PackageLoader {
         }
 
         let package = ProviderPackage::load_from_dir(&package_root)?;
-        let runtime_entrypoint = package_root.join(&package.manifest.runner.entrypoint);
-        if !runtime_entrypoint.is_file() {
+        let runtime_executable = package_root.join(&package.manifest.runtime.executable.path);
+        if !runtime_executable.is_file() {
             return Err(PluginFrameworkError::invalid_provider_package(format!(
-                "provider runtime entrypoint does not exist: {}",
-                runtime_entrypoint.display()
+                "provider runtime executable does not exist: {}",
+                runtime_executable.display()
             )));
         }
 
         Ok(LoadedProviderPackage {
             package_root,
-            runtime_entrypoint,
+            runtime_executable,
             package,
         })
     }

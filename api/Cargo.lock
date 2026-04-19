@@ -1544,6 +1544,7 @@ name = "plugin-runner"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "libc",
  "plugin-framework",
  "serde",
  "serde_json",
