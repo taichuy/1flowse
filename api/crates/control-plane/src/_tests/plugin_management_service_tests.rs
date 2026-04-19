@@ -60,6 +60,7 @@ struct MemoryPluginManagementRepository {
     instances: Arc<RwLock<HashMap<Uuid, ModelProviderInstanceRecord>>>,
     caches: Arc<RwLock<HashMap<Uuid, ModelProviderCatalogCacheRecord>>>,
     audit_events: Arc<RwLock<Vec<String>>>,
+    created_task_status_override: Arc<RwLock<Option<PluginTaskStatus>>>,
 }
 
 impl MemoryPluginManagementRepository {
@@ -73,6 +74,7 @@ impl MemoryPluginManagementRepository {
             instances: Arc::new(RwLock::new(HashMap::new())),
             caches: Arc::new(RwLock::new(HashMap::new())),
             audit_events: Arc::new(RwLock::new(Vec::new())),
+            created_task_status_override: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -100,6 +102,10 @@ impl MemoryPluginManagementRepository {
             .collect::<Vec<_>>();
         statuses.sort();
         statuses
+    }
+
+    async fn set_created_task_status_override(&self, status: PluginTaskStatus) {
+        *self.created_task_status_override.write().await = Some(status);
     }
 
     async fn seed_instance_with_ready_cache(
@@ -324,13 +330,14 @@ impl PluginRepository for MemoryPluginManagementRepository {
 
     async fn create_task(&self, input: &CreatePluginTaskInput) -> Result<PluginTaskRecord> {
         let now = OffsetDateTime::now_utc();
+        let status_override = *self.created_task_status_override.read().await;
         let record = PluginTaskRecord {
             id: input.task_id,
             installation_id: input.installation_id,
             workspace_id: input.workspace_id,
             provider_code: input.provider_code.clone(),
             task_kind: input.task_kind,
-            status: input.status,
+            status: status_override.unwrap_or(input.status),
             status_message: input.status_message.clone(),
             detail_json: input.detail_json.clone(),
             created_by: input.actor_user_id,
@@ -1725,4 +1732,42 @@ async fn plugin_management_service_installs_uploaded_signed_package_as_verified_
         result.installation.signature_status.as_deref(),
         Some("verified")
     );
+}
+
+#[tokio::test]
+async fn plugin_management_service_rejects_restarting_terminal_task() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let runtime = MemoryProviderRuntime::default();
+    let nonce = Uuid::now_v7().to_string();
+    let package_root = std::env::temp_dir().join(format!("plugin-terminal-task-source-{nonce}"));
+    let install_root = std::env::temp_dir().join(format!("plugin-terminal-task-installed-{nonce}"));
+    create_provider_fixture(&package_root);
+    repository
+        .set_created_task_status_override(PluginTaskStatus::Success)
+        .await;
+
+    let service = PluginManagementService::new(
+        repository.clone(),
+        runtime,
+        std::sync::Arc::new(MemoryOfficialPluginSource::default()),
+        &install_root,
+    );
+
+    let error = service
+        .install_plugin(InstallPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            package_root: package_root.display().to_string(),
+        })
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::InvalidStateTransition { resource, from, to, .. })
+            if *resource == "plugin_task" && from == "success" && to == "running"
+    ));
 }

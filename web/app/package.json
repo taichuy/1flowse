@@ -30,6 +30,11 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "lint": "eslint src --ext .ts,.tsx",
-    "test": "vitest --run --maxWorkers=50% --minWorkers=1"
+    "test": "vitest --run --maxWorkers=50% --minWorkers=1",
+    "test:fast": "vitest --run --maxWorkers=50% --minWorkers=1",
+    "test:coverage": "vitest --run --coverage --maxWorkers=50% --minWorkers=1"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.4"
   }
 }

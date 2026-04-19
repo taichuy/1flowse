@@ -21,6 +21,7 @@ use crate::{
         OrchestrationRuntimeRepository, PluginRepository, ProviderRuntimePort, UpdateFlowRunInput,
         UpdateNodeRunInput, UpsertCompiledPlanInput,
     },
+    state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
 
 pub struct StartNodeDebugPreviewCommand {
@@ -53,6 +54,7 @@ pub struct CompleteCallbackTaskCommand {
 
 struct WaitingNodeResumeUpdate {
     node_run_id: Uuid,
+    from_status: domain::NodeRunStatus,
     output_payload: Value,
 }
 
@@ -212,6 +214,15 @@ where
         let events =
             persist_preview_events(&self.repository, &flow_run, &node_run, &preview).await?;
         let finished_at = OffsetDateTime::now_utc();
+        ensure_node_run_transition(
+            node_run.status,
+            if preview.is_failed() {
+                domain::NodeRunStatus::Failed
+            } else {
+                domain::NodeRunStatus::Succeeded
+            },
+            "complete_node_debug_preview",
+        )?;
         let node_run = self
             .repository
             .complete_node_run(&build_complete_node_run_input(
@@ -220,6 +231,15 @@ where
                 finished_at,
             ))
             .await?;
+        ensure_flow_run_transition(
+            flow_run.status,
+            if preview.is_failed() {
+                domain::FlowRunStatus::Failed
+            } else {
+                domain::FlowRunStatus::Succeeded
+            },
+            "complete_flow_debug_preview",
+        )?;
         let flow_run = self
             .repository
             .complete_flow_run(&build_complete_flow_run_input(
@@ -357,6 +377,20 @@ where
             &self.runtime_invoker(application.workspace_id),
         )
         .await?;
+        let waiting_node_resume = if let Some(node_run_id) = checkpoint.node_run_id {
+            let waiting_node = current_detail
+                .node_runs
+                .iter()
+                .find(|record| record.id == node_run_id)
+                .ok_or_else(|| anyhow!("waiting node run not found for checkpoint"))?;
+            Some(WaitingNodeResumeUpdate {
+                node_run_id,
+                from_status: waiting_node.status,
+                output_payload: resume_patch,
+            })
+        } else {
+            None
+        };
 
         self.persist_flow_debug_outcome(PersistFlowDebugOutcomeInput {
             application_id: command.application_id,
@@ -368,12 +402,7 @@ where
                 "input_payload": command.input_payload,
             }),
             base_started_at: next_node_started_at(&current_detail),
-            waiting_node_resume: checkpoint.node_run_id.map(|node_run_id| {
-                WaitingNodeResumeUpdate {
-                    node_run_id,
-                    output_payload: resume_patch,
-                }
-            }),
+            waiting_node_resume,
         })
         .await
     }
@@ -432,6 +461,12 @@ where
         )
         .await?;
 
+        let waiting_node = detail
+            .node_runs
+            .iter()
+            .find(|record| record.id == callback_task.node_run_id)
+            .ok_or_else(|| anyhow!("waiting node run not found for callback task"))?;
+
         self.persist_flow_debug_outcome(PersistFlowDebugOutcomeInput {
             application_id: command.application_id,
             flow_run: &flow_run,
@@ -444,6 +479,7 @@ where
             base_started_at: next_node_started_at(&detail),
             waiting_node_resume: Some(WaitingNodeResumeUpdate {
                 node_run_id: callback_task.node_run_id,
+                from_status: waiting_node.status,
                 output_payload: callback_task.response_payload.clone().ok_or_else(|| {
                     anyhow!("completed callback task is missing response payload")
                 })?,
@@ -475,6 +511,11 @@ where
             .await?;
 
         if let Some(waiting_node_resume) = waiting_node_resume {
+            ensure_node_run_transition(
+                waiting_node_resume.from_status,
+                domain::NodeRunStatus::Succeeded,
+                "resume_waiting_node",
+            )?;
             self.repository
                 .update_node_run(&UpdateNodeRunInput {
                     node_run_id: waiting_node_resume.node_run_id,
@@ -516,7 +557,14 @@ where
                 self.repository
                     .update_flow_run(&UpdateFlowRunInput {
                         flow_run_id: flow_run.id,
-                        status: domain::FlowRunStatus::WaitingHuman,
+                        status: {
+                            ensure_flow_run_transition(
+                                flow_run.status,
+                                domain::FlowRunStatus::WaitingHuman,
+                                "persist_flow_waiting_human",
+                            )?;
+                            domain::FlowRunStatus::WaitingHuman
+                        },
                         output_payload: json!({}),
                         error_payload: None,
                         finished_at: None,
@@ -556,7 +604,14 @@ where
                 self.repository
                     .update_flow_run(&UpdateFlowRunInput {
                         flow_run_id: flow_run.id,
-                        status: domain::FlowRunStatus::WaitingCallback,
+                        status: {
+                            ensure_flow_run_transition(
+                                flow_run.status,
+                                domain::FlowRunStatus::WaitingCallback,
+                                "persist_flow_waiting_callback",
+                            )?;
+                            domain::FlowRunStatus::WaitingCallback
+                        },
                         output_payload: json!({}),
                         error_payload: None,
                         finished_at: None,
@@ -564,6 +619,11 @@ where
                     .await?;
             }
             orchestration_runtime::execution_state::ExecutionStopReason::Completed => {
+                ensure_flow_run_transition(
+                    flow_run.status,
+                    domain::FlowRunStatus::Succeeded,
+                    "persist_flow_completed",
+                )?;
                 self.repository
                     .update_flow_run(&UpdateFlowRunInput {
                         flow_run_id: flow_run.id,
@@ -583,6 +643,11 @@ where
                     .await?;
             }
             orchestration_runtime::execution_state::ExecutionStopReason::Failed(failure) => {
+                ensure_flow_run_transition(
+                    flow_run.status,
+                    domain::FlowRunStatus::Failed,
+                    "persist_flow_failed",
+                )?;
                 self.repository
                     .update_flow_run(&UpdateFlowRunInput {
                         flow_run_id: flow_run.id,
@@ -924,6 +989,11 @@ where
             }
             _ => (domain::NodeRunStatus::Succeeded, Some(started_at)),
         };
+        ensure_node_run_transition(
+            domain::NodeRunStatus::Running,
+            status,
+            "persist_flow_debug_node_trace",
+        )?;
         let node_run = repository
             .update_node_run(&UpdateNodeRunInput {
                 node_run_id: node_run.id,
@@ -2226,6 +2296,19 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
             application_id: seeded.application_id,
             callback_task_id: detail.callback_tasks.first().expect("callback task").id,
         }
+    }
+
+    pub async fn force_flow_run_status(&self, flow_run_id: Uuid, status: domain::FlowRunStatus) {
+        let mut inner = self
+            .repository
+            .inner
+            .lock()
+            .expect("runtime repo mutex poisoned");
+        let flow_run = inner
+            .flow_runs_by_id
+            .get_mut(&flow_run_id)
+            .expect("flow run should exist for test");
+        flow_run.status = status;
     }
 
     async fn seed_application_with_document(

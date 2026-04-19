@@ -17,6 +17,7 @@ use crate::{
         PluginRepository, ProviderRuntimePort, UpdateModelProviderInstanceInput,
         UpsertModelProviderCatalogCacheInput, UpsertModelProviderSecretInput,
     },
+    state_transition::ensure_model_provider_instance_transition,
 };
 
 pub struct CreateModelProviderInstanceCommand {
@@ -311,18 +312,21 @@ where
                 .await?;
         }
 
+        let next_status = match existing.status {
+            domain::ModelProviderInstanceStatus::Disabled => {
+                domain::ModelProviderInstanceStatus::Disabled
+            }
+            _ => domain::ModelProviderInstanceStatus::Draft,
+        };
+        ensure_model_provider_instance_transition(existing.status, next_status, "update_instance")?;
+
         let updated = self
             .repository
             .update_instance(&UpdateModelProviderInstanceInput {
                 instance_id: existing.id,
                 workspace_id: actor.current_workspace_id,
                 display_name: normalize_required_text(&command.display_name, "display_name")?,
-                status: match existing.status {
-                    domain::ModelProviderInstanceStatus::Disabled => {
-                        domain::ModelProviderInstanceStatus::Disabled
-                    }
-                    _ => domain::ModelProviderInstanceStatus::Draft,
-                },
+                status: next_status,
                 config_json: merged_public_config,
                 last_validated_at: None,
                 last_validation_status: None,
@@ -373,6 +377,11 @@ where
         let provider_config = self
             .build_provider_runtime_config(&package, &instance)
             .await?;
+        ensure_model_provider_instance_transition(
+            instance.status,
+            domain::ModelProviderInstanceStatus::Ready,
+            "validate_instance_success",
+        )?;
 
         let validation_result = async {
             self.runtime.ensure_loaded(&installation).await?;
@@ -399,6 +408,11 @@ where
                     refreshed_at: Some(now),
                 })
                 .await?;
+            ensure_model_provider_instance_transition(
+                instance.status,
+                domain::ModelProviderInstanceStatus::Ready,
+                "validate_instance_success",
+            )?;
             let updated_instance = self
                 .repository
                 .update_instance(&UpdateModelProviderInstanceInput {
@@ -446,6 +460,12 @@ where
             Err(error) => {
                 let now = OffsetDateTime::now_utc();
                 let existing_cache = self.repository.get_catalog_cache(instance.id).await?;
+                let invalid_transition_allowed = ensure_model_provider_instance_transition(
+                    instance.status,
+                    domain::ModelProviderInstanceStatus::Invalid,
+                    "validate_instance_failure",
+                )
+                .is_ok();
                 let _ = self
                     .repository
                     .upsert_catalog_cache(&UpsertModelProviderCatalogCacheInput {
@@ -462,20 +482,24 @@ where
                         refreshed_at: None,
                     })
                     .await;
-                let _ = self
-                    .repository
-                    .update_instance(&UpdateModelProviderInstanceInput {
-                        instance_id: instance.id,
-                        workspace_id: actor.current_workspace_id,
-                        display_name: instance.display_name.clone(),
-                        status: domain::ModelProviderInstanceStatus::Invalid,
-                        config_json: instance.config_json.clone(),
-                        last_validated_at: Some(now),
-                        last_validation_status: Some(domain::ModelProviderValidationStatus::Failed),
-                        last_validation_message: Some(error.to_string()),
-                        updated_by: actor_user_id,
-                    })
-                    .await;
+                if invalid_transition_allowed {
+                    let _ = self
+                        .repository
+                        .update_instance(&UpdateModelProviderInstanceInput {
+                            instance_id: instance.id,
+                            workspace_id: actor.current_workspace_id,
+                            display_name: instance.display_name.clone(),
+                            status: domain::ModelProviderInstanceStatus::Invalid,
+                            config_json: instance.config_json.clone(),
+                            last_validated_at: Some(now),
+                            last_validation_status: Some(
+                                domain::ModelProviderValidationStatus::Failed,
+                            ),
+                            last_validation_message: Some(error.to_string()),
+                            updated_by: actor_user_id,
+                        })
+                        .await;
+                }
                 let _ = self
                     .repository
                     .append_audit_log(&audit_log(
