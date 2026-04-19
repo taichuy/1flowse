@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -9,6 +9,7 @@ use access_control::ensure_permission;
 use anyhow::{Context, Result};
 use plugin_framework::provider_package::ProviderPackage;
 use serde_json::json;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::{
@@ -40,6 +41,17 @@ pub struct AssignPluginCommand {
 pub struct InstallOfficialPluginCommand {
     pub actor_user_id: Uuid,
     pub plugin_id: String,
+}
+
+pub struct UpgradeLatestPluginFamilyCommand {
+    pub actor_user_id: Uuid,
+    pub provider_code: String,
+}
+
+pub struct SwitchPluginVersionCommand {
+    pub actor_user_id: Uuid,
+    pub provider_code: String,
+    pub target_installation_id: Uuid,
 }
 
 #[derive(Debug, Clone)]
@@ -78,6 +90,30 @@ pub struct OfficialPluginCatalogEntry {
     pub help_url: Option<String>,
     pub model_discovery_mode: String,
     pub install_status: OfficialPluginInstallStatus,
+}
+
+#[derive(Debug, Clone)]
+pub struct PluginInstalledVersionView {
+    pub installation_id: Uuid,
+    pub plugin_version: String,
+    pub source_kind: String,
+    pub created_at: OffsetDateTime,
+    pub is_current: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct PluginFamilyView {
+    pub provider_code: String,
+    pub display_name: String,
+    pub protocol: String,
+    pub help_url: Option<String>,
+    pub default_base_url: Option<String>,
+    pub model_discovery_mode: String,
+    pub current_installation_id: Uuid,
+    pub current_version: String,
+    pub latest_version: Option<String>,
+    pub has_update: bool,
+    pub installed_versions: Vec<PluginInstalledVersionView>,
 }
 
 #[derive(Debug, Clone)]
@@ -207,6 +243,90 @@ where
             .collect())
     }
 
+    pub async fn list_families(&self, actor_user_id: Uuid) -> Result<Vec<PluginFamilyView>> {
+        let actor = load_actor_context_for_user(&self.repository, actor_user_id).await?;
+        ensure_permission(&actor, "plugin_config.view.all")
+            .map_err(ControlPlaneError::PermissionDenied)?;
+
+        let assignments = self
+            .repository
+            .list_assignments(actor.current_workspace_id)
+            .await?;
+        let installations = self.repository.list_installations().await?;
+        let installation_map = installations
+            .iter()
+            .cloned()
+            .map(|installation| (installation.id, installation))
+            .collect::<HashMap<_, _>>();
+        let mut installations_by_provider =
+            HashMap::<String, Vec<domain::PluginInstallationRecord>>::new();
+        for installation in installations {
+            installations_by_provider
+                .entry(installation.provider_code.clone())
+                .or_default()
+                .push(installation);
+        }
+        for versions in installations_by_provider.values_mut() {
+            versions.sort_by(|left, right| {
+                right
+                    .created_at
+                    .cmp(&left.created_at)
+                    .then_with(|| right.id.cmp(&left.id))
+            });
+        }
+        let official_by_provider = self
+            .official_source
+            .list_official_catalog()
+            .await?
+            .into_iter()
+            .map(|entry| (entry.provider_code.clone(), entry))
+            .collect::<HashMap<_, _>>();
+
+        let mut families = Vec::with_capacity(assignments.len());
+        for assignment in assignments {
+            let current = installation_map
+                .get(&assignment.installation_id)
+                .cloned()
+                .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+            let package = load_provider_package(&current.install_path)?;
+            let latest_version = official_by_provider
+                .get(&assignment.provider_code)
+                .map(|entry| entry.latest_version.clone());
+            let installed_versions = installations_by_provider
+                .get(&assignment.provider_code)
+                .into_iter()
+                .flatten()
+                .map(|installation| PluginInstalledVersionView {
+                    installation_id: installation.id,
+                    plugin_version: installation.plugin_version.clone(),
+                    source_kind: installation.source_kind.clone(),
+                    created_at: installation.created_at,
+                    is_current: installation.id == current.id,
+                })
+                .collect();
+
+            families.push(PluginFamilyView {
+                provider_code: current.provider_code.clone(),
+                display_name: package.provider.display_name.clone(),
+                protocol: current.protocol.clone(),
+                help_url: package.provider.help_url.clone(),
+                default_base_url: package.provider.default_base_url.clone(),
+                model_discovery_mode: format!("{:?}", package.provider.model_discovery_mode)
+                    .to_ascii_lowercase(),
+                current_installation_id: current.id,
+                current_version: current.plugin_version.clone(),
+                latest_version: latest_version.clone(),
+                has_update: latest_version
+                    .as_deref()
+                    .is_some_and(|version| version != current.plugin_version),
+                installed_versions,
+            });
+        }
+        families.sort_by(|left, right| left.provider_code.cmp(&right.provider_code));
+
+        Ok(families)
+    }
+
     pub async fn install_plugin(
         &self,
         command: InstallPluginCommand,
@@ -266,6 +386,71 @@ where
 
         let _ = fs::remove_dir_all(&package_root);
         result
+    }
+
+    pub async fn upgrade_latest(
+        &self,
+        command: UpgradeLatestPluginFamilyCommand,
+    ) -> Result<domain::PluginTaskRecord> {
+        let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
+        ensure_permission(&actor, "plugin_config.configure.all")
+            .map_err(ControlPlaneError::PermissionDenied)?;
+
+        let current = self
+            .load_current_family_installation(actor.current_workspace_id, &command.provider_code)
+            .await?;
+        let official_entry = self
+            .official_source
+            .list_official_catalog()
+            .await?
+            .into_iter()
+            .find(|entry| entry.provider_code == command.provider_code)
+            .ok_or(ControlPlaneError::NotFound("official_plugin"))?;
+        let installed_target = self
+            .repository
+            .list_installations()
+            .await?
+            .into_iter()
+            .find(|installation| {
+                installation.provider_code == command.provider_code
+                    && installation.plugin_version == official_entry.latest_version
+            });
+        let target = match installed_target {
+            Some(installation) => installation,
+            None => {
+                let downloaded = self.official_source.download_plugin(&official_entry).await?;
+                let package_root = downloaded.package_root.clone();
+                let install_result = async {
+                    self.install_plugin_with_metadata(
+                        InstallPluginCommand {
+                            actor_user_id: command.actor_user_id,
+                            package_root: package_root.display().to_string(),
+                        },
+                        InstallSourceMetadata {
+                            source_kind: "official_registry".to_string(),
+                            checksum: Some(downloaded.checksum.clone()),
+                            signature_status: Some(downloaded.signature_status.clone()),
+                        },
+                    )
+                    .await
+                }
+                .await;
+                let _ = fs::remove_dir_all(&package_root);
+                install_result?.installation
+            }
+        };
+        if current.id == target.id {
+            return Err(ControlPlaneError::Conflict("plugin_version_already_current").into());
+        }
+
+        self.switch_family_installation(
+            &actor,
+            &command.provider_code,
+            &current,
+            &target,
+            command.actor_user_id,
+        )
+        .await
     }
 
     async fn install_plugin_with_metadata(
@@ -576,6 +761,39 @@ where
         }
     }
 
+    pub async fn switch_version(
+        &self,
+        command: SwitchPluginVersionCommand,
+    ) -> Result<domain::PluginTaskRecord> {
+        let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
+        ensure_permission(&actor, "plugin_config.configure.all")
+            .map_err(ControlPlaneError::PermissionDenied)?;
+
+        let current = self
+            .load_current_family_installation(actor.current_workspace_id, &command.provider_code)
+            .await?;
+        let target = self
+            .repository
+            .get_installation(command.target_installation_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        if target.provider_code != command.provider_code {
+            return Err(ControlPlaneError::InvalidInput("plugin_family_target_mismatch").into());
+        }
+        if current.id == target.id {
+            return Err(ControlPlaneError::Conflict("plugin_version_already_current").into());
+        }
+
+        self.switch_family_installation(
+            &actor,
+            &command.provider_code,
+            &current,
+            &target,
+            command.actor_user_id,
+        )
+        .await
+    }
+
     pub async fn list_tasks(&self, actor_user_id: Uuid) -> Result<Vec<domain::PluginTaskRecord>> {
         let actor = load_actor_context_for_user(&self.repository, actor_user_id).await?;
         ensure_permission(&actor, "plugin_config.view.all")
@@ -595,6 +813,136 @@ where
             .get_task(task_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("plugin_task").into())
+    }
+
+    async fn load_current_family_installation(
+        &self,
+        workspace_id: Uuid,
+        provider_code: &str,
+    ) -> Result<domain::PluginInstallationRecord> {
+        let assignment = self
+            .repository
+            .list_assignments(workspace_id)
+            .await?
+            .into_iter()
+            .find(|item| item.provider_code == provider_code)
+            .ok_or(ControlPlaneError::NotFound("plugin_assignment"))?;
+
+        self.repository
+            .get_installation(assignment.installation_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("plugin_installation").into())
+    }
+
+    async fn switch_family_installation(
+        &self,
+        actor: &domain::ActorContext,
+        provider_code: &str,
+        current: &domain::PluginInstallationRecord,
+        target: &domain::PluginInstallationRecord,
+        actor_user_id: Uuid,
+    ) -> Result<domain::PluginTaskRecord> {
+        if !target.enabled {
+            self.enable_plugin(EnablePluginCommand {
+                actor_user_id,
+                installation_id: target.id,
+            })
+            .await?;
+        }
+
+        let task_id = Uuid::now_v7();
+        self.repository
+            .create_task(&CreatePluginTaskInput {
+                task_id,
+                installation_id: Some(target.id),
+                workspace_id: Some(actor.current_workspace_id),
+                provider_code: provider_code.to_string(),
+                task_kind: domain::PluginTaskKind::SwitchVersion,
+                status: domain::PluginTaskStatus::Pending,
+                status_message: Some("pending".into()),
+                detail_json: json!({}),
+                actor_user_id: Some(actor_user_id),
+            })
+            .await?;
+        self.repository
+            .update_task_status(&UpdatePluginTaskStatusInput {
+                task_id,
+                status: domain::PluginTaskStatus::Running,
+                status_message: Some("running".into()),
+                detail_json: json!({
+                    "provider_code": provider_code,
+                    "previous_installation_id": current.id,
+                    "previous_version": current.plugin_version,
+                    "target_installation_id": target.id,
+                    "target_version": target.plugin_version,
+                }),
+            })
+            .await?;
+
+        let switch_result = async {
+            self.repository
+                .create_assignment(&CreatePluginAssignmentInput {
+                    installation_id: target.id,
+                    workspace_id: actor.current_workspace_id,
+                    provider_code: provider_code.to_string(),
+                    actor_user_id,
+                })
+                .await?;
+            self.repository
+                .append_audit_log(&audit_log(
+                    Some(actor.current_workspace_id),
+                    Some(actor_user_id),
+                    "plugin_assignment",
+                    Some(target.id),
+                    "plugin.version_switched",
+                    json!({
+                        "provider_code": provider_code,
+                        "previous_installation_id": current.id,
+                        "previous_version": current.plugin_version,
+                        "target_installation_id": target.id,
+                        "target_version": target.plugin_version,
+                    }),
+                ))
+                .await?;
+            Ok::<(), anyhow::Error>(())
+        }
+        .await;
+
+        match switch_result {
+            Ok(()) => {
+                self.repository
+                    .update_task_status(&UpdatePluginTaskStatusInput {
+                        task_id,
+                        status: domain::PluginTaskStatus::Success,
+                        status_message: Some("switched".into()),
+                        detail_json: json!({
+                            "provider_code": provider_code,
+                            "previous_installation_id": current.id,
+                            "previous_version": current.plugin_version,
+                            "target_installation_id": target.id,
+                            "target_version": target.plugin_version,
+                            "migrated_instance_count": 0,
+                        }),
+                    })
+                    .await
+            }
+            Err(error) => {
+                let _ = self
+                    .repository
+                    .update_task_status(&UpdatePluginTaskStatusInput {
+                        task_id,
+                        status: domain::PluginTaskStatus::Failed,
+                        status_message: Some(error.to_string()),
+                        detail_json: json!({
+                            "provider_code": provider_code,
+                            "previous_installation_id": current.id,
+                            "target_installation_id": target.id,
+                        }),
+                    })
+                    .await;
+                Err(error)
+            }
+        }
     }
 }
 

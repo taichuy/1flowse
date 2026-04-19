@@ -2,7 +2,10 @@ use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
 };
 
 use anyhow::Result;
@@ -15,7 +18,8 @@ use crate::{
     errors::ControlPlaneError,
     plugin_management::{
         AssignPluginCommand, EnablePluginCommand, InstallOfficialPluginCommand,
-        InstallPluginCommand, PluginManagementService,
+        InstallPluginCommand, PluginManagementService, SwitchPluginVersionCommand,
+        UpgradeLatestPluginFamilyCommand,
     },
     ports::{
         AuthRepository, CreatePluginAssignmentInput, CreatePluginTaskInput,
@@ -517,6 +521,281 @@ capabilities:
         r#"{ "plugin": { "label": "OpenAI Compatible" } }"#,
     )
     .unwrap();
+}
+
+async fn seed_test_installation(
+    repository: &MemoryPluginManagementRepository,
+    install_root: &Path,
+    provider_code: &str,
+    plugin_version: &str,
+    enabled: bool,
+) -> Uuid {
+    let package_root = install_root.join(format!("{provider_code}-{plugin_version}"));
+    fs::create_dir_all(package_root.join("provider")).unwrap();
+    fs::create_dir_all(package_root.join("models/llm")).unwrap();
+    fs::create_dir_all(package_root.join("i18n")).unwrap();
+    fs::write(
+        package_root.join("manifest.yaml"),
+        format!(
+            "plugin_code: {provider_code}\ndisplay_name: Fixture Provider\nversion: {plugin_version}\ncontract_version: 1flowbase.provider/v1\nsupported_model_types:\n  - llm\nrunner:\n  language: nodejs\n  entrypoint: provider/{provider_code}.js\n"
+        ),
+    )
+    .unwrap();
+    fs::write(
+        package_root.join(format!("provider/{provider_code}.yaml")),
+        format!(
+            "provider_code: {provider_code}\ndisplay_name: Fixture Provider\nprotocol: openai_compatible\nhelp_url: https://example.com/help\ndefault_base_url: https://api.example.com\nmodel_discovery: hybrid\nconfig_schema:\n  - key: base_url\n    type: string\n    required: true\n  - key: api_key\n    type: secret\n    required: true\n"
+        ),
+    )
+    .unwrap();
+    fs::write(
+        package_root.join(format!("provider/{provider_code}.js")),
+        "module.exports = {};",
+    )
+    .unwrap();
+    fs::write(
+        package_root.join("models/llm/_position.yaml"),
+        "items:\n  - fixture_chat\n",
+    )
+    .unwrap();
+    fs::write(
+        package_root.join("models/llm/fixture_chat.yaml"),
+        r#"model: fixture_chat
+label: Fixture Chat
+family: llm
+capabilities:
+  - stream
+"#,
+    )
+    .unwrap();
+    fs::write(
+        package_root.join("i18n/en_US.json"),
+        r#"{ "plugin": { "label": "Fixture Provider" } }"#,
+    )
+    .unwrap();
+
+    repository
+        .upsert_installation(&UpsertPluginInstallationInput {
+            installation_id: Uuid::now_v7(),
+            provider_code: provider_code.into(),
+            plugin_id: format!("{provider_code}@{plugin_version}"),
+            plugin_version: plugin_version.into(),
+            contract_version: "1flowbase.provider/v1".into(),
+            protocol: "openai_compatible".into(),
+            display_name: "Fixture Provider".into(),
+            source_kind: "official_registry".into(),
+            verification_status: domain::PluginVerificationStatus::Valid,
+            enabled,
+            install_path: package_root.display().to_string(),
+            checksum: None,
+            signature_status: None,
+            metadata_json: json!({}),
+            actor_user_id: repository.actor.user_id,
+        })
+        .await
+        .unwrap()
+        .id
+}
+
+#[tokio::test]
+async fn plugin_management_service_lists_provider_families_with_current_and_latest_versions() {
+    #[derive(Clone)]
+    struct OutdatedOfficialSource;
+
+    #[async_trait]
+    impl OfficialPluginSourcePort for OutdatedOfficialSource {
+        async fn list_official_catalog(&self) -> Result<Vec<OfficialPluginSourceEntry>> {
+            Ok(vec![OfficialPluginSourceEntry {
+                plugin_id: "1flowbase.openai_compatible".into(),
+                provider_code: "openai_compatible".into(),
+                display_name: "OpenAI Compatible".into(),
+                protocol: "openai_compatible".into(),
+                latest_version: "0.2.0".into(),
+                release_tag: "openai_compatible-v0.2.0".into(),
+                download_url: "https://example.com/openai-compatible.1flowbasepkg".into(),
+                checksum: "sha256:abc123".into(),
+                signature_status: "unsigned".into(),
+                help_url: Some("https://example.com/help".into()),
+                model_discovery_mode: "hybrid".into(),
+            }])
+        }
+
+        async fn download_plugin(
+            &self,
+            _entry: &OfficialPluginSourceEntry,
+        ) -> Result<DownloadedOfficialPluginPackage> {
+            unreachable!("download is not used in this read-only test");
+        }
+    }
+
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let install_root = std::env::temp_dir().join(format!("plugin-family-{}", Uuid::now_v7()));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(OutdatedOfficialSource),
+        &install_root,
+    );
+
+    let installation_v1 =
+        seed_test_installation(&repository, &install_root, "openai_compatible", "0.1.0", true)
+            .await;
+    let _installation_v2 =
+        seed_test_installation(&repository, &install_root, "openai_compatible", "0.2.0", true)
+            .await;
+    repository
+        .create_assignment(&CreatePluginAssignmentInput {
+            installation_id: installation_v1,
+            workspace_id: repository.actor.current_workspace_id,
+            provider_code: "openai_compatible".into(),
+            actor_user_id: repository.actor.user_id,
+        })
+        .await
+        .unwrap();
+
+    let families = service.list_families(repository.actor.user_id).await.unwrap();
+    assert_eq!(families.len(), 1);
+    assert_eq!(families[0].provider_code, "openai_compatible");
+    assert_eq!(families[0].current_version, "0.1.0");
+    assert_eq!(families[0].latest_version.as_deref(), Some("0.2.0"));
+    assert!(families[0].has_update);
+}
+
+#[tokio::test]
+async fn plugin_management_service_switches_to_a_local_version_without_redownloading() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let runtime = MemoryProviderRuntime::default();
+    let install_root = std::env::temp_dir().join(format!("plugin-switch-{}", Uuid::now_v7()));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        runtime,
+        Arc::new(MemoryOfficialPluginSource),
+        &install_root,
+    );
+
+    let current_installation =
+        seed_test_installation(&repository, &install_root, "fixture_provider", "0.1.0", true)
+            .await;
+    let target_installation =
+        seed_test_installation(&repository, &install_root, "fixture_provider", "0.2.0", true)
+            .await;
+    repository
+        .create_assignment(&CreatePluginAssignmentInput {
+            installation_id: current_installation,
+            workspace_id,
+            provider_code: "fixture_provider".into(),
+            actor_user_id: repository.actor.user_id,
+        })
+        .await
+        .unwrap();
+
+    let task = service
+        .switch_version(SwitchPluginVersionCommand {
+            actor_user_id: repository.actor.user_id,
+            provider_code: "fixture_provider".into(),
+            target_installation_id: target_installation,
+        })
+        .await
+        .unwrap();
+
+    let assignments = repository.list_assignments(workspace_id).await.unwrap();
+    assert_eq!(assignments.len(), 1);
+    assert_eq!(assignments[0].installation_id, target_installation);
+    assert_eq!(task.task_kind, PluginTaskKind::SwitchVersion);
+    assert_eq!(task.status, PluginTaskStatus::Success);
+}
+
+#[tokio::test]
+async fn plugin_management_service_upgrades_to_latest_without_redownloading_when_already_installed_locally(
+) {
+    #[derive(Clone)]
+    struct LatestAlreadyInstalledSource {
+        download_calls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl OfficialPluginSourcePort for LatestAlreadyInstalledSource {
+        async fn list_official_catalog(&self) -> Result<Vec<OfficialPluginSourceEntry>> {
+            Ok(vec![OfficialPluginSourceEntry {
+                plugin_id: "1flowbase.fixture_provider".into(),
+                provider_code: "fixture_provider".into(),
+                display_name: "Fixture Provider".into(),
+                protocol: "openai_compatible".into(),
+                latest_version: "0.2.0".into(),
+                release_tag: "fixture_provider-v0.2.0".into(),
+                download_url: "https://example.com/fixture-provider.1flowbasepkg".into(),
+                checksum: "sha256:fixture".into(),
+                signature_status: "unsigned".into(),
+                help_url: Some("https://example.com/help".into()),
+                model_discovery_mode: "hybrid".into(),
+            }])
+        }
+
+        async fn download_plugin(
+            &self,
+            _entry: &OfficialPluginSourceEntry,
+        ) -> Result<DownloadedOfficialPluginPackage> {
+            self.download_calls.fetch_add(1, Ordering::SeqCst);
+            anyhow::bail!("download should not be called when latest is already installed")
+        }
+    }
+
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let runtime = MemoryProviderRuntime::default();
+    let download_calls = Arc::new(AtomicUsize::new(0));
+    let install_root =
+        std::env::temp_dir().join(format!("plugin-upgrade-latest-{}", Uuid::now_v7()));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        runtime,
+        Arc::new(LatestAlreadyInstalledSource {
+            download_calls: download_calls.clone(),
+        }),
+        &install_root,
+    );
+
+    let current_installation =
+        seed_test_installation(&repository, &install_root, "fixture_provider", "0.1.0", true)
+            .await;
+    let target_installation =
+        seed_test_installation(&repository, &install_root, "fixture_provider", "0.2.0", false)
+            .await;
+    repository
+        .create_assignment(&CreatePluginAssignmentInput {
+            installation_id: current_installation,
+            workspace_id,
+            provider_code: "fixture_provider".into(),
+            actor_user_id: repository.actor.user_id,
+        })
+        .await
+        .unwrap();
+
+    let task = service
+        .upgrade_latest(UpgradeLatestPluginFamilyCommand {
+            actor_user_id: repository.actor.user_id,
+            provider_code: "fixture_provider".into(),
+        })
+        .await
+        .unwrap();
+
+    let assignments = repository.list_assignments(workspace_id).await.unwrap();
+    assert_eq!(assignments.len(), 1);
+    assert_eq!(assignments[0].installation_id, target_installation);
+    assert_eq!(task.task_kind, PluginTaskKind::SwitchVersion);
+    assert_eq!(task.status, PluginTaskStatus::Success);
+    assert_eq!(download_calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

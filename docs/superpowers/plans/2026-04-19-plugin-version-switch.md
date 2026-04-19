@@ -304,7 +304,7 @@ Expected: one focused commit that only changes pointer storage and task-kind voc
 - Modify: `api/crates/control-plane/src/plugin_management.rs`
 - Test: `api/crates/control-plane/src/_tests/plugin_management_service_tests.rs`
 
-- [ ] **Step 1: Write the failing control-plane tests for family listing and switch semantics**
+- [x] **Step 1: Write the failing control-plane tests for family listing and switch semantics**
 
 Add tests like these to `api/crates/control-plane/src/_tests/plugin_management_service_tests.rs`:
 
@@ -466,7 +466,7 @@ async fn plugin_management_service_switches_to_a_local_version_without_redownloa
 }
 ```
 
-- [ ] **Step 2: Run the control-plane tests to capture the RED baseline**
+- [x] **Step 2: Run the control-plane tests to capture the RED baseline**
 
 Run:
 
@@ -476,7 +476,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p control-plane plugin_management
 
 Expected: FAIL because `PluginManagementService` does not expose `list_families`, `upgrade_latest`, or `switch_version`.
 
-- [ ] **Step 3: Implement plugin family read models and the new switch commands**
+- [x] **Step 3: Implement plugin family read models and the new switch commands**
 
 Add these read models and commands in `api/crates/control-plane/src/plugin_management.rs`:
 
@@ -592,7 +592,7 @@ async fn switch_family_installation(
 
 Use `official_source.list_official_catalog()` to set `latest_version` and `has_update`, and skip download when the target `latest` installation already exists locally.
 
-- [ ] **Step 4: Re-run the control-plane tests**
+- [x] **Step 4: Re-run the control-plane tests**
 
 Run:
 
@@ -602,7 +602,9 @@ rtk cargo test --manifest-path api/Cargo.toml -p control-plane plugin_management
 
 Expected: PASS for family listing, local switch, and latest-upgrade tests that do not require instance migration yet.
 
-- [ ] **Step 5: Commit the plugin family control-plane changes**
+Execution note (`2026-04-19`): besides the plan's family-listing and local-switch examples, this round also added a targeted `upgrade_latest` test to lock the "latest already installed locally does not redownload" contract. The focused command `rtk cargo test --manifest-path api/Cargo.toml -p control-plane plugin_management_service_ -- --nocapture` passed with `6 passed`.
+
+- [x] **Step 5: Commit the plugin family control-plane changes**
 
 Run:
 
