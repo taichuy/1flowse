@@ -129,7 +129,19 @@ export function createDefaultAgentFlowDocument({
           containerId: null,
           position: { x: 360, y: 220 },
           configVersion: 1,
-          config: { provider_instance_id: '', model: '', temperature: 0.7 },
+          config: {
+            model_provider: {
+              provider_instance_id: '',
+              model_id: ''
+            },
+            llm_parameters: {
+              schema_version: '1.0.0',
+              items: {}
+            },
+            response_format: {
+              mode: 'text'
+            }
+          },
           bindings: {
             user_prompt: { kind: 'selector', value: ['node-start', 'query'] }
           },

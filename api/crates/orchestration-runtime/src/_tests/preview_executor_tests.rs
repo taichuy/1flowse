@@ -1,4 +1,7 @@
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -17,15 +20,18 @@ use crate::{
     preview_executor,
 };
 
-struct StubPreviewInvoker;
+struct StubPreviewInvoker {
+    captured_input: Arc<Mutex<Option<ProviderInvocationInput>>>,
+}
 
 #[async_trait]
 impl ProviderInvoker for StubPreviewInvoker {
     async fn invoke_llm(
         &self,
         runtime: &CompiledLlmRuntime,
-        _input: ProviderInvocationInput,
+        input: ProviderInvocationInput,
     ) -> Result<ProviderInvocationOutput> {
+        *self.captured_input.lock().expect("captured input mutex poisoned") = Some(input);
         Ok(ProviderInvocationOutput {
             events: vec![
                 ProviderStreamEvent::TextDelta {
@@ -114,11 +120,14 @@ fn sample_compiled_plan() -> CompiledPlan {
 #[tokio::test]
 async fn preview_executor_resolves_bindings_renders_prompt_and_calls_provider() {
     let plan = sample_compiled_plan();
+    let invoker = StubPreviewInvoker {
+        captured_input: Arc::new(Mutex::new(None)),
+    };
     let outcome = preview_executor::run_node_preview(
         &plan,
         "node-llm",
         &serde_json::json!({ "node-start": { "query": "退款流程是什么？" } }),
-        &StubPreviewInvoker,
+        &invoker,
     )
     .await
     .unwrap();
@@ -132,4 +141,13 @@ async fn preview_executor_resolves_bindings_renders_prompt_and_calls_provider() 
     assert_eq!(outcome.node_output["text"], "preview:gpt-5.4-mini");
     assert_eq!(outcome.provider_events.len(), 3);
     assert!(!outcome.is_failed());
+
+    let captured_input = invoker
+        .captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+    assert!(captured_input.model_parameters.is_empty());
+    assert_eq!(captured_input.response_format, None);
 }

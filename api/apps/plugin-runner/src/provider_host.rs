@@ -292,6 +292,7 @@ fn normalize_models(raw: Value) -> FrameworkResult<Vec<ProviderModelDescriptor>>
             supports_multimodal: model.mode.as_deref() == Some("multimodal"),
             context_window: None,
             max_output_tokens: None,
+            parameter_form: None,
             provider_metadata: legacy_model_metadata(model.family, model.mode),
         })
         .collect())

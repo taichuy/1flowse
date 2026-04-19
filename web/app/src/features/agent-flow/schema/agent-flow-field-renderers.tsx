@@ -13,6 +13,7 @@ import { StateWriteField } from '../components/bindings/StateWriteField';
 import { TemplatedTextField } from '../components/bindings/TemplatedTextField';
 import { OutputContractDefinitionField } from '../components/detail/fields/OutputContractDefinitionField';
 import { LlmModelField } from '../components/detail/fields/LlmModelField';
+import { LlmResponseFormatField } from '../components/detail/fields/LlmResponseFormatField';
 import type { FlowSelectorOption } from '../lib/selector-options';
 import { createTemplateSelectorToken } from '../lib/template-binding';
 
@@ -211,6 +212,7 @@ function renderOutputContractDefinitionField({ adapter, block }: SchemaFieldRend
 export const agentFlowFieldRenderers = {
   text: renderTextField,
   llm_model: LlmModelField,
+  llm_response_format: LlmResponseFormatField,
   number: renderNumberField,
   selector: renderSelectorField,
   selector_list: renderSelectorListField,

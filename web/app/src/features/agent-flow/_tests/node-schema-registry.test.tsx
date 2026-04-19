@@ -38,9 +38,11 @@ describe('agent-flow node schema registry', () => {
   test('exposes a real renderer registry for later schema-driven consumers', () => {
     expect(agentFlowRendererRegistry.fields.text).toBeTypeOf('function');
     expect(agentFlowRendererRegistry.fields.llm_model).toBeTypeOf('function');
+    expect(agentFlowRendererRegistry.fields.llm_response_format).toBeTypeOf('function');
     expect(agentFlowRendererRegistry.fields.output_contract_definition).toBeTypeOf(
       'function'
     );
+    expect(agentFlowRendererRegistry.dynamicForms.llm_parameters).toBeTypeOf('function');
     expect(agentFlowRendererRegistry.views.summary).toBeTypeOf('function');
     expect(agentFlowRendererRegistry.views.relations).toBeTypeOf('function');
   });
@@ -57,7 +59,10 @@ describe('agent-flow node schema registry', () => {
     });
 
     expect(adapter.getValue('alias')).toBe('LLM');
-    expect(adapter.getValue('config.model')).toBe('');
+    expect(adapter.getValue('config.model_provider')).toEqual({
+      provider_instance_id: '',
+      model_id: ''
+    });
 
     const nextOutputs: FlowNodeDocument['outputs'] = [
       { key: 'answer', title: '最终回复', valueType: 'string' }

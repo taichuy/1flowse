@@ -9,6 +9,7 @@ import { NodeRunIOCard } from '../components/detail/last-run/NodeRunIOCard';
 import { NodeRunMetadataCard } from '../components/detail/last-run/NodeRunMetadataCard';
 import { NodeRunSummaryCard } from '../components/detail/last-run/NodeRunSummaryCard';
 import type { NodeLastRun } from '../api/runtime';
+import { getLlmModelProvider } from '../lib/llm-node-config';
 
 function getNode(adapter: SchemaViewRendererProps['adapter']) {
   return adapter.getDerived('node') as
@@ -86,12 +87,9 @@ function renderCardModelView({ adapter }: SchemaViewRendererProps) {
     return null;
   }
 
-  const providerInstanceId =
-    typeof node.config.provider_instance_id === 'string'
-      ? node.config.provider_instance_id.trim()
-      : '';
-  const model =
-    typeof node.config.model === 'string' ? node.config.model.trim() : '';
+  const modelProvider = getLlmModelProvider(node.config);
+  const providerInstanceId = modelProvider.provider_instance_id.trim();
+  const model = modelProvider.model_id.trim();
 
   return (
     <div className="agent-flow-node-card__model">
@@ -100,10 +98,10 @@ function renderCardModelView({ adapter }: SchemaViewRendererProps) {
       </span>
       <span className="agent-flow-node-card__model-content">
         <span className="agent-flow-node-card__model-provider-label">
-          {providerInstanceId || '模型供应商未选择'}
+          {modelProvider.provider_label || providerInstanceId || '模型供应商未选择'}
         </span>
         <span className="agent-flow-node-card__model-label">
-          {model || '选择模型'}
+          {modelProvider.model_label || model || '选择模型'}
         </span>
       </span>
     </div>

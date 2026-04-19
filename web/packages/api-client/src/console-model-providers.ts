@@ -6,6 +6,51 @@ export interface ConsoleModelProviderConfigField {
   required: boolean;
 }
 
+export interface ConsolePluginFormOption {
+  label: string;
+  value: unknown;
+  description?: string;
+  disabled?: boolean;
+}
+
+export interface ConsolePluginFormCondition {
+  field: string;
+  operator: string;
+  value?: unknown;
+  values: unknown[];
+}
+
+export interface ConsolePluginFormFieldSchema {
+  key: string;
+  label: string;
+  type: string;
+  control?: string;
+  group?: string;
+  order?: number;
+  advanced?: boolean;
+  required?: boolean;
+  send_mode?: string;
+  enabled_by_default?: boolean;
+  description?: string;
+  placeholder?: string;
+  default_value?: unknown;
+  min?: number;
+  max?: number;
+  step?: number;
+  precision?: number;
+  unit?: string;
+  options: ConsolePluginFormOption[];
+  visible_when: ConsolePluginFormCondition[];
+  disabled_when: ConsolePluginFormCondition[];
+}
+
+export interface ConsolePluginFormSchema {
+  schema_version: '1.0.0' | string;
+  title?: string;
+  description?: string;
+  fields: ConsolePluginFormFieldSchema[];
+}
+
 export interface ConsoleProviderModelDescriptor {
   model_id: string;
   display_name: string;
@@ -15,6 +60,7 @@ export interface ConsoleProviderModelDescriptor {
   supports_multimodal: boolean;
   context_window: number | null;
   max_output_tokens: number | null;
+  parameter_form: ConsolePluginFormSchema | null;
   provider_metadata: Record<string, unknown>;
 }
 
@@ -74,6 +120,11 @@ export interface ConsoleModelProviderModelCatalog {
   last_error_message: string | null;
   refreshed_at: string | null;
   models: ConsoleProviderModelDescriptor[];
+}
+
+export interface RevealConsoleModelProviderSecretResult {
+  key: string;
+  value: unknown;
 }
 
 export interface ConsoleModelProviderOption {
@@ -163,6 +214,21 @@ export function refreshConsoleModelProviderModels(
   return apiFetch<ConsoleModelProviderModelCatalog>({
     path: `/api/console/model-providers/${instanceId}/models/refresh`,
     method: 'POST',
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function revealConsoleModelProviderSecret(
+  instanceId: string,
+  key: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<RevealConsoleModelProviderSecretResult>({
+    path: `/api/console/model-providers/${instanceId}/secrets/reveal`,
+    method: 'POST',
+    body: { key },
     csrfToken,
     baseUrl
   });

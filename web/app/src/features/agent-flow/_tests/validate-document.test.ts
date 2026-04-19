@@ -88,7 +88,7 @@ describe('validateDocument', () => {
     );
   });
 
-  test('flags missing llm provider instance and model separately', () => {
+  test('flags a missing llm model provider selection on the unified field', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
     const issues = validateDocument(document);
@@ -97,13 +97,8 @@ describe('validateDocument', () => {
       expect.arrayContaining([
         expect.objectContaining({
           nodeId: 'node-llm',
-          fieldKey: 'config.provider_instance_id',
+          fieldKey: 'config.model_provider',
           title: 'LLM 缺少模型供应商实例'
-        }),
-        expect.objectContaining({
-          nodeId: 'node-llm',
-          fieldKey: 'config.model',
-          title: 'LLM 缺少模型'
         })
       ])
     );
@@ -117,8 +112,10 @@ describe('validateDocument', () => {
       throw new Error('expected default LLM node');
     }
 
-    llmNode.config.provider_instance_id = 'provider-stale';
-    llmNode.config.model = 'gpt-4.1';
+    llmNode.config.model_provider = {
+      provider_instance_id: 'provider-stale',
+      model_id: 'gpt-4.1'
+    };
 
     const issues = validateDocument(document, {
       instances: [
@@ -137,6 +134,7 @@ describe('validateDocument', () => {
               supports_multimodal: false,
               context_window: 128000,
               max_output_tokens: 16384,
+              parameter_form: null,
               provider_metadata: {}
             }
           ]
@@ -148,7 +146,7 @@ describe('validateDocument', () => {
       expect.arrayContaining([
         expect.objectContaining({
           nodeId: 'node-llm',
-          fieldKey: 'config.provider_instance_id',
+          fieldKey: 'config.model_provider',
           title: 'LLM 模型供应商实例不可用'
         })
       ])

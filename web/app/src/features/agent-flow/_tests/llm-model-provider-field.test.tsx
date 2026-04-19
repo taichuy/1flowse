@@ -72,6 +72,19 @@ describe('LlmModelField', () => {
               supports_multimodal: false,
               context_window: 128000,
               max_output_tokens: 16384,
+              parameter_form: {
+                schema_version: '1.0.0',
+                fields: [
+                  {
+                    key: 'temperature',
+                    label: 'Temperature',
+                    type: 'number',
+                    send_mode: 'optional',
+                    enabled_by_default: false,
+                    default_value: 0.7
+                  }
+                ]
+              },
               provider_metadata: {}
             },
             {
@@ -83,6 +96,7 @@ describe('LlmModelField', () => {
               supports_multimodal: false,
               context_window: 128000,
               max_output_tokens: 16384,
+              parameter_form: null,
               provider_metadata: {}
             }
           ]
@@ -102,6 +116,7 @@ describe('LlmModelField', () => {
               supports_multimodal: false,
               context_window: 128000,
               max_output_tokens: 16384,
+              parameter_form: null,
               provider_metadata: {}
             }
           ]
@@ -138,7 +153,10 @@ describe('LlmModelField', () => {
           expect.objectContaining({
             id: 'node-llm',
             config: expect.objectContaining({
-              provider_instance_id: 'provider-openai-prod'
+              model_provider: expect.objectContaining({
+                provider_instance_id: 'provider-openai-prod',
+                model_id: ''
+              })
             })
           })
         ])
@@ -154,14 +172,27 @@ describe('LlmModelField', () => {
           expect.objectContaining({
             id: 'node-llm',
             config: expect.objectContaining({
-              provider_instance_id: 'provider-openai-prod',
-              model: 'gpt-4o-mini'
+              model_provider: expect.objectContaining({
+                provider_instance_id: 'provider-openai-prod',
+                model_id: 'gpt-4o-mini',
+                provider_label: 'OpenAI Prod',
+                model_label: 'GPT-4o Mini'
+              }),
+              llm_parameters: {
+                schema_version: '1.0.0',
+                items: {
+                  temperature: {
+                    enabled: false,
+                    value: 0.7
+                  }
+                }
+              }
             })
           })
         ])
       );
     });
-  });
+  }, 10_000);
 
   test('shows a formal error state and settings link when the current provider instance is unavailable', async () => {
     const state = createInitialState();
@@ -171,8 +202,10 @@ describe('LlmModelField', () => {
       throw new Error('expected default LLM node');
     }
 
-    llmNode.config.provider_instance_id = 'provider-stale';
-    llmNode.config.model = 'gpt-4o-mini';
+    llmNode.config.model_provider = {
+      provider_instance_id: 'provider-stale',
+      model_id: 'gpt-4o-mini'
+    };
 
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={state}>

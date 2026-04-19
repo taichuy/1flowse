@@ -143,7 +143,7 @@ function FocusIssueSeed() {
     focusIssueField({
       nodeId: 'node-llm',
       sectionKey: 'inputs',
-      fieldKey: 'config.provider_instance_id'
+      fieldKey: 'config.model_provider'
     });
   }, [focusIssueField]);
 
@@ -191,8 +191,9 @@ describe('NodeInspector', () => {
     expect(screen.queryByLabelText('节点简介')).not.toBeInTheDocument();
     expect(screen.queryByText('Inputs')).not.toBeInTheDocument();
     expect(screen.queryByText('Outputs')).not.toBeInTheDocument();
-    expect(screen.getByText('Policy')).toBeInTheDocument();
     expect(screen.getByText('Advanced')).toBeInTheDocument();
+    expect(screen.getByLabelText('失败重试')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '异常处理' })).toBeInTheDocument();
     expect(screen.getByLabelText('System Prompt')).toBeInTheDocument();
     expect(screen.getByLabelText('User Prompt').tagName).toBe('TEXTAREA');
     },

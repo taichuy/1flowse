@@ -15,6 +15,9 @@ export interface LlmModelOption {
   providerLabel: string;
   providerCode: string;
   protocol: string;
+  parameterForm: NonNullable<
+    AgentFlowModelProviderOptions['instances'][number]['models'][number]['parameter_form']
+  > | null;
   tag?: string;
 }
 
@@ -41,6 +44,7 @@ export function listLlmProviderInstanceOptions(
       providerLabel: instance.display_name,
       providerCode: instance.provider_code,
       protocol: instance.protocol,
+      parameterForm: model.parameter_form,
       tag: toTag(model.source)
     }))
   }));

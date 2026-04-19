@@ -2,6 +2,7 @@ import type { FlowNodeType } from '@1flowbase/flow-schema';
 
 import type {
   SchemaBlock,
+  SchemaDynamicFormBlock,
   SchemaFieldBlock,
   SchemaSectionBlock
 } from '../../../shared/schema-ui/contracts/canvas-node-schema';
@@ -14,6 +15,7 @@ import {
 const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
   text: 'text',
   llm_model: 'llm_model',
+  llm_response_format: 'llm_response_format',
   number: 'number',
   selector: 'selector',
   selector_list: 'selector_list',
@@ -85,7 +87,25 @@ export function buildNodeCardBlocks(nodeType: FlowNodeType): SchemaBlock[] {
 export function buildCommonConfigBlocks(nodeType: FlowNodeType): SchemaBlock[] {
   const definitionSections = getNodeDefinitionSections(nodeType)
     .filter((section) => section.key !== 'basics' && section.key !== 'outputs')
-    .map((section) => createSectionBlock(section.title, section.fields));
+    .flatMap((section) => {
+      const blocks: SchemaBlock[] = [createSectionBlock(section.title, section.fields)];
+
+      if (nodeType === 'llm' && section.key === 'inputs') {
+        blocks.push({
+          kind: 'section',
+          title: 'LLM 参数',
+          blocks: [
+            {
+              kind: 'dynamic_form',
+              form_key: 'llm_parameters',
+              title: 'LLM 参数'
+            } satisfies SchemaDynamicFormBlock
+          ]
+        });
+      }
+
+      return blocks;
+    });
   const policyBlocks: SchemaBlock[] =
     nodeType === 'start'
       ? []
@@ -94,7 +114,7 @@ export function buildCommonConfigBlocks(nodeType: FlowNodeType): SchemaBlock[] {
   return [
     ...definitionSections,
     ...policyBlocks,
-    { kind: 'view', renderer: 'relations', title: '关系' }
+    { kind: 'view', renderer: 'relations', title: '下一步' }
   ];
 }
 

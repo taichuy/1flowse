@@ -40,7 +40,19 @@ export interface SchemaStackBlock extends SchemaBlockBase {
   title?: string;
 }
 
-export type SchemaBlock = SchemaFieldBlock | SchemaViewBlock | SchemaSectionBlock | SchemaStackBlock;
+export interface SchemaDynamicFormBlock extends SchemaBlockBase {
+  kind: 'dynamic_form';
+  form_key: 'provider_config' | 'llm_parameters' | string;
+  title?: string;
+  empty_text?: string;
+}
+
+export type SchemaBlock =
+  | SchemaFieldBlock
+  | SchemaViewBlock
+  | SchemaSectionBlock
+  | SchemaStackBlock
+  | SchemaDynamicFormBlock;
 
 export interface CanvasNodeSchema {
   schemaVersion: '1.0.0';

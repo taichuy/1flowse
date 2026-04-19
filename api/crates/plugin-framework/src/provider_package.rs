@@ -252,6 +252,7 @@ fn load_predefined_models(models_dir: &Path) -> FrameworkResult<Vec<ProviderMode
             supports_multimodal: capabilities.iter().any(|value| value == "multimodal"),
             context_window: raw_model.context_window,
             max_output_tokens: raw_model.max_output_tokens,
+            parameter_form: None,
             provider_metadata: raw_model.provider_metadata,
         });
     }

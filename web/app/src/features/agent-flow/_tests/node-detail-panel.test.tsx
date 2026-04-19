@@ -164,9 +164,8 @@ describe('NodeDetailPanel', () => {
     expect(screen.queryByText('帮助文档')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '模型' })).toBeInTheDocument();
     expect(screen.queryByText('输出契约')).not.toBeInTheDocument();
-    expect(screen.getAllByText('下一步')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: '添加下一个节点' })).not.toBeInTheDocument();
-    expect(screen.getByText('添加并行节点')).toBeInTheDocument();
+    expect(screen.getAllByText('添加并行节点')).toHaveLength(1);
   }, NODE_DETAIL_PANEL_TEST_TIMEOUT);
 
   test('does not duplicate identity or summary content inside config tab', () => {

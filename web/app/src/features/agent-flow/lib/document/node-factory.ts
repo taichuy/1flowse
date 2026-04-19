@@ -52,7 +52,19 @@ function defaultOutputs(nodeType: FlowNodeType): FlowNodeDocument['outputs'] {
 function defaultConfig(nodeType: FlowNodeType): Record<string, unknown> {
   switch (nodeType) {
     case 'llm':
-      return { model: '', temperature: 0.7 };
+      return {
+        model_provider: {
+          provider_instance_id: '',
+          model_id: ''
+        },
+        llm_parameters: {
+          schema_version: '1.0.0',
+          items: {}
+        },
+        response_format: {
+          mode: 'text'
+        }
+      };
     case 'template_transform':
       return { template: '' };
     case 'knowledge_retrieval':

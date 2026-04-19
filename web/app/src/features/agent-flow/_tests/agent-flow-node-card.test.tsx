@@ -50,8 +50,12 @@ describe('AgentFlowNodeCard', () => {
             alias: 'LLM',
             description: '',
             config: {
-              provider_instance_id: 'provider-openai-prod',
-              model: 'gpt-4'
+              model_provider: {
+                provider_instance_id: 'provider-openai-prod',
+                model_id: 'gpt-4',
+                provider_label: 'OpenAI Prod',
+                model_label: 'GPT-4'
+              }
             },
             issueCount: 0,
             canEnterContainer: false,
@@ -72,8 +76,8 @@ describe('AgentFlowNodeCard', () => {
     );
 
     const trigger = screen.getByRole('button', { name: '在 LLM 后新增节点' });
-    expect(screen.getByText('gpt-4')).toBeInTheDocument();
-    expect(screen.getByText('provider-openai-prod')).toBeInTheDocument();
+    expect(screen.getByText('GPT-4')).toBeInTheDocument();
+    expect(screen.getByText('OpenAI Prod')).toBeInTheDocument();
 
     expect(trigger).toHaveClass('react-flow__handle');
     expect(within(trigger).queryByRole('button')).not.toBeInTheDocument();

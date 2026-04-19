@@ -43,6 +43,81 @@ pub enum ProviderModelSource {
     Dynamic,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PluginFormOption {
+    pub label: String,
+    pub value: Value,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub disabled: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PluginFormCondition {
+    pub field: String,
+    pub operator: String,
+    #[serde(default)]
+    pub value: Option<Value>,
+    #[serde(default)]
+    pub values: Vec<Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PluginFormFieldSchema {
+    pub key: String,
+    pub label: String,
+    #[serde(rename = "type")]
+    pub field_type: String,
+    #[serde(default)]
+    pub control: Option<String>,
+    #[serde(default)]
+    pub group: Option<String>,
+    #[serde(default)]
+    pub order: Option<i32>,
+    #[serde(default)]
+    pub advanced: Option<bool>,
+    #[serde(default)]
+    pub required: Option<bool>,
+    #[serde(default)]
+    pub send_mode: Option<String>,
+    #[serde(default)]
+    pub enabled_by_default: Option<bool>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub placeholder: Option<String>,
+    #[serde(default)]
+    pub default_value: Option<Value>,
+    #[serde(default)]
+    pub min: Option<f64>,
+    #[serde(default)]
+    pub max: Option<f64>,
+    #[serde(default)]
+    pub step: Option<f64>,
+    #[serde(default)]
+    pub precision: Option<u32>,
+    #[serde(default)]
+    pub unit: Option<String>,
+    #[serde(default)]
+    pub options: Vec<PluginFormOption>,
+    #[serde(default)]
+    pub visible_when: Vec<PluginFormCondition>,
+    #[serde(default)]
+    pub disabled_when: Vec<PluginFormCondition>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PluginFormSchema {
+    pub schema_version: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub fields: Vec<PluginFormFieldSchema>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ProviderUsage {
     pub input_tokens: Option<u64>,
@@ -110,6 +185,8 @@ pub struct ProviderModelDescriptor {
     pub context_window: Option<u64>,
     pub max_output_tokens: Option<u64>,
     #[serde(default)]
+    pub parameter_form: Option<PluginFormSchema>,
+    #[serde(default)]
     pub provider_metadata: Value,
 }
 
@@ -161,10 +238,8 @@ pub struct ProviderInvocationInput {
     #[serde(default)]
     pub mcp_bindings: Vec<Value>,
     pub response_format: Option<Value>,
-    pub temperature: Option<f64>,
-    pub top_p: Option<f64>,
-    pub max_tokens: Option<u64>,
-    pub seed: Option<u64>,
+    #[serde(default)]
+    pub model_parameters: BTreeMap<String, Value>,
     #[serde(default)]
     pub trace_context: BTreeMap<String, String>,
     #[serde(default)]

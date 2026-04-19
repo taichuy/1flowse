@@ -1,6 +1,11 @@
 import type { ReactNode } from 'react';
 
-import type { SchemaBlock, SchemaFieldBlock, SchemaViewBlock } from '../contracts/canvas-node-schema';
+import type {
+  SchemaBlock,
+  SchemaDynamicFormBlock,
+  SchemaFieldBlock,
+  SchemaViewBlock
+} from '../contracts/canvas-node-schema';
 import { evaluateSchemaRule } from './rule-evaluator';
 import type { RendererRegistry, SchemaAdapter } from '../registry/create-renderer-registry';
 
@@ -48,6 +53,20 @@ function renderView(block: SchemaViewBlock, adapter: SchemaAdapter, registry: Re
   return <Renderer adapter={adapter} block={block} />;
 }
 
+function renderDynamicForm(
+  block: SchemaDynamicFormBlock,
+  adapter: SchemaAdapter,
+  registry: RendererRegistry
+) {
+  const Renderer = registry.dynamicForms[block.form_key];
+
+  if (!Renderer) {
+    return <div data-schema-missing-dynamic-form={block.form_key} />;
+  }
+
+  return <Renderer adapter={adapter} block={block} />;
+}
+
 function renderBlock(
   block: SchemaBlock,
   adapter: SchemaAdapter,
@@ -64,6 +83,8 @@ function renderBlock(
       return renderField(block, adapter, registry);
     case 'view':
       return renderView(block, adapter, registry);
+    case 'dynamic_form':
+      return renderDynamicForm(block, adapter, registry);
     case 'section':
       return (
         <section data-schema-block="section">

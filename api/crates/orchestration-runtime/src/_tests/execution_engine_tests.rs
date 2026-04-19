@@ -1,4 +1,7 @@
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -21,15 +24,19 @@ use crate::{
 
 struct StubProviderInvoker {
     fail: bool,
+    captured_input: Arc<Mutex<Option<ProviderInvocationInput>>>,
+    final_content: String,
 }
 
 #[async_trait]
 impl ProviderInvoker for StubProviderInvoker {
     async fn invoke_llm(
         &self,
-        runtime: &CompiledLlmRuntime,
-        _input: ProviderInvocationInput,
+        _runtime: &CompiledLlmRuntime,
+        input: ProviderInvocationInput,
     ) -> Result<ProviderInvocationOutput> {
+        *self.captured_input.lock().expect("captured input mutex poisoned") = Some(input);
+
         if self.fail {
             return Ok(ProviderInvocationOutput {
                 events: vec![ProviderStreamEvent::Error {
@@ -49,7 +56,7 @@ impl ProviderInvoker for StubProviderInvoker {
         Ok(ProviderInvocationOutput {
             events: vec![
                 ProviderStreamEvent::TextDelta {
-                    delta: format!("echo:{}", runtime.model),
+                    delta: self.final_content.clone(),
                 },
                 ProviderStreamEvent::UsageSnapshot {
                     usage: ProviderUsage {
@@ -64,7 +71,7 @@ impl ProviderInvoker for StubProviderInvoker {
                 },
             ],
             result: ProviderInvocationResult {
-                final_content: Some(format!("echo:{}", runtime.model)),
+                final_content: Some(self.final_content.clone()),
                 usage: ProviderUsage {
                     input_tokens: Some(5),
                     output_tokens: Some(7),
@@ -75,6 +82,14 @@ impl ProviderInvoker for StubProviderInvoker {
                 ..ProviderInvocationResult::default()
             },
         })
+    }
+}
+
+fn successful_invoker() -> StubProviderInvoker {
+    StubProviderInvoker {
+        fail: false,
+        captured_input: Arc::new(Mutex::new(None)),
+        final_content: "echo:gpt-5.4-mini".to_string(),
     }
 }
 
@@ -208,7 +223,7 @@ async fn start_flow_debug_run_waits_for_human_input() {
         &json!({
             "node-start": { "query": "请总结退款政策" }
         }),
-        &StubProviderInvoker { fail: false },
+        &successful_invoker(),
     )
     .await
     .unwrap();
@@ -235,7 +250,7 @@ async fn resume_flow_debug_run_completes_answer_after_human_input() {
     let waiting = start_flow_debug_run(
         &base_plan(),
         &json!({ "node-start": { "query": "退款政策" } }),
-        &StubProviderInvoker { fail: false },
+        &successful_invoker(),
     )
     .await
     .unwrap();
@@ -245,7 +260,7 @@ async fn resume_flow_debug_run_completes_answer_after_human_input() {
         &base_plan(),
         &checkpoint,
         &json!({ "node-human": { "input": "已审核，可继续" } }),
-        &StubProviderInvoker { fail: false },
+        &successful_invoker(),
     )
     .await
     .unwrap();
@@ -290,7 +305,7 @@ async fn tool_node_emits_waiting_callback_stop_reason() {
     let outcome = start_flow_debug_run(
         &plan,
         &json!({ "node-start": { "query": "order_123" } }),
-        &StubProviderInvoker { fail: false },
+        &successful_invoker(),
     )
     .await
     .unwrap();
@@ -309,7 +324,11 @@ async fn provider_error_marks_flow_failed_and_redacts_summary() {
     let outcome = start_flow_debug_run(
         &base_plan(),
         &json!({ "node-start": { "query": "退款政策" } }),
-        &StubProviderInvoker { fail: true },
+        &StubProviderInvoker {
+            fail: true,
+            captured_input: Arc::new(Mutex::new(None)),
+            final_content: String::new(),
+        },
     )
     .await
     .unwrap();
@@ -325,4 +344,63 @@ async fn provider_error_marks_flow_failed_and_redacts_summary() {
         }
         other => panic!("expected failed stop reason, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn llm_runtime_sends_enabled_model_parameters_and_keeps_text_output_for_json_schema() {
+    let mut plan = base_plan();
+    let llm = plan.nodes.get_mut("node-llm").expect("llm node should exist");
+    llm.config = json!({
+        "model_provider": {
+            "provider_instance_id": "provider-ready",
+            "model_id": "gpt-5.4-mini"
+        },
+        "llm_parameters": {
+            "schema_version": "1.0.0",
+            "items": {
+                "temperature": { "enabled": true, "value": 0.7 },
+                "top_p": { "enabled": false, "value": 0.9 }
+            }
+        },
+        "response_format": {
+            "mode": "json_schema",
+            "schema": { "type": "object" }
+        }
+    });
+
+    let invoker = StubProviderInvoker {
+        fail: false,
+        captured_input: Arc::new(Mutex::new(None)),
+        final_content: "{\"ok\":true}".to_string(),
+    };
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "输出 JSON" } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let captured_input = invoker
+        .captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+
+    assert_eq!(
+        captured_input.model_parameters.get("temperature"),
+        Some(&json!(0.7))
+    );
+    assert!(!captured_input.model_parameters.contains_key("top_p"));
+    assert_eq!(
+        captured_input.response_format,
+        Some(json!({ "mode": "json_schema", "schema": { "type": "object" } }))
+    );
+    assert_eq!(outcome.node_traces[1].output_payload["text"], json!("{\"ok\":true}"));
+    assert!(outcome.node_traces[1]
+        .output_payload
+        .get("structured_output")
+        .is_none());
 }

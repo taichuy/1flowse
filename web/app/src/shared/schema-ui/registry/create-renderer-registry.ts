@@ -1,6 +1,11 @@
 import type { ComponentType, ReactNode } from 'react';
 
-import type { SchemaBlock, SchemaFieldBlock, SchemaViewBlock } from '../contracts/canvas-node-schema';
+import type {
+  SchemaBlock,
+  SchemaDynamicFormBlock,
+  SchemaFieldBlock,
+  SchemaViewBlock
+} from '../contracts/canvas-node-schema';
 
 export interface SchemaAdapter {
   getValue(path: string): unknown;
@@ -19,6 +24,11 @@ export interface SchemaViewRendererProps {
   block: SchemaViewBlock;
 }
 
+export interface SchemaDynamicFormRendererProps {
+  adapter: SchemaAdapter;
+  block: SchemaDynamicFormBlock;
+}
+
 export interface SchemaShellRendererProps {
   children?: ReactNode;
   block: Extract<SchemaBlock, { kind: 'section' | 'stack' | 'inline' | 'tabs' }>;
@@ -26,17 +36,20 @@ export interface SchemaShellRendererProps {
 
 export type SchemaFieldRenderer = ComponentType<SchemaFieldRendererProps>;
 export type SchemaViewRenderer = ComponentType<SchemaViewRendererProps>;
+export type SchemaDynamicFormRenderer = ComponentType<SchemaDynamicFormRendererProps>;
 export type SchemaShellRenderer = ComponentType<SchemaShellRendererProps>;
 
 export interface RendererRegistryInput {
   fields: Record<string, SchemaFieldRenderer>;
   views: Record<string, SchemaViewRenderer>;
+  dynamicForms: Record<string, SchemaDynamicFormRenderer>;
   shells: Record<string, SchemaShellRenderer>;
 }
 
 export interface RendererRegistry {
   fields: Record<string, SchemaFieldRenderer>;
   views: Record<string, SchemaViewRenderer>;
+  dynamicForms: Record<string, SchemaDynamicFormRenderer>;
   shells: Record<string, SchemaShellRenderer>;
 }
 
@@ -44,6 +57,7 @@ export function createRendererRegistry(input: RendererRegistryInput): RendererRe
   return {
     fields: { ...input.fields },
     views: { ...input.views },
+    dynamicForms: { ...input.dynamicForms },
     shells: { ...input.shells }
   };
 }

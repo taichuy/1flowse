@@ -331,7 +331,9 @@ describe('AgentFlowEditorShell', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Issues' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'LLM 缺少模型' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'LLM 缺少模型供应商实例' })
+    );
 
     await waitFor(() => {
       expect(screen.getByLabelText('模型')).toHaveFocus();

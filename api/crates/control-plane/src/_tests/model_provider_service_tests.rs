@@ -522,6 +522,34 @@ impl ProviderRuntimePort for MemoryProviderRuntime {
             supports_multimodal: false,
             context_window: Some(128000),
             max_output_tokens: Some(4096),
+            parameter_form: Some(plugin_framework::provider_contract::PluginFormSchema {
+                schema_version: "1.0.0".to_string(),
+                title: Some("LLM Parameters".to_string()),
+                description: None,
+                fields: vec![plugin_framework::provider_contract::PluginFormFieldSchema {
+                    key: "temperature".to_string(),
+                    label: "Temperature".to_string(),
+                    field_type: "number".to_string(),
+                    control: Some("slider".to_string()),
+                    group: Some("sampling".to_string()),
+                    order: Some(10),
+                    advanced: Some(false),
+                    required: Some(false),
+                    send_mode: Some("optional".to_string()),
+                    enabled_by_default: Some(true),
+                    description: Some("Controls randomness.".to_string()),
+                    placeholder: None,
+                    default_value: Some(json!(0.7)),
+                    min: Some(0.0),
+                    max: Some(2.0),
+                    step: Some(0.1),
+                    precision: Some(1),
+                    unit: None,
+                    options: Vec::new(),
+                    visible_when: Vec::new(),
+                    disabled_when: Vec::new(),
+                }],
+            }),
             provider_metadata: json!({}),
         }])
     }
@@ -539,8 +567,7 @@ impl ProviderRuntimePort for MemoryProviderRuntime {
 }
 
 #[tokio::test]
-async fn model_provider_service_creates_validates_and_builds_ready_options_with_editable_secret()
-{
+async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
     let workspace_id = Uuid::now_v7();
     let repository = MemoryModelProviderRepository::new(actor_with_permissions(
         workspace_id,
@@ -573,7 +600,7 @@ async fn model_provider_service_creates_validates_and_builds_ready_options_with_
         created.instance.config_json["base_url"],
         "https://api.example.com"
     );
-    assert_eq!(created.instance.config_json["api_key"], "super-secret");
+    assert_eq!(created.instance.config_json["api_key"], "supe****cret");
     assert_eq!(
         repository.secret_json(created.instance.id).await["api_key"],
         "super-secret"
@@ -584,7 +611,13 @@ async fn model_provider_service_creates_validates_and_builds_ready_options_with_
         .await
         .unwrap();
     assert_eq!(listed.len(), 1);
-    assert_eq!(listed[0].instance.config_json["api_key"], "super-secret");
+    assert_eq!(listed[0].instance.config_json["api_key"], "supe****cret");
+
+    let revealed = service
+        .reveal_secret(repository.actor.user_id, created.instance.id, "api_key")
+        .await
+        .unwrap();
+    assert_eq!(revealed, "super-secret");
 
     let validated = service
         .validate_instance(repository.actor.user_id, created.instance.id)
@@ -594,6 +627,7 @@ async fn model_provider_service_creates_validates_and_builds_ready_options_with_
         validated.instance.status,
         ModelProviderInstanceStatus::Ready
     );
+    assert_eq!(validated.instance.config_json["api_key"], "supe****cret");
     assert_eq!(
         validated.instance.last_validation_status,
         Some(ModelProviderValidationStatus::Succeeded)
@@ -608,12 +642,38 @@ async fn model_provider_service_creates_validates_and_builds_ready_options_with_
     assert_eq!(options.len(), 1);
     assert_eq!(options[0].models.len(), 1);
     assert_eq!(options[0].models[0].model_id, "fixture_chat");
+    assert_eq!(
+        options[0].models[0]
+            .parameter_form
+            .as_ref()
+            .expect("parameter form should exist")
+            .fields[0]
+            .key,
+        "temperature"
+    );
+    assert_eq!(
+        options[0].models[0]
+            .parameter_form
+            .as_ref()
+            .unwrap()
+            .schema_version,
+        "1.0.0"
+    );
 
     let refreshed = service
         .refresh_models(repository.actor.user_id, created.instance.id)
         .await
         .unwrap();
     assert_eq!(refreshed.models.len(), 1);
+    assert_eq!(
+        refreshed.models[0]
+            .parameter_form
+            .as_ref()
+            .expect("refreshed models should keep parameter form")
+            .fields[0]
+            .key,
+        "temperature"
+    );
     assert_eq!(
         repository.audit_events().await,
         vec![

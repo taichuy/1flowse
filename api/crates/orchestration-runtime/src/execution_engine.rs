@@ -359,10 +359,7 @@ fn build_provider_invocation_input(
         tools: Vec::new(),
         mcp_bindings: Vec::new(),
         response_format: node.config.get("response_format").cloned(),
-        temperature: json_f64(&node.config, "temperature"),
-        top_p: json_f64(&node.config, "top_p"),
-        max_tokens: json_u64(&node.config, "max_tokens"),
-        seed: json_u64(&node.config, "seed"),
+        model_parameters: build_model_parameters(&node.config),
         trace_context,
         run_context: BTreeMap::from([(
             "resolved_inputs".to_string(),
@@ -390,12 +387,34 @@ fn value_to_text(value: &Value) -> Option<String> {
     }
 }
 
-fn json_f64(value: &Value, key: &str) -> Option<f64> {
-    value.get(key).and_then(Value::as_f64)
-}
+fn build_model_parameters(config: &Value) -> BTreeMap<String, Value> {
+    if let Some(items) = config
+        .get("llm_parameters")
+        .and_then(Value::as_object)
+        .and_then(|value| value.get("items"))
+        .and_then(Value::as_object)
+    {
+        return items
+            .iter()
+            .filter_map(|(key, item)| {
+                let enabled = item.get("enabled").and_then(Value::as_bool).unwrap_or(false);
+                let value = item.get("value").cloned().unwrap_or(Value::Null);
+                enabled.then_some((key.clone(), value))
+            })
+            .collect();
+    }
 
-fn json_u64(value: &Value, key: &str) -> Option<u64> {
-    value.get(key).and_then(Value::as_u64)
+    [
+        "temperature",
+        "top_p",
+        "presence_penalty",
+        "frequency_penalty",
+        "max_tokens",
+        "seed",
+    ]
+    .into_iter()
+    .filter_map(|key| config.get(key).cloned().map(|value| (key.to_string(), value)))
+    .collect()
 }
 
 fn first_output_key(node: &CompiledNode) -> String {

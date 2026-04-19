@@ -60,6 +60,24 @@ config_schema:
         supports_streaming: true,
         supports_tool_call: false,
         supports_multimodal: false,
+        parameter_form: {
+          schema_version: "1.0.0",
+          title: "LLM Parameters",
+          fields: [
+            {
+              key: "temperature",
+              label: "Temperature",
+              type: "number",
+              control: "slider",
+              send_mode: "optional",
+              enabled_by_default: true,
+              default_value: 0.7,
+              min: 0,
+              max: 2,
+              step: 0.1
+            }
+          ]
+        },
         provider_metadata: {}
       }
     ];
@@ -158,7 +176,7 @@ async fn install_enable_assign(app: &axum::Router, cookie: &str, csrf: &str) -> 
 }
 
 #[tokio::test]
-async fn model_provider_routes_return_secret_for_edit_and_ready_options() {
+async fn model_provider_routes_mask_secret_until_reveal_and_keep_ready_options() {
     let app = test_app().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let installation_id = install_enable_assign(&app, &cookie, &csrf).await;
@@ -212,6 +230,36 @@ async fn model_provider_routes_return_secret_for_edit_and_ready_options() {
     );
     assert_eq!(
         list_payload["data"][0]["config_json"]["api_key"].as_str(),
+        Some("supe****cret")
+    );
+
+    let reveal = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/model-providers/{instance_id}/secrets/reveal"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "key": "api_key"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(reveal.status(), StatusCode::OK);
+    let reveal_payload: Value =
+        serde_json::from_slice(&to_bytes(reveal.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(reveal_payload["data"]["key"].as_str(), Some("api_key"));
+    assert_eq!(
+        reveal_payload["data"]["value"].as_str(),
         Some("super-secret")
     );
 
@@ -266,5 +314,15 @@ async fn model_provider_routes_return_secret_for_edit_and_ready_options() {
     assert_eq!(
         options_payload["data"]["instances"][0]["models"][0]["model_id"].as_str(),
         Some("fixture_chat")
+    );
+    assert_eq!(
+        options_payload["data"]["instances"][0]["models"][0]["parameter_form"]["schema_version"]
+            .as_str(),
+        Some("1.0.0")
+    );
+    assert_eq!(
+        options_payload["data"]["instances"][0]["models"][0]["parameter_form"]["fields"][0]["key"]
+            .as_str(),
+        Some("temperature")
     );
 }

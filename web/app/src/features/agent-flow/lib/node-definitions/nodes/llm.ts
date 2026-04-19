@@ -14,7 +14,7 @@ export const llmNodeDefinition: NodeDefinition = {
       title: 'Inputs',
       fields: [
         {
-          key: 'config.provider_instance_id',
+          key: 'config.model_provider',
           label: '模型',
           editor: 'llm_model',
           required: true
@@ -38,14 +38,9 @@ export const llmNodeDefinition: NodeDefinition = {
       fields: [{ key: 'outputs.text', label: '模型输出', editor: 'text', required: true }]
     },
     {
-      key: 'policy',
-      title: 'Policy',
-      fields: [{ key: 'config.temperature', label: '温度', editor: 'number' }]
-    },
-    {
       key: 'advanced',
       title: 'Advanced',
-      fields: [{ key: 'config.max_tokens', label: '最大输出', editor: 'number' }]
+      fields: [{ key: 'config.response_format', label: '返回格式', editor: 'llm_response_format' }]
     }
   ]
 };

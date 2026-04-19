@@ -13,7 +13,11 @@ use control_plane::model_provider::{
     ValidateModelProviderResult,
 };
 use plugin_framework::{
-    provider_contract::ProviderModelDescriptor, provider_package::ProviderConfigField,
+    provider_contract::{
+        PluginFormCondition, PluginFormFieldSchema, PluginFormOption, PluginFormSchema,
+        ProviderModelDescriptor,
+    },
+    provider_package::ProviderConfigField,
 };
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
@@ -43,6 +47,11 @@ pub struct UpdateModelProviderBody {
     pub config: serde_json::Value,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RevealModelProviderSecretBody {
+    pub key: String,
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ModelProviderConfigFieldResponse {
     pub key: String,
@@ -60,8 +69,63 @@ pub struct ProviderModelDescriptorResponse {
     pub supports_multimodal: bool,
     pub context_window: Option<u64>,
     pub max_output_tokens: Option<u64>,
+    pub parameter_form: Option<PluginFormSchemaResponse>,
     #[schema(value_type = Object)]
     pub provider_metadata: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PluginFormOptionResponse {
+    pub label: String,
+    #[schema(value_type = Object)]
+    pub value: serde_json::Value,
+    pub description: Option<String>,
+    pub disabled: Option<bool>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PluginFormConditionResponse {
+    pub field: String,
+    pub operator: String,
+    #[schema(value_type = Object)]
+    pub value: Option<serde_json::Value>,
+    #[schema(value_type = [Object])]
+    pub values: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PluginFormFieldSchemaResponse {
+    pub key: String,
+    pub label: String,
+    #[serde(rename = "type")]
+    pub field_type: String,
+    pub control: Option<String>,
+    pub group: Option<String>,
+    pub order: Option<i32>,
+    pub advanced: Option<bool>,
+    pub required: Option<bool>,
+    pub send_mode: Option<String>,
+    pub enabled_by_default: Option<bool>,
+    pub description: Option<String>,
+    pub placeholder: Option<String>,
+    #[schema(value_type = Object)]
+    pub default_value: Option<serde_json::Value>,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    pub step: Option<f64>,
+    pub precision: Option<u32>,
+    pub unit: Option<String>,
+    pub options: Vec<PluginFormOptionResponse>,
+    pub visible_when: Vec<PluginFormConditionResponse>,
+    pub disabled_when: Vec<PluginFormConditionResponse>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PluginFormSchemaResponse {
+    pub schema_version: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub fields: Vec<PluginFormFieldSchemaResponse>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -118,6 +182,12 @@ pub struct ModelProviderModelCatalogResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+pub struct RevealModelProviderSecretResponse {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ModelProviderOptionResponse {
     pub provider_instance_id: String,
     pub provider_code: String,
@@ -149,6 +219,7 @@ pub fn router() -> Router<Arc<ApiState>> {
             patch(update_instance).delete(delete_instance),
         )
         .route("/model-providers/:id/validate", post(validate_instance))
+        .route("/model-providers/:id/secrets/reveal", post(reveal_secret))
         .route("/model-providers/:id/models", get(list_models))
         .route("/model-providers/:id/models/refresh", post(refresh_models))
 }
@@ -194,7 +265,81 @@ fn to_model_descriptor_response(model: ProviderModelDescriptor) -> ProviderModel
         supports_multimodal: model.supports_multimodal,
         context_window: model.context_window,
         max_output_tokens: model.max_output_tokens,
+        parameter_form: model.parameter_form.map(to_plugin_form_schema_response),
         provider_metadata: model.provider_metadata,
+    }
+}
+
+fn to_plugin_form_option_response(option: PluginFormOption) -> PluginFormOptionResponse {
+    PluginFormOptionResponse {
+        label: option.label,
+        value: option.value,
+        description: option.description,
+        disabled: option.disabled,
+    }
+}
+
+fn to_plugin_form_condition_response(
+    condition: PluginFormCondition,
+) -> PluginFormConditionResponse {
+    PluginFormConditionResponse {
+        field: condition.field,
+        operator: condition.operator,
+        value: condition.value,
+        values: condition.values,
+    }
+}
+
+fn to_plugin_form_field_schema_response(
+    field: PluginFormFieldSchema,
+) -> PluginFormFieldSchemaResponse {
+    PluginFormFieldSchemaResponse {
+        key: field.key,
+        label: field.label,
+        field_type: field.field_type,
+        control: field.control,
+        group: field.group,
+        order: field.order,
+        advanced: field.advanced,
+        required: field.required,
+        send_mode: field.send_mode,
+        enabled_by_default: field.enabled_by_default,
+        description: field.description,
+        placeholder: field.placeholder,
+        default_value: field.default_value,
+        min: field.min,
+        max: field.max,
+        step: field.step,
+        precision: field.precision,
+        unit: field.unit,
+        options: field
+            .options
+            .into_iter()
+            .map(to_plugin_form_option_response)
+            .collect(),
+        visible_when: field
+            .visible_when
+            .into_iter()
+            .map(to_plugin_form_condition_response)
+            .collect(),
+        disabled_when: field
+            .disabled_when
+            .into_iter()
+            .map(to_plugin_form_condition_response)
+            .collect(),
+    }
+}
+
+fn to_plugin_form_schema_response(schema: PluginFormSchema) -> PluginFormSchemaResponse {
+    PluginFormSchemaResponse {
+        schema_version: schema.schema_version,
+        title: schema.title,
+        description: schema.description,
+        fields: schema
+            .fields
+            .into_iter()
+            .map(to_plugin_form_field_schema_response)
+            .collect(),
     }
 }
 
@@ -406,6 +551,30 @@ pub async fn validate_instance(
         .validate_instance(context.user.id, parse_uuid(&id, "id")?)
         .await?;
     Ok(Json(ApiSuccess::new(to_validate_response(result))))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/model-providers/{id}/secrets/reveal",
+    operation_id = "model_provider_reveal_secret",
+    request_body = RevealModelProviderSecretBody,
+    responses((status = 200, body = RevealModelProviderSecretResponse), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn reveal_secret(
+    State(state): State<Arc<ApiState>>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<RevealModelProviderSecretBody>,
+) -> Result<Json<ApiSuccess<RevealModelProviderSecretResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let value = service(&state)
+        .reveal_secret(context.user.id, parse_uuid(&id, "id")?, &body.key)
+        .await?;
+    Ok(Json(ApiSuccess::new(RevealModelProviderSecretResponse {
+        key: body.key,
+        value,
+    })))
 }
 
 #[utoipa::path(

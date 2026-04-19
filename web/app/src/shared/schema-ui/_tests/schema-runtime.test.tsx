@@ -16,6 +16,9 @@ const view = createRendererRegistry({
   views: {
     summary: ({ block }) => <div>{block.title}</div>
   },
+  dynamicForms: {
+    llm_parameters: ({ block }) => <div>{block.form_key}</div>
+  },
   shells: {}
 });
 
@@ -108,5 +111,22 @@ describe('schema runtime', () => {
     );
 
     expect(screen.getByLabelText('模型')).toHaveValue('gpt-4o-mini');
+  });
+
+  test('renders dynamic form blocks through the registry', () => {
+    render(
+      <SchemaRenderer
+        adapter={{
+          getValue: () => null,
+          setValue: vi.fn(),
+          getDerived: () => null,
+          dispatch: vi.fn()
+        }}
+        blocks={[{ kind: 'dynamic_form', form_key: 'llm_parameters', title: 'LLM 参数' }]}
+        registry={view}
+      />
+    );
+
+    expect(screen.getByText('llm_parameters')).toBeInTheDocument();
   });
 });

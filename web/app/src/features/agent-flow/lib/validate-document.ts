@@ -2,6 +2,7 @@ import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 import type { FlowBinding, FlowNodeDocument } from '@1flowbase/flow-schema';
 
 import type { AgentFlowModelProviderOptions } from '../api/model-provider-options';
+import { getLlmModelProvider } from './llm-node-config';
 import type { InspectorSectionKey } from './node-definitions';
 import { findInspectorSectionKey, nodeDefinitions } from './node-definitions';
 import { isSelectorVisible } from './selector-options';
@@ -27,6 +28,14 @@ function isMissingRequiredField(
   }
 
   if (fieldKey.startsWith('config.')) {
+    if (fieldKey === 'config.model_provider') {
+      const modelProvider = getLlmModelProvider(node.config);
+      return (
+        modelProvider.provider_instance_id.trim().length === 0 ||
+        modelProvider.model_id.trim().length === 0
+      );
+    }
+
     const configValue = node.config[fieldKey.slice('config.'.length)];
 
     if (typeof configValue === 'string') {
@@ -181,21 +190,26 @@ export function validateDocument(
       for (const section of definition.sections) {
         for (const field of section.fields) {
           if (field.required && isMissingRequiredField(node, field.key)) {
-            const isMissingProviderInstance =
-              node.type === 'llm' && field.key === 'config.provider_instance_id';
+            if (node.type === 'llm' && field.key === 'config.model_provider') {
+              const modelProvider = getLlmModelProvider(node.config);
+              const providerMissing = modelProvider.provider_instance_id.trim().length === 0;
+
+              pushFieldIssue(
+                issues,
+                node,
+                field.key,
+                providerMissing ? 'LLM 缺少模型供应商实例' : 'LLM 缺少模型',
+                providerMissing ? '请先选择模型供应商实例。' : '请先选择模型。'
+              );
+              continue;
+            }
 
             pushFieldIssue(
               issues,
               node,
               field.key,
-              isMissingProviderInstance
-                ? 'LLM 缺少模型供应商实例'
-                : node.type === 'llm' && field.key === 'config.model'
-                ? 'LLM 缺少模型'
-                : `${field.label} 未配置`,
-              isMissingProviderInstance
-                ? '请先选择模型供应商实例。'
-                : `请先完善 ${field.label}。`
+              `${field.label} 未配置`,
+              `请先完善 ${field.label}。`
             );
           }
         }
@@ -203,22 +217,9 @@ export function validateDocument(
     }
 
     if (node.type === 'llm') {
-      const providerInstanceId =
-        typeof node.config.provider_instance_id === 'string'
-          ? node.config.provider_instance_id.trim()
-          : '';
-      const model =
-        typeof node.config.model === 'string' ? node.config.model.trim() : '';
-
-      if (model.length === 0) {
-        pushFieldIssue(
-          issues,
-          node,
-          'config.model',
-          'LLM 缺少模型',
-          '请先选择模型。'
-        );
-      }
+      const modelProvider = getLlmModelProvider(node.config);
+      const providerInstanceId = modelProvider.provider_instance_id.trim();
+      const model = modelProvider.model_id.trim();
 
       if (providerOptions && providerInstanceId.length > 0) {
         const providerInstance = providerInstanceMap.get(providerInstanceId);
@@ -227,7 +228,7 @@ export function validateDocument(
           pushFieldIssue(
             issues,
             node,
-            'config.provider_instance_id',
+            'config.model_provider',
             'LLM 模型供应商实例不可用',
             '当前模型供应商实例不存在、未就绪或你无权访问。',
             'inputs'
@@ -239,7 +240,7 @@ export function validateDocument(
           pushFieldIssue(
             issues,
             node,
-            'config.model',
+            'config.model_provider',
             'LLM 模型不可用',
             '当前模型不属于所选模型供应商实例。'
           );
