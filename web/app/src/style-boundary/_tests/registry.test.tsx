@@ -131,7 +131,7 @@ describe('style boundary registry', () => {
         await screen.findByRole('heading', { name: '已安装供应商', level: 5 }, { timeout: 5000 })
       ).toBeInTheDocument();
       expect(
-        await screen.findByRole('heading', { name: '安装模型供应商', level: 5 }, { timeout: 5000 })
+        await screen.findByRole('heading', { name: '模型供应商', level: 5 }, { timeout: 5000 })
       ).toBeInTheDocument();
       expect(await screen.findByText('OpenAI Compatible')).toBeInTheDocument();
       expect(

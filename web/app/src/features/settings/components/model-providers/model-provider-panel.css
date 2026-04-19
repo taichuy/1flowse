@@ -111,9 +111,11 @@
   margin-top: 8px;
 }
 
-.model-provider-panel__official-actions {
+.model-provider-panel__official-toolbar {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .model-provider-panel__official-grid {
@@ -128,13 +130,6 @@
   border-radius: 12px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: #fbfcfe;
-}
-
-.model-provider-panel__catalog-item-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
 }
 
 .model-provider-panel__catalog-item-main,
@@ -152,7 +147,6 @@
   gap: 8px;
 }
 
-.model-provider-panel__catalog-item-head .ant-typography,
 .model-provider-panel__catalog-item-main .ant-typography {
   margin: 0;
 }
@@ -160,6 +154,8 @@
 .model-provider-panel__catalog-item-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
 }
 
 .model-provider-panel__install-confirm {

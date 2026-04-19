@@ -799,12 +799,14 @@ describe('ModelProvidersPage', () => {
       expect(pluginsApi.fetchSettingsOfficialPluginCatalog).toHaveBeenCalled();
     });
     expect(
-      await screen.findByRole(
-        'heading',
-        { name: '安装模型供应商' },
-        { timeout: 10000 }
-      )
-    ).toBeInTheDocument();
+      (
+        await screen.findAllByRole(
+          'heading',
+          { name: '模型供应商' },
+          { timeout: 10000 }
+        )
+      ).length
+    ).toBeGreaterThan(0);
     expect(
       await screen.findByRole(
         'button',
@@ -856,9 +858,9 @@ describe('ModelProvidersPage', () => {
     });
 
     expect(
-      await screen.findByText('openai_compatible · 官方最新 0.2.0')
+      await screen.findByText('官方最新 0.2.0，未安装，hybrid')
     ).toBeInTheDocument();
-    expect(screen.queryByText('openai_compatible · 官方最新 0.1.0')).not.toBeInTheDocument();
+    expect(screen.queryByText('官方最新 0.1.0，已安装待分配，hybrid')).not.toBeInTheDocument();
   });
 
   test('polls install task until the official plugin finishes installing', async () => {
@@ -1044,9 +1046,7 @@ describe('ModelProvidersPage', () => {
 
     renderApp('/settings/model-providers');
 
-    expect(await screen.findByText('当前来源：镜像源')).toBeInTheDocument();
-    expect(screen.getByText('优先从镜像源拉取官方插件')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '上传插件' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '上传插件' })).toBeInTheDocument();
 
     const catalogRow = await screen.findByRole('row', {
       name: /OpenAI Compatible/

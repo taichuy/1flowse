@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Empty, Modal, Select, Space, Tag, Typography } from 'antd';
+import { Button, Empty, Modal, Select, Typography } from 'antd';
 
 import type {
   SettingsOfficialPluginCatalogEntry,
@@ -30,46 +30,6 @@ function getInstallButtonLabel(
   }
 
   return '安装到当前 workspace';
-}
-
-function getInstallStatusTag(
-  entry: SettingsOfficialPluginCatalogEntry,
-  installState: InstallState,
-  activePluginId: string | null
-) {
-  if (activePluginId === entry.plugin_id && installState === 'installing') {
-    return <Tag color="processing">安装中</Tag>;
-  }
-
-  if (
-    entry.install_status === 'assigned' ||
-    (activePluginId === entry.plugin_id && installState === 'success')
-  ) {
-    return <Tag color="green">当前 workspace 已可用</Tag>;
-  }
-
-  if (entry.install_status === 'installed') {
-    return <Tag color="gold">已安装，待分配</Tag>;
-  }
-
-  if (activePluginId === entry.plugin_id && installState === 'failed') {
-    return <Tag color="red">安装失败</Tag>;
-  }
-
-  return <Tag>未安装</Tag>;
-}
-
-function getFamilyStatusTags(family: SettingsPluginFamilyEntry) {
-  return (
-    <Space wrap size={6}>
-      <Tag color="green">当前 {family.current_version}</Tag>
-      {family.has_update && family.latest_version ? (
-        <Tag color="gold">官方最新 {family.latest_version}</Tag>
-      ) : (
-        <Tag color="green">当前已是官方最新</Tag>
-      )}
-    </Space>
-  );
 }
 
 function compareOfficialVersion(left: string, right: string) {
@@ -118,6 +78,64 @@ function pickPreferredOfficialEntry(
   return compareOfficialVersion(candidate.plugin_id, current.plugin_id) > 0
     ? candidate
     : current;
+}
+
+function getSourceRepositoryUrl(
+  sourceMeta: {
+    registryUrl: string;
+  } | null,
+  entries: SettingsOfficialPluginCatalogEntry[]
+) {
+  const registryUrl = sourceMeta?.registryUrl ?? '';
+  const githubReleaseMatch = registryUrl.match(
+    /^(https:\/\/github\.com\/[^/]+\/[^/]+)\/releases\//
+  );
+  if (githubReleaseMatch) {
+    return githubReleaseMatch[1];
+  }
+
+  const helpUrl = entries.find((entry) => entry.help_url)?.help_url ?? '';
+  const githubTreeMatch = helpUrl.match(
+    /^(https:\/\/github\.com\/[^/]+\/[^/]+)\/(tree|blob)\//
+  );
+  if (githubTreeMatch) {
+    return githubTreeMatch[1];
+  }
+
+  return registryUrl || null;
+}
+
+function getStatusLine(
+  entry: SettingsOfficialPluginCatalogEntry,
+  family: SettingsPluginFamilyEntry | undefined,
+  installState: InstallState,
+  activePluginId: string | null
+) {
+  if (family) {
+    return `当前 ${family.current_version}，${
+      family.has_update && family.latest_version
+        ? `官方最新 ${family.latest_version}`
+        : '当前已是官方最新'
+    }，${entry.model_discovery_mode}`;
+  }
+
+  if (activePluginId === entry.plugin_id && installState === 'installing') {
+    return `官方最新 ${entry.latest_version}，安装中，${entry.model_discovery_mode}`;
+  }
+
+  if (entry.install_status === 'assigned') {
+    return `官方最新 ${entry.latest_version}，当前 workspace 已可用，${entry.model_discovery_mode}`;
+  }
+
+  if (entry.install_status === 'installed') {
+    return `官方最新 ${entry.latest_version}，已安装待分配，${entry.model_discovery_mode}`;
+  }
+
+  if (activePluginId === entry.plugin_id && installState === 'failed') {
+    return `官方最新 ${entry.latest_version}，安装失败，${entry.model_discovery_mode}`;
+  }
+
+  return `官方最新 ${entry.latest_version}，未安装，${entry.model_discovery_mode}`;
 }
 
 export function OfficialPluginInstallPanel({
@@ -180,36 +198,34 @@ export function OfficialPluginInstallPanel({
 
     return normalizedEntries.filter((entry) => entry.plugin_id === selectedPluginId);
   }, [normalizedEntries, selectedPluginId]);
+  const repositoryUrl = useMemo(
+    () => getSourceRepositoryUrl(sourceMeta, normalizedEntries),
+    [normalizedEntries, sourceMeta]
+  );
+  const openExternal = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <section className="model-provider-panel__official">
       {contextHolder}
       <div className="model-provider-panel__section-head">
         <div>
-          <Typography.Title level={5}>安装模型供应商</Typography.Title>
-          <Typography.Text type="secondary">
-            从官方目录安装最新版本；如果当前 workspace
-            已在使用某个供应商，这里会直接显示升级状态。
-          </Typography.Text>
-          {sourceMeta ? (
-            <div className="model-provider-panel__official-source">
-              <Typography.Text strong>
-                当前来源：{sourceMeta.sourceLabel}
-              </Typography.Text>
-              <Typography.Text type="secondary">
-                优先从{sourceMeta.sourceLabel}拉取官方插件
-              </Typography.Text>
-              <Typography.Link href={sourceMeta.registryUrl} target="_blank">
-                查看源清单
-              </Typography.Link>
-            </div>
-          ) : null}
-        </div>
-        {canManage ? (
-          <div className="model-provider-panel__official-actions">
-            <Button onClick={onOpenUpload}>上传插件</Button>
+          <Typography.Title level={5}>模型供应商</Typography.Title>
+          <div className="model-provider-panel__official-toolbar">
+            {canManage ? <Button onClick={onOpenUpload}>上传插件</Button> : null}
+            {sourceMeta ? (
+              <Button onClick={() => openExternal(sourceMeta.registryUrl)}>
+                来源
+              </Button>
+            ) : null}
+            {repositoryUrl ? (
+              <Button onClick={() => openExternal(repositoryUrl)}>
+                前往仓库下载
+              </Button>
+            ) : null}
           </div>
-        ) : null}
+        </div>
       </div>
       <Select
         allowClear
@@ -260,46 +276,27 @@ export function OfficialPluginInstallPanel({
                 key={entry.plugin_id}
                 className="model-provider-panel__official-card"
               >
-                <div className="model-provider-panel__catalog-item-head">
-                  <div className="model-provider-panel__catalog-item-main">
-                    <div className="model-provider-panel__catalog-item-title-row">
-                      <Typography.Title level={5}>
-                        {entry.display_name}
-                      </Typography.Title>
-                    </div>
-                    <Typography.Text type="secondary">
-                      {entry.protocol} · 官方最新 {entry.latest_version}
-                    </Typography.Text>
+                <div className="model-provider-panel__catalog-item-main">
+                  <div className="model-provider-panel__catalog-item-title-row">
+                    <Typography.Title level={5}>
+                      {entry.display_name}
+                    </Typography.Title>
                   </div>
-                  <Space wrap size={6}>
-                    {family
-                      ? getFamilyStatusTags(family)
-                      : getInstallStatusTag(
-                          entry,
-                          installState,
-                          activePluginId
-                        )}
-                    <Tag>{entry.model_discovery_mode}</Tag>
-                  </Space>
+                  <Typography.Text type="secondary">
+                    {getStatusLine(entry, family, installState, activePluginId)}
+                  </Typography.Text>
+                  <Typography.Text type="secondary">
+                    {entry.plugin_id}
+                  </Typography.Text>
                 </div>
-
-                <div className="model-provider-panel__catalog-item-meta">
-                  <span>{entry.plugin_id}</span>
-                  <span>
-                    {family
-                      ? `当前 ${family.current_version}`
-                      : `官方最新 ${entry.latest_version}`}
-                  </span>
-                </div>
-
-                {entry.help_url ? (
-                  <Typography.Link href={entry.help_url} target="_blank">
-                    查看插件说明
-                  </Typography.Link>
-                ) : null}
 
                 {canManage ? (
                   <div className="model-provider-panel__catalog-item-actions">
+                    {entry.help_url ? (
+                      <Button onClick={() => openExternal(entry.help_url!)}>
+                        文档
+                      </Button>
+                    ) : null}
                     <Button
                       type={buttonDisabled ? 'default' : 'primary'}
                       loading={installing || upgrading}
@@ -347,6 +344,12 @@ export function OfficialPluginInstallPanel({
                       }}
                     >
                       {buttonLabel}
+                    </Button>
+                  </div>
+                ) : entry.help_url ? (
+                  <div className="model-provider-panel__catalog-item-actions">
+                    <Button onClick={() => openExternal(entry.help_url!)}>
+                      文档
                     </Button>
                   </div>
                 ) : null}
