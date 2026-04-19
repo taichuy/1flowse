@@ -957,7 +957,7 @@ git commit -m "feat: package rust provider binaries per target"
 - Modify: `../1flowbase-official-plugins/scripts/update-official-registry.mjs`
 - Modify: `../1flowbase-official-plugins/scripts/_tests/update-official-registry.test.mjs`
 
-- [ ] **Step 1: Write the failing registry-updater test for one logical entry with multiple artifacts**
+- [x] **Step 1: Write the failing registry-updater test for one logical entry with multiple artifacts**
 
 Replace the old flat-entry expectation in `../1flowbase-official-plugins/scripts/_tests/update-official-registry.test.mjs` with:
 
@@ -996,7 +996,7 @@ test('upsertRegistryEntry replaces one provider entry and preserves artifacts ar
 });
 ```
 
-- [ ] **Step 2: Run the sibling-repo script tests to capture the RED baseline**
+- [x] **Step 2: Run the sibling-repo script tests to capture the RED baseline**
 
 Run:
 
@@ -1006,7 +1006,7 @@ cd ../1flowbase-official-plugins && node --test scripts/_tests/*.test.mjs
 
 Expected: FAIL because the updater and release workflow still assume a flat `download_url/checksum` entry and only package one artifact.
 
-- [ ] **Step 3: Implement the multi-artifact release workflow and latest-only registry writer**
+- [x] **Step 3: Implement the multi-artifact release workflow and latest-only registry writer**
 
 Keep provider detection by version bump, but build both Linux targets inside one provider release job.
 
@@ -1068,7 +1068,7 @@ export function upsertRegistryEntry(registry, entry) {
 
 Also update `provider-ci.yml` to compile and package at least the host `x86_64-unknown-linux-musl` target in dry-run mode before script tests.
 
-- [ ] **Step 4: Rerun the sibling-repo script test suite**
+- [x] **Step 4: Rerun the sibling-repo script test suite**
 
 Run:
 
@@ -1078,7 +1078,7 @@ cd ../1flowbase-official-plugins && node --test scripts/_tests/*.test.mjs
 
 Expected: PASS, with `official-registry.json` writer ready to store one latest-only plugin entry containing an `artifacts[]` array.
 
-- [ ] **Step 5: Commit the sibling-repo release automation**
+- [x] **Step 5: Commit the sibling-repo release automation**
 
 ```bash
 git -C ../1flowbase-official-plugins add \
@@ -1101,7 +1101,7 @@ git -C ../1flowbase-official-plugins commit -m "chore: publish multi-target offi
 - Modify: `../1flowbase-official-plugins/README.md`
 - Delete: `../1flowbase-official-plugins/models/openai_compatible/provider/openai_compatible.js`
 
-- [ ] **Step 1: Write the failing Rust unit tests for config normalization and invocation mapping**
+- [x] **Step 1: Write the failing Rust unit tests for config normalization and invocation mapping**
 
 Start `../1flowbase-official-plugins/models/openai_compatible/src/lib.rs` with unit tests like:
 
@@ -1134,7 +1134,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the plugin crate test command to capture the RED baseline**
+- [x] **Step 2: Run the plugin crate test command to capture the RED baseline**
 
 Run:
 
@@ -1144,7 +1144,7 @@ rtk cargo test --manifest-path ../1flowbase-official-plugins/models/openai_compa
 
 Expected: FAIL immediately because the Rust crate does not exist yet and the plugin still ships a Node.js runtime file.
 
-- [ ] **Step 3: Implement the Rust crate, executable main, and schema-v2 manifest**
+- [x] **Step 3: Implement the Rust crate, executable main, and schema-v2 manifest**
 
 Create `Cargo.toml` with the minimal dependencies:
 
@@ -1278,7 +1278,7 @@ pub async fn handle_request(request: ProviderStdioRequest) -> anyhow::Result<Pro
 
 Keep `normalize_provider_config`, `request_json`, `normalize_model_entries`, `normalize_usage`, and `invoke_chat_completion` as private helpers inside `src/lib.rs`, ported directly from the current `provider/openai_compatible.js` behavior before deleting that file.
 
-- [ ] **Step 4: Run the full focused verification set across both repos**
+- [x] **Step 4: Run the full focused verification set across both repos**
 
 Run:
 
@@ -1293,7 +1293,7 @@ cd ../1flowbase-official-plugins && node --test scripts/_tests/*.test.mjs
 
 Expected: PASS, proving the new schema-v2 package parser, executable runner host, target-aware artifact selection, host packaging CLI, official repo release scripts, and Rust `openai_compatible` sample are aligned.
 
-- [ ] **Step 5: Commit the sample-plugin migration in the sibling repo**
+- [x] **Step 5: Commit the sample-plugin migration in the sibling repo**
 
 ```bash
 git -C ../1flowbase-official-plugins add \
