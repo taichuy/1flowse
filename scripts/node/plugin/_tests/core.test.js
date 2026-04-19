@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
+const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
 const { main, startDemoServer } = require('../core.js');
@@ -32,6 +33,47 @@ function request(url) {
 
     req.on('error', reject);
   });
+}
+
+function payloadSha256(rootDir) {
+  const entries = [];
+
+  function walk(currentDir) {
+    const children = fs
+      .readdirSync(currentDir, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name));
+
+    for (const child of children) {
+      const absolutePath = path.join(currentDir, child.name);
+      const relativePath = path
+        .relative(rootDir, absolutePath)
+        .split(path.sep)
+        .join('/');
+
+      if (relativePath.startsWith('_meta/')) {
+        continue;
+      }
+
+      if (child.isDirectory()) {
+        walk(absolutePath);
+        continue;
+      }
+
+      entries.push([relativePath, fs.readFileSync(absolutePath)]);
+    }
+  }
+
+  walk(rootDir);
+
+  const hasher = crypto.createHash('sha256');
+  for (const [relativePath, content] of entries) {
+    hasher.update(relativePath);
+    hasher.update(Buffer.from([0]));
+    hasher.update(content);
+    hasher.update(Buffer.from([0]));
+  }
+
+  return `sha256:${hasher.digest('hex')}`;
 }
 
 test('plugin init scaffolds provider plugin skeleton in target path', async () => {
@@ -170,4 +212,58 @@ test('plugin package excludes demo and scripts from the packaged artifact', asyn
   assert.equal(fs.existsSync(path.join(pluginPath, 'scripts')), true);
   assert.equal(fs.existsSync(path.join(extractedDir, 'demo')), false);
   assert.equal(fs.existsSync(path.join(extractedDir, 'scripts')), false);
+});
+
+test('plugin package writes official signature metadata when signing inputs are provided', async () => {
+  const pluginPath = makeTempPluginPath();
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-plugin-dist-'));
+  const extractedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-plugin-extract-'));
+  const signingKeyFile = path.join(outputDir, 'official-signing-key.pem');
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
+
+  await main(['init', pluginPath]);
+  fs.writeFileSync(
+    signingKeyFile,
+    privateKey.export({ format: 'pem', type: 'pkcs8' }),
+    'utf8'
+  );
+
+  const result = await main([
+    'package',
+    pluginPath,
+    '--out',
+    outputDir,
+    '--signing-key-pem-file',
+    signingKeyFile,
+    '--signing-key-id',
+    'official-key-2026-04',
+    '--issued-at',
+    '2026-04-19T13:00:00Z',
+  ]);
+
+  const unpack = spawnSync('tar', ['-xzf', result.packageFile, '-C', extractedDir]);
+  assert.equal(unpack.status, 0);
+
+  const releasePath = path.join(extractedDir, '_meta', 'official-release.json');
+  const signaturePath = path.join(extractedDir, '_meta', 'official-release.sig');
+  assert.equal(fs.existsSync(releasePath), true);
+  assert.equal(fs.existsSync(signaturePath), true);
+
+  const releaseBytes = fs.readFileSync(releasePath);
+  const release = JSON.parse(releaseBytes.toString('utf8'));
+  const signature = fs.readFileSync(signaturePath);
+
+  assert.equal(release.schema_version, 1);
+  assert.equal(release.plugin_id, '1flowbase.acme_openai_compatible');
+  assert.equal(release.provider_code, 'acme_openai_compatible');
+  assert.equal(release.version, '0.1.0');
+  assert.equal(release.contract_version, '1flowbase.provider/v1');
+  assert.equal(release.signature_algorithm, 'ed25519');
+  assert.equal(release.signing_key_id, 'official-key-2026-04');
+  assert.equal(release.issued_at, '2026-04-19T13:00:00Z');
+  assert.equal(release.payload_sha256, payloadSha256(extractedDir));
+  assert.equal(
+    crypto.verify(null, releaseBytes, publicKey, signature),
+    true
+  );
 });

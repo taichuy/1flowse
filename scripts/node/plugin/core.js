@@ -32,11 +32,15 @@ function usage() {
 
   package <plugin-path> --out <output-dir>
     生成过滤 demo/scripts 后的 .1flowbasepkg 安装产物，并返回 sha256 元数据。
+    可选传入官方签名参数，将 _meta/official-release.json 与 .sig 一并写入包内。
 
 选项：
   --host <host>        demo dev 监听地址，默认 127.0.0.1
   --port <port>        demo dev 监听端口，默认 4310；传 0 表示自动分配
   --runner-url <url>   传给 demo 页面显示的 plugin-runner 地址，默认 http://127.0.0.1:7801
+  --signing-key-pem-file <file>  package 时使用的 ed25519 PKCS8 私钥 PEM 文件
+  --signing-key-id <id>          package 时写入官方签名 key id
+  --issued-at <iso8601>          package 时写入官方签名签发时间，默认当前 UTC 时间
   -h, --help           查看帮助
 
 示例：
@@ -44,6 +48,7 @@ function usage() {
   node scripts/node/plugin.js demo init ../1flowbase-official-plugins/models/openai_compatible
   node scripts/node/plugin.js demo dev ../1flowbase-official-plugins/models/openai_compatible --port 4310
   node scripts/node/plugin.js package ../1flowbase-official-plugins/models/openai_compatible --out ./dist
+  node scripts/node/plugin.js package ../1flowbase-official-plugins/models/openai_compatible --out ./dist --signing-key-pem-file ./official-plugin-signing-key.pem --signing-key-id official-key-2026-04
 `);
 }
 
@@ -685,7 +690,77 @@ function hashFile(filePath) {
   return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
 }
 
-function createPluginPackage(pluginPath, outputDir) {
+function payloadSha256(rootDir) {
+  const files = [];
+
+  function walk(currentDir) {
+    const children = fs
+      .readdirSync(currentDir, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name));
+
+    for (const child of children) {
+      const absolutePath = path.join(currentDir, child.name);
+      const relativePath = path
+        .relative(rootDir, absolutePath)
+        .split(path.sep)
+        .join('/');
+
+      if (relativePath.startsWith('_meta/')) {
+        continue;
+      }
+
+      if (child.isDirectory()) {
+        walk(absolutePath);
+        continue;
+      }
+
+      files.push([relativePath, fs.readFileSync(absolutePath)]);
+    }
+  }
+
+  walk(rootDir);
+
+  const hasher = crypto.createHash('sha256');
+  for (const [relativePath, content] of files) {
+    hasher.update(relativePath);
+    hasher.update(Buffer.from([0]));
+    hasher.update(content);
+    hasher.update(Buffer.from([0]));
+  }
+
+  return `sha256:${hasher.digest('hex')}`;
+}
+
+function writeOfficialSignatureFiles(stagedRoot, options) {
+  const privateKeyPem = fs.readFileSync(options.signingKeyPemFile, 'utf8');
+  const privateKey = crypto.createPrivateKey(privateKeyPem);
+  const release = {
+    schema_version: 1,
+    plugin_id: options.pluginId,
+    provider_code: options.providerCode,
+    version: options.version,
+    contract_version: options.contractVersion,
+    artifact_sha256: options.artifactSha256,
+    payload_sha256: payloadSha256(stagedRoot),
+    signature_algorithm: 'ed25519',
+    signing_key_id: options.signingKeyId,
+    issued_at: options.issuedAt,
+  };
+  const releaseBytes = Buffer.from(JSON.stringify(release), 'utf8');
+  const signature = crypto.sign(null, releaseBytes, privateKey);
+  const metaDir = path.join(stagedRoot, '_meta');
+
+  fs.mkdirSync(metaDir, { recursive: true });
+  fs.writeFileSync(path.join(metaDir, 'official-release.json'), releaseBytes);
+  fs.writeFileSync(path.join(metaDir, 'official-release.sig'), signature);
+
+  return {
+    signatureAlgorithm: release.signature_algorithm,
+    signingKeyId: release.signing_key_id,
+  };
+}
+
+function createPluginPackage(pluginPath, outputDir, options = {}) {
   ensurePluginScaffoldExists(pluginPath);
 
   const resolvedPluginPath = path.resolve(pluginPath);
@@ -693,6 +768,11 @@ function createPluginPackage(pluginPath, outputDir) {
   const stagedRoot = createPackageArtifactRoot(resolvedPluginPath);
   const pluginCode = readPluginCode(resolvedPluginPath);
   const version = readManifestField(resolvedPluginPath, 'version', '0.1.0');
+  const contractVersion = readManifestField(
+    resolvedPluginPath,
+    'contract_version',
+    '1flowbase.provider/v1'
+  );
 
   fs.mkdirSync(resolvedOutputDir, { recursive: true });
 
@@ -702,6 +782,20 @@ function createPluginPackage(pluginPath, outputDir) {
   );
 
   try {
+    let signatureMetadata = null;
+    if (options.signingKeyPemFile && options.signingKeyId) {
+      signatureMetadata = writeOfficialSignatureFiles(stagedRoot, {
+        pluginId: `1flowbase.${pluginCode}`,
+        providerCode: pluginCode,
+        version,
+        contractVersion,
+        artifactSha256: payloadSha256(stagedRoot),
+        signingKeyPemFile: path.resolve(options.signingKeyPemFile),
+        signingKeyId: options.signingKeyId,
+        issuedAt: options.issuedAt || new Date().toISOString(),
+      });
+    }
+
     const result = spawnSync('tar', ['-czf', pendingFile, '-C', stagedRoot, '.'], {
       stdio: 'pipe',
     });
@@ -725,6 +819,8 @@ function createPluginPackage(pluginPath, outputDir) {
       pluginPath: resolvedPluginPath,
       packageFile: finalFile,
       checksum,
+      signatureAlgorithm: signatureMetadata?.signatureAlgorithm ?? null,
+      signingKeyId: signatureMetadata?.signingKeyId ?? null,
     };
   } finally {
     removeDirIfExists(stagedRoot);
@@ -1009,6 +1105,9 @@ function parseCliArgs(argv) {
       command: 'package',
       pluginPath: path.resolve(second),
       outputDir: null,
+      signingKeyPemFile: null,
+      signingKeyId: null,
+      issuedAt: null,
     };
 
     for (let index = 0; index < packageArgs.length; index += 1) {
@@ -1022,11 +1121,41 @@ function parseCliArgs(argv) {
         index += 1;
         continue;
       }
+      if (arg === '--signing-key-pem-file') {
+        if (!next) {
+          throw new Error('--signing-key-pem-file 需要值');
+        }
+        options.signingKeyPemFile = path.resolve(next);
+        index += 1;
+        continue;
+      }
+      if (arg === '--signing-key-id') {
+        if (!next) {
+          throw new Error('--signing-key-id 需要值');
+        }
+        options.signingKeyId = next;
+        index += 1;
+        continue;
+      }
+      if (arg === '--issued-at') {
+        if (!next) {
+          throw new Error('--issued-at 需要值');
+        }
+        options.issuedAt = next;
+        index += 1;
+        continue;
+      }
       throw new Error(`未知参数：${arg}`);
     }
 
     if (!options.outputDir) {
       throw new Error('package 需要提供 --out <output-dir>');
+    }
+    if (options.signingKeyPemFile && !options.signingKeyId) {
+      throw new Error('package 使用签名时需要提供 --signing-key-id');
+    }
+    if (options.signingKeyId && !options.signingKeyPemFile) {
+      throw new Error('package 使用签名时需要提供 --signing-key-pem-file');
     }
 
     return options;
@@ -1076,7 +1205,7 @@ async function main(argv) {
   }
 
   if (parsed.command === 'package') {
-    const result = createPluginPackage(parsed.pluginPath, parsed.outputDir);
+    const result = createPluginPackage(parsed.pluginPath, parsed.outputDir, parsed);
     log(`Plugin package created at ${result.packageFile}`);
     return result;
   }
