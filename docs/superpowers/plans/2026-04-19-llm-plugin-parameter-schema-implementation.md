@@ -20,7 +20,7 @@
 
 **Completion Summary:** 本计划对应的实现已经落地：后端补齐了 `parameter_form` / `model_parameters` contract 与路由暴露，运行时完成了 `LLM` 参数透传，`shared schema-ui` 新增了 `dynamic_form` 渲染能力，`AgentFlow` 的 `LLM` 节点已经切到 `model_provider / llm_parameters / response_format` 新对象结构，并接入插件驱动的动态参数表单与 `json_schema` 编辑。
 
-**Execution Notes:** 实际实现过程中有少量文件级偏移，例如 `NodeInspector` 接管了顶层 config view 渲染，`LlmModelField` 收口为模型选择容器而不是单独新增 `LlmProviderSelectorField.tsx`，部分原计划列出的文件无需修改。下方 checklist 保留为原始实施计划，不再逐项回填为完成态，最终状态以本节和提交记录为准。
+**Execution Notes:** 实际实现过程中有少量文件级偏移，例如 `NodeInspector` 接管了顶层 config view 渲染，`LlmModelField` 收口为模型选择容器而不是单独新增 `LlmProviderSelectorField.tsx`，部分原计划列出的文件无需修改。下方 checklist 已按实际执行结果回填为完成态，最终状态以本节和提交记录为准。
 
 **Verification Evidence:**
 - `rtk cargo test -p control-plane model_provider_service_tests`
@@ -118,7 +118,7 @@
 - Test: `api/crates/control-plane/src/_tests/model_provider_service_tests.rs`
 - Test: `api/apps/api-server/src/_tests/model_provider_routes.rs`
 
-- [ ] **Step 1: Write the failing backend tests for `parameter_form` round-trip**
+- [x] **Step 1: Write the failing backend tests for `parameter_form` round-trip**
 
 ```rust
 assert_eq!(
@@ -141,7 +141,7 @@ assert_eq!(
 );
 ```
 
-- [ ] **Step 2: Run the targeted tests and verify they fail on missing fields**
+- [x] **Step 2: Run the targeted tests and verify they fail on missing fields**
 
 Run: `rtk cargo test -p control-plane model_provider_service_tests`
 Expected: FAIL with compile or assertion errors mentioning `parameter_form` / missing struct field.
@@ -149,7 +149,7 @@ Expected: FAIL with compile or assertion errors mentioning `parameter_form` / mi
 Run: `rtk cargo test -p api-server model_provider_routes`
 Expected: FAIL because route response / OpenAPI type does not expose `parameter_form`.
 
-- [ ] **Step 3: Add plugin form schema types and expose them through model descriptors**
+- [x] **Step 3: Add plugin form schema types and expose them through model descriptors**
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -202,7 +202,7 @@ export interface ConsoleProviderModelDescriptor {
 }
 ```
 
-- [ ] **Step 4: Re-run the backend tests and verify contract exposure is stable**
+- [x] **Step 4: Re-run the backend tests and verify contract exposure is stable**
 
 Run: `rtk cargo test -p control-plane model_provider_service_tests`
 Expected: PASS
@@ -210,7 +210,7 @@ Expected: PASS
 Run: `rtk cargo test -p api-server model_provider_routes`
 Expected: PASS
 
-- [ ] **Step 5: Commit the backend contract slice**
+- [x] **Step 5: Commit the backend contract slice**
 
 ```bash
 rtk git add api/crates/plugin-framework/src/provider_contract.rs \
@@ -233,7 +233,7 @@ rtk git commit -m "feat: expose llm parameter form descriptors"
 - Modify: `api/crates/orchestration-runtime/src/_tests/preview_executor_tests.rs`
 - Modify: `api/crates/control-plane/src/orchestration_runtime.rs`
 
-- [ ] **Step 1: Write failing runtime tests for enabled parameter filtering and text-only output**
+- [x] **Step 1: Write failing runtime tests for enabled parameter filtering and text-only output**
 
 ```rust
 assert_eq!(
@@ -248,12 +248,12 @@ assert_eq!(
 assert_eq!(output_payload, json!({ "text": "{\"ok\":true}" }));
 ```
 
-- [ ] **Step 2: Run runtime tests to verify the current invocation builder fails**
+- [x] **Step 2: Run runtime tests to verify the current invocation builder fails**
 
 Run: `rtk cargo test -p orchestration-runtime execution_engine_tests`
 Expected: FAIL because `ProviderInvocationInput` still uses fixed fields like `temperature` / `top_p` and does not emit `model_parameters`.
 
-- [ ] **Step 3: Replace fixed numeric passthrough with node-driven `model_parameters`**
+- [x] **Step 3: Replace fixed numeric passthrough with node-driven `model_parameters`**
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -301,7 +301,7 @@ fn build_model_parameters(node: &CompiledNode) -> BTreeMap<String, Value> {
 }
 ```
 
-- [ ] **Step 4: Re-run runtime tests and confirm `json_schema` still produces only `text`**
+- [x] **Step 4: Re-run runtime tests and confirm `json_schema` still produces only `text`**
 
 Run: `rtk cargo test -p orchestration-runtime execution_engine_tests`
 Expected: PASS
@@ -309,7 +309,7 @@ Expected: PASS
 Run: `rtk cargo test -p orchestration-runtime preview_executor_tests`
 Expected: PASS
 
-- [ ] **Step 5: Commit the runtime contract slice**
+- [x] **Step 5: Commit the runtime contract slice**
 
 ```bash
 rtk git add api/crates/plugin-framework/src/provider_contract.rs \
@@ -329,7 +329,7 @@ rtk git commit -m "feat: pass llm parameter objects to provider runtime"
 - Modify: `web/app/src/shared/schema-ui/runtime/SchemaRenderer.tsx`
 - Modify: `web/app/src/shared/schema-ui/_tests/schema-runtime.test.tsx`
 
-- [ ] **Step 1: Write the failing schema runtime test for `dynamic_form` blocks**
+- [x] **Step 1: Write the failing schema runtime test for `dynamic_form` blocks**
 
 ```tsx
 dynamicForms: {
@@ -349,12 +349,12 @@ Expected assertion:
 expect(screen.getByText('llm_parameters')).toBeInTheDocument();
 ```
 
-- [ ] **Step 2: Run the shared schema-ui test and confirm it fails**
+- [x] **Step 2: Run the shared schema-ui test and confirm it fails**
 
 Run: `rtk pnpm --dir web --filter @1flowbase/web test -- src/shared/schema-ui/_tests/schema-runtime.test.tsx`
 Expected: FAIL because `SchemaBlock` and registry do not recognize `dynamic_form`.
 
-- [ ] **Step 3: Add a dedicated block type and registry entry for dynamic forms**
+- [x] **Step 3: Add a dedicated block type and registry entry for dynamic forms**
 
 ```ts
 export interface SchemaDynamicFormBlock extends SchemaBlockBase {
@@ -386,12 +386,12 @@ export interface RendererRegistryInput {
 }
 ```
 
-- [ ] **Step 4: Re-run the schema runtime test and confirm nested dynamic forms render**
+- [x] **Step 4: Re-run the schema runtime test and confirm nested dynamic forms render**
 
 Run: `rtk pnpm --dir web --filter @1flowbase/web test -- src/shared/schema-ui/_tests/schema-runtime.test.tsx`
 Expected: PASS
 
-- [ ] **Step 5: Commit the shared schema-ui slice**
+- [x] **Step 5: Commit the shared schema-ui slice**
 
 ```bash
 rtk git add web/app/src/shared/schema-ui/contracts/plugin-form-schema.ts \
@@ -422,7 +422,7 @@ rtk git commit -m "feat: add dynamic plugin form blocks to schema ui"
 - Test: `web/app/src/features/agent-flow/_tests/node-schema-registry.test.tsx`
 - Test: `web/app/src/features/agent-flow/_tests/agent-flow-node-card.test.tsx`
 
-- [ ] **Step 1: Write the failing editor tests for model selection, parameter reset, and response format**
+- [x] **Step 1: Write the failing editor tests for model selection, parameter reset, and response format**
 
 ```tsx
 expect(latestNode.config).toMatchObject({
@@ -449,7 +449,7 @@ expect(latestNode.config.response_format).toEqual({
 });
 ```
 
-- [ ] **Step 2: Run the focused front-end tests and verify they fail on the old config shape**
+- [x] **Step 2: Run the focused front-end tests and verify they fail on the old config shape**
 
 Run: `rtk pnpm --dir web --filter @1flowbase/web test -- src/features/agent-flow/_tests/llm-model-provider-field.test.tsx`
 Expected: FAIL because the node still writes `config.provider_instance_id`, `config.model`, `config.temperature`, `config.max_tokens`.
@@ -457,7 +457,7 @@ Expected: FAIL because the node still writes `config.provider_instance_id`, `con
 Run: `rtk pnpm --dir web --filter @1flowbase/web test -- src/features/agent-flow/_tests/node-detail-panel.test.tsx src/features/agent-flow/_tests/node-schema-registry.test.tsx src/features/agent-flow/_tests/agent-flow-node-card.test.tsx`
 Expected: FAIL because the schema and card renderers still read the old config keys.
 
-- [ ] **Step 3: Split the giant field component and migrate the node definition to the new object model**
+- [x] **Step 3: Split the giant field component and migrate the node definition to the new object model**
 
 ```ts
 config: {
@@ -499,7 +499,7 @@ if (nodeType === 'llm') {
 }
 ```
 
-- [ ] **Step 4: Re-run the editor tests and confirm model switching clears and rebuilds parameter items**
+- [x] **Step 4: Re-run the editor tests and confirm model switching clears and rebuilds parameter items**
 
 Run: `rtk pnpm --dir web --filter @1flowbase/web test -- src/features/agent-flow/_tests/llm-model-provider-field.test.tsx`
 Expected: PASS
@@ -507,7 +507,7 @@ Expected: PASS
 Run: `rtk pnpm --dir web --filter @1flowbase/web test -- src/features/agent-flow/_tests/node-detail-panel.test.tsx src/features/agent-flow/_tests/node-schema-registry.test.tsx src/features/agent-flow/_tests/agent-flow-node-card.test.tsx`
 Expected: PASS
 
-- [ ] **Step 5: Commit the `LLM` node editor refactor**
+- [x] **Step 5: Commit the `LLM` node editor refactor**
 
 ```bash
 rtk git add web/packages/flow-schema/src/index.ts \
@@ -537,7 +537,7 @@ rtk git commit -m "feat: move llm nodes to plugin-driven parameter forms"
 - Modify: `web/app/src/features/settings/_tests/model-providers-page.test.tsx`
 - Modify: `web/app/src/features/settings/_tests/settings-page.test.tsx`
 
-- [ ] **Step 1: Write failing validation and settings fixture tests**
+- [x] **Step 1: Write failing validation and settings fixture tests**
 
 ```ts
 expect(
@@ -554,12 +554,12 @@ expect(
 expect(options.instances[0].models[0].parameter_form?.fields[0].key).toBe('temperature');
 ```
 
-- [ ] **Step 2: Run the focused validation and settings tests**
+- [x] **Step 2: Run the focused validation and settings tests**
 
 Run: `rtk pnpm --dir web --filter @1flowbase/web test -- src/features/agent-flow/_tests/validate-document.test.ts src/features/settings/_tests/model-providers-page.test.tsx src/features/settings/_tests/settings-page.test.tsx`
 Expected: FAIL because the validator and fixtures still assume `provider_instance_id / model` live at the top level of `config`.
 
-- [ ] **Step 3: Update validation helpers and fixture payloads to the new object shape**
+- [x] **Step 3: Update validation helpers and fixture payloads to the new object shape**
 
 ```ts
 const providerInstanceId =
@@ -597,7 +597,7 @@ models: [
 ]
 ```
 
-- [ ] **Step 4: Run the regression sweep**
+- [x] **Step 4: Run the regression sweep**
 
 Run: `rtk pnpm --dir web --filter @1flowbase/web test -- src/features/agent-flow/_tests/validate-document.test.ts src/features/agent-flow/_tests/llm-model-provider-field.test.tsx src/shared/schema-ui/_tests/schema-runtime.test.tsx src/features/settings/_tests/model-providers-page.test.tsx`
 Expected: PASS
@@ -617,7 +617,7 @@ Expected: PASS
 Run: `rtk pnpm --dir web --filter @1flowbase/web build`
 Expected: PASS
 
-- [ ] **Step 5: Commit the validation and regression slice**
+- [x] **Step 5: Commit the validation and regression slice**
 
 ```bash
 rtk git add web/app/src/features/agent-flow/lib/validate-document.ts \
