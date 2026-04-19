@@ -311,7 +311,7 @@ git commit -m "feat: add plugin package trust intake"
 - Modify: `api/crates/storage-pg/src/_tests/plugin_repository_tests.rs`
 - Modify: `api/crates/storage-pg/src/_tests/migration_smoke.rs`
 
-- [ ] **Step 1: Write failing storage tests for trust persistence and schema columns**
+- [x] **Step 1: Write failing storage tests for trust persistence and schema columns**
 
 Extend `api/crates/storage-pg/src/_tests/plugin_repository_tests.rs` and `api/crates/storage-pg/src/_tests/migration_smoke.rs` with cases like:
 
@@ -380,7 +380,7 @@ async fn migration_smoke_creates_plugin_trust_columns_and_constraints() {
 }
 ```
 
-- [ ] **Step 2: Run the targeted storage tests to confirm the contract is still missing**
+- [x] **Step 2: Run the targeted storage tests to confirm the contract is still missing**
 
 Run:
 
@@ -391,7 +391,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p storage-pg migration_smoke_crea
 
 Expected: FAIL because `trust_level`, `signature_algorithm`, and `signing_key_id` are not in the schema or the Rust structs yet.
 
-- [ ] **Step 3: Add the migration that introduces the new fields and normalizes legacy source values**
+- [x] **Step 3: Add the migration that introduces the new fields and normalizes legacy source values**
 
 Create `api/crates/storage-pg/migrations/20260419183000_add_plugin_install_trust_fields.sql`:
 
@@ -421,7 +421,7 @@ alter table plugin_installations
         check (trust_level in ('verified_official', 'checksum_only', 'unverified'));
 ```
 
-- [ ] **Step 4: Extend the domain and repository contracts with the new persisted fields**
+- [x] **Step 4: Extend the domain and repository contracts with the new persisted fields**
 
 Update `api/crates/domain/src/model_provider.rs` and `api/crates/control-plane/src/ports.rs`:
 
@@ -475,7 +475,7 @@ pub struct UpsertPluginInstallationInput {
 
 Then thread the new fields through `plugin_mapper.rs` and `plugin_repository.rs` `insert/select/update` SQL.
 
-- [ ] **Step 5: Rerun the storage tests and migration smoke**
+- [x] **Step 5: Rerun the storage tests and migration smoke**
 
 Run:
 
@@ -486,7 +486,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p storage-pg migration_smoke_crea
 
 Expected: PASS, and repository reads/writes now preserve `trust_level + signature_*`.
 
-- [ ] **Step 6: Commit the persistence layer changes**
+- [x] **Step 6: Commit the persistence layer changes**
 
 ```bash
 git add \

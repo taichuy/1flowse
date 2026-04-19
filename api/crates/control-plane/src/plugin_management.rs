@@ -17,10 +17,10 @@ use crate::{
     errors::ControlPlaneError,
     ports::{
         AuthRepository, CreatePluginAssignmentInput, CreatePluginTaskInput,
-        ModelProviderRepository, OfficialPluginSourcePort, PluginRepository,
-        ProviderRuntimePort, ReassignModelProviderInstancesInput,
-        UpdatePluginInstallationEnabledInput, UpdatePluginTaskStatusInput,
-        UpsertModelProviderCatalogCacheInput, UpsertPluginInstallationInput,
+        ModelProviderRepository, OfficialPluginSourcePort, PluginRepository, ProviderRuntimePort,
+        ReassignModelProviderInstancesInput, UpdatePluginInstallationEnabledInput,
+        UpdatePluginTaskStatusInput, UpsertModelProviderCatalogCacheInput,
+        UpsertPluginInstallationInput,
     },
 };
 
@@ -132,17 +132,42 @@ pub struct PluginManagementService<R, H> {
 
 struct InstallSourceMetadata {
     source_kind: String,
+    trust_level: String,
     checksum: Option<String>,
     signature_status: Option<String>,
+    signature_algorithm: Option<String>,
+    signing_key_id: Option<String>,
 }
 
 impl InstallSourceMetadata {
     fn uploaded_or_downloaded() -> Self {
         Self {
-            source_kind: "downloaded_or_uploaded".to_string(),
+            source_kind: "uploaded".to_string(),
+            trust_level: "unverified".to_string(),
             checksum: None,
             signature_status: None,
+            signature_algorithm: None,
+            signing_key_id: None,
         }
+    }
+
+    fn from_registry_download(checksum: String, signature_status: String) -> Self {
+        Self {
+            source_kind: "official_registry".to_string(),
+            trust_level: derive_trust_level("official_registry", Some(signature_status.as_str())),
+            checksum: Some(checksum),
+            signature_status: Some(signature_status),
+            signature_algorithm: None,
+            signing_key_id: None,
+        }
+    }
+}
+
+fn derive_trust_level(source_kind: &str, signature_status: Option<&str>) -> String {
+    match signature_status {
+        Some("verified") => "verified_official".to_string(),
+        _ if source_kind == "uploaded" => "unverified".to_string(),
+        _ => "checksum_only".to_string(),
     }
 }
 
@@ -358,11 +383,10 @@ where
                         actor_user_id: command.actor_user_id,
                         package_root: package_root.display().to_string(),
                     },
-                    InstallSourceMetadata {
-                        source_kind: "official_registry".to_string(),
-                        checksum: Some(downloaded.checksum.clone()),
-                        signature_status: Some(downloaded.signature_status.clone()),
-                    },
+                    InstallSourceMetadata::from_registry_download(
+                        downloaded.checksum.clone(),
+                        downloaded.signature_status.clone(),
+                    ),
                 )
                 .await?;
             self.enable_plugin(EnablePluginCommand {
@@ -419,7 +443,10 @@ where
         let target = match installed_target {
             Some(installation) => installation,
             None => {
-                let downloaded = self.official_source.download_plugin(&official_entry).await?;
+                let downloaded = self
+                    .official_source
+                    .download_plugin(&official_entry)
+                    .await?;
                 let package_root = downloaded.package_root.clone();
                 let install_result = async {
                     self.install_plugin_with_metadata(
@@ -427,11 +454,10 @@ where
                             actor_user_id: command.actor_user_id,
                             package_root: package_root.display().to_string(),
                         },
-                        InstallSourceMetadata {
-                            source_kind: "official_registry".to_string(),
-                            checksum: Some(downloaded.checksum.clone()),
-                            signature_status: Some(downloaded.signature_status.clone()),
-                        },
+                        InstallSourceMetadata::from_registry_download(
+                            downloaded.checksum.clone(),
+                            downloaded.signature_status.clone(),
+                        ),
                     )
                     .await
                 }
@@ -508,11 +534,14 @@ where
                     protocol: installed_package.provider.protocol.clone(),
                     display_name: installed_package.manifest.display_name.clone(),
                     source_kind: source_metadata.source_kind.clone(),
+                    trust_level: source_metadata.trust_level.clone(),
                     verification_status: domain::PluginVerificationStatus::Valid,
                     enabled: false,
                     install_path: install_path.display().to_string(),
                     checksum: source_metadata.checksum.clone(),
                     signature_status: source_metadata.signature_status.clone(),
+                    signature_algorithm: source_metadata.signature_algorithm.clone(),
+                    signing_key_id: source_metadata.signing_key_id.clone(),
                     metadata_json: json!({
                         "help_url": installed_package.provider.help_url,
                         "default_base_url": installed_package.provider.default_base_url,

@@ -23,13 +23,12 @@ use crate::{
     },
     ports::{
         AuthRepository, CreateModelProviderInstanceInput, CreatePluginAssignmentInput,
-        CreatePluginTaskInput, ModelProviderRepository,
-        DownloadedOfficialPluginPackage, OfficialPluginSourceEntry, OfficialPluginSourcePort,
-        PluginRepository, ProviderRuntimeInvocationOutput, ProviderRuntimePort,
-        ReassignModelProviderInstancesInput, UpdateModelProviderInstanceInput,
-        UpdatePluginInstallationEnabledInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
-        UpsertModelProviderCatalogCacheInput, UpsertModelProviderSecretInput,
-        UpsertPluginInstallationInput,
+        CreatePluginTaskInput, DownloadedOfficialPluginPackage, ModelProviderRepository,
+        OfficialPluginSourceEntry, OfficialPluginSourcePort, PluginRepository,
+        ProviderRuntimeInvocationOutput, ProviderRuntimePort, ReassignModelProviderInstancesInput,
+        UpdateModelProviderInstanceInput, UpdatePluginInstallationEnabledInput,
+        UpdatePluginTaskStatusInput, UpdateProfileInput, UpsertModelProviderCatalogCacheInput,
+        UpsertModelProviderSecretInput, UpsertPluginInstallationInput,
     },
 };
 use domain::{
@@ -229,11 +228,14 @@ impl PluginRepository for MemoryPluginManagementRepository {
             protocol: input.protocol.clone(),
             display_name: input.display_name.clone(),
             source_kind: input.source_kind.clone(),
+            trust_level: input.trust_level.clone(),
             verification_status: input.verification_status,
             enabled: input.enabled,
             install_path: input.install_path.clone(),
             checksum: input.checksum.clone(),
             signature_status: input.signature_status.clone(),
+            signature_algorithm: input.signature_algorithm.clone(),
+            signing_key_id: input.signing_key_id.clone(),
             metadata_json: input.metadata_json.clone(),
             created_by: input.actor_user_id,
             created_at,
@@ -817,11 +819,14 @@ capabilities:
             protocol: "openai_compatible".into(),
             display_name: "Fixture Provider".into(),
             source_kind: "official_registry".into(),
+            trust_level: "checksum_only".into(),
             verification_status: domain::PluginVerificationStatus::Valid,
             enabled,
             install_path: package_root.display().to_string(),
             checksum: None,
             signature_status: None,
+            signature_algorithm: None,
+            signing_key_id: None,
             metadata_json: json!({}),
             actor_user_id: repository.actor.user_id,
         })
@@ -874,12 +879,22 @@ async fn plugin_management_service_lists_provider_families_with_current_and_late
         &install_root,
     );
 
-    let installation_v1 =
-        seed_test_installation(&repository, &install_root, "openai_compatible", "0.1.0", true)
-            .await;
-    let _installation_v2 =
-        seed_test_installation(&repository, &install_root, "openai_compatible", "0.2.0", true)
-            .await;
+    let installation_v1 = seed_test_installation(
+        &repository,
+        &install_root,
+        "openai_compatible",
+        "0.1.0",
+        true,
+    )
+    .await;
+    let _installation_v2 = seed_test_installation(
+        &repository,
+        &install_root,
+        "openai_compatible",
+        "0.2.0",
+        true,
+    )
+    .await;
     repository
         .create_assignment(&CreatePluginAssignmentInput {
             installation_id: installation_v1,
@@ -890,7 +905,10 @@ async fn plugin_management_service_lists_provider_families_with_current_and_late
         .await
         .unwrap();
 
-    let families = service.list_families(repository.actor.user_id).await.unwrap();
+    let families = service
+        .list_families(repository.actor.user_id)
+        .await
+        .unwrap();
     assert_eq!(families.len(), 1);
     assert_eq!(families[0].provider_code, "openai_compatible");
     assert_eq!(families[0].current_version, "0.1.0");
@@ -914,12 +932,22 @@ async fn plugin_management_service_switches_to_a_local_version_without_redownloa
         &install_root,
     );
 
-    let current_installation =
-        seed_test_installation(&repository, &install_root, "fixture_provider", "0.1.0", true)
-            .await;
-    let target_installation =
-        seed_test_installation(&repository, &install_root, "fixture_provider", "0.2.0", true)
-            .await;
+    let current_installation = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.1.0",
+        true,
+    )
+    .await;
+    let target_installation = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.2.0",
+        true,
+    )
+    .await;
     repository
         .create_assignment(&CreatePluginAssignmentInput {
             installation_id: current_installation,
@@ -954,7 +982,8 @@ async fn plugin_management_service_switches_version_and_invalidates_provider_cac
         &["plugin_config.view.all", "plugin_config.configure.all"],
     ));
     let runtime = MemoryProviderRuntime::default();
-    let install_root = std::env::temp_dir().join(format!("plugin-switch-migrate-{}", Uuid::now_v7()));
+    let install_root =
+        std::env::temp_dir().join(format!("plugin-switch-migrate-{}", Uuid::now_v7()));
     let service = PluginManagementService::new(
         repository.clone(),
         runtime,
@@ -962,12 +991,22 @@ async fn plugin_management_service_switches_version_and_invalidates_provider_cac
         &install_root,
     );
 
-    let current_installation =
-        seed_test_installation(&repository, &install_root, "fixture_provider", "0.1.0", true)
-            .await;
-    let target_installation =
-        seed_test_installation(&repository, &install_root, "fixture_provider", "0.2.0", true)
-            .await;
+    let current_installation = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.1.0",
+        true,
+    )
+    .await;
+    let target_installation = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.2.0",
+        true,
+    )
+    .await;
     repository
         .create_assignment(&CreatePluginAssignmentInput {
             installation_id: current_installation,
@@ -1004,7 +1043,9 @@ async fn plugin_management_service_switches_version_and_invalidates_provider_cac
     assert_eq!(task.task_kind, PluginTaskKind::SwitchVersion);
     assert_eq!(task.detail_json["migrated_instance_count"], 2);
     assert_eq!(
-        repository.assignment_installation_id("fixture_provider").await,
+        repository
+            .assignment_installation_id("fixture_provider")
+            .await,
         target_installation
     );
     assert_eq!(
@@ -1066,12 +1107,22 @@ async fn plugin_management_service_upgrades_to_latest_without_redownloading_when
         &install_root,
     );
 
-    let current_installation =
-        seed_test_installation(&repository, &install_root, "fixture_provider", "0.1.0", true)
-            .await;
-    let target_installation =
-        seed_test_installation(&repository, &install_root, "fixture_provider", "0.2.0", false)
-            .await;
+    let current_installation = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.1.0",
+        true,
+    )
+    .await;
+    let target_installation = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.2.0",
+        false,
+    )
+    .await;
     repository
         .create_assignment(&CreatePluginAssignmentInput {
             installation_id: current_installation,

@@ -187,3 +187,29 @@ async fn bootstrap_repository_upserts_password_local_and_root_user() {
         "password-local"
     );
 }
+
+#[tokio::test]
+async fn migration_smoke_creates_plugin_trust_columns_and_constraints() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let schema: String = sqlx::query_scalar("select current_schema()")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let columns: Vec<String> = sqlx::query_scalar(
+        r#"
+        select column_name
+        from information_schema.columns
+        where table_schema = $1
+          and table_name = 'plugin_installations'
+        "#,
+    )
+    .bind(&schema)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    assert!(columns.contains(&"trust_level".to_string()));
+    assert!(columns.contains(&"signature_algorithm".to_string()));
+    assert!(columns.contains(&"signing_key_id".to_string()));
+}

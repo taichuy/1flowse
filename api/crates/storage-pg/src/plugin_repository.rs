@@ -28,11 +28,14 @@ fn map_installation(row: sqlx::postgres::PgRow) -> Result<domain::PluginInstalla
         protocol: row.get("protocol"),
         display_name: row.get("display_name"),
         source_kind: row.get("source_kind"),
+        trust_level: row.get("trust_level"),
         verification_status: row.get("verification_status"),
         enabled: row.get("enabled"),
         install_path: row.get("install_path"),
         checksum: row.get("checksum"),
         signature_status: row.get("signature_status"),
+        signature_algorithm: row.get("signature_algorithm"),
+        signing_key_id: row.get("signing_key_id"),
         metadata_json: row.get("metadata_json"),
         created_by: row.get("created_by"),
         created_at: row.get("created_at"),
@@ -85,15 +88,18 @@ impl PluginRepository for PgControlPlaneStore {
                 protocol,
                 display_name,
                 source_kind,
+                trust_level,
                 verification_status,
                 enabled,
                 install_path,
                 checksum,
                 signature_status,
+                signature_algorithm,
+                signing_key_id,
                 metadata_json,
                 created_by
             ) values (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
             )
             on conflict (plugin_id) do update
             set
@@ -103,11 +109,14 @@ impl PluginRepository for PgControlPlaneStore {
                 protocol = excluded.protocol,
                 display_name = excluded.display_name,
                 source_kind = excluded.source_kind,
+                trust_level = excluded.trust_level,
                 verification_status = excluded.verification_status,
                 enabled = excluded.enabled,
                 install_path = excluded.install_path,
                 checksum = excluded.checksum,
                 signature_status = excluded.signature_status,
+                signature_algorithm = excluded.signature_algorithm,
+                signing_key_id = excluded.signing_key_id,
                 metadata_json = excluded.metadata_json,
                 updated_at = now()
             returning
@@ -119,11 +128,14 @@ impl PluginRepository for PgControlPlaneStore {
                 protocol,
                 display_name,
                 source_kind,
+                trust_level,
                 verification_status,
                 enabled,
                 install_path,
                 checksum,
                 signature_status,
+                signature_algorithm,
+                signing_key_id,
                 metadata_json,
                 created_by,
                 created_at,
@@ -138,11 +150,14 @@ impl PluginRepository for PgControlPlaneStore {
         .bind(&input.protocol)
         .bind(&input.display_name)
         .bind(&input.source_kind)
+        .bind(&input.trust_level)
         .bind(input.verification_status.as_str())
         .bind(input.enabled)
         .bind(&input.install_path)
         .bind(input.checksum.as_deref())
         .bind(input.signature_status.as_deref())
+        .bind(input.signature_algorithm.as_deref())
+        .bind(input.signing_key_id.as_deref())
         .bind(&input.metadata_json)
         .bind(input.actor_user_id)
         .fetch_one(self.pool())
@@ -166,11 +181,14 @@ impl PluginRepository for PgControlPlaneStore {
                 protocol,
                 display_name,
                 source_kind,
+                trust_level,
                 verification_status,
                 enabled,
                 install_path,
                 checksum,
                 signature_status,
+                signature_algorithm,
+                signing_key_id,
                 metadata_json,
                 created_by,
                 created_at,
@@ -198,11 +216,14 @@ impl PluginRepository for PgControlPlaneStore {
                 protocol,
                 display_name,
                 source_kind,
+                trust_level,
                 verification_status,
                 enabled,
                 install_path,
                 checksum,
                 signature_status,
+                signature_algorithm,
+                signing_key_id,
                 metadata_json,
                 created_by,
                 created_at,
@@ -237,11 +258,14 @@ impl PluginRepository for PgControlPlaneStore {
                 protocol,
                 display_name,
                 source_kind,
+                trust_level,
                 verification_status,
                 enabled,
                 install_path,
                 checksum,
                 signature_status,
+                signature_algorithm,
+                signing_key_id,
                 metadata_json,
                 created_by,
                 created_at,

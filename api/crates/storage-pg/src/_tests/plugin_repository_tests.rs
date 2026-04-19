@@ -85,12 +85,15 @@ async fn plugin_repository_persists_installations_assignments_and_tasks() {
             contract_version: "1flowbase.provider/v1".into(),
             protocol: "openai_compatible".into(),
             display_name: "Fixture Provider".into(),
-            source_kind: "downloaded_or_uploaded".into(),
+            source_kind: "uploaded".into(),
+            trust_level: "unverified".into(),
             verification_status: PluginVerificationStatus::Valid,
             enabled: true,
             install_path: "/tmp/plugin-installed/fixture_provider/0.1.0".into(),
             checksum: Some("abc123".into()),
             signature_status: Some("unsigned".into()),
+            signature_algorithm: None,
+            signing_key_id: None,
             metadata_json: json!({ "help_url": "https://example.com/help" }),
             actor_user_id: actor.id,
         },
@@ -169,11 +172,14 @@ async fn plugin_repository_repoints_assignment_by_workspace_and_provider_code() 
             protocol: "openai_compatible".into(),
             display_name: "Fixture Provider".into(),
             source_kind: "official_registry".into(),
+            trust_level: "checksum_only".into(),
             verification_status: PluginVerificationStatus::Valid,
             enabled: true,
             install_path: "/tmp/plugin-installed/fixture_provider/0.1.0".into(),
             checksum: None,
             signature_status: None,
+            signature_algorithm: None,
+            signing_key_id: None,
             metadata_json: json!({}),
             actor_user_id: actor.id,
         },
@@ -191,11 +197,14 @@ async fn plugin_repository_repoints_assignment_by_workspace_and_provider_code() 
             protocol: "openai_compatible".into(),
             display_name: "Fixture Provider".into(),
             source_kind: "official_registry".into(),
+            trust_level: "checksum_only".into(),
             verification_status: PluginVerificationStatus::Valid,
             enabled: true,
             install_path: "/tmp/plugin-installed/fixture_provider/0.2.0".into(),
             checksum: None,
             signature_status: None,
+            signature_algorithm: None,
+            signing_key_id: None,
             metadata_json: json!({}),
             actor_user_id: actor.id,
         },
@@ -232,4 +241,42 @@ async fn plugin_repository_repoints_assignment_by_workspace_and_provider_code() 
     assert_eq!(assignments.len(), 1);
     assert_eq!(assignments[0].provider_code, "fixture_provider");
     assert_eq!(assignments[0].installation_id, installation_v2.id);
+}
+
+#[tokio::test]
+async fn plugin_repository_persists_trust_level_and_signature_metadata() {
+    let (store, _workspace, actor) = seed_store().await;
+    let installation = PluginRepository::upsert_installation(
+        &store,
+        &UpsertPluginInstallationInput {
+            installation_id: Uuid::now_v7(),
+            provider_code: "openai_compatible".into(),
+            plugin_id: "1flowbase.openai_compatible@0.2.0".into(),
+            plugin_version: "0.2.0".into(),
+            contract_version: "1flowbase.provider/v1".into(),
+            protocol: "openai_compatible".into(),
+            display_name: "OpenAI Compatible".into(),
+            source_kind: "mirror_registry".into(),
+            trust_level: "verified_official".into(),
+            verification_status: PluginVerificationStatus::Valid,
+            enabled: true,
+            install_path: "/tmp/plugin-installed/openai_compatible/0.2.0".into(),
+            checksum: Some("sha256:abc123".into()),
+            signature_status: Some("verified".into()),
+            signature_algorithm: Some("ed25519".into()),
+            signing_key_id: Some("official-key-2026-04".into()),
+            metadata_json: json!({}),
+            actor_user_id: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(installation.trust_level, "verified_official");
+    assert_eq!(installation.signature_status.as_deref(), Some("verified"));
+    assert_eq!(installation.signature_algorithm.as_deref(), Some("ed25519"));
+    assert_eq!(
+        installation.signing_key_id.as_deref(),
+        Some("official-key-2026-04")
+    );
 }
