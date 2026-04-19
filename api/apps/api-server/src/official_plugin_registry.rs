@@ -4,6 +4,7 @@ use control_plane::ports::{
     DownloadedOfficialPluginPackage, OfficialPluginCatalogSnapshot, OfficialPluginCatalogSource,
     OfficialPluginSourceEntry, OfficialPluginSourcePort,
 };
+use plugin_framework::RuntimeTarget;
 use reqwest::Client;
 use serde::Deserialize;
 
@@ -65,6 +66,9 @@ impl ApiOfficialPluginRegistry {
 impl OfficialPluginSourcePort for ApiOfficialPluginRegistry {
     async fn list_official_catalog(&self) -> Result<OfficialPluginCatalogSnapshot> {
         let document = self.fetch_registry().await?;
+        let host = RuntimeTarget::current_host().unwrap_or_else(|_| {
+            RuntimeTarget::from_rust_target_triple("x86_64-unknown-linux-musl").unwrap()
+        });
         Ok(OfficialPluginCatalogSnapshot {
             source: OfficialPluginCatalogSource {
                 source_kind: self.source_kind.clone(),
@@ -74,7 +78,24 @@ impl OfficialPluginSourcePort for ApiOfficialPluginRegistry {
             entries: document
                 .plugins
                 .into_iter()
-                .map(OfficialPluginSourceEntry::from)
+                .filter_map(|entry| {
+                    let selected = select_artifact_for_host(&entry, &host)?;
+                    Some(OfficialPluginSourceEntry {
+                        release_tag: format!("{}-v{}", entry.provider_code, entry.latest_version),
+                        plugin_id: entry.plugin_id,
+                        provider_code: entry.provider_code,
+                        display_name: entry.display_name,
+                        protocol: entry.protocol,
+                        latest_version: entry.latest_version,
+                        download_url: selected.download_url,
+                        checksum: selected.checksum,
+                        trust_mode: default_trust_mode(),
+                        signature_algorithm: selected.signature_algorithm,
+                        signing_key_id: selected.signing_key_id,
+                        help_url: entry.help_url,
+                        model_discovery_mode: entry.model_discovery_mode,
+                    })
+                })
                 .collect(),
         })
     }
@@ -107,44 +128,56 @@ struct OfficialRegistryDocument {
     plugins: Vec<OfficialRegistryEntry>,
 }
 
-#[derive(Debug, Deserialize)]
-struct OfficialRegistryEntry {
-    plugin_id: String,
-    provider_code: String,
-    display_name: String,
-    protocol: String,
-    latest_version: String,
-    release_tag: String,
-    download_url: String,
-    checksum: String,
-    #[serde(default = "default_trust_mode")]
-    trust_mode: String,
+#[derive(Debug, Clone, Deserialize)]
+pub struct OfficialRegistryArtifact {
+    pub os: String,
+    pub arch: String,
     #[serde(default)]
-    signature_algorithm: Option<String>,
+    pub libc: Option<String>,
+    pub rust_target: String,
+    pub download_url: String,
+    pub checksum: String,
     #[serde(default)]
-    signing_key_id: Option<String>,
-    help_url: Option<String>,
-    model_discovery_mode: String,
+    pub signature_algorithm: Option<String>,
+    #[serde(default)]
+    pub signing_key_id: Option<String>,
 }
 
-impl From<OfficialRegistryEntry> for OfficialPluginSourceEntry {
-    fn from(entry: OfficialRegistryEntry) -> Self {
-        Self {
-            plugin_id: entry.plugin_id,
-            provider_code: entry.provider_code,
-            display_name: entry.display_name,
-            protocol: entry.protocol,
-            latest_version: entry.latest_version,
-            release_tag: entry.release_tag,
-            download_url: entry.download_url,
-            checksum: entry.checksum,
-            trust_mode: entry.trust_mode,
-            signature_algorithm: entry.signature_algorithm,
-            signing_key_id: entry.signing_key_id,
-            help_url: entry.help_url,
-            model_discovery_mode: entry.model_discovery_mode,
-        }
-    }
+#[derive(Debug, Clone, Deserialize)]
+pub struct OfficialRegistryEntry {
+    pub plugin_id: String,
+    pub provider_code: String,
+    pub display_name: String,
+    pub protocol: String,
+    pub latest_version: String,
+    pub help_url: Option<String>,
+    pub model_discovery_mode: String,
+    #[serde(default)]
+    pub artifacts: Vec<OfficialRegistryArtifact>,
+}
+
+pub fn select_artifact_for_host(
+    entry: &OfficialRegistryEntry,
+    host: &RuntimeTarget,
+) -> Option<OfficialRegistryArtifact> {
+    entry
+        .artifacts
+        .iter()
+        .cloned()
+        .max_by_key(|artifact| {
+            if artifact.os != host.os || artifact.arch != host.arch {
+                return 0_u8;
+            }
+
+            match (host.libc.as_deref(), artifact.libc.as_deref()) {
+                (Some(left), Some(right)) if left == right => 3,
+                (Some("gnu"), Some("musl")) if host.os == "linux" => 2,
+                (_, None) => 1,
+                (None, Some(_)) => 1,
+                _ => 0,
+            }
+        })
+        .filter(|artifact| artifact.os == host.os && artifact.arch == host.arch)
 }
 
 fn default_trust_mode() -> String {

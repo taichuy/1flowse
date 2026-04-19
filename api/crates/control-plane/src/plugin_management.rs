@@ -697,7 +697,7 @@ where
                     plugin_version: installed_package.manifest.version.clone(),
                     contract_version: installed_package.manifest.contract_version.clone(),
                     protocol: installed_package.provider.protocol.clone(),
-                    display_name: installed_package.manifest.display_name.clone(),
+                    display_name: installed_package.provider.display_name.clone(),
                     source_kind: source_metadata.source_kind.clone(),
                     trust_level: source_metadata.trust_level.clone(),
                     verification_status: domain::PluginVerificationStatus::Valid,
@@ -711,7 +711,7 @@ where
                         "help_url": installed_package.provider.help_url,
                         "default_base_url": installed_package.provider.default_base_url,
                         "model_discovery_mode": format!("{:?}", installed_package.provider.model_discovery_mode).to_ascii_lowercase(),
-                        "supported_model_types": installed_package.manifest.supported_model_types,
+                        "supported_model_types": installed_package.manifest.capabilities.model_types,
                     }),
                     actor_user_id: command.actor_user_id,
                 })

@@ -8,6 +8,7 @@ mod me_routes;
 mod member_routes;
 mod model_definition_routes;
 mod model_provider_routes;
+mod official_plugin_registry_tests;
 mod openapi_alignment;
 mod openapi_docs_tests;
 mod plugin_routes;

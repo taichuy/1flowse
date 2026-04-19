@@ -529,7 +529,7 @@ git commit -m "feat: run provider binaries over stdio json"
 - Modify: `api/apps/api-server/src/_tests/mod.rs`
 - Modify: `api/apps/api-server/src/official_plugin_registry.rs`
 
-- [ ] **Step 1: Write the failing registry-selection tests for `artifacts[]`**
+- [x] **Step 1: Write the failing registry-selection tests for `artifacts[]`**
 
 Create `api/apps/api-server/src/_tests/official_plugin_registry_tests.rs` with focused unit tests:
 
@@ -615,7 +615,7 @@ fn select_artifact_returns_none_when_no_platform_matches() {
 }
 ```
 
-- [ ] **Step 2: Run the focused `api-server` tests to capture the RED baseline**
+- [x] **Step 2: Run the focused `api-server` tests to capture the RED baseline**
 
 Run:
 
@@ -625,7 +625,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p api-server official_plugin_regi
 
 Expected: FAIL because the registry parser still expects `download_url` and `checksum` at the top level and has no `artifacts[]` selection helper.
 
-- [ ] **Step 3: Implement the artifact parser and host-target selection inside the registry client**
+- [x] **Step 3: Implement the artifact parser and host-target selection inside the registry client**
 
 Reshape `api/apps/api-server/src/official_plugin_registry.rs` like this:
 
@@ -707,7 +707,7 @@ let entries = document
     .collect();
 ```
 
-- [ ] **Step 4: Rerun the registry client tests**
+- [x] **Step 4: Rerun the registry client tests**
 
 Run:
 
@@ -717,7 +717,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p api-server official_plugin_regi
 
 Expected: PASS, with the host repo only ever exposing one selected artifact per logical official plugin entry.
 
-- [ ] **Step 5: Commit the host-side artifact selection**
+- [x] **Step 5: Commit the host-side artifact selection**
 
 ```bash
 git add \
