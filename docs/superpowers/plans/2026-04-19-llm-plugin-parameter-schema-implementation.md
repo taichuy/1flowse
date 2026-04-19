@@ -14,6 +14,25 @@
 
 **Out Of Scope:** 自动从 `json_schema` 反推节点输出契约、结构化输出独立变量、插件自定义 React 控件、官方插件仓库里的 schema 补齐工作、多节点类型共享参数面板抽象
 
+## Execution Status
+
+**Status:** 已完成实现与验证（2026-04-19）
+
+**Completion Summary:** 本计划对应的实现已经落地：后端补齐了 `parameter_form` / `model_parameters` contract 与路由暴露，运行时完成了 `LLM` 参数透传，`shared schema-ui` 新增了 `dynamic_form` 渲染能力，`AgentFlow` 的 `LLM` 节点已经切到 `model_provider / llm_parameters / response_format` 新对象结构，并接入插件驱动的动态参数表单与 `json_schema` 编辑。
+
+**Execution Notes:** 实际实现过程中有少量文件级偏移，例如 `NodeInspector` 接管了顶层 config view 渲染，`LlmModelField` 收口为模型选择容器而不是单独新增 `LlmProviderSelectorField.tsx`，部分原计划列出的文件无需修改。下方 checklist 保留为原始实施计划，不再逐项回填为完成态，最终状态以本节和提交记录为准。
+
+**Verification Evidence:**
+- `rtk cargo test -p control-plane model_provider_service_tests`
+- `rtk cargo test -p api-server model_provider_routes`
+- `rtk cargo test -p orchestration-runtime execution_engine_tests`
+- `rtk cargo test -p orchestration-runtime preview_executor_tests`
+- `rtk pnpm --dir web --filter @1flowbase/web exec vitest run src/features/agent-flow/_tests src/shared/schema-ui/_tests/schema-runtime.test.tsx`
+- `rtk pnpm --dir web --filter @1flowbase/web lint`
+- `rtk pnpm --dir web --filter @1flowbase/web build`
+
+**Implementation Commit:** `c09bb734` (`feat: implement llm plugin parameter forms`)
+
 ---
 
 ## File Structure
