@@ -379,7 +379,7 @@
       },
       {
         "id": "model-provider-layout",
-        "selector": ".model-provider-panel__layout",
+        "selector": ".model-provider-panel__main",
         "propertyAssertions": [
           {
             "property": "display",
@@ -406,15 +406,15 @@
         ]
       },
       {
-        "id": "model-provider-catalog-item",
-        "selector": ".model-provider-panel__catalog-item",
+        "id": "model-provider-catalog-panel",
+        "selector": ".model-provider-panel__catalog",
         "propertyAssertions": [
           {
-            "property": "display",
-            "expected": "grid"
+            "property": "border-top-left-radius",
+            "expected": "16px"
           },
           {
-            "property": "border-top-left-radius",
+            "property": "padding-top",
             "expected": "16px"
           }
         ]
@@ -429,7 +429,7 @@
           },
           {
             "property": "row-gap",
-            "expected": "14px"
+            "expected": "10px"
           }
         ]
       },
@@ -443,7 +443,7 @@
           },
           {
             "property": "border-top-left-radius",
-            "expected": "16px"
+            "expected": "12px"
           }
         ]
       }

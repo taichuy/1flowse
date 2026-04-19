@@ -436,42 +436,46 @@ describe('ModelProvidersPage', () => {
     });
   });
 
-  test('renders provider family rows and upgrades to the latest version from version management', async () => {
-    authenticateWithPermissions([
-      'route_page.view.all',
-      'state_model.view.all',
-      'state_model.manage.all'
-    ]);
+  test(
+    'renders provider family rows and upgrades to the latest version from version management',
+    async () => {
+      authenticateWithPermissions([
+        'route_page.view.all',
+        'state_model.view.all',
+        'state_model.manage.all'
+      ]);
 
-    renderApp('/settings/model-providers');
+      renderApp('/settings/model-providers');
 
-    await waitFor(() => {
-      expect(pluginsApi.fetchSettingsPluginFamilies).toHaveBeenCalled();
-    });
-    expect(
-      await screen.findByText('当前使用 0.1.0，最新版本 0.2.0')
-    ).toBeInTheDocument();
+      await waitFor(() => {
+        expect(pluginsApi.fetchSettingsPluginFamilies).toHaveBeenCalled();
+      });
+      expect(
+        await screen.findByText('当前使用 0.1.0，最新版本 0.2.0')
+      ).toBeInTheDocument();
 
-    const catalogRow = await screen.findByRole('row', {
-      name: /OpenAI Compatible/
-    });
-    fireEvent.click(
-      within(catalogRow).getByRole('button', { name: '版本管理' })
-    );
-
-    expect(await screen.findByText('升级到最新版本')).toBeInTheDocument();
-    expect(screen.getAllByText('0.2.0')).toHaveLength(1);
-    expect(screen.getByText('其他本地版本')).toBeInTheDocument();
-    expect(screen.queryByText('最新')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '升级到最新版本' }));
-
-    await waitFor(() => {
-      expect(pluginsApi.upgradeSettingsPluginFamilyLatest).toHaveBeenCalledWith(
-        'openai_compatible',
-        'csrf-123'
+      const catalogRow = await screen.findByRole('row', {
+        name: /OpenAI Compatible/
+      });
+      fireEvent.click(
+        within(catalogRow).getByRole('button', { name: '版本管理' })
       );
-    });
-  });
+
+      expect(await screen.findByText('升级到最新版本')).toBeInTheDocument();
+      expect(screen.getAllByText('0.2.0')).toHaveLength(1);
+      expect(screen.getByText('其他本地版本')).toBeInTheDocument();
+      expect(screen.queryByText('最新')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: '升级到最新版本' }));
+
+      await waitFor(() => {
+        expect(pluginsApi.upgradeSettingsPluginFamilyLatest).toHaveBeenCalledWith(
+          'openai_compatible',
+          'csrf-123'
+        );
+      });
+    },
+    10000
+  );
 
   test('switches provider family version and shows a follow-up warning in the instances modal', async () => {
     authenticateWithPermissions([

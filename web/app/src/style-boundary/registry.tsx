@@ -99,18 +99,25 @@ const styleBoundaryProviderOptions = {
   ]
 };
 
-const styleBoundaryOfficialPluginCatalog = [
-  {
-    plugin_id: '1flowbase.openai_compatible',
-    provider_code: 'openai_compatible',
-    display_name: 'OpenAI Compatible',
-    protocol: 'openai_responses',
-    latest_version: '0.1.0',
-    help_url: 'https://github.com/taichuy/1flowbase-official-plugins/tree/main/models/openai_compatible',
-    model_discovery_mode: 'hybrid',
-    install_status: 'assigned'
-  }
-];
+const styleBoundaryOfficialPluginCatalog = {
+  source_kind: 'official_registry',
+  source_label: '官方源',
+  registry_url:
+    'https://github.com/taichuy/1flowbase-official-plugins/releases/latest/download/official-registry.json',
+  entries: [
+    {
+      plugin_id: '1flowbase.openai_compatible',
+      provider_code: 'openai_compatible',
+      display_name: 'OpenAI Compatible',
+      protocol: 'openai_responses',
+      latest_version: '0.1.0',
+      help_url:
+        'https://github.com/taichuy/1flowbase-official-plugins/tree/main/models/openai_compatible',
+      model_discovery_mode: 'hybrid',
+      install_status: 'assigned'
+    }
+  ]
+};
 
 function getAccountPopupChildren() {
   const items = createAccountMenuItems() ?? [];

@@ -1273,14 +1273,18 @@ git commit -m "feat: expose plugin source trust and upload install"
 ```
 
 Actual on 2026-04-19:
-- Committed in the task-specific changeset with message `feat: expose plugin source trust and upload install`.
+- Committed as `c9617740 feat: expose plugin source trust and upload install`.
 
 ### Task 6: Run Full Verification And Close The Loop
 
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-19-plugin-trust-source-install.md`
+- Modify: `web/app/src/features/settings/pages/SettingsPage.tsx`
+- Modify: `web/app/src/features/settings/_tests/model-providers-page.test.tsx`
+- Modify: `web/app/src/style-boundary/registry.tsx`
+- Modify: `web/app/src/style-boundary/scenario-manifest.json`
 
-- [ ] **Step 1: Run the backend verification suite from the repo root**
+- [x] **Step 1: Run the backend verification suite from the repo root**
 
 ```bash
 rtk node scripts/node/verify-backend.js
@@ -1288,7 +1292,10 @@ rtk node scripts/node/verify-backend.js
 
 Expected: PASS for the repo-standard backend verification chain.
 
-- [ ] **Step 2: Run the required frontend lint, tests, and production build**
+Actual on 2026-04-19:
+- `rtk node scripts/node/verify-backend.js` passed end-to-end, including the new plugin intake, upload install, official catalog, migration smoke, and repository regression coverage.
+
+- [x] **Step 2: Run the required frontend lint, tests, and production build**
 
 ```bash
 rtk pnpm --dir web lint
@@ -1298,7 +1305,13 @@ rtk pnpm --dir web/app build
 
 Expected: PASS, satisfying `web/AGENTS.md` minimum frontend verification rules.
 
-- [ ] **Step 3: Run style-boundary verification for the settings page**
+Actual on 2026-04-19:
+- `rtk pnpm --dir web lint` passed; the only remaining output was two pre-existing `react-refresh/only-export-components` warnings in `agent-flow`, not in the settings/plugin files touched by this plan.
+- The first `rtk pnpm --dir web test` run surfaced two real regressions introduced by the new contract: `model-providers-page.test.tsx` needed a longer timeout for the slow version-management integration path, and `style-boundary/registry.tsx` still mocked `/api/console/plugins/official-catalog` as a plain array instead of `{ source_kind, source_label, registry_url, entries }`.
+- After fixing those issues and syncing the settings-page style-boundary manifest to the current layout selectors/values, `rtk pnpm --dir web test` passed with `49` files and `176` tests green.
+- `rtk pnpm --dir web/app build` passed; Vite emitted the existing large-chunk warning for the main bundle, but no type or build failure occurred.
+
+- [x] **Step 3: Run style-boundary verification for the settings page**
 
 ```bash
 rtk node scripts/node/check-style-boundary.js page page.settings
@@ -1306,7 +1319,11 @@ rtk node scripts/node/check-style-boundary.js page page.settings
 
 Expected: PASS for `page.settings`, proving the new upload/source/trust UI did not bleed across shell boundaries.
 
-- [ ] **Step 4: Run a final text-level diff check**
+Actual on 2026-04-19:
+- The first `rtk node scripts/node/check-style-boundary.js page page.settings` run caught stale manifest expectations that still pointed at the old card layout (`.model-provider-panel__layout`, `.model-provider-panel__catalog-item`, outdated `row-gap` / radius baselines).
+- After aligning `web/app/src/style-boundary/scenario-manifest.json` with the current settings page structure and spacing tokens, rerunning `rtk node scripts/node/check-style-boundary.js page page.settings` returned `PASS page.settings`.
+
+- [x] **Step 4: Run a final text-level diff check**
 
 ```bash
 rtk git diff --check
@@ -1314,9 +1331,21 @@ rtk git diff --check
 
 Expected: PASS with no whitespace or conflict-marker issues.
 
-- [ ] **Step 5: Commit the verification close-out**
+Actual on 2026-04-19:
+- `rtk git diff --check` passed after the verification fixes and again before the close-out commit.
+
+- [x] **Step 5: Commit the verification close-out**
 
 ```bash
-git add docs/superpowers/plans/2026-04-19-plugin-trust-source-install.md
+git add \
+  .memory/project-memory/2026-04-19-plugin-trust-source-install-plan-stage.md \
+  docs/superpowers/plans/2026-04-19-plugin-trust-source-install.md \
+  web/app/src/features/settings/pages/SettingsPage.tsx \
+  web/app/src/features/settings/_tests/model-providers-page.test.tsx \
+  web/app/src/style-boundary/registry.tsx \
+  web/app/src/style-boundary/scenario-manifest.json
 git commit -m "chore: verify plugin trust source install rollout"
 ```
+
+Actual on 2026-04-19:
+- Committed in the verification close-out changeset with message `chore: verify plugin trust source install rollout`.

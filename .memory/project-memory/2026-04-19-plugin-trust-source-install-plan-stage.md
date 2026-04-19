@@ -26,6 +26,8 @@ scope:
   - api/crates/control-plane/src/plugin_management.rs
   - api/crates/plugin-framework/src/package_intake.rs
   - web/app/src/features/settings/pages/SettingsPage.tsx
+  - web/app/src/style-boundary/registry.tsx
+  - web/app/src/style-boundary/scenario-manifest.json
 ---
 
 # 官方插件信任链与双入口安装进入实现计划阶段
@@ -70,4 +72,7 @@ scope:
 - Task 5 已完成：设置页现已拆开展示官方源/镜像源来源信息与 trust 标签，并新增浏览器上传插件入口；前端 client 已支持 `FormData` 上传，版本管理弹窗也改为同时展示来源与信任级别。为配合前端消费，`control-plane` / `api-server` 的安装与 family DTO 也补出了 `trust_level`、`signature_algorithm` 与 `signing_key_id`。
 - Task 5 的定向验证已再次跑通：`@1flowbase/api-client` 的 `transport.test.ts`、`@1flowbase/web` 的 `model-providers-page.test.tsx` 和 `settings-page.test.tsx` 均通过；同时补跑了 `control-plane` 的 provider family 回归、`api-server` 的 upload route 回归、`cargo fmt` 与 `git diff --check`，结果均为通过。
 - 在 Task 5 的 RED 阶段，计划里原始的合并 vitest 根命令确实暴露了 transport 缺口，但 `web` 根执行形态还同时碰到既有 `@1flowbase/ui` alias 解析噪音；因此后续 GREEN 验证固定改为 package-local vitest 命令，避免把非目标问题混入这轮实现判断。
-- 下一步进入 Task 6：执行仓库级 backend verify、前端 `lint/test/build`、`style-boundary` 校验，并在最终收尾 commit 中补齐计划文档的全量验证结果。
+- Task 5 已独立提交为 `c9617740`：设置页现已具备 official/mirror source metadata、trust 标签、上传插件入口，以及 `FormData` upload transport。
+- Task 6 的仓库级验证已完成：`rtk node scripts/node/verify-backend.js` 通过；`rtk pnpm --dir web lint` 通过，剩余仅两条既有 `agent-flow` fast-refresh warning；`rtk pnpm --dir web test` 在修正慢用例 timeout 与 style-boundary settings mock/manifest 基线后通过，最终为 `49` 个文件、`176` 条测试全绿；`rtk pnpm --dir web/app build` 通过，仅保留既有大 chunk warning；`rtk node scripts/node/check-style-boundary.js page page.settings` 通过；`rtk git diff --check` 通过。
+- 为完成 Task 6，这轮额外修了三处 close-out 噪音：`SettingsPage.tsx` 去掉了自己引入的 hooks lint warning；`model-providers-page.test.tsx` 为慢速版本管理集成用例显式加了 `10000ms` timeout；`style-boundary/registry.tsx` 与 `scenario-manifest.json` 同步到了新的 official catalog contract 与设置页当前 DOM / spacing 基线。
+- 当前整份 plan 已执行完毕，只待最终 close-out commit 落库；整个过程未修改 `1flowbase-official-plugins/*`，也未纳入仓库里现存的 `orchestration-runtime` 脏改动。

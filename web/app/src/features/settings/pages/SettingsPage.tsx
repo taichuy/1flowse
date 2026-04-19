@@ -70,6 +70,7 @@ function isTaskTerminal(status: string | null | undefined) {
 
 const EMPTY_MODEL_PROVIDER_INSTANCES: SettingsModelProviderInstance[] = [];
 const EMPTY_MODEL_PROVIDER_CATALOG: SettingsModelProviderCatalogEntry[] = [];
+const EMPTY_PLUGIN_FAMILIES: SettingsPluginFamilyEntry[] = [];
 const IDLE_MODEL_PROVIDER_MODELS_QUERY_KEY = [
   'settings',
   'model-providers',
@@ -170,7 +171,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
 
   const instances = instancesQuery.data ?? EMPTY_MODEL_PROVIDER_INSTANCES;
   const catalogEntries = catalogQuery.data ?? EMPTY_MODEL_PROVIDER_CATALOG;
-  const families = familiesQuery.data ?? [];
+  const families = familiesQuery.data ?? EMPTY_PLUGIN_FAMILIES;
   const officialCatalogEntries = officialCatalogQuery.data?.entries ?? [];
   const officialSourceMeta = officialCatalogQuery.data
     ? {
