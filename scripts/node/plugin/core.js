@@ -31,10 +31,12 @@ function usage() {
     启动目标插件目录下 demo/ 的本地静态服务。
 
   package <plugin-path> --out <output-dir>
-    生成过滤 demo/scripts 后的 .1flowbasepkg 安装产物，并返回 sha256 元数据。
+    生成过滤 demo/scripts/target 后的 .1flowbasepkg 安装产物，并返回 sha256 元数据。
     可选传入官方签名参数，将 _meta/official-release.json 与 .sig 一并写入包内。
 
 选项：
+  --runtime-binary <file>  package 时写入 bin/ 的已编译 provider 可执行文件
+  --target <triple>        package 时指定 rust target triple，例如 x86_64-unknown-linux-musl
   --host <host>        demo dev 监听地址，默认 127.0.0.1
   --port <port>        demo dev 监听端口，默认 4310；传 0 表示自动分配
   --runner-url <url>   传给 demo 页面显示的 plugin-runner 地址，默认 http://127.0.0.1:7801
@@ -146,7 +148,7 @@ function createDemoPackageRoot(pluginPath) {
 function createPackageArtifactRoot(pluginPath) {
   return createArtifactRoot(pluginPath, {
     prefix: '1flowbase-plugin-package',
-    excludedEntries: ['demo', 'scripts'],
+    excludedEntries: ['demo', 'scripts', 'target'],
   });
 }
 
@@ -158,16 +160,29 @@ function removeDirIfExists(targetPath) {
   fs.rmSync(targetPath, { recursive: true, force: true });
 }
 
-function createManifestTemplate({ pluginCode, pluginName }) {
-  return `plugin_code: ${pluginCode}
-display_name: ${pluginName}
+function createManifestTemplate({ pluginCode }) {
+  return `schema_version: 2
+plugin_type: model_provider
+plugin_code: ${pluginCode}
 version: 0.1.0
 contract_version: 1flowbase.provider/v1
-supported_model_types:
-  - llm
-runner:
-  language: nodejs
-  entrypoint: provider/${pluginCode}.js
+metadata:
+  author: taichuy
+provider:
+  definition: provider/${pluginCode}.yaml
+runtime:
+  kind: executable
+  protocol: stdio-json
+  executable:
+    path: bin/${pluginCode}-provider
+limits:
+  memory_bytes: 268435456
+  invoke_timeout_ms: 30000
+capabilities:
+  model_types:
+    - llm
+compat:
+  minimum_host_version: 0.1.0
 `;
 }
 
@@ -187,39 +202,46 @@ config_schema:
 `;
 }
 
-function createProviderRuntimeTemplate({ pluginCode }) {
-  return `'use strict';
+function createCargoTomlTemplate({ pluginCode }) {
+  return `[package]
+name = "${pluginCode}-provider"
+version = "0.1.0"
+edition = "2021"
 
-module.exports = {
-  providerCode: '${pluginCode}',
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+`;
+}
 
-  async validateProviderCredentials(input) {
-    return {
-      ok: true,
-      providerCode: '${pluginCode}',
-      received: {
-        base_url: input?.base_url ?? null,
-        api_key: input?.api_key ? '***' : null,
-      },
-    };
-  },
+function createRustMainTemplate({ pluginCode }) {
+  return `use std::io::{self, Read};
 
-  async listModels() {
-    return [
-      { code: '${pluginCode}_chat', label: 'Example Chat Model', family: 'llm' },
-      { code: '${pluginCode}_reasoning', label: 'Example Reasoning Model', family: 'llm' },
-    ];
-  },
+fn main() {
+    let mut stdin = String::new();
+    io::stdin().read_to_string(&mut stdin).unwrap();
 
-  async invoke(request) {
-    return {
-      type: 'result',
-      providerCode: '${pluginCode}',
-      output_text: 'Replace this stub with real provider integration.',
-      request,
-    };
-  },
-};
+    let payload: serde_json::Value =
+        serde_json::from_str(&stdin).unwrap_or(serde_json::Value::Null);
+    let model = payload
+        .get("input")
+        .and_then(|value| value.get("model"))
+        .and_then(|value| value.as_str())
+        .unwrap_or("generated-rust-scaffold");
+
+    println!(
+        "{}",
+        serde_json::json!({
+            "ok": true,
+            "result": {
+                "provider_code": "${pluginCode}",
+                "message": "generated rust scaffold",
+                "echo_model": model,
+            }
+        })
+    );
+}
 `;
 }
 
@@ -265,10 +287,11 @@ function createReadmeTemplate({ pluginCode, pluginName }) {
 
 ## Next Steps
 
-1. Replace \`provider/${pluginCode}.js\` with the real provider runtime.
+1. Replace \`src/main.rs\` with the real provider runtime.
 2. Update \`provider/${pluginCode}.yaml\` and \`models/llm/*.yaml\`.
-3. Run \`node scripts/node/plugin.js demo init <plugin-path>\` to generate the local demo.
-4. Run \`node scripts/node/plugin.js demo dev <plugin-path>\` to serve the demo locally.
+3. Build a target binary with \`cargo build --release --target x86_64-unknown-linux-musl\`.
+4. Run \`node scripts/node/plugin.js package <plugin-path> --out <dir> --runtime-binary <file> --target x86_64-unknown-linux-musl\`.
+5. Run \`node scripts/node/plugin.js demo init <plugin-path>\` to generate the local demo.
 `;
 }
 
@@ -690,6 +713,29 @@ function hashFile(filePath) {
   return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
 }
 
+function parseRustTargetTriple(raw) {
+  switch (String(raw || '').trim()) {
+    case 'x86_64-unknown-linux-musl':
+      return {
+        rustTargetTriple: raw,
+        os: 'linux',
+        arch: 'amd64',
+        libc: 'musl',
+        assetSuffix: 'linux-amd64',
+      };
+    case 'aarch64-unknown-linux-musl':
+      return {
+        rustTargetTriple: raw,
+        os: 'linux',
+        arch: 'arm64',
+        libc: 'musl',
+        assetSuffix: 'linux-arm64',
+      };
+    default:
+      throw new Error(`暂不支持的 rust target: ${raw}`);
+  }
+}
+
 function payloadSha256(rootDir) {
   const files = [];
 
@@ -765,6 +811,16 @@ function createPluginPackage(pluginPath, outputDir, options = {}) {
 
   const resolvedPluginPath = path.resolve(pluginPath);
   const resolvedOutputDir = path.resolve(outputDir);
+  const runtimeBinaryFile = options.runtimeBinaryFile
+    ? path.resolve(options.runtimeBinaryFile)
+    : null;
+  if (!runtimeBinaryFile) {
+    throw new Error('package 需要 --runtime-binary 指向已编译 provider 可执行文件');
+  }
+  if (!options.targetTriple) {
+    throw new Error('package 需要 --target 指定 rust target triple');
+  }
+  const target = parseRustTargetTriple(options.targetTriple);
   const stagedRoot = createPackageArtifactRoot(resolvedPluginPath);
   const pluginCode = readPluginCode(resolvedPluginPath);
   const version = readManifestField(resolvedPluginPath, 'version', '0.1.0');
@@ -774,11 +830,23 @@ function createPluginPackage(pluginPath, outputDir, options = {}) {
     '1flowbase.provider/v1'
   );
 
+  if (!fs.existsSync(runtimeBinaryFile)) {
+    throw new Error(`runtime binary 不存在：${runtimeBinaryFile}`);
+  }
+
   fs.mkdirSync(resolvedOutputDir, { recursive: true });
+
+  const binaryName = target.os === 'windows'
+    ? `${pluginCode}-provider.exe`
+    : `${pluginCode}-provider`;
+  const stagedBinaryPath = path.join(stagedRoot, 'bin', binaryName);
+  fs.mkdirSync(path.dirname(stagedBinaryPath), { recursive: true });
+  fs.copyFileSync(runtimeBinaryFile, stagedBinaryPath);
+  fs.chmodSync(stagedBinaryPath, 0o755);
 
   const pendingFile = path.join(
     resolvedOutputDir,
-    `1flowbase@${pluginCode}@${version}@pending.1flowbasepkg`
+    `1flowbase@${pluginCode}@${version}@${target.assetSuffix}@pending.1flowbasepkg`
   );
 
   try {
@@ -811,14 +879,19 @@ function createPluginPackage(pluginPath, outputDir, options = {}) {
     const checksum = hashFile(pendingFile);
     const finalFile = path.join(
       resolvedOutputDir,
-      `1flowbase@${pluginCode}@${version}@${checksum}.1flowbasepkg`
+      `1flowbase@${pluginCode}@${version}@${target.assetSuffix}@${checksum}.1flowbasepkg`
     );
     fs.renameSync(pendingFile, finalFile);
 
     return {
       pluginPath: resolvedPluginPath,
       packageFile: finalFile,
+      packageName: path.basename(finalFile),
       checksum,
+      os: target.os,
+      arch: target.arch,
+      libc: target.libc,
+      rustTarget: target.rustTargetTriple,
       signatureAlgorithm: signatureMetadata?.signatureAlgorithm ?? null,
       signingKeyId: signatureMetadata?.signingKeyId ?? null,
     };
@@ -837,14 +910,15 @@ function createPluginScaffold(pluginPath, options = {}) {
 
   ensureTargetDirForInit(pluginPath);
 
-  writeFile(path.join(pluginPath, 'manifest.yaml'), createManifestTemplate({ pluginCode, pluginName }));
+  writeFile(path.join(pluginPath, 'manifest.yaml'), createManifestTemplate({ pluginCode }));
   writeFile(
     path.join(pluginPath, 'provider', `${pluginCode}.yaml`),
     createProviderYamlTemplate({ pluginCode, pluginName })
   );
+  writeFile(path.join(pluginPath, 'Cargo.toml'), createCargoTomlTemplate({ pluginCode }));
   writeFile(
-    path.join(pluginPath, 'provider', `${pluginCode}.js`),
-    createProviderRuntimeTemplate({ pluginCode })
+    path.join(pluginPath, 'src', 'main.rs'),
+    createRustMainTemplate({ pluginCode })
   );
   writeFile(
     path.join(pluginPath, 'models', 'llm', '_position.yaml'),
@@ -1105,6 +1179,8 @@ function parseCliArgs(argv) {
       command: 'package',
       pluginPath: path.resolve(second),
       outputDir: null,
+      runtimeBinaryFile: null,
+      targetTriple: null,
       signingKeyPemFile: null,
       signingKeyId: null,
       issuedAt: null,
@@ -1118,6 +1194,22 @@ function parseCliArgs(argv) {
           throw new Error('--out 需要值');
         }
         options.outputDir = path.resolve(next);
+        index += 1;
+        continue;
+      }
+      if (arg === '--runtime-binary') {
+        if (!next) {
+          throw new Error('--runtime-binary 需要值');
+        }
+        options.runtimeBinaryFile = path.resolve(next);
+        index += 1;
+        continue;
+      }
+      if (arg === '--target') {
+        if (!next) {
+          throw new Error('--target 需要值');
+        }
+        options.targetTriple = next;
         index += 1;
         continue;
       }
@@ -1150,6 +1242,12 @@ function parseCliArgs(argv) {
 
     if (!options.outputDir) {
       throw new Error('package 需要提供 --out <output-dir>');
+    }
+    if (!options.runtimeBinaryFile) {
+      throw new Error('package 需要 --runtime-binary 指向已编译 provider 可执行文件');
+    }
+    if (!options.targetTriple) {
+      throw new Error('package 需要 --target 指定 rust target triple');
     }
     if (options.signingKeyPemFile && !options.signingKeyId) {
       throw new Error('package 使用签名时需要提供 --signing-key-id');

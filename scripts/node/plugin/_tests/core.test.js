@@ -76,30 +76,35 @@ function payloadSha256(rootDir) {
   return `sha256:${hasher.digest('hex')}`;
 }
 
-test('plugin init scaffolds provider plugin skeleton in target path', async () => {
+function writeFakeRuntimeBinary(outputDir, fileName = 'acme_openai_compatible-provider') {
+  const binaryPath = path.join(outputDir, fileName);
+  fs.writeFileSync(binaryPath, '#!/usr/bin/env bash\nexit 0\n', 'utf8');
+  fs.chmodSync(binaryPath, 0o755);
+  return binaryPath;
+}
+
+test('plugin init scaffolds rust provider source and executable manifest', async () => {
   const pluginPath = makeTempPluginPath();
 
   await main(['init', pluginPath]);
 
-  assert.equal(fs.existsSync(path.join(pluginPath, 'manifest.yaml')), true);
+  const manifest = fs.readFileSync(path.join(pluginPath, 'manifest.yaml'), 'utf8');
+  assert.match(manifest, /schema_version: 2/);
+  assert.match(manifest, /plugin_type: model_provider/);
+  assert.match(manifest, /plugin_code: acme_openai_compatible/);
+  assert.match(manifest, /kind: executable/);
+  assert.match(manifest, /protocol: stdio-json/);
+  assert.match(manifest, /path: bin\/acme_openai_compatible-provider/);
+  assert.equal(fs.existsSync(path.join(pluginPath, 'Cargo.toml')), true);
+  assert.equal(fs.existsSync(path.join(pluginPath, 'src', 'main.rs')), true);
   assert.equal(
     fs.existsSync(path.join(pluginPath, 'provider', 'acme_openai_compatible.yaml')),
     true
   );
   assert.equal(
     fs.existsSync(path.join(pluginPath, 'provider', 'acme_openai_compatible.js')),
-    true
+    false
   );
-  assert.equal(fs.existsSync(path.join(pluginPath, 'models', 'llm', '_position.yaml')), true);
-  assert.equal(fs.existsSync(path.join(pluginPath, 'i18n', 'en_US.json')), true);
-  assert.equal(fs.existsSync(path.join(pluginPath, 'readme', 'README_en_US.md')), true);
-  assert.equal(fs.existsSync(path.join(pluginPath, 'demo')), true);
-  assert.equal(fs.existsSync(path.join(pluginPath, 'scripts')), true);
-
-  const manifest = fs.readFileSync(path.join(pluginPath, 'manifest.yaml'), 'utf8');
-  assert.match(manifest, /plugin_code: acme_openai_compatible/);
-  assert.match(manifest, /contract_version: 1flowbase\.provider\/v1/);
-  assert.match(manifest, /language: nodejs/);
 });
 
 test('plugin demo init writes demo assets and helper config files', async () => {
@@ -182,18 +187,35 @@ test('plugin demo dev rejects target without generated demo assets', async () =>
   );
 });
 
-test('plugin package creates a single .1flowbasepkg asset with checksum metadata', async () => {
+test('plugin package copies a target binary into bin and encodes the target in the asset name', async () => {
   const pluginPath = makeTempPluginPath();
   const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-plugin-dist-'));
 
   await main(['init', pluginPath]);
+  const fakeBinary = writeFakeRuntimeBinary(outputDir);
 
-  const result = await main(['package', pluginPath, '--out', outputDir]);
+  const result = await main([
+    'package',
+    pluginPath,
+    '--out',
+    outputDir,
+    '--runtime-binary',
+    fakeBinary,
+    '--target',
+    'x86_64-unknown-linux-musl',
+  ]);
 
-  assert.match(result.packageFile, /\.1flowbasepkg$/);
-  assert.match(result.packageFile, new RegExp(`${result.checksum}\\.1flowbasepkg$`));
+  assert.match(result.packageFile, /@linux-amd64@[a-f0-9]{64}\.1flowbasepkg$/);
   assert.match(result.checksum, /^[a-f0-9]{64}$/);
   assert.equal(fs.existsSync(result.packageFile), true);
+
+  const extractedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-plugin-extract-'));
+  const unpack = spawnSync('tar', ['-xzf', result.packageFile, '-C', extractedDir]);
+  assert.equal(unpack.status, 0);
+  assert.equal(
+    fs.existsSync(path.join(extractedDir, 'bin', 'acme_openai_compatible-provider')),
+    true
+  );
 });
 
 test('plugin package excludes demo and scripts from the packaged artifact', async () => {
@@ -202,8 +224,18 @@ test('plugin package excludes demo and scripts from the packaged artifact', asyn
 
   await main(['init', pluginPath]);
   await main(['demo', 'init', pluginPath]);
+  const fakeBinary = writeFakeRuntimeBinary(outputDir);
 
-  const result = await main(['package', pluginPath, '--out', outputDir]);
+  const result = await main([
+    'package',
+    pluginPath,
+    '--out',
+    outputDir,
+    '--runtime-binary',
+    fakeBinary,
+    '--target',
+    'x86_64-unknown-linux-musl',
+  ]);
   const extractedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-plugin-extract-'));
   const unpack = spawnSync('tar', ['-xzf', result.packageFile, '-C', extractedDir]);
 
@@ -222,6 +254,7 @@ test('plugin package writes official signature metadata when signing inputs are 
   const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
 
   await main(['init', pluginPath]);
+  const fakeBinary = writeFakeRuntimeBinary(outputDir);
   fs.writeFileSync(
     signingKeyFile,
     privateKey.export({ format: 'pem', type: 'pkcs8' }),
@@ -233,6 +266,10 @@ test('plugin package writes official signature metadata when signing inputs are 
     pluginPath,
     '--out',
     outputDir,
+    '--runtime-binary',
+    fakeBinary,
+    '--target',
+    'x86_64-unknown-linux-musl',
     '--signing-key-pem-file',
     signingKeyFile,
     '--signing-key-id',

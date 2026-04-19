@@ -733,7 +733,7 @@ git commit -m "feat: select official plugin artifacts by host target"
 - Modify: `scripts/node/plugin/core.js`
 - Modify: `scripts/node/plugin/_tests/core.test.js`
 
-- [ ] **Step 1: Write the failing Node tests for Rust scaffolds and target-specific packages**
+- [x] **Step 1: Write the failing Node tests for Rust scaffolds and target-specific packages**
 
 Add tests like these to `scripts/node/plugin/_tests/core.test.js`:
 
@@ -788,7 +788,7 @@ test('plugin package copies a target binary into bin and encodes the target in t
 });
 ```
 
-- [ ] **Step 2: Run the focused CLI tests to capture the RED baseline**
+- [x] **Step 2: Run the focused CLI tests to capture the RED baseline**
 
 Run:
 
@@ -798,7 +798,7 @@ rtk node --test scripts/node/plugin/_tests/core.test.js
 
 Expected: FAIL because `plugin init` still emits Node.js `runner:` manifests and `provider/*.js`, while `plugin package` does not accept `--runtime-binary` or `--target`.
 
-- [ ] **Step 3: Implement Rust scaffolding and target-aware package staging**
+- [x] **Step 3: Implement Rust scaffolding and target-aware package staging**
 
 Update `scripts/node/plugin/core.js` in three places.
 
@@ -932,7 +932,7 @@ function createPluginPackage(pluginPath, outputDir, options = {}) {
 }
 ```
 
-- [ ] **Step 4: Rerun the CLI tests**
+- [x] **Step 4: Rerun the CLI tests**
 
 Run:
 
@@ -942,7 +942,7 @@ rtk node --test scripts/node/plugin/_tests/core.test.js
 
 Expected: PASS with Rust scaffold output and per-target `.1flowbasepkg` naming such as `1flowbase@openai_compatible@0.2.1@linux-amd64@<sha>.1flowbasepkg`.
 
-- [ ] **Step 5: Commit the host CLI changes**
+- [x] **Step 5: Commit the host CLI changes**
 
 ```bash
 git add scripts/node/plugin/core.js scripts/node/plugin/_tests/core.test.js
