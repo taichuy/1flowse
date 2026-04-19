@@ -912,7 +912,7 @@ Expected: one commit that makes version switching behaviorally complete on the b
 - Modify: `web/packages/api-client/src/console-plugins.ts`
 - Modify: `web/app/src/features/settings/api/plugins.ts`
 
-- [ ] **Step 1: Write the failing route tests for the new family endpoints**
+- [x] **Step 1: Write the failing route tests for the new family endpoints**
 
 Add a route test to `api/apps/api-server/src/_tests/plugin_routes.rs` that exercises:
 
@@ -947,7 +947,7 @@ let switch_response = app
 assert_eq!(switch_response.status(), StatusCode::OK);
 ```
 
-- [ ] **Step 2: Run the API route tests to capture the RED baseline**
+- [x] **Step 2: Run the API route tests to capture the RED baseline**
 
 Run:
 
@@ -957,7 +957,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p api-server plugin_routes_ -- --
 
 Expected: FAIL because `/api/console/plugins/families*` routes and schemas do not exist yet.
 
-- [ ] **Step 3: Add route DTOs, OpenAPI registration, and client bindings**
+- [x] **Step 3: Add route DTOs, OpenAPI registration, and client bindings**
 
 In `api/apps/api-server/src/routes/plugins.rs`, add:
 
@@ -1069,7 +1069,7 @@ export function switchConsolePluginFamilyVersion(
 
 And re-export them via `web/app/src/features/settings/api/plugins.ts` as settings-scoped wrappers.
 
-- [ ] **Step 4: Re-run the API route tests**
+- [x] **Step 4: Re-run the API route tests**
 
 Run:
 
@@ -1079,7 +1079,9 @@ rtk cargo test --manifest-path api/Cargo.toml -p api-server plugin_routes_ -- --
 
 Expected: PASS for listing families, switching versions, upgrading latest, and the existing plugin install routes.
 
-- [ ] **Step 5: Commit the API and client contract changes**
+Execution note (`2026-04-19`): the route regression also updated the `api-server` test-only official source fixture to advertise `openai_compatible@0.2.0`, so the new `/plugins/families/openai_compatible/upgrade-latest` endpoint could be exercised against a real "current local 0.1.0 -> official latest 0.2.0" scenario. The focused command `rtk cargo test --manifest-path api/Cargo.toml -p api-server plugin_routes_ -- --nocapture` passed with `5 passed`.
+
+- [x] **Step 5: Commit the API and client contract changes**
 
 Run:
 

@@ -43,6 +43,28 @@ export interface ConsoleOfficialPluginCatalogEntry {
   install_status: ConsoleOfficialPluginInstallStatus;
 }
 
+export interface ConsolePluginInstalledVersion {
+  installation_id: string;
+  plugin_version: string;
+  source_kind: string;
+  created_at: string;
+  is_current: boolean;
+}
+
+export interface ConsolePluginFamilyEntry {
+  provider_code: string;
+  display_name: string;
+  protocol: string;
+  help_url: string | null;
+  default_base_url: string | null;
+  model_discovery_mode: string;
+  current_installation_id: string;
+  current_version: string;
+  latest_version: string | null;
+  has_update: boolean;
+  installed_versions: ConsolePluginInstalledVersion[];
+}
+
 export interface ConsolePluginTask {
   id: string;
   installation_id: string | null;
@@ -73,6 +95,13 @@ export interface InstallConsolePluginResult {
 export function listConsolePluginCatalog(baseUrl?: string) {
   return apiFetch<ConsolePluginCatalogEntry[]>({
     path: '/api/console/plugins/catalog',
+    baseUrl
+  });
+}
+
+export function listConsolePluginFamilies(baseUrl?: string) {
+  return apiFetch<ConsolePluginFamilyEntry[]>({
+    path: '/api/console/plugins/families',
     baseUrl
   });
 }
@@ -133,6 +162,34 @@ export function assignConsolePlugin(
   return apiFetch<ConsolePluginTask>({
     path: `/api/console/plugins/${installationId}/assign`,
     method: 'POST',
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function upgradeConsolePluginFamilyLatest(
+  providerCode: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsolePluginTask>({
+    path: `/api/console/plugins/families/${providerCode}/upgrade-latest`,
+    method: 'POST',
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function switchConsolePluginFamilyVersion(
+  providerCode: string,
+  input: { installation_id: string },
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsolePluginTask>({
+    path: `/api/console/plugins/families/${providerCode}/switch-version`,
+    method: 'POST',
+    body: input,
     csrfToken,
     baseUrl
   });

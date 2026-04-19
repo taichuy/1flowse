@@ -36,8 +36,8 @@ impl OfficialPluginSourcePort for InMemoryOfficialPluginSource {
             provider_code: "openai_compatible".to_string(),
             display_name: "OpenAI Compatible".to_string(),
             protocol: "openai_compatible".to_string(),
-            latest_version: "0.1.0".to_string(),
-            release_tag: "openai_compatible-v0.1.0".to_string(),
+            latest_version: "0.2.0".to_string(),
+            release_tag: "openai_compatible-v0.2.0".to_string(),
             download_url: "https://example.com/openai-compatible.1flowbasepkg".to_string(),
             checksum: "sha256:abc123".to_string(),
             signature_status: "unsigned".to_string(),
@@ -231,7 +231,7 @@ fn create_official_provider_fixture(root: &Path) {
         root.join("manifest.yaml"),
         r#"plugin_code: openai_compatible
 display_name: OpenAI Compatible
-version: 0.1.0
+version: 0.2.0
 contract_version: 1flowbase.provider/v1
 supported_model_types:
   - llm

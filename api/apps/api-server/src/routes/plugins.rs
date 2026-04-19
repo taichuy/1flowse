@@ -8,7 +8,9 @@ use axum::{
 };
 use control_plane::plugin_management::{
     AssignPluginCommand, EnablePluginCommand, InstallOfficialPluginCommand, InstallPluginCommand,
-    OfficialPluginCatalogEntry, PluginCatalogEntry, PluginManagementService,
+    OfficialPluginCatalogEntry, PluginCatalogEntry, PluginFamilyView,
+    PluginInstalledVersionView, PluginManagementService, SwitchPluginVersionCommand,
+    UpgradeLatestPluginFamilyCommand,
 };
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
@@ -31,6 +33,11 @@ pub struct InstallPluginBody {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct InstallOfficialPluginBody {
     pub plugin_id: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SwitchPluginVersionBody {
+    pub installation_id: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -77,6 +84,30 @@ pub struct OfficialPluginCatalogEntryResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+pub struct PluginInstalledVersionResponse {
+    pub installation_id: String,
+    pub plugin_version: String,
+    pub source_kind: String,
+    pub created_at: String,
+    pub is_current: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PluginFamilyResponse {
+    pub provider_code: String,
+    pub display_name: String,
+    pub protocol: String,
+    pub help_url: Option<String>,
+    pub default_base_url: Option<String>,
+    pub model_discovery_mode: String,
+    pub current_installation_id: String,
+    pub current_version: String,
+    pub latest_version: Option<String>,
+    pub has_update: bool,
+    pub installed_versions: Vec<PluginInstalledVersionResponse>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct PluginTaskResponse {
     pub id: String,
     pub installation_id: Option<String>,
@@ -101,6 +132,15 @@ pub struct InstallPluginResponse {
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route("/plugins/catalog", get(list_catalog))
+        .route("/plugins/families", get(list_families))
+        .route(
+            "/plugins/families/:provider_code/upgrade-latest",
+            post(upgrade_latest),
+        )
+        .route(
+            "/plugins/families/:provider_code/switch-version",
+            post(switch_version),
+        )
         .route("/plugins/official-catalog", get(list_official_catalog))
         .route("/plugins/install", post(install_plugin))
         .route("/plugins/install-official", post(install_official_plugin))
@@ -182,6 +222,38 @@ fn to_official_catalog_response(
     }
 }
 
+fn to_installed_version_response(
+    version: PluginInstalledVersionView,
+) -> PluginInstalledVersionResponse {
+    PluginInstalledVersionResponse {
+        installation_id: version.installation_id.to_string(),
+        plugin_version: version.plugin_version,
+        source_kind: version.source_kind,
+        created_at: format_time(version.created_at),
+        is_current: version.is_current,
+    }
+}
+
+fn to_family_response(entry: PluginFamilyView) -> PluginFamilyResponse {
+    PluginFamilyResponse {
+        provider_code: entry.provider_code,
+        display_name: entry.display_name,
+        protocol: entry.protocol,
+        help_url: entry.help_url,
+        default_base_url: entry.default_base_url,
+        model_discovery_mode: entry.model_discovery_mode,
+        current_installation_id: entry.current_installation_id.to_string(),
+        current_version: entry.current_version,
+        latest_version: entry.latest_version,
+        has_update: entry.has_update,
+        installed_versions: entry
+            .installed_versions
+            .into_iter()
+            .map(to_installed_version_response)
+            .collect(),
+    }
+}
+
 fn to_task_response(task: domain::PluginTaskRecord) -> PluginTaskResponse {
     PluginTaskResponse {
         id: task.id.to_string(),
@@ -212,6 +284,23 @@ pub async fn list_catalog(
     let catalog = service(&state).list_catalog(context.user.id).await?;
     Ok(Json(ApiSuccess::new(
         catalog.into_iter().map(to_catalog_response).collect(),
+    )))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/plugins/families",
+    operation_id = "plugin_list_families",
+    responses((status = 200, body = [PluginFamilyResponse]), (status = 401, body = crate::error_response::ErrorBody))
+)]
+pub async fn list_families(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<Vec<PluginFamilyResponse>>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let families = service(&state).list_families(context.user.id).await?;
+    Ok(Json(ApiSuccess::new(
+        families.into_iter().map(to_family_response).collect(),
     )))
 }
 
@@ -295,6 +384,53 @@ pub async fn install_official_plugin(
             task: to_task_response(result.task),
         })),
     ))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/plugins/families/{provider_code}/upgrade-latest",
+    operation_id = "plugin_upgrade_family_latest",
+    responses((status = 200, body = PluginTaskResponse), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn upgrade_latest(
+    State(state): State<Arc<ApiState>>,
+    Path(provider_code): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<PluginTaskResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let task = service(&state)
+        .upgrade_latest(UpgradeLatestPluginFamilyCommand {
+            actor_user_id: context.user.id,
+            provider_code,
+        })
+        .await?;
+    Ok(Json(ApiSuccess::new(to_task_response(task))))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/plugins/families/{provider_code}/switch-version",
+    operation_id = "plugin_switch_family_version",
+    request_body = SwitchPluginVersionBody,
+    responses((status = 200, body = PluginTaskResponse), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn switch_version(
+    State(state): State<Arc<ApiState>>,
+    Path(provider_code): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<SwitchPluginVersionBody>,
+) -> Result<Json<ApiSuccess<PluginTaskResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let task = service(&state)
+        .switch_version(SwitchPluginVersionCommand {
+            actor_user_id: context.user.id,
+            provider_code,
+            target_installation_id: parse_uuid(&body.installation_id, "installation_id")?,
+        })
+        .await?;
+    Ok(Json(ApiSuccess::new(to_task_response(task))))
 }
 
 #[utoipa::path(

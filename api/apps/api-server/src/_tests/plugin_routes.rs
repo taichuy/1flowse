@@ -125,7 +125,7 @@ async fn replace_member_roles(
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
 }
 
-fn create_provider_fixture(root: &Path) {
+fn create_fixture_provider_package(root: &Path, version: &str) {
     fs::create_dir_all(root.join("provider")).unwrap();
     fs::create_dir_all(root.join("models/llm")).unwrap();
     fs::create_dir_all(root.join("i18n")).unwrap();
@@ -133,16 +133,18 @@ fn create_provider_fixture(root: &Path) {
     fs::create_dir_all(root.join("scripts")).unwrap();
     fs::write(
         root.join("manifest.yaml"),
-        r#"plugin_code: fixture_provider
+        format!(
+            r#"plugin_code: fixture_provider
 display_name: Fixture Provider
-version: 0.1.0
+version: {version}
 contract_version: 1flowbase.provider/v1
 supported_model_types:
   - llm
 runner:
   language: nodejs
   entrypoint: provider/fixture_provider.js
-"#,
+"#
+        ),
     )
     .unwrap();
     fs::write(
@@ -212,12 +214,98 @@ capabilities:
     fs::write(root.join("scripts/demo.sh"), "echo demo").unwrap();
 }
 
+fn create_openai_compatible_package(root: &Path, version: &str) {
+    fs::create_dir_all(root.join("provider")).unwrap();
+    fs::create_dir_all(root.join("models/llm")).unwrap();
+    fs::create_dir_all(root.join("i18n")).unwrap();
+    fs::write(
+        root.join("manifest.yaml"),
+        format!(
+            r#"plugin_code: openai_compatible
+display_name: OpenAI Compatible
+version: {version}
+contract_version: 1flowbase.provider/v1
+supported_model_types:
+  - llm
+runner:
+  language: nodejs
+  entrypoint: provider/openai_compatible.js
+"#
+        ),
+    )
+    .unwrap();
+    fs::write(
+        root.join("provider/openai_compatible.yaml"),
+        r#"provider_code: openai_compatible
+display_name: OpenAI Compatible
+protocol: openai_compatible
+help_url: https://platform.openai.com/docs/api-reference
+default_base_url: https://api.openai.com/v1
+model_discovery: hybrid
+config_schema:
+  - key: base_url
+    type: string
+    required: true
+  - key: api_key
+    type: secret
+    required: true
+"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("provider/openai_compatible.js"),
+        r#"module.exports = {
+  async validateProviderCredentials(input) {
+    return { sanitized: { api_key: input.api_key ? "***" : null } };
+  },
+  async listModels() {
+    return [
+      {
+        model_id: "openai_compatible_chat",
+        display_name: "OpenAI Compatible Chat",
+        source: "dynamic",
+        supports_streaming: true,
+        supports_tool_call: false,
+        supports_multimodal: false,
+        provider_metadata: {}
+      }
+    ];
+  },
+  async invoke() {
+    return { events: [], result: { final_content: "ok" } };
+  }
+};
+"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("models/llm/_position.yaml"),
+        "items:\n  - openai_compatible_chat\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("models/llm/openai_compatible_chat.yaml"),
+        r#"model: openai_compatible_chat
+label: OpenAI Compatible Chat
+family: llm
+capabilities:
+  - stream
+"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("i18n/en_US.json"),
+        r#"{ "plugin": { "label": "OpenAI Compatible" } }"#,
+    )
+    .unwrap();
+}
+
 #[tokio::test]
 async fn plugin_routes_install_enable_assign_and_query_tasks() {
     let app = test_app().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let package_root = std::env::temp_dir().join(format!("plugin-route-{}", uuid::Uuid::now_v7()));
-    create_provider_fixture(&package_root);
+    create_fixture_provider_package(&package_root, "0.1.0");
 
     let install = app
         .clone()
@@ -428,4 +516,206 @@ async fn plugin_routes_list_official_catalog_and_install_official_package() {
         .unwrap();
 
     assert_eq!(install.status(), StatusCode::CREATED);
+}
+
+#[tokio::test]
+async fn plugin_routes_list_families_and_switch_local_version() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let package_root_v1 =
+        std::env::temp_dir().join(format!("plugin-route-switch-v1-{}", uuid::Uuid::now_v7()));
+    let package_root_v2 =
+        std::env::temp_dir().join(format!("plugin-route-switch-v2-{}", uuid::Uuid::now_v7()));
+    create_fixture_provider_package(&package_root_v1, "0.1.0");
+    create_fixture_provider_package(&package_root_v2, "0.2.0");
+
+    let install_v1 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/plugins/install")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "package_root": package_root_v1.display().to_string() }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(install_v1.status(), StatusCode::CREATED);
+    let install_v1_payload: Value =
+        serde_json::from_slice(&to_bytes(install_v1.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    let installation_v1_id = install_v1_payload["data"]["installation"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let install_v2 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/plugins/install")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "package_root": package_root_v2.display().to_string() }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(install_v2.status(), StatusCode::CREATED);
+    let install_v2_payload: Value =
+        serde_json::from_slice(&to_bytes(install_v2.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    let installation_v2_id = install_v2_payload["data"]["installation"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let enable_v1 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/console/plugins/{installation_v1_id}/enable"))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(enable_v1.status(), StatusCode::OK);
+
+    let assign_v1 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/console/plugins/{installation_v1_id}/assign"))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(assign_v1.status(), StatusCode::OK);
+
+    let list_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/console/plugins/families")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(list_response.status(), StatusCode::OK);
+
+    let switch_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/plugins/families/fixture_provider/switch-version")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "installation_id": installation_v2_id }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(switch_response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn plugin_routes_upgrade_family_to_latest_official_version() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let package_root_v1 =
+        std::env::temp_dir().join(format!("plugin-route-openai-v1-{}", uuid::Uuid::now_v7()));
+    create_openai_compatible_package(&package_root_v1, "0.1.0");
+
+    let install_v1 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/plugins/install")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "package_root": package_root_v1.display().to_string() }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(install_v1.status(), StatusCode::CREATED);
+    let install_v1_payload: Value =
+        serde_json::from_slice(&to_bytes(install_v1.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    let installation_v1_id = install_v1_payload["data"]["installation"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let enable_v1 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/console/plugins/{installation_v1_id}/enable"))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(enable_v1.status(), StatusCode::OK);
+
+    let assign_v1 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/console/plugins/{installation_v1_id}/assign"))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(assign_v1.status(), StatusCode::OK);
+
+    let upgrade_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/plugins/families/openai_compatible/upgrade-latest")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(upgrade_response.status(), StatusCode::OK);
 }
