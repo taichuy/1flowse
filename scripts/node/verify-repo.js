@@ -16,6 +16,12 @@ function buildCommands({ repoRoot }) {
       cwd: repoRoot,
     },
     {
+      label: 'repo-contract-tests',
+      command: process.execPath,
+      args: [path.join(repoRoot, 'scripts', 'node', 'test-contracts.js')],
+      cwd: repoRoot,
+    },
+    {
       label: 'repo-frontend-full',
       command: process.execPath,
       args: [path.join(repoRoot, 'scripts', 'node', 'test-frontend.js'), 'full'],
@@ -33,7 +39,7 @@ function buildCommands({ repoRoot }) {
 function usage() {
   process.stdout.write(
     'Usage: node scripts/node/verify-repo.js\n'
-      + 'Runs: scripts/node tests + frontend full gate + backend full gate\n'
+      + 'Runs: scripts/node tests + contract tests + frontend full gate + backend full gate\n'
   );
 }
 

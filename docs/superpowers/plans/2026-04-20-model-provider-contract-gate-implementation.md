@@ -57,7 +57,7 @@
 - Modify: `scripts/node/verify-repo.js`
 - Modify: `scripts/node/verify-repo/_tests/cli.test.js`
 
-- [ ] **Step 1: Write the failing CLI tests for the new contract gate and updated repo gate order**
+- [x] **Step 1: Write the failing CLI tests for the new contract gate and updated repo gate order**
 
 ```js
 // scripts/node/test-contracts/_tests/cli.test.js
@@ -153,7 +153,7 @@ test('buildCommands composes script tests, contract tests, frontend full gate an
 });
 ```
 
-- [ ] **Step 2: Run the script CLI tests and verify they fail before implementation**
+- [x] **Step 2: Run the script CLI tests and verify they fail before implementation**
 
 Run:
 
@@ -166,7 +166,7 @@ Expected:
 - FAIL because `scripts/node/test-contracts.js` does not exist yet.
 - FAIL because `verify-repo` still composes only three commands.
 
-- [ ] **Step 3: Implement the new CLI entrypoint and compose it into `verify-repo`**
+- [x] **Step 3: Implement the new CLI entrypoint and compose it into `verify-repo`**
 
 ```js
 // scripts/node/test-contracts.js
@@ -269,7 +269,7 @@ function buildCommands({ repoRoot }) {
 }
 ```
 
-- [ ] **Step 4: Run the CLI tests again and verify the command layer passes**
+- [x] **Step 4: Run the CLI tests again and verify the command layer passes**
 
 Run:
 
@@ -282,7 +282,7 @@ Expected:
 - PASS for the new `test-contracts` help/build/main flow.
 - PASS for the updated `verify-repo` command ordering.
 
-- [ ] **Step 5: Commit the CLI runner changes**
+- [x] **Step 5: Commit the CLI runner changes**
 
 ```bash
 git add \

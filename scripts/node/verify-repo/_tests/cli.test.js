@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const { buildCommands, main } = require('../../verify-repo.js');
 
-test('buildCommands composes script tests, frontend full gate and backend verify gate', () => {
+test('buildCommands composes script tests, contract tests, frontend full gate and backend verify gate', () => {
   const repoRoot = '/repo-root';
 
   assert.deepEqual(buildCommands({ repoRoot }), [
@@ -14,6 +14,12 @@ test('buildCommands composes script tests, frontend full gate and backend verify
       label: 'repo-script-tests',
       command: process.execPath,
       args: [path.join(repoRoot, 'scripts', 'node', 'test-scripts.js')],
+      cwd: repoRoot,
+    },
+    {
+      label: 'repo-contract-tests',
+      command: process.execPath,
+      args: [path.join(repoRoot, 'scripts', 'node', 'test-contracts.js')],
       cwd: repoRoot,
     },
     {
@@ -52,11 +58,12 @@ test('main runs repository full gate in order and captures advisory output', () 
   });
 
   assert.equal(status, 0);
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
   assert.deepEqual(
     calls.map((call) => call.args),
     [
       [path.join(repoRoot, 'scripts', 'node', 'test-scripts.js')],
+      [path.join(repoRoot, 'scripts', 'node', 'test-contracts.js')],
       [path.join(repoRoot, 'scripts', 'node', 'test-frontend.js'), 'full'],
       [path.join(repoRoot, 'scripts', 'node', 'verify-backend.js')],
     ]
@@ -66,6 +73,7 @@ test('main runs repository full gate in order and captures advisory output', () 
   assert.equal(fs.existsSync(warningLogPath), true);
   const warningLog = fs.readFileSync(warningLogPath, 'utf8');
   assert.match(warningLog, /warning: test-scripts\.js advisory/u);
+  assert.match(warningLog, /warning: test-contracts\.js advisory/u);
   assert.match(warningLog, /warning: test-frontend\.js advisory/u);
   assert.match(warningLog, /warning: verify-backend\.js advisory/u);
 });
