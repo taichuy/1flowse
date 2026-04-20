@@ -122,6 +122,10 @@ describe('validateDocument', () => {
         {
           provider_instance_id: 'provider-ready',
           provider_code: 'openai_compatible',
+          plugin_type: 'provider',
+          namespace: 'plugin.openai_compatible',
+          label_key: 'provider.label',
+          description_key: 'provider.description',
           protocol: 'openai_responses',
           display_name: 'OpenAI Prod',
           models: [
