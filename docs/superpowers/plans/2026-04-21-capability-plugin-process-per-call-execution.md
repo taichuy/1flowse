@@ -171,7 +171,7 @@ git commit -m "feat: add capability plugin runtime contracts"
 - Modify: `api/apps/plugin-runner/src/lib.rs`
 - Modify: `api/apps/plugin-runner/src/package_loader.rs`
 
-- [ ] **Step 1: Write failing plugin-runner route tests**
+- [x] **Step 1: Write failing plugin-runner route tests**
 
 Add tests like:
 
@@ -195,7 +195,7 @@ async fn execute_capability_route_runs_process_per_call_plugin() {
 }
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -207,7 +207,7 @@ Expected:
 
 - FAIL because `plugin-runner` only exposes provider routes today.
 
-- [ ] **Step 3: Implement capability runtime endpoints**
+- [x] **Step 3: Implement capability runtime endpoints**
 
 Add a host like:
 
@@ -246,7 +246,7 @@ And wire routes:
 .route("/capabilities/execute", post(execute_capability))
 ```
 
-- [ ] **Step 4: Re-run the plugin-runner tests**
+- [x] **Step 4: Re-run the plugin-runner tests**
 
 Run:
 
@@ -258,7 +258,7 @@ Expected:
 
 - PASS with `plugin-runner` able to load capability packages and execute them per request.
 
-- [ ] **Step 5: Commit the plugin-runner path**
+- [x] **Step 5: Commit the plugin-runner path**
 
 ```bash
 git add api/apps/plugin-runner/src/lib.rs api/apps/plugin-runner/src/package_loader.rs api/apps/plugin-runner/src/capability_host.rs api/apps/plugin-runner/src/capability_stdio.rs api/apps/plugin-runner/tests/capability_runtime_routes.rs
