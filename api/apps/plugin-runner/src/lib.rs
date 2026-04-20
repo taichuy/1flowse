@@ -24,10 +24,13 @@ use crate::provider_host::{
     LoadedProviderSummary, ProviderHost, ProviderInvokeStreamOutput, ProviderModelsOutput,
     ProviderValidationOutput,
 };
+pub use capability_host::CapabilityHost;
 
 pub const DEFAULT_PLUGIN_RUNNER_ADDR: &str = "0.0.0.0:7801";
 static STARTED_AT: OnceLock<OffsetDateTime> = OnceLock::new();
 
+pub mod capability_host;
+pub mod capability_stdio;
 pub mod package_loader;
 pub mod provider_host;
 pub mod stdio_runtime;
@@ -42,6 +45,16 @@ pub struct HealthResponse {
 #[derive(Debug, Clone, Default)]
 pub struct AppState {
     provider_host: Arc<RwLock<ProviderHost>>,
+    capability_host: Arc<RwLock<CapabilityHost>>,
+}
+
+impl AppState {
+    pub fn with_capability_host(capability_host: CapabilityHost) -> Self {
+        Self {
+            provider_host: Arc::new(RwLock::new(ProviderHost::default())),
+            capability_host: Arc::new(RwLock::new(capability_host)),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -72,6 +85,24 @@ struct ListModelsRequest {
 struct InvokeProviderRequest {
     plugin_id: String,
     input: ProviderInvocationInput,
+}
+
+#[derive(Debug, Deserialize)]
+struct ValidateCapabilityRequest {
+    plugin_id: String,
+    contribution_code: String,
+    #[serde(default)]
+    config_payload: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExecuteCapabilityRequest {
+    plugin_id: String,
+    contribution_code: String,
+    #[serde(default)]
+    config_payload: Value,
+    #[serde(default)]
+    input_payload: Value,
 }
 
 #[derive(Debug, Serialize)]
@@ -152,6 +183,67 @@ async fn invoke_stream(
         .map_err(map_framework_error)
 }
 
+async fn validate_capability_config(
+    State(state): State<AppState>,
+    Json(request): Json<ValidateCapabilityRequest>,
+) -> Result<Json<capability_host::CapabilityValueOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.capability_host.read().await;
+    host.validate_config(
+        &request.plugin_id,
+        &request.contribution_code,
+        request.config_payload,
+    )
+    .await
+    .map(Json)
+    .map_err(map_framework_error)
+}
+
+async fn resolve_capability_dynamic_options(
+    State(state): State<AppState>,
+    Json(request): Json<ValidateCapabilityRequest>,
+) -> Result<Json<capability_host::CapabilityValueOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.capability_host.read().await;
+    host.resolve_dynamic_options(
+        &request.plugin_id,
+        &request.contribution_code,
+        request.config_payload,
+    )
+    .await
+    .map(Json)
+    .map_err(map_framework_error)
+}
+
+async fn resolve_capability_output_schema(
+    State(state): State<AppState>,
+    Json(request): Json<ValidateCapabilityRequest>,
+) -> Result<Json<capability_host::CapabilityValueOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.capability_host.read().await;
+    host.resolve_output_schema(
+        &request.plugin_id,
+        &request.contribution_code,
+        request.config_payload,
+    )
+    .await
+    .map(Json)
+    .map_err(map_framework_error)
+}
+
+async fn execute_capability(
+    State(state): State<AppState>,
+    Json(request): Json<ExecuteCapabilityRequest>,
+) -> Result<Json<capability_host::CapabilityExecutionOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.capability_host.read().await;
+    host.execute(
+        &request.plugin_id,
+        &request.contribution_code,
+        request.config_payload,
+        request.input_payload,
+    )
+    .await
+    .map(Json)
+    .map_err(map_framework_error)
+}
+
 pub fn parse_bind_addr(candidate: Option<&str>, default_addr: &str) -> SocketAddr {
     candidate
         .and_then(|value| value.parse().ok())
@@ -171,6 +263,19 @@ pub fn app_with_state(state: AppState) -> Router {
         .route("/providers/validate", post(validate_provider))
         .route("/providers/list-models", post(list_models))
         .route("/providers/invoke-stream", post(invoke_stream))
+        .route(
+            "/capabilities/validate-config",
+            post(validate_capability_config),
+        )
+        .route(
+            "/capabilities/resolve-dynamic-options",
+            post(resolve_capability_dynamic_options),
+        )
+        .route(
+            "/capabilities/resolve-output-schema",
+            post(resolve_capability_output_schema),
+        )
+        .route("/capabilities/execute", post(execute_capability))
         .with_state(state)
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
