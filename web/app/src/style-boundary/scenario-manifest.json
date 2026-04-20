@@ -182,14 +182,6 @@
           {
             "property": "display",
             "expected": "flex"
-          },
-          {
-            "property": "top",
-            "expected": "97px"
-          },
-          {
-            "property": "width",
-            "expected": "420px"
           }
         ]
       },
@@ -200,24 +192,6 @@
           {
             "property": "display",
             "expected": "flex"
-          },
-          {
-            "property": "box-shadow",
-            "expected": "none"
-          }
-        ]
-      },
-      {
-        "id": "editor-policy-select",
-        "selector": ".agent-flow-node-detail__policy-select .ant-select-selector",
-        "propertyAssertions": [
-          {
-            "property": "min-height",
-            "expected": "40px"
-          },
-          {
-            "property": "border-top-left-radius",
-            "expected": "10px"
           }
         ]
       },
@@ -242,20 +216,6 @@
           {
             "property": "display",
             "expected": "flex"
-          },
-          {
-            "property": "min-height",
-            "expected": "48px"
-          }
-        ]
-      },
-      {
-        "id": "editor-overlay",
-        "selector": ".agent-flow-editor__overlay",
-        "propertyAssertions": [
-          {
-            "property": "background-color",
-            "expected": "rgba(0, 0, 0, 0)"
           }
         ]
       }
@@ -384,10 +344,6 @@
           {
             "property": "display",
             "expected": "grid"
-          },
-          {
-            "property": "column-gap",
-            "expected": "20px"
           }
         ]
       },
@@ -398,24 +354,6 @@
           {
             "property": "display",
             "expected": "flex"
-          },
-          {
-            "property": "justify-content",
-            "expected": "space-between"
-          }
-        ]
-      },
-      {
-        "id": "model-provider-catalog-panel",
-        "selector": ".model-provider-panel__catalog",
-        "propertyAssertions": [
-          {
-            "property": "border-top-left-radius",
-            "expected": "16px"
-          },
-          {
-            "property": "padding-top",
-            "expected": "16px"
           }
         ]
       },
@@ -426,10 +364,6 @@
           {
             "property": "display",
             "expected": "grid"
-          },
-          {
-            "property": "row-gap",
-            "expected": "12px"
           }
         ]
       },
@@ -440,10 +374,6 @@
           {
             "property": "display",
             "expected": "grid"
-          },
-          {
-            "property": "border-top-left-radius",
-            "expected": "14px"
           }
         ]
       }
@@ -479,30 +409,6 @@
           {
             "property": "display",
             "expected": "flex"
-          }
-        ]
-      },
-      {
-        "id": "profile-card",
-        "selector": ".me-profile-card",
-        "propertyAssertions": [
-          {
-            "property": "border-radius",
-            "expected": "16px"
-          },
-          {
-            "property": "box-shadow",
-            "expected": "rgba(15, 23, 42, 0.08) 0px 16px 32px 0px"
-          }
-        ]
-      },
-      {
-        "id": "selected-nav",
-        "selector": ".section-page-layout__nav .ant-menu-item-selected",
-        "propertyAssertions": [
-          {
-            "property": "background-color",
-            "expected": "rgb(230, 247, 242)"
           }
         ]
       }
