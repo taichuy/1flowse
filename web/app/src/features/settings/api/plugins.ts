@@ -17,9 +17,11 @@ import {
 
 export type SettingsPluginFamilyEntry = ConsolePluginFamilyEntry & {
   display_name: string;
+  description: string | null;
 };
 export type SettingsOfficialPluginCatalogEntry = ConsoleOfficialPluginCatalogEntry & {
   display_name: string;
+  description: string | null;
 };
 export type SettingsOfficialPluginCatalogResponse = Omit<
   ConsoleOfficialPluginCatalogResponse,
@@ -144,13 +146,68 @@ function resolvePluginDisplayName(
   return entry.provider_code ?? entry.plugin_id ?? entry.namespace;
 }
 
+function resolvePluginDescription(
+  entry: {
+    namespace: string;
+    description_key: string | null;
+  },
+  response: Pick<
+    ConsolePluginFamilyCatalogResponse | ConsoleOfficialPluginCatalogResponse,
+    'locale_meta' | 'i18n_catalog'
+  >
+) {
+  if (!entry.description_key) {
+    return null;
+  }
+
+  const namespaceCatalog = asRecord(response.i18n_catalog)?.[entry.namespace];
+  const localeCatalog = asRecord(namespaceCatalog);
+
+  if (localeCatalog) {
+    for (const locale of pickPreferredLocales(response.locale_meta)) {
+      const localizedBundle = asRecord(localeCatalog[locale]);
+
+      if (!localizedBundle) {
+        continue;
+      }
+
+      const description = readLocalizedValue(
+        localizedBundle,
+        entry.description_key
+      );
+      if (description) {
+        return description;
+      }
+    }
+
+    for (const localizedBundle of Object.values(localeCatalog)) {
+      const normalizedBundle = asRecord(localizedBundle);
+
+      if (!normalizedBundle) {
+        continue;
+      }
+
+      const description = readLocalizedValue(
+        normalizedBundle,
+        entry.description_key
+      );
+      if (description) {
+        return description;
+      }
+    }
+  }
+
+  return null;
+}
+
 export function fetchSettingsPluginFamilies() {
   return listConsolePluginFamilies({
     plugin_type: MODEL_PROVIDER_PLUGIN_TYPE
   }).then((response) =>
     response.entries.map((entry) => ({
       ...entry,
-      display_name: resolvePluginDisplayName(entry, response)
+      display_name: resolvePluginDisplayName(entry, response),
+      description: resolvePluginDescription(entry, response)
     }))
   );
 }
@@ -162,7 +219,8 @@ export function fetchSettingsOfficialPluginCatalog() {
     ...response,
     entries: response.entries.map((entry) => ({
       ...entry,
-      display_name: resolvePluginDisplayName(entry, response)
+      display_name: resolvePluginDisplayName(entry, response),
+      description: resolvePluginDescription(entry, response)
     }))
   }));
 }

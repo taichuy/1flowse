@@ -795,6 +795,8 @@ describe('ModelProvidersPage', () => {
           plugin_id: '1flowbase.openai_compatible',
           provider_code: 'openai_compatible',
           display_name: 'OpenAI Compatible',
+          description:
+            '面向 OpenAI 兼容 Chat Completions API 的 provider 插件。',
           latest_version: '0.1.0',
           protocol: 'openai_compatible',
           help_url:
@@ -825,6 +827,9 @@ describe('ModelProvidersPage', () => {
         { name: '安装到当前 workspace' },
         { timeout: 10000 }
       )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('面向 OpenAI 兼容 Chat Completions API 的 provider 插件。')
     ).toBeInTheDocument();
   });
 

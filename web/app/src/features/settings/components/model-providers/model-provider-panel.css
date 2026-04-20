@@ -120,16 +120,39 @@
 
 .model-provider-panel__official-grid {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .model-provider-panel__official-card {
   display: grid;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 12px;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  background: #fbfcfe;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, #f6fbff 100%);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+}
+
+.model-provider-panel__catalog-item-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.model-provider-panel__catalog-item-title-row .ant-typography {
+  margin-bottom: 0;
+}
+
+.model-provider-panel__mono {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  font-size: 13px;
+  background: rgba(15, 23, 42, 0.04);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .model-provider-panel__catalog-item-main,
@@ -138,6 +161,13 @@
   gap: 4px;
   color: rgba(15, 23, 42, 0.68);
   font-size: 13px;
+}
+
+.model-provider-panel__official-card-description {
+  margin: 0;
+  color: rgba(15, 23, 42, 0.82);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .model-provider-panel__catalog-item-title-row {
@@ -173,6 +203,7 @@
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
+  padding-top: 2px;
 }
 
 .model-provider-panel__install-confirm {

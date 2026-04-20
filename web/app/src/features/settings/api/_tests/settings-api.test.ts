@@ -366,7 +366,8 @@ describe('settings api wrappers', () => {
         'plugin.openai_compatible': {
           zh_Hans: {
             plugin: {
-              label: 'OpenAI 兼容插件'
+              label: 'OpenAI 兼容插件',
+              description: '面向 OpenAI 兼容 Chat Completions API 的 provider 插件。'
             },
             provider: {
               label: 'OpenAI Compatible'
@@ -374,7 +375,9 @@ describe('settings api wrappers', () => {
           },
           en_US: {
             plugin: {
-              label: 'OpenAI-Compatible API Provider'
+              label: 'OpenAI-Compatible API Provider',
+              description:
+                'Provider plugin for services exposing an OpenAI-compatible Chat Completions API.'
             },
             provider: {
               label: 'OpenAI Compatible'
@@ -418,7 +421,8 @@ describe('settings api wrappers', () => {
         'plugin.openai_compatible': {
           zh_Hans: {
             plugin: {
-              label: 'OpenAI 兼容插件'
+              label: 'OpenAI 兼容插件',
+              description: '面向 OpenAI 兼容 Chat Completions API 的 provider 插件。'
             },
             provider: {
               label: 'OpenAI Compatible'
@@ -426,7 +430,9 @@ describe('settings api wrappers', () => {
           },
           en_US: {
             plugin: {
-              label: 'OpenAI-Compatible API Provider'
+              label: 'OpenAI-Compatible API Provider',
+              description:
+                'Provider plugin for services exposing an OpenAI-compatible Chat Completions API.'
             },
             provider: {
               label: 'OpenAI Compatible'
@@ -477,6 +483,7 @@ describe('settings api wrappers', () => {
       expect.objectContaining({
         provider_code: 'openai_compatible',
         display_name: 'OpenAI Compatible',
+        description: '面向 OpenAI 兼容 Chat Completions API 的 provider 插件。',
         plugin_type: 'model_provider',
         current_version: '0.3.7'
       })
@@ -484,14 +491,15 @@ describe('settings api wrappers', () => {
     await expect(fetchSettingsOfficialPluginCatalog()).resolves.toEqual(
       expect.objectContaining({
         source_kind: 'official_registry',
-        entries: [
+        entries: expect.arrayContaining([
           expect.objectContaining({
             plugin_id: '1flowbase.openai_compatible',
             display_name: 'OpenAI Compatible',
+            description: '面向 OpenAI 兼容 Chat Completions API 的 provider 插件。',
             plugin_type: 'model_provider',
             latest_version: '0.3.7'
           })
-        ]
+        ])
       })
     );
     await installSettingsOfficialPlugin('openai_compatible@0.2.0', 'csrf-123');

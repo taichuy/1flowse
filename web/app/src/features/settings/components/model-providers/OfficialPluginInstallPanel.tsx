@@ -84,6 +84,19 @@ function pickPreferredOfficialEntry(
 const OFFICIAL_PLUGIN_RELEASES_URL =
   'https://github.com/taichuy/1flowbase-official-plugins/releases';
 
+function getDiscoveryModeDescription(mode: string) {
+  switch (mode) {
+    case 'hybrid':
+      return '预置模型与运行时发现合并显示';
+    case 'dynamic':
+      return '运行时实时拉取模型目录';
+    case 'static':
+      return '仅使用插件内置模型目录';
+    default:
+      return `发现模式：${mode}`;
+  }
+}
+
 function getTagColor(tag: string) {
   switch (tag) {
     case 'latest':
@@ -151,7 +164,11 @@ function getStatusTags(
 
   if (family) {
     tags.push(family.current_version);
-    tags.push(family.has_update && family.latest_version ? family.latest_version : 'latest');
+    tags.push(
+      family.has_update && family.latest_version
+        ? family.latest_version
+        : 'latest'
+    );
     tags.push(entry.model_discovery_mode);
     return tags;
   }
@@ -232,7 +249,9 @@ export function OfficialPluginInstallPanel({
       return normalizedEntries;
     }
 
-    return normalizedEntries.filter((entry) => entry.plugin_id === selectedPluginId);
+    return normalizedEntries.filter(
+      (entry) => entry.plugin_id === selectedPluginId
+    );
   }, [normalizedEntries, selectedPluginId]);
   const openExternal = (url: string) => {
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -244,8 +263,16 @@ export function OfficialPluginInstallPanel({
       <div className="model-provider-panel__section-head">
         <div>
           <Typography.Title level={5}>模型供应商</Typography.Title>
+          {sourceMeta ? (
+            <Typography.Text type="secondary">
+              当前从{sourceMeta.sourceLabel}读取可安装供应商目录，可直接查看说明后安装到当前
+              workspace。
+            </Typography.Text>
+          ) : null}
           <div className="model-provider-panel__official-toolbar">
-            {canManage ? <Button onClick={onOpenUpload}>上传插件</Button> : null}
+            {canManage ? (
+              <Button onClick={onOpenUpload}>上传插件</Button>
+            ) : null}
             {sourceMeta ? (
               <Button onClick={() => openExternal(sourceMeta.registryUrl)}>
                 来源
@@ -311,6 +338,12 @@ export function OfficialPluginInstallPanel({
                     <Typography.Title level={5}>
                       {entry.display_name}
                     </Typography.Title>
+                    <Typography.Text
+                      type="secondary"
+                      className="model-provider-panel__mono"
+                    >
+                      {entry.plugin_id}
+                    </Typography.Text>
                   </div>
                   <div className="model-provider-panel__catalog-item-tag-row">
                     {getStatusTags(
@@ -327,9 +360,32 @@ export function OfficialPluginInstallPanel({
                       </Tag>
                     ))}
                   </div>
-                  <Typography.Text type="secondary">
-                    {entry.plugin_id}
-                  </Typography.Text>
+                  {entry.description ? (
+                    <Typography.Paragraph className="model-provider-panel__official-card-description">
+                      {entry.description}
+                    </Typography.Paragraph>
+                  ) : null}
+                  <div className="model-provider-panel__catalog-item-meta">
+                    <Typography.Text type="secondary">
+                      协议：{entry.protocol}
+                    </Typography.Text>
+                    <Typography.Text type="secondary">
+                      {getDiscoveryModeDescription(entry.model_discovery_mode)}
+                    </Typography.Text>
+                    {sourceMeta ? (
+                      <Typography.Text type="secondary">
+                        来源：{sourceMeta.sourceLabel}
+                      </Typography.Text>
+                    ) : null}
+                  </div>
+                  <div className="model-provider-panel__catalog-item-meta">
+                    <Typography.Text
+                      type="secondary"
+                      className="model-provider-panel__mono"
+                    >
+                      {entry.plugin_id}
+                    </Typography.Text>
+                  </div>
                 </div>
 
                 {canManage ? (
@@ -366,9 +422,9 @@ export function OfficialPluginInstallPanel({
                                     : `即将安装官方最新版本 ${entry.latest_version}，完成后会自动启用到当前 workspace。`}
                                 </Typography.Paragraph>
                                 <div className="model-provider-panel__catalog-item-meta">
-                                  <span>协议 {entry.protocol}</span>
+                                  <span>协议：{entry.protocol}</span>
                                   <span>
-                                    发现模式 {entry.model_discovery_mode}
+                                    发现模式：{entry.model_discovery_mode}
                                   </span>
                                 </div>
                               </div>
