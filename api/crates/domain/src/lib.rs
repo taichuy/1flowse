@@ -7,6 +7,7 @@ pub mod base;
 pub mod flow;
 pub mod model_provider;
 pub mod node_contribution;
+pub mod plugin_worker;
 pub mod modeling;
 pub mod orchestration;
 pub mod resource;
@@ -36,6 +37,7 @@ pub use model_provider::{
     PluginVerificationStatus,
 };
 pub use node_contribution::{NodeContributionDependencyStatus, NodeContributionRegistryEntry};
+pub use plugin_worker::{PluginWorkerLeaseRecord, PluginWorkerStatus};
 pub use modeling::{
     DataModelScopeKind, MetadataAvailabilityStatus, ModelDefinitionRecord, ModelFieldKind,
     ModelFieldRecord,

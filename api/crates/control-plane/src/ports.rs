@@ -922,3 +922,18 @@ pub trait ProviderRuntimePort: Send + Sync {
         input: ProviderInvocationInput,
     ) -> anyhow::Result<ProviderRuntimeInvocationOutput>;
 }
+
+#[derive(Debug, Clone)]
+pub struct CreatePluginWorkerLeaseInput {
+    pub installation_id: Uuid,
+    pub worker_key: String,
+    pub status: domain::PluginWorkerStatus,
+}
+
+#[async_trait]
+pub trait PluginWorkerRepository: Send + Sync {
+    async fn create_worker_lease(
+        &self,
+        input: &CreatePluginWorkerLeaseInput,
+    ) -> anyhow::Result<domain::PluginWorkerLeaseRecord>;
+}

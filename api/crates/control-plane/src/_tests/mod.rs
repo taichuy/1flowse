@@ -1,5 +1,6 @@
 mod application_service_tests;
 mod bootstrap_tests;
+mod capability_plugin_runtime_tests;
 mod flow_service_tests;
 mod member_service_tests;
 mod model_definition_acl_tests;

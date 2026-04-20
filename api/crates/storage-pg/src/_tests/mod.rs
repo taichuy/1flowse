@@ -8,6 +8,7 @@ mod node_contribution_repository_tests;
 mod orchestration_runtime_repository_tests;
 mod physical_schema_repository_tests;
 mod plugin_repository_tests;
+mod plugin_worker_repository_tests;
 mod role_policy_tests;
 mod runtime_record_repository_tests;
 mod runtime_registry_health_tests;
