@@ -719,6 +719,27 @@ function hashFile(filePath) {
   return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
 }
 
+function createTarArchive(archivePath, sourceDir) {
+  const archiveFd = fs.openSync(archivePath, 'w');
+
+  try {
+    const result = spawnSync('tar', ['-czf', '-', '.'], {
+      cwd: sourceDir,
+      stdio: ['ignore', archiveFd, 'pipe'],
+    });
+
+    if (result.error) {
+      throw result.error;
+    }
+    if (result.status !== 0) {
+      const stderr = result.stderr ? result.stderr.toString('utf8').trim() : '';
+      throw new Error(stderr || `tar 打包失败，退出码 ${result.status}`);
+    }
+  } finally {
+    fs.closeSync(archiveFd);
+  }
+}
+
 function parseRustTargetTriple(raw) {
   switch (String(raw || '').trim()) {
     case 'x86_64-unknown-linux-musl':
@@ -906,17 +927,7 @@ function createPluginPackage(pluginPath, outputDir, options = {}) {
       });
     }
 
-    const result = spawnSync('tar', ['-czf', pendingFile, '-C', stagedRoot, '.'], {
-      stdio: 'pipe',
-    });
-
-    if (result.error) {
-      throw result.error;
-    }
-    if (result.status !== 0) {
-      const stderr = result.stderr ? result.stderr.toString('utf8').trim() : '';
-      throw new Error(stderr || `tar 打包失败，退出码 ${result.status}`);
-    }
+    createTarArchive(pendingFile, stagedRoot);
 
     const checksum = hashFile(pendingFile);
     const finalFile = path.join(

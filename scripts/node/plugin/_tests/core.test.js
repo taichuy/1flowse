@@ -83,6 +83,37 @@ function writeFakeRuntimeBinary(outputDir, fileName = 'acme_openai_compatible-pr
   return binaryPath;
 }
 
+function createFakeTarBin(binDir) {
+  const tarScript = path.join(binDir, 'tar');
+  const tarSource = `#!/usr/bin/env node
+const fs = require('node:fs');
+
+const logPath = process.env.ONEFLOWBASE_FAKE_TAR_LOG;
+if (!logPath) {
+  process.stderr.write('ONEFLOWBASE_FAKE_TAR_LOG is required\\n');
+  process.exit(2);
+}
+
+fs.writeFileSync(
+  logPath,
+  JSON.stringify(
+    {
+      cwd: process.cwd(),
+      args: process.argv.slice(2),
+    },
+    null,
+    2
+  )
+);
+
+process.stdout.write(Buffer.from(process.env.ONEFLOWBASE_FAKE_TAR_BYTES_B64 || '', 'base64'));
+`;
+
+  fs.writeFileSync(tarScript, tarSource, 'utf8');
+  fs.chmodSync(tarScript, 0o755);
+  return tarScript;
+}
+
 test('plugin init scaffolds rust provider source and executable manifest', async () => {
   const pluginPath = makeTempPluginPath();
 
@@ -251,6 +282,68 @@ test('plugin package writes a windows executable and asset suffix', async () => 
 
   assert.match(result.packageFile, /@windows-amd64@[a-f0-9]{64}\.1flowbasepkg$/);
   assert.ok(fs.readdirSync(outputDir).some((name) => name.includes('@windows-amd64@')));
+});
+
+test('plugin package streams tar output into the archive file instead of passing the output path to tar', async () => {
+  const pluginPath = makeTempPluginPath();
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-plugin-dist-'));
+  const fakeTarDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-fake-tar-'));
+  const tarLogPath = path.join(outputDir, 'fake-tar-log.json');
+  const archiveBytes = Buffer.from('fake plugin archive bytes\n', 'utf8');
+
+  await main(['init', pluginPath]);
+  createFakeTarBin(fakeTarDir);
+
+  const runtimeBinary = writeFakeRuntimeBinary(outputDir);
+  const originalPath = process.env.PATH;
+  const originalTarLog = process.env.ONEFLOWBASE_FAKE_TAR_LOG;
+  const originalTarBytes = process.env.ONEFLOWBASE_FAKE_TAR_BYTES_B64;
+
+  process.env.PATH = `${fakeTarDir}${path.delimiter}${originalPath || ''}`;
+  process.env.ONEFLOWBASE_FAKE_TAR_LOG = tarLogPath;
+  process.env.ONEFLOWBASE_FAKE_TAR_BYTES_B64 = archiveBytes.toString('base64');
+
+  try {
+    const result = await main([
+      'package',
+      pluginPath,
+      '--out',
+      outputDir,
+      '--runtime-binary',
+      runtimeBinary,
+      '--target',
+      'x86_64-pc-windows-msvc',
+    ]);
+
+    const tarLog = JSON.parse(fs.readFileSync(tarLogPath, 'utf8'));
+    const expectedChecksum = crypto.createHash('sha256').update(archiveBytes).digest('hex');
+
+    assert.deepEqual(tarLog.args, ['-czf', '-', '.']);
+    assert.match(path.basename(tarLog.cwd), /^1flowbase-plugin-package-/);
+    assert.equal(fs.readFileSync(result.packageFile).equals(archiveBytes), true);
+    assert.match(
+      result.packageFile,
+      new RegExp(`@windows-amd64@${expectedChecksum}\\.1flowbasepkg$`)
+    );
+  } finally {
+    if (originalPath === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = originalPath;
+    }
+
+    if (originalTarLog === undefined) {
+      delete process.env.ONEFLOWBASE_FAKE_TAR_LOG;
+    } else {
+      process.env.ONEFLOWBASE_FAKE_TAR_LOG = originalTarLog;
+    }
+
+    if (originalTarBytes === undefined) {
+      delete process.env.ONEFLOWBASE_FAKE_TAR_BYTES_B64;
+    } else {
+      process.env.ONEFLOWBASE_FAKE_TAR_BYTES_B64 = originalTarBytes;
+    }
+  }
 });
 
 test('plugin package excludes demo and scripts from the packaged artifact', async () => {
