@@ -110,7 +110,7 @@ describe('style boundary registry', () => {
   }, 15_000);
 
   test(
-    'renders the settings scene with mocked model provider data',
+    'renders the settings scene with canonical multi-provider contract data',
     async () => {
       const scene = getRuntimeScene('page.settings');
 
@@ -133,9 +133,10 @@ describe('style boundary registry', () => {
       expect(
         await screen.findByRole('heading', { name: '模型供应商', level: 5 }, { timeout: 5000 })
       ).toBeInTheDocument();
-      expect(await screen.findByText('OpenAI Compatible')).toBeInTheDocument();
+      expect((await screen.findAllByText('OpenAI Compatible')).length).toBeGreaterThan(0);
+      expect(await screen.findByText('Anthropic Compatible')).toBeInTheDocument();
       expect(
-        await screen.findByRole('button', { name: '已安装到当前 workspace' }, { timeout: 5000 })
+        await screen.findByRole('button', { name: '当前已是最新版本' }, { timeout: 5000 })
       ).toBeInTheDocument();
     },
     15000

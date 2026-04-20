@@ -9,60 +9,18 @@ import { SignInPage } from '../features/auth/pages/SignInPage';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
 import { ToolsPage } from '../features/tools/pages/ToolsPage';
 import { useAuthStore } from '../state/auth-store';
+import {
+  modelProviderCatalogContract,
+  modelProviderOptionsContract,
+  primaryContractProviderModels
+} from '../test/model-provider-contract-fixtures';
 import manifest from './scenario-manifest.json';
 import type {
   StyleBoundaryManifestScene,
   StyleBoundaryRuntimeScene
 } from './types';
 
-const styleBoundaryProviderModels = [
-  {
-    model_id: 'gpt-4o-mini',
-    display_name: 'GPT-4o Mini',
-    source: 'runtime_catalog',
-    supports_streaming: true,
-    supports_tool_call: true,
-    supports_multimodal: false,
-    context_window: 128000,
-    max_output_tokens: 16384,
-    provider_metadata: {}
-  },
-  {
-    model_id: 'gpt-4.1-mini',
-    display_name: 'GPT-4.1 Mini',
-    source: 'runtime_catalog',
-    supports_streaming: true,
-    supports_tool_call: true,
-    supports_multimodal: false,
-    context_window: 1048576,
-    max_output_tokens: 32768,
-    provider_metadata: {}
-  }
-];
-
-const styleBoundaryProviderCatalog = [
-  {
-    installation_id: 'installation-openai-compatible',
-    provider_code: 'openai_compatible',
-    plugin_id: 'openai_compatible@0.1.0',
-    plugin_version: '0.1.0',
-    display_name: 'OpenAI Compatible',
-    protocol: 'openai_responses',
-    help_url: 'https://platform.openai.com/docs/api-reference/responses',
-    default_base_url: 'https://api.openai.com/v1',
-    model_discovery_mode: 'dynamic',
-    supports_model_fetch_without_credentials: false,
-    enabled: true,
-    form_schema: [
-      { key: 'base_url', field_type: 'string', required: true },
-      { key: 'api_key', field_type: 'secret', required: true },
-      { key: 'organization', field_type: 'string', required: false },
-      { key: 'default_headers', field_type: 'json', required: false },
-      { key: 'validate_model', field_type: 'boolean', required: false }
-    ],
-    predefined_models: styleBoundaryProviderModels
-  }
-];
+const styleBoundaryProviderModels = primaryContractProviderModels;
 
 const styleBoundaryProviderInstances = [
   {
@@ -87,16 +45,73 @@ const styleBoundaryProviderInstances = [
   }
 ];
 
-const styleBoundaryProviderOptions = {
-  instances: [
-    {
-      provider_instance_id: 'provider-openai-prod',
-      provider_code: 'openai_compatible',
-      protocol: 'openai_responses',
-      display_name: 'OpenAI Production',
-      models: styleBoundaryProviderModels
+function expandDottedBundle(bundle: Record<string, string>) {
+  const expanded: Record<string, unknown> = {};
+
+  for (const [dottedKey, value] of Object.entries(bundle)) {
+    const segments = dottedKey.split('.');
+    let current = expanded;
+
+    for (const segment of segments.slice(0, -1)) {
+      const next = current[segment];
+      if (typeof next === 'object' && next !== null) {
+        current = next as Record<string, unknown>;
+        continue;
+      }
+
+      const created: Record<string, unknown> = {};
+      current[segment] = created;
+      current = created;
     }
-  ]
+
+    current[segments[segments.length - 1]!] = value;
+  }
+
+  return expanded;
+}
+
+const styleBoundaryPluginI18nCatalog = Object.fromEntries(
+  Object.entries(modelProviderCatalogContract.i18n_catalog).map(
+    ([namespace, locales]) => [
+      namespace,
+      Object.fromEntries(
+        Object.entries(locales as Record<string, Record<string, string>>).map(
+          ([locale, bundle]) => [locale, expandDottedBundle(bundle)]
+        )
+      )
+    ]
+  )
+);
+
+const styleBoundaryPluginFamiliesCatalog = {
+  locale_meta: modelProviderCatalogContract.locale_meta,
+  i18n_catalog: styleBoundaryPluginI18nCatalog,
+  entries: modelProviderCatalogContract.entries.map((entry) => ({
+    provider_code: entry.provider_code,
+    plugin_type: 'model_provider',
+    namespace: entry.namespace,
+    label_key: entry.label_key,
+    description_key: entry.description_key,
+    provider_label_key: entry.label_key,
+    protocol: entry.protocol,
+    help_url: entry.help_url,
+    default_base_url: entry.default_base_url,
+    model_discovery_mode: entry.model_discovery_mode,
+    current_installation_id: entry.installation_id,
+    current_version: entry.plugin_version,
+    latest_version: entry.plugin_version,
+    has_update: false,
+    installed_versions: [
+      {
+        installation_id: entry.installation_id,
+        plugin_version: entry.plugin_version,
+        source_kind: 'official_registry',
+        trust_level: 'verified_official',
+        created_at: '2026-04-20T10:00:00Z',
+        is_current: true
+      }
+    ]
+  }))
 };
 
 const styleBoundaryOfficialPluginCatalog = {
@@ -104,13 +119,29 @@ const styleBoundaryOfficialPluginCatalog = {
   source_label: '官方源',
   registry_url:
     'https://github.com/taichuy/1flowbase-official-plugins/releases/latest/download/official-registry.json',
+  locale_meta: modelProviderCatalogContract.locale_meta,
+  i18n_catalog: styleBoundaryPluginI18nCatalog,
   entries: [
     {
       plugin_id: '1flowbase.openai_compatible',
       provider_code: 'openai_compatible',
-      display_name: 'OpenAI Compatible',
+      plugin_type: 'model_provider',
+      namespace: 'plugin.openai_compatible',
+      label_key: 'provider.label',
+      description_key: 'provider.description',
+      provider_label_key: 'provider.label',
       protocol: 'openai_responses',
       latest_version: '0.1.0',
+      selected_artifact: {
+        os: 'linux',
+        arch: 'x64',
+        libc: 'gnu',
+        rust_target: 'x86_64-unknown-linux-gnu',
+        download_url: 'https://example.com/openai-compatible.tar.gz',
+        checksum: 'openai-compatible-checksum',
+        signature_algorithm: null,
+        signing_key_id: null
+      },
       help_url:
         'https://github.com/taichuy/1flowbase-official-plugins/tree/main/models/openai_compatible',
       model_discovery_mode: 'hybrid',
@@ -295,7 +326,7 @@ function seedStyleBoundarySettingsFetch() {
     ) {
       return new Response(
         JSON.stringify({
-          data: styleBoundaryProviderOptions,
+          data: modelProviderOptionsContract,
           meta: null
         }),
         {
@@ -311,7 +342,7 @@ function seedStyleBoundarySettingsFetch() {
     ) {
       return new Response(
         JSON.stringify({
-          data: styleBoundaryProviderCatalog,
+          data: modelProviderCatalogContract,
           meta: null
         }),
         {
@@ -323,7 +354,23 @@ function seedStyleBoundarySettingsFetch() {
 
     if (
       method.toUpperCase() === 'GET' &&
-      url.endsWith('/api/console/plugins/official-catalog')
+      url.includes('/api/console/plugins/families')
+    ) {
+      return new Response(
+        JSON.stringify({
+          data: styleBoundaryPluginFamiliesCatalog,
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
+    if (
+      method.toUpperCase() === 'GET' &&
+      url.includes('/api/console/plugins/official-catalog')
     ) {
       return new Response(
         JSON.stringify({
@@ -395,7 +442,7 @@ function seedStyleBoundaryApplicationFetch() {
     ) {
       return new Response(
         JSON.stringify({
-          data: styleBoundaryProviderOptions,
+          data: modelProviderOptionsContract,
           meta: null
         }),
         {

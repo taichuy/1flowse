@@ -7,6 +7,10 @@ import {
 } from '@testing-library/react';
 import { Grid } from 'antd';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import {
+  modelProviderCatalogEntries,
+  primaryContractProviderModels
+} from '../../../test/model-provider-contract-fixtures';
 
 const membersApi = vi.hoisted(() => ({
   settingsMembersQueryKey: ['settings', 'members'],
@@ -202,44 +206,15 @@ describe('ModelProvidersPage', () => {
       paths: {},
       components: {}
     });
-    modelProvidersApi.fetchSettingsModelProviderCatalog.mockResolvedValue([
-      {
-        installation_id: 'installation-1',
-        provider_code: 'openai_compatible',
-        plugin_id: 'openai_compatible@0.1.0',
-        plugin_version: '0.1.0',
-        display_name: 'OpenAI Compatible',
-        protocol: 'openai_compatible',
-        help_url: 'https://platform.openai.com/docs/api-reference',
-        default_base_url: 'https://api.openai.com/v1',
-        model_discovery_mode: 'hybrid',
-        supports_model_fetch_without_credentials: false,
-        enabled: true,
-        form_schema: [
-          { key: 'base_url', field_type: 'string', required: true },
-          { key: 'api_key', field_type: 'secret', required: true }
-        ],
-        predefined_models: [
-          {
-            model_id: 'gpt-4o-mini',
-            display_name: 'GPT-4o mini',
-            source: 'static',
-            supports_streaming: true,
-            supports_tool_call: true,
-            supports_multimodal: false,
-            context_window: 128000,
-            max_output_tokens: 16384,
-            provider_metadata: {}
-          }
-        ]
-      }
-    ]);
+    modelProvidersApi.fetchSettingsModelProviderCatalog.mockResolvedValue(
+      modelProviderCatalogEntries
+    );
     modelProvidersApi.fetchSettingsModelProviderInstances.mockResolvedValue([
       {
         id: 'provider-1',
-        installation_id: 'installation-1',
-        provider_code: 'openai_compatible',
-        protocol: 'openai_compatible',
+        installation_id: modelProviderCatalogEntries[0].installation_id,
+        provider_code: modelProviderCatalogEntries[0].provider_code,
+        protocol: modelProviderCatalogEntries[0].protocol,
         display_name: 'OpenAI Production',
         status: 'ready',
         config_json: {
@@ -256,9 +231,9 @@ describe('ModelProvidersPage', () => {
       },
       {
         id: 'provider-2',
-        installation_id: 'installation-1',
-        provider_code: 'openai_compatible',
-        protocol: 'openai_compatible',
+        installation_id: modelProviderCatalogEntries[0].installation_id,
+        provider_code: modelProviderCatalogEntries[0].provider_code,
+        protocol: modelProviderCatalogEntries[0].protocol,
         display_name: 'OpenAI Backup',
         status: 'disabled',
         config_json: {
@@ -280,30 +255,7 @@ describe('ModelProvidersPage', () => {
       source: 'hybrid',
       last_error_message: null,
       refreshed_at: '2026-04-18T10:01:00Z',
-      models: [
-        {
-          model_id: 'gpt-4o-mini',
-          display_name: 'GPT-4o mini',
-          source: 'static',
-          supports_streaming: true,
-          supports_tool_call: true,
-          supports_multimodal: false,
-          context_window: 128000,
-          max_output_tokens: 16384,
-          provider_metadata: {}
-        },
-        {
-          model_id: 'gpt-4.1',
-          display_name: 'GPT-4.1',
-          source: 'dynamic',
-          supports_streaming: true,
-          supports_tool_call: true,
-          supports_multimodal: false,
-          context_window: 128000,
-          max_output_tokens: 32768,
-          provider_metadata: {}
-        }
-      ]
+      models: primaryContractProviderModels
     });
     modelProvidersApi.revealSettingsModelProviderSecret.mockResolvedValue({
       key: 'api_key',
@@ -775,7 +727,9 @@ describe('ModelProvidersPage', () => {
       expect(
         await within(modal).findByRole('combobox', { name: '可用模型' })
       ).toBeInTheDocument();
-      expect(within(modal).getByText('GPT-4o mini')).toBeInTheDocument();
+      expect(
+        within(modal).getByText(primaryContractProviderModels[0].display_name)
+      ).toBeInTheDocument();
     }
   );
 
