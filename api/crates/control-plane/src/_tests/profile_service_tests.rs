@@ -14,6 +14,7 @@ fn test_user() -> UserRecord {
         nickname: "Root".to_string(),
         avatar_url: Some("https://example.com/avatar.png".to_string()),
         introduction: "before".to_string(),
+        preferred_locale: None,
         default_display_role: Some("root".to_string()),
         email_login_enabled: true,
         phone_login_enabled: true,
@@ -44,6 +45,7 @@ async fn update_me_updates_only_profile_fields() {
             phone: Some("13900000000".to_string()),
             avatar_url: Some("https://example.com/next-avatar.png".to_string()),
             introduction: "updated intro".to_string(),
+            preferred_locale: None,
         })
         .await
         .unwrap();
@@ -64,4 +66,28 @@ async fn update_me_updates_only_profile_fields() {
     assert_eq!(profile.user.email, "root-next@example.com");
     assert_eq!(profile.user.nickname, "Captain Root");
     assert_eq!(profile.actor.effective_display_role, "root");
+}
+
+#[tokio::test]
+async fn update_me_persists_preferred_locale() {
+    let repository = MemoryAuthRepository::new(test_user());
+    let service = ProfileService::new(repository.clone());
+
+    let profile = service
+        .update_me(UpdateMeCommand {
+            actor_user_id: repository.user().id,
+            tenant_id: Uuid::nil(),
+            workspace_id: Uuid::nil(),
+            name: "Root".into(),
+            nickname: "Root".into(),
+            email: "root@example.com".into(),
+            phone: None,
+            avatar_url: None,
+            introduction: "intro".into(),
+            preferred_locale: Some("zh_Hans".into()),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(profile.user.preferred_locale.as_deref(), Some("zh_Hans"));
 }

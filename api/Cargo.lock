@@ -362,6 +362,7 @@ dependencies = [
  "orchestration-runtime",
  "plugin-framework",
  "runtime-core",
+ "runtime-profile",
  "serde",
  "serde_json",
  "sha2",

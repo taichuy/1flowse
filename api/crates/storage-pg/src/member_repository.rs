@@ -269,7 +269,7 @@ impl MemberRepository for PgControlPlaneStore {
             r#"
             select
               u.id, u.account, u.email, u.phone, u.password_hash, u.name, u.nickname, u.avatar_url,
-              u.introduction, u.default_display_role, u.email_login_enabled, u.phone_login_enabled,
+              u.introduction, u.preferred_locale, u.default_display_role, u.email_login_enabled, u.phone_login_enabled,
               u.status, u.session_version
             from workspace_memberships tm
             join users u on u.id = tm.user_id

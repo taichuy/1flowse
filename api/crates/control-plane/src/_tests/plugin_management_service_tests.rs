@@ -174,6 +174,16 @@ impl AuthRepository for MemoryPluginManagementRepository {
         })
     }
 
+    async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
+        self.load_actor_context(
+            actor_user_id,
+            self.actor.tenant_id,
+            self.actor.current_workspace_id,
+            None,
+        )
+        .await
+    }
+
     async fn load_actor_context(
         &self,
         user_id: Uuid,

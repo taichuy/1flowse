@@ -583,7 +583,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p runtime-profile -- --nocapture
 
 Expected: PASS with deterministic fingerprint generation, the agreed locale precedence, and memory byte/GB conversions rounded to two decimals.
 
-- [ ] **Step 5: Commit the shared runtime-profile crate**
+- [x] **Step 5: Commit the shared runtime-profile crate**
 
 ```bash
 rtk git add api/Cargo.toml api/crates/runtime-profile
@@ -610,7 +610,7 @@ rtk git commit -m "feat: add runtime profile shared crate"
 - Modify: `api/apps/api-server/src/routes/me.rs`
 - Modify: `api/apps/api-server/src/_tests/me_routes.rs`
 
-- [ ] **Step 1: Write the failing profile and permission tests**
+- [x] **Step 1: Write the failing profile and permission tests**
 
 Add service coverage in `api/crates/control-plane/src/_tests/profile_service_tests.rs`:
 
@@ -670,7 +670,7 @@ assert_eq!(updated["data"]["preferred_locale"], serde_json::Value::Null);
 assert_eq!(error["error"]["code"], "unsupported_locale");
 ```
 
-- [ ] **Step 2: Run the profile/service/route tests and confirm RED**
+- [x] **Step 2: Run the profile/service/route tests and confirm RED**
 
 Run:
 
@@ -682,7 +682,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p api-server me_routes -- --nocap
 
 Expected: FAIL because `UserRecord` and profile updates do not carry `preferred_locale`, there is no `SystemRuntimeService`, and `/api/console/me` does not yet round-trip locale changes.
 
-- [ ] **Step 3: Implement additive locale persistence and system runtime access**
+- [x] **Step 3: Implement additive locale persistence and system runtime access**
 
 Create the migration:
 
@@ -758,7 +758,7 @@ pub async fn authorize_view(&self, actor_user_id: Uuid) -> Result<SystemRuntimeA
 }
 ```
 
-- [ ] **Step 4: Re-run the profile/service/route tests and confirm GREEN**
+- [x] **Step 4: Re-run the profile/service/route tests and confirm GREEN**
 
 Run:
 
@@ -770,7 +770,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p api-server me_routes -- --nocap
 
 Expected: PASS with `preferred_locale` stored on users, root bypassing permission checks automatically, non-root users requiring `system_runtime.view.all`, and `/api/console/me` correctly updating/clearing locale.
 
-- [ ] **Step 5: Commit locale persistence and runtime authorization**
+- [x] **Step 5: Commit locale persistence and runtime authorization**
 
 ```bash
 rtk git add api/crates/domain/src/auth.rs api/crates/domain/src/_tests/auth_domain_tests.rs api/crates/control-plane/src/lib.rs api/crates/control-plane/src/ports.rs api/crates/control-plane/src/profile.rs api/crates/control-plane/src/system_runtime.rs api/crates/control-plane/src/_tests/profile_service_tests.rs api/crates/control-plane/src/_tests/system_runtime_service_tests.rs api/crates/control-plane/src/_tests/support.rs api/crates/access-control/src/catalog.rs api/crates/storage-pg/migrations/20260420120000_add_user_preferred_locale.sql api/crates/storage-pg/src/auth_repository.rs api/crates/storage-pg/src/member_repository.rs api/crates/storage-pg/src/mappers/member_mapper.rs api/apps/api-server/src/routes/me.rs api/apps/api-server/src/_tests/me_routes.rs

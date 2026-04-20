@@ -141,6 +141,7 @@ impl BootstrapRepository for MemoryBootstrapRepository {
             nickname: nickname.to_string(),
             avatar_url: None,
             introduction: String::new(),
+            preferred_locale: None,
             default_display_role: Some("root".to_string()),
             email_login_enabled: true,
             phone_login_enabled: false,
@@ -229,6 +230,7 @@ impl MemberRepository for MemoryMemberRepository {
             nickname: format!("{} 1", default_role_code.to_uppercase()),
             avatar_url: None,
             introduction: String::new(),
+            preferred_locale: None,
             default_display_role: Some(default_role_code.clone()),
             email_login_enabled: true,
             phone_login_enabled: false,
@@ -572,6 +574,7 @@ impl WorkspaceRepository for MemoryWorkspaceRepository {
 #[derive(Clone)]
 pub struct MemoryAuthRepository {
     user: Arc<RwLock<UserRecord>>,
+    permissions: Arc<RwLock<HashSet<String>>>,
     audit_events: Arc<RwLock<Vec<String>>>,
     audit_logs: Arc<RwLock<Vec<AuditLogRecord>>>,
     bump_session_version_calls: Arc<RwLock<Vec<(Uuid, Uuid)>>>,
@@ -581,10 +584,67 @@ impl MemoryAuthRepository {
     pub fn new(user: UserRecord) -> Self {
         Self {
             user: Arc::new(RwLock::new(user)),
+            permissions: Arc::new(RwLock::new(HashSet::new())),
             audit_events: Arc::new(RwLock::new(Vec::new())),
             audit_logs: Arc::new(RwLock::new(Vec::new())),
             bump_session_version_calls: Arc::new(RwLock::new(Vec::new())),
         }
+    }
+
+    pub fn root_user(preferred_locale: Option<&str>) -> Self {
+        Self::new(UserRecord {
+            id: Uuid::now_v7(),
+            account: "root".to_string(),
+            email: "root@example.com".to_string(),
+            phone: None,
+            password_hash: "password-hash".to_string(),
+            name: "Root".to_string(),
+            nickname: "Root".to_string(),
+            avatar_url: None,
+            introduction: String::new(),
+            preferred_locale: preferred_locale.map(str::to_string),
+            default_display_role: Some("root".to_string()),
+            email_login_enabled: true,
+            phone_login_enabled: false,
+            status: UserStatus::Active,
+            session_version: 1,
+            roles: vec![BoundRole {
+                code: "root".to_string(),
+                scope_kind: RoleScopeKind::System,
+                workspace_id: None,
+            }],
+        })
+    }
+
+    pub fn scoped_user(permissions: &[&str]) -> Self {
+        let repository = Self::new(UserRecord {
+            id: Uuid::now_v7(),
+            account: "manager".to_string(),
+            email: "manager@example.com".to_string(),
+            phone: None,
+            password_hash: "password-hash".to_string(),
+            name: "Manager".to_string(),
+            nickname: "Manager".to_string(),
+            avatar_url: None,
+            introduction: String::new(),
+            preferred_locale: None,
+            default_display_role: Some("manager".to_string()),
+            email_login_enabled: true,
+            phone_login_enabled: false,
+            status: UserStatus::Active,
+            session_version: 1,
+            roles: vec![BoundRole {
+                code: "manager".to_string(),
+                scope_kind: RoleScopeKind::Workspace,
+                workspace_id: Some(Uuid::nil()),
+            }],
+        });
+        repository
+            .permissions
+            .try_write()
+            .expect("permissions lock should be free while constructing repository")
+            .extend(permissions.iter().map(|value| value.to_string()));
+        repository
     }
 
     pub fn user(&self) -> UserRecord {
@@ -638,6 +698,12 @@ impl AuthRepository for MemoryAuthRepository {
         })
     }
 
+    async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
+        let scope = self.default_scope_for_user(actor_user_id).await?;
+        self.load_actor_context(actor_user_id, scope.tenant_id, scope.workspace_id, None)
+            .await
+    }
+
     async fn load_actor_context(
         &self,
         user_id: Uuid,
@@ -667,7 +733,7 @@ impl AuthRepository for MemoryAuthRepository {
             current_workspace_id: workspace_id,
             effective_display_role,
             is_root: codes.iter().any(|code| code == "root"),
-            permissions: Default::default(),
+            permissions: self.permissions.read().await.clone(),
         })
     }
 
@@ -693,6 +759,7 @@ impl AuthRepository for MemoryAuthRepository {
         user.phone = input.phone.clone();
         user.avatar_url = input.avatar_url.clone();
         user.introduction = input.introduction.clone();
+        user.preferred_locale = input.preferred_locale.clone();
         Ok(user.clone())
     }
 

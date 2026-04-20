@@ -13,6 +13,7 @@ fn member_mapper_preserves_roles_and_status() {
         name: "Manager".into(),
         nickname: "Manager".into(),
         introduction: String::new(),
+        preferred_locale: None,
         default_display_role: Some("manager".into()),
         avatar_url: None,
         email_login_enabled: true,

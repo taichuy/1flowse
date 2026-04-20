@@ -18,6 +18,7 @@ fn test_user() -> UserRecord {
         nickname: "Root".to_string(),
         avatar_url: None,
         introduction: String::new(),
+        preferred_locale: None,
         default_display_role: Some("root".to_string()),
         email_login_enabled: true,
         phone_login_enabled: false,

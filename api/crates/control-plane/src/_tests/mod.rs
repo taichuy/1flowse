@@ -14,5 +14,6 @@ mod role_service_tests;
 mod session_security_service_tests;
 mod state_transition_tests;
 mod support;
+mod system_runtime_service_tests;
 mod workspace_service_tests;
 mod workspace_session_service_tests;

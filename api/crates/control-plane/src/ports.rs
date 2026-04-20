@@ -58,6 +58,7 @@ pub trait AuthRepository: Send + Sync {
     ) -> anyhow::Result<Option<UserRecord>>;
     async fn find_user_by_id(&self, user_id: Uuid) -> anyhow::Result<Option<UserRecord>>;
     async fn default_scope_for_user(&self, user_id: Uuid) -> anyhow::Result<ScopeContext>;
+    async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> anyhow::Result<ActorContext>;
     async fn load_actor_context(
         &self,
         user_id: Uuid,
@@ -407,6 +408,7 @@ pub struct UpdateProfileInput {
     pub phone: Option<String>,
     pub avatar_url: Option<String>,
     pub introduction: String,
+    pub preferred_locale: Option<String>,
 }
 
 #[derive(Debug, Clone)]

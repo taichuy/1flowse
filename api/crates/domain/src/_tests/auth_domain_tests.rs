@@ -12,6 +12,7 @@ fn sample_user(default_display_role: Option<&str>, roles: &[&str]) -> UserRecord
         nickname: "Root".into(),
         avatar_url: None,
         introduction: String::new(),
+        preferred_locale: None,
         default_display_role: default_display_role.map(str::to_string),
         email_login_enabled: true,
         phone_login_enabled: false,

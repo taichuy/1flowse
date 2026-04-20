@@ -1,8 +1,12 @@
 use anyhow::Result;
 use domain::{ActorContext, UserRecord};
+use runtime_profile::{normalize_supported_locale, SUPPORTED_LOCALES};
 use uuid::Uuid;
 
-use crate::ports::{AuthRepository, UpdateProfileInput};
+use crate::{
+    errors::ControlPlaneError,
+    ports::{AuthRepository, UpdateProfileInput},
+};
 
 pub struct MeProfile {
     pub user: UserRecord,
@@ -19,6 +23,7 @@ pub struct UpdateMeCommand {
     pub phone: Option<String>,
     pub avatar_url: Option<String>,
     pub introduction: String,
+    pub preferred_locale: Option<String>,
 }
 
 pub struct ProfileService<R> {
@@ -68,6 +73,7 @@ where
     }
 
     pub async fn update_me(&self, command: UpdateMeCommand) -> Result<MeProfile> {
+        let preferred_locale = normalize_locale(command.preferred_locale)?;
         let user = self
             .repository
             .update_profile(&UpdateProfileInput {
@@ -79,10 +85,24 @@ where
                 phone: command.phone,
                 avatar_url: command.avatar_url,
                 introduction: command.introduction,
+                preferred_locale,
             })
             .await?;
 
         self.load_profile(user, command.tenant_id, command.workspace_id)
             .await
+    }
+}
+
+fn normalize_locale(preferred_locale: Option<String>) -> Result<Option<String>> {
+    let supported_locales = SUPPORTED_LOCALES
+        .iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>();
+    match preferred_locale {
+        Some(locale) => normalize_supported_locale(&locale, &supported_locales)
+            .map(Some)
+            .ok_or(ControlPlaneError::InvalidInput("unsupported_locale").into()),
+        None => Ok(None),
     }
 }

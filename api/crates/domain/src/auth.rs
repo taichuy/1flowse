@@ -42,6 +42,7 @@ pub struct UserRecord {
     pub nickname: String,
     pub avatar_url: Option<String>,
     pub introduction: String,
+    pub preferred_locale: Option<String>,
     pub default_display_role: Option<String>,
     pub email_login_enabled: bool,
     pub phone_login_enabled: bool,

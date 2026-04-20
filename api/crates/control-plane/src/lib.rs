@@ -17,6 +17,7 @@ pub mod role;
 pub mod runtime_registry_sync;
 pub mod session_security;
 pub mod state_transition;
+pub mod system_runtime;
 pub mod workspace;
 pub mod workspace_session;
 

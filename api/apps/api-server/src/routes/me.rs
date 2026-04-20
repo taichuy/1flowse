@@ -35,6 +35,7 @@ pub struct MeResponse {
     pub name: String,
     pub avatar_url: Option<String>,
     pub introduction: String,
+    pub preferred_locale: Option<String>,
     pub effective_display_role: String,
     pub permissions: Vec<String>,
 }
@@ -46,6 +47,13 @@ pub struct ChangePasswordBody {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(untagged)]
+pub enum PreferredLocalePatch {
+    Value(String),
+    Null,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct PatchMeBody {
     pub name: String,
     pub nickname: String,
@@ -53,6 +61,7 @@ pub struct PatchMeBody {
     pub phone: Option<String>,
     pub avatar_url: Option<String>,
     pub introduction: String,
+    pub preferred_locale: PreferredLocalePatch,
 }
 
 fn hash_password(password: &str) -> Result<String, ApiError> {
@@ -82,6 +91,7 @@ fn to_me_response(profile: control_plane::profile::MeProfile) -> MeResponse {
         name: profile.user.name,
         avatar_url: profile.user.avatar_url,
         introduction: profile.user.introduction,
+        preferred_locale: profile.user.preferred_locale,
         effective_display_role: profile.actor.effective_display_role,
         permissions,
     }
@@ -132,6 +142,10 @@ pub async fn patch_me(
             phone: body.phone,
             avatar_url: body.avatar_url,
             introduction: body.introduction,
+            preferred_locale: match body.preferred_locale {
+                PreferredLocalePatch::Value(value) => Some(value),
+                PreferredLocalePatch::Null => None,
+            },
         })
         .await?;
 

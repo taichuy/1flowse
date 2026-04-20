@@ -12,6 +12,7 @@ access-control = { path = "../access-control" }
 domain = { path = "../domain" }
 orchestration-runtime = { path = "../orchestration-runtime" }
 plugin-framework = { path = "../plugin-framework" }
+runtime-profile = { path = "../runtime-profile" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
