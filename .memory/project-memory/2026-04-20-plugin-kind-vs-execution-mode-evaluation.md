@@ -1,7 +1,7 @@
 ---
 memory_type: project
 topic: 插件消费语义与执行方式需要分轴建模
-summary: 用户于 `2026-04-20 00` 继续追问 `HostExtension`、`RuntimeExtension`、`CapabilityPlugin` 的区别，核心混淆点在于当前命名同时承载了“插件被谁消费/如何选用”和“插件代码怎么执行/如何回收”两层语义。基于当前代码与 spec，后续插件体系应把 `consumption kind` 与 `execution mode` 明确拆开建模：`HostExtension` 表示系统级宿主扩展，`RuntimeExtension` 表示挂到宿主 runtime slot 的运行时扩展，`CapabilityPlugin` 表示需显式选用的用户能力贡献；而 `in_process / process_per_call / warm_worker / declarative_only` 应作为另一条独立执行维度。用户在同日后续讨论中进一步修正：`HostExtension` 不再把“官方白名单”写死进类型，而改为由部署侧 `source allowlist + signature policy` 决定准入；`v1` 仅允许 `filesystem_dropin` 来源，且暂不考虑热卸载。第三方代码不应进入主进程热加载/热卸载路径，以避免 Rust 动态库 TLS/static unload 风险。
+summary: 用户于 `2026-04-20 00` 继续追问 `HostExtension`、`RuntimeExtension`、`CapabilityPlugin` 的区别，核心混淆点在于当前命名同时承载了“插件被谁消费/如何选用”和“插件代码怎么执行/如何回收”两层语义。基于当前代码与 spec，后续插件体系应把 `consumption kind` 与 `execution mode` 明确拆开建模：`HostExtension` 表示系统级宿主扩展，`RuntimeExtension` 表示挂到宿主 runtime slot 的运行时扩展，`CapabilityPlugin` 表示需显式选用的用户能力贡献；而 `in_process / process_per_call / warm_worker / declarative_only` 应作为另一条独立执行维度。用户在同日后续讨论中进一步修正：`HostExtension` 不再把“官方白名单”写死进类型，而改为由部署侧 `source allowlist + signature policy` 决定准入；默认走 `filesystem_dropin`，若部署显式开启则允许 `root` 上传，但安装后只写数据库 `activation_status=pending_restart`，必须重启后才能激活。目录只表达物理职责，日志统一收口，业务状态不再镜像成目录。第三方代码不应进入主进程热加载/热卸载路径，以避免 Rust 动态库 TLS/static unload 风险。
 keywords:
   - host-extension
   - runtime-extension
@@ -16,8 +16,8 @@ match_when:
   - 需要设计插件回收、热加载、进程边界
   - 需要避免 Rust so/dll unload 风险
 created_at: 2026-04-20 00
-updated_at: 2026-04-20 22
-last_verified_at: 2026-04-20 22
+updated_at: 2026-04-20 23
+last_verified_at: 2026-04-20 23
 decision_policy: verify_before_decision
 scope:
   - api/apps/plugin-runner/src/provider_host.rs
@@ -68,7 +68,10 @@ scope:
   - 第三方代码插件不进入主进程热加载/热卸载路径
   - `HostExtension` 若存在，应按宿主启动生命周期加载，不做热卸载
   - `HostExtension` 的来源准入不写死为“官方白名单”，而由部署侧 `source allowlist + signature policy` 控制
-  - `HostExtension` `v1` 只允许 `filesystem_dropin`
+  - `HostExtension` 默认走 `filesystem_dropin`；若部署显式开启则允许 `root` 上传
+  - `HostExtension uploaded` 安装成功后只写数据库 `activation_status=pending_restart`
+  - 目录只表达 `dropins / packages / installed / working` 等物理职责，不承载业务状态
+  - 日志统一收口到单一 `plugin-logs/` 根目录
   - 第三方可执行插件一律走 `plugin-runner` 进程外执行
 
 ## 用户确认
@@ -76,5 +79,8 @@ scope:
 - 用户已确认接受：
   - `HostExtension` 不再把“官方白名单”写死进类型
   - `HostExtension` 准入改为部署侧 `source allowlist + signature policy`
-  - `HostExtension` `v1` 只允许 `filesystem_dropin`
+  - `HostExtension` 默认走 `filesystem_dropin`；若部署显式开启则允许 `root` 上传
+  - `HostExtension uploaded` 安装成功后只写数据库 `activation_status=pending_restart`
+  - 插件目录只保留物理职责划分，状态以数据库为准
+  - 插件日志统一收口，不再按插件级别各自维护日志根目录
   - 初期暂不考虑热卸载

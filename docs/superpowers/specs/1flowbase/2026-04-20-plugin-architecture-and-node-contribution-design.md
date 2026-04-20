@@ -122,7 +122,8 @@
 - 启动期加载
 - 不支持热卸载
 - 不进入普通 marketplace 安装入口
-- `v1` 只允许 `source_kind=filesystem_dropin`
+- `v1` 默认允许 `source_kind=filesystem_dropin`
+- 若部署开启 `uploaded host extension`，则仅允许 `root` 上传，且安装成功后只写入数据库 `activation_status=pending_restart`
 - 是否仅信任白名单来源、是否要求官方签名，由部署配置决定；默认建议开启严格策略
 - 变更通过重启宿主相关服务生效
 
@@ -204,7 +205,7 @@
 补充约束：
 
 - `host_extension` 不进入普通 marketplace 开放生态
-- `host_extension` `v1` 只允许 `filesystem_dropin`
+- `host_extension` 默认走 `filesystem_dropin`；若部署显式开启则允许 `root` 上传，但上传后只写数据库 `activation_status=pending_restart`
 - `runtime_extension` 与 `capability_plugin` 不允许注册系统级 HTTP 接口
 - 第三方代码插件不进入主进程热加载路径
 
@@ -366,18 +367,24 @@
 - `downloaded`
 - `verified`
 - `installed`
-- `enabled`
-- `assigned`
+- `install_failed`
+
+### 9.3 插件激活状态
+
+- `inactive`
+- `pending_restart`
+- `active`
+- `load_failed`
 - `disabled`
 
-### 9.3 节点依赖状态
+### 9.4 节点依赖状态
 
 - `ready`
 - `missing_plugin`
 - `version_mismatch`
 - `disabled_plugin`
 
-### 9.4 worker 状态
+### 9.5 worker 状态
 
 - `unloaded`
 - `starting`
@@ -389,6 +396,8 @@
 初期规则：
 
 - `HostExtension` 不做热卸载，不维护细粒度 worker 生命周期
+- `HostExtension` 的上传安装与激活必须拆开；`root` 上传成功后只更新数据库状态为 `pending_restart`
+- `HostExtension` 重启后才进入加载判定；加载成功写 `active`，失败写 `load_failed`
 - `RuntimeExtension` 与带执行逻辑的 `CapabilityPlugin` 初期都可以统一走 `process_per_call`
 - `process_per_call` 模式下，每次调用结束即由操作系统回收进程资源
 
@@ -398,16 +407,32 @@
 
 宿主目录至少分为：
 
-- `plugin-dropins/`
-  - 运维控制的本地 drop-in 目录，供 `HostExtension` 与其它受控本地插件入口使用
-- `plugin-packages/`
-  - 原始安装包
-- `plugin-installed/`
-  - 当前已安装版本
-- `plugin-working/`
-  - 运行时工作目录
+- `plugins/host-extension/dropins/`
+  - 运维控制的本地 drop-in 目录，对应 `source_kind=filesystem_dropin`
+- `plugins/host-extension/packages/`
+  - `HostExtension` 原始安装包归档
+- `plugins/host-extension/installed/`
+  - `HostExtension` 解包后的只读安装目录
+- `plugins/runtime-extension/packages/`
+  - `RuntimeExtension` 原始安装包归档
+- `plugins/runtime-extension/installed/`
+  - `RuntimeExtension` 解包后的只读安装目录
+- `plugins/runtime-extension/working/`
+  - `RuntimeExtension` 运行时工作目录
+- `plugins/capability-plugin/packages/`
+  - `CapabilityPlugin` 原始安装包归档
+- `plugins/capability-plugin/installed/`
+  - `CapabilityPlugin` 解包后的只读安装目录
+- `plugins/capability-plugin/working/`
+  - 带执行逻辑的 `CapabilityPlugin` 运行时工作目录
 - `plugin-logs/`
-  - 诊断日志目录
+  - 唯一日志根目录；日志可按 `kind / plugin_id / installation_id` 组织，但不再为每类插件单独维护不同日志根目录
+
+补充约束：
+
+- 目录只表达物理职责，不表达业务状态
+- 上传临时 staging 目录只作为短暂中转，不进入持久化目录契约
+- `pending_restart / active / load_failed` 等状态以数据库为准，不镜像成目录结构
 
 ### 10.2 核心数据模型
 
@@ -416,6 +441,7 @@
 - `plugin_family`
 - `plugin_version`
 - `plugin_installation`
+- `plugin_activation`
 - `plugin_assignment`
 - `plugin_task`
 - `node_contribution_registry`
@@ -471,7 +497,7 @@ block selector 固定规则：
 
 - `HostExtension`
   - 启动期加载
-  - 启动期扫描运维控制的 `filesystem_dropin` 目录
+  - 启动期扫描运维控制的 `filesystem_dropin` 目录与数据库中 `activation_status=pending_restart` 的安装记录
   - 通过宿主重启生效
 - `RuntimeExtension`
   - 统一由 `plugin-runner` 进程外执行
@@ -511,7 +537,7 @@ block selector 固定规则：
 `1flowbase` 插件体系初期应明确采用以下原则：
 
 - 分类和执行分轴建模
-- `HostExtension` 是宿主级特权插件，`v1` 仅允许 `filesystem_dropin`，启动期加载、无热卸载
+- `HostExtension` 是宿主级特权插件，默认走 `filesystem_dropin`；若部署显式开启则允许 `root` 上传，但只在重启后激活
 - `RuntimeExtension` 只负责扩展宿主 runtime slot
 - 第三方画布节点插件属于 `CapabilityPlugin`
 - 节点 UI 只允许 `schema ui`，统一由宿主渲染

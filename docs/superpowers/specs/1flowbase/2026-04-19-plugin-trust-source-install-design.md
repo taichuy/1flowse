@@ -71,7 +71,8 @@
 - 镜像源允许存在，但镜像只负责搬运，不拥有“声明官方身份”的权力
 - 用户上传允许存在，但默认是手工来源；只有在后端验签通过时，才能提升为“官方签发的离线包”
 - `filesystem_dropin` 允许存在，但它是运维控制的本地来源，不等价于官方来源
-- `HostExtension` `v1` 只允许 `filesystem_dropin`
+- `HostExtension` 默认走 `filesystem_dropin`；若部署显式开启，则可接受 `root` 上传，但 `source_kind` 仍保持 `uploaded`
+- `HostExtension uploaded` 安装成功后只写数据库 `activation_status=pending_restart`，必须重启后才能尝试激活
 - 上传入口不替代官方源，只作为高级能力和离线兜底
 
 ## 4. 总体方案
@@ -220,6 +221,7 @@
 - `API_PLUGIN_REQUIRE_SIGNATURE_FOR_REGISTRY_SOURCES`
 - `API_PLUGIN_ALLOW_UNVERIFIED_UPLOADS`
 - `API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS`
+- `API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS`
 - `API_OFFICIAL_PLUGIN_DEFAULT_REGISTRY_URL`
 - `API_OFFICIAL_PLUGIN_MIRROR_REGISTRY_URL`
 - `API_OFFICIAL_PLUGIN_TRUSTED_PUBLIC_KEYS_JSON`
@@ -231,6 +233,7 @@
 - `API_PLUGIN_REQUIRE_SIGNATURE_FOR_REGISTRY_SOURCES` 默认 `true`
 - `API_PLUGIN_ALLOW_UNVERIFIED_UPLOADS` 默认 `true`
 - `API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS` 默认 `true`
+- `API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS` 默认 `false`
 - 镜像地址为空：使用默认官方 registry
 - 镜像地址非空：优先使用镜像 registry
 - 对业务层暴露统一 resolved official source
@@ -281,7 +284,7 @@
 - 来源于运维控制的本地目录
 - 不等价于“官方来源”
 - 不暴露为普通浏览器上传入口
-- `HostExtension` `v1` 只允许来自该来源
+- 它是 `HostExtension` 的默认来源，而不是唯一来源
 
 宿主启动时对 `filesystem_dropin` 固定执行：
 
@@ -290,6 +293,14 @@
 3. 记录 `source_kind=filesystem_dropin`
 4. 根据签名结果生成 `trust_level`
 5. 对 `HostExtension` 按启动生命周期加载或拒绝加载
+
+对 `HostExtension uploaded` 额外固定：
+
+- 仅在 `API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS=true` 时允许
+- 仅 `root` 账号可执行上传
+- 上传后 `source_kind` 仍保持 `uploaded`
+- 安装成功后只写数据库 `activation_status=pending_restart`
+- 宿主重启时根据数据库状态尝试激活；成功写 `active`，失败写 `load_failed`
 
 ### 6.4 官方 catalog API 形状
 
@@ -366,8 +377,10 @@
 8. 生成 `source_kind=uploaded`
 9. 根据签名结果推导 `trust_level`
 10. 若当前策略不允许 `unverified upload`，则在此处拒绝安装
-11. 复用现有安装、启用、分配链路
-12. 写入任务记录、审计日志并清理临时目录
+11. 若包声明 `consumption_kind=host_extension`，则校验上传者必须是 `root`，且部署已开启 `API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS=true`
+12. 复用现有安装链路，将原始包归档到 `packages/`，解包产物写入 `installed/`
+13. 若包声明 `consumption_kind=host_extension`，则只写数据库 `activation_status=pending_restart`，不得立即激活
+14. 写入任务记录、审计日志并清理临时目录
 
 前端传来的元信息一律不可信，后端只能以解包后重新读取到的内容为准。
 
@@ -390,6 +403,11 @@ UI 应显示为：
 
 而不是“官方源安装”。
 
+若上传对象是 `HostExtension`，则 UI 还必须明确显示：
+
+- `仅 root 可上传`
+- `已安装，需重启应用后生效`
+
 ## 8. 数据模型与状态表达
 
 ### 8.1 installation 记录新增字段
@@ -403,12 +421,15 @@ UI 应显示为：
 - `signature_status`
 - `signature_algorithm`
 - `signing_key_id`
+- `activation_status`
+- `last_load_error`
 
 其中：
 
 - `source_kind` 回答“包从哪里来”
 - `trust_level` 回答“系统当前有多信任它”
 - `verification_status` 继续保留兼容，不再承担“官方可信”语义
+- `activation_status` 回答“这个安装对象当前是否已生效”
 
 ### 8.2 字段语义约束
 
@@ -419,6 +440,7 @@ UI 应显示为：
 - `signature_status=unsigned` 不代表失败，只代表没有官方签名
 - `source_kind=mirror_registry` 不天然等于官方可信，仍需验签成功
 - `source_kind=filesystem_dropin` 只表示包来自运维控制的本地目录，不天然等于官方可信
+- 目录结构不承载业务状态；`pending_restart / active / load_failed` 以数据库字段为准
 
 ### 8.3 版本管理与升级规则
 
@@ -430,6 +452,7 @@ UI 应显示为：
 - 上传来源版本可以切换，但不参与“推荐版本 / 官方最新”语义
 - `filesystem_dropin` 来源版本允许被宿主加载，但不参与 official catalog 的推荐和升级语义
 - 上传且未验签版本允许安装和回退，但 UI 必须明确标记“手工上传版本”
+- `HostExtension uploaded` 不参与“安装即生效”，而是固定进入 `pending_restart`
 
 ## 9. 前端交互设计
 
@@ -502,6 +525,7 @@ UI 应显示为：
 - 执行来源 allowlist 判断
 - 根据来源生成 `source_kind`
 - 根据验签结果生成 `trust_level`
+- 写入 `activation_status`
 - 复用 install、enable、assign、switch_version 等已有生命周期
 - 写任务记录和审计
 
@@ -574,8 +598,8 @@ UI 应显示为：
 - `filesystem_dropin` 是运维控制来源，不进入普通 marketplace 安装入口
 - 官方升级按钮只针对 official catalog 中的 `verified_official` 版本
 - 上传来源版本可以安装和切换，但文案必须标记为“手工上传版本”
-- `HostExtension` `v1` 只允许 `filesystem_dropin`，是否要求签名由部署配置决定
+- `HostExtension` 默认走 `filesystem_dropin`；若部署显式开启则允许 `root` 上传，但上传后固定进入 `pending_restart`
 
 一句话总结就是：
 
-`镜像源解决可达性，上传入口解决兜底安装，本地 drop-in 解决运维侧特权扩展，签名信任链与来源策略解决真实性和准入；几者缺一不可，但实现顺序不能颠倒。`
+`镜像源解决可达性，上传入口解决兜底安装，本地 drop-in 和 root 上传共同承载宿主级特权扩展，签名信任链与来源策略解决真实性和准入；几者缺一不可，但实现顺序不能颠倒。`
