@@ -108,6 +108,7 @@ docker compose -f docker/docker-compose.middleware.yaml up -d
 ```bash
 node scripts/node/test-scripts.js
 node scripts/node/test-scripts.js page-debug
+node scripts/node/test-contracts.js
 node scripts/node/verify-repo.js
 ```
 
@@ -115,7 +116,9 @@ node scripts/node/verify-repo.js
 
 - `node scripts/node/test-scripts.js` 统一执行 `scripts/node/**/_tests/*.js`。
 - `node scripts/node/test-scripts.js <filter>` 支持按脚本路径片段做 targeted fast run，例如 `page-debug`、`verify-backend`。
-- `node scripts/node/verify-repo.js` 是仓库级 full gate，会依次执行 `scripts/node` 测试、前端 `full` 门禁和后端 `verify-backend`。
+- `node scripts/node/test-contracts.js` 统一执行 model provider 共享契约定向测试，当前覆盖 settings API wrapper、settings page、style-boundary settings scene 和 agent-flow provider options consumer。
+- canonical fixture 真相源位于 `scripts/node/testing/contracts/model-providers/`。
+- `node scripts/node/verify-repo.js` 是仓库级 full gate，会依次执行 `scripts/node` 测试、contract gate、前端 `full` 门禁和后端 `verify-backend`。
 
 ### Coverage
 
@@ -165,6 +168,7 @@ node scripts/node/verify-ci.js
 说明：
 
 - `node scripts/node/verify-ci.js` 会按顺序执行 `verify-repo` 和 `verify-coverage all`，作为仓库自有的 CI 总入口。
+- `verify-ci` 的编排保持不变；新增的 contract gate 通过 `verify-repo` 间接纳入 CI。
 - GitHub Actions `verify` workflow 只负责准备 Node、pnpm、Rust 与 `cargo-llvm-cov`，实际 lint / test / coverage 逻辑统一委托给仓库脚本。
 
 ### Runtime Gate

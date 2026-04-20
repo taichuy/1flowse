@@ -305,7 +305,7 @@ git commit -m "test: add model provider contract gate entrypoint"
 - Modify: `web/packages/api-client/src/console-model-providers.ts`
 - Test: `web/app/src/features/settings/api/_tests/settings-api.test.ts`
 
-- [ ] **Step 1: Rewrite the settings API wrapper test to consume canonical fixtures and lock wrapper passthrough**
+- [x] **Step 1: Rewrite the settings API wrapper test to consume canonical fixtures and lock wrapper passthrough**
 
 ```ts
 // web/app/src/features/settings/api/_tests/settings-api.test.ts
@@ -350,7 +350,7 @@ test('forwards model provider query keys and request helpers', async () => {
 });
 ```
 
-- [ ] **Step 2: Run the settings API wrapper test and verify it fails on unresolved fixtures and missing DTO fields**
+- [x] **Step 2: Run the settings API wrapper test and verify it fails on unresolved fixtures and missing DTO fields**
 
 Run:
 
@@ -363,7 +363,7 @@ Expected:
 - FAIL because the canonical fixture adapter does not exist yet.
 - FAIL because `ConsoleModelProviderCatalogEntry` and `ConsoleModelProviderOptions` do not yet retain the full shared contract shape.
 
-- [ ] **Step 3: Add the canonical fixtures, web adapter, alias wiring, and DTO fields**
+- [x] **Step 3: Add the canonical fixtures, web adapter, alias wiring, and DTO fields**
 
 ```json
 // scripts/node/testing/contracts/model-providers/catalog.multiple-providers.json
@@ -696,7 +696,7 @@ export interface ConsoleModelProviderOptions {
 }
 ```
 
-- [ ] **Step 4: Run the settings API wrapper test again and verify it passes with canonical fixture data**
+- [x] **Step 4: Run the settings API wrapper test again and verify it passes with canonical fixture data**
 
 Run:
 
@@ -709,7 +709,7 @@ Expected:
 - PASS with wrapper passthrough locked to canonical fixture data.
 - PASS with catalog entries and options wrapper retaining the shared key fields.
 
-- [ ] **Step 5: Commit the canonical fixture source and DTO changes**
+- [x] **Step 5: Commit the canonical fixture source and DTO changes**
 
 ```bash
 git add \
@@ -731,7 +731,7 @@ git commit -m "test: add canonical model provider contract fixtures"
 - Modify: `web/app/src/style-boundary/registry.tsx`
 - Modify: `web/app/src/style-boundary/_tests/registry.test.tsx`
 
-- [ ] **Step 1: Replace hand-written stale contract mocks in the settings and style-boundary tests**
+- [x] **Step 1: Replace hand-written stale contract mocks in the settings and style-boundary tests**
 
 ```ts
 // web/app/src/features/settings/_tests/model-providers-page.test.tsx
@@ -801,7 +801,7 @@ if (
 }
 ```
 
-- [ ] **Step 2: Run the settings page and style-boundary tests and verify the current implementation fails before the refactor is complete**
+- [x] **Step 2: Run the settings page and style-boundary tests and verify the current implementation fails before the refactor is complete**
 
 Run:
 
@@ -814,7 +814,7 @@ Expected:
 - FAIL at first on unresolved fixture imports or stale style-boundary settings mock shape.
 - Specifically, the settings scene should fail until `/catalog` stops returning the old array payload.
 
-- [ ] **Step 3: Finish the refactor so both consumers read the canonical fixtures**
+- [x] **Step 3: Finish the refactor so both consumers read the canonical fixtures**
 
 ```tsx
 // web/app/src/style-boundary/_tests/registry.test.tsx
@@ -844,7 +844,7 @@ test(
 );
 ```
 
-- [ ] **Step 4: Run the settings page and style-boundary tests again and verify they pass**
+- [x] **Step 4: Run the settings page and style-boundary tests again and verify they pass**
 
 Run:
 
@@ -857,7 +857,7 @@ Expected:
 - PASS for the settings model provider page tests under canonical catalog data.
 - PASS for the `style-boundary` settings scene that previously failed with `catalogEntries is not iterable`.
 
-- [ ] **Step 5: Commit the settings consumer and style-boundary alignment**
+- [x] **Step 5: Commit the settings consumer and style-boundary alignment**
 
 ```bash
 git add \
