@@ -5,14 +5,11 @@
 .agents/skills
 如果没有注册，请自行更新到对应约定目录
 # 质量控制
-1.质量控制与验证入口以各级 `AGENTS.md` 为准，`README.md` 不再作为规范主承载。
-2.仓库级质量门禁入口固定为 `node scripts/node/test-scripts.js [filter]`、`node scripts/node/test-contracts.js`、`node scripts/node/test-frontend.js [fast|full]`、`node scripts/node/test-backend.js`、`node scripts/node/verify-repo.js`、`node scripts/node/verify-coverage.js [frontend|backend|all]`、`node scripts/node/verify-ci.js`、`node scripts/node/runtime-gate.js <page-debug args>`。
-3.`node scripts/node/verify-repo.js` 是仓库级 full gate，固定串联 `scripts/node` 测试、contract gate、前端 full gate 和后端 `verify-backend`。
-4.`node scripts/node/verify-ci.js` 是 CI 总入口，固定串联 `verify-repo` 与 `verify-coverage all`。
-5.需要判断“当前任务该跑哪条门禁、门禁如何组合、证据是否足以下 QA 结论、QA 报告怎么写”时，使用 `.agents/skills/qa-evaluation`；但命令入口真相源仍以上述 `AGENTS.md` 规则为准。
-6.前端质量规则、样式边界和页面验证看 `web/AGENTS.md`。
-7.后端分层规则、测试要求和验证入口看 `api/AGENTS.md`。
-8.warning 与 coverage 产物统一落到 `tmp/test-governance/`。
+1.开发阶段默认只按当前作用域 `AGENTS.md` 的实现规则推进，不在仓库根自动注入完整质量门禁脚本清单。
+2.进入自检、验收、回归或交付阶段时，使用 `.agents/skills/qa-evaluation`；由 agent 自行选择并执行对应脚本。
+3.前端实现规则与前端 QA 边界看 `web/AGENTS.md`。
+4.后端实现规则与后端 QA 边界看 `api/AGENTS.md`。
+5.warning 与 coverage 产物统一落到 `tmp/test-governance/`。
 # 文件管理约定
 1.理论上来说单个代码文件不应该超过1500行
 2.当前一个目录下不文件不应该超过15个，超过后应该收纳整理对应子目录

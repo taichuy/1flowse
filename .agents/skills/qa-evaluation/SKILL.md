@@ -7,7 +7,7 @@ description: Use when evaluating 1flowbase task outcomes or current project qual
 
 ## Overview
 
-`qa-evaluation` 不是另一个开发 Skill，而是 1flowbase 的质量评估器。它用于验证当前任务是否过关，或在用户明确要求时审计项目现状，并默认只产出问题报告与修正方向，不直接改代码。
+`qa-evaluation` 不是另一个开发 Skill，而是 1flowbase 的质量评估器。开发阶段默认不自动注入完整测试门禁；进入自检、验收、回归或交付阶段后，再由这个 Skill 负责选择脚本、收集证据并输出 QA 结论。它默认只产出问题报告与修正方向，不直接改代码。
 
 ## When to Use
 
@@ -30,6 +30,7 @@ description: Use when evaluating 1flowbase task outcomes or current project qual
 
 ## Quick Reference
 
+- 开发阶段默认不加载完整质量门禁；功能完成后再主动进入 `qa-evaluation`
 - 默认 `task mode`；只有用户明确要求全量审计时才进入 `project evaluation mode`
 - 评估前先读 `.memory/AGENTS.md`、`.memory/user-memory.md`、项目记忆、反馈记忆和相关 spec
 - 仓库质量门禁“怎么选、怎么组合、各自覆盖什么”看 `references/repo-quality-gates.md`

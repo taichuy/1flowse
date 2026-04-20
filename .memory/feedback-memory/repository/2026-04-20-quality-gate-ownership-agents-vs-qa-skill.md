@@ -1,14 +1,14 @@
 ---
 memory_type: feedback
 feedback_category: repository
-topic: 质量门禁入口保留在 AGENTS，门禁选型与 QA 判断进入 qa-evaluation skill
-summary: 质量门禁命令入口仍以各级 AGENTS.md 为真相源；什么时候跑哪条门禁、如何组合门禁、证据是否足以下 QA 结论，应收敛到 qa-evaluation skill，而不是继续堆在 AGENTS.md。
+topic: 开发阶段不自动注入质量门禁，QA 阶段由 qa-evaluation 自行选脚本
+summary: 开发阶段不需要把完整质量门禁脚本清单放进 AGENTS.md 自动注入；AGENTS.md 只保留开发流程与少量不可变 QA 边界，进入自检、验收、回归或交付阶段后再由 qa-evaluation skill 自行选择并执行脚本。
 keywords:
   - AGENTS
   - qa-evaluation
   - quality-gate
   - verification
-  - ownership
+  - workflow
 match_when:
   - 需要调整质量门禁文档归属
   - 需要判断某条 QA 规则该写进 AGENTS.md 还是 qa skill
@@ -23,7 +23,7 @@ scope:
   - .memory/feedback-memory/repository
 ---
 
-# 质量门禁入口保留在 AGENTS，门禁选型与 QA 判断进入 qa-evaluation skill
+# 开发阶段不自动注入质量门禁，QA 阶段由 qa-evaluation 自行选脚本
 
 ## 时间
 
@@ -31,18 +31,18 @@ scope:
 
 ## 规则
 
-- 质量门禁命令入口继续保留在最近作用域的 `AGENTS.md`。
-- `AGENTS.md` 只保留短、硬、稳定的本地执行规则与统一入口。
-- “当前任务该跑哪条门禁、是否需要组合、证据是否足以下 QA 结论、QA 报告怎么写”收敛到 `qa-evaluation` skill。
+- 开发阶段不需要把完整质量门禁脚本清单放进 `AGENTS.md` 自动注入。
+- `AGENTS.md` 只保留短、硬、稳定的开发流程规则和少量不可变 QA 边界。
+- 进入自检、验收、回归或交付阶段后，再由 `qa-evaluation` 自行选择并执行脚本。
 
 ## 原因
 
-- 质量门禁命令属于仓库硬规则，应该在进入目录时即可直接命中。
-- 门禁选型、组合和证据判断属于 QA 工作流，不适合继续堆在 `AGENTS.md`。
-- 把入口和方法论拆开后，规则更稳定，skill 也更容易复用。
+- 开发实现和 QA 验收不是同一阶段，不需要把完整测试清单在每次实现时都自动灌进去。
+- 门禁选型、脚本执行和证据判断属于 QA 工作流，更适合在 `qa-evaluation` 中统一收敛。
+- `AGENTS.md` 回到实现边界和流程约束后，噪声更少，指令更稳定。
 
 ## 适用场景
 
-- 重写或收紧仓库级、目录级质量门禁文档时。
-- 为 `qa-evaluation` 补充门禁选型、组合或证据规则时。
-- 评审 `AGENTS.md` 是否混入 QA 方法论时。
+- 重写或收紧仓库级、目录级开发流程文档时。
+- 为 `qa-evaluation` 补充脚本选型、执行或证据规则时。
+- 评审 `AGENTS.md` 是否混入完整测试清单时。
