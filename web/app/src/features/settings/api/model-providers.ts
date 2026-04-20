@@ -49,7 +49,7 @@ export function settingsModelProviderModelsQueryKey(instanceId: string) {
 }
 
 export function fetchSettingsModelProviderCatalog() {
-  return listConsoleModelProviderCatalog();
+  return listConsoleModelProviderCatalog().then((response) => response.entries);
 }
 
 export function fetchSettingsModelProviderInstances() {

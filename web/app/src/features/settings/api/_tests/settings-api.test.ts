@@ -22,7 +22,18 @@ vi.mock('@1flowbase/api-client', () => ({
     permission_codes: []
   }),
   replaceConsoleRolePermissions: vi.fn().mockResolvedValue(undefined),
-  listConsoleModelProviderCatalog: vi.fn().mockResolvedValue([]),
+  listConsoleModelProviderCatalog: vi.fn().mockResolvedValue({
+    locale_meta: {
+      requested_locale: null,
+      resolved_locale: 'zh_Hans',
+      user_preferred_locale: null,
+      accept_language: null,
+      fallback_locale: 'en_US',
+      supported_locales: ['zh_Hans', 'en_US']
+    },
+    i18n_catalog: {},
+    entries: []
+  }),
   listConsoleModelProviderInstances: vi.fn().mockResolvedValue([]),
   listConsoleModelProviderOptions: vi.fn().mockResolvedValue([]),
   getConsoleModelProviderModels: vi.fn().mockResolvedValue({
@@ -46,7 +57,18 @@ vi.mock('@1flowbase/api-client', () => ({
     value: 'super-secret'
   }),
   deleteConsoleModelProviderInstance: vi.fn().mockResolvedValue(undefined),
-  listConsolePluginFamilies: vi.fn().mockResolvedValue([]),
+  listConsolePluginFamilies: vi.fn().mockResolvedValue({
+    locale_meta: {
+      requested_locale: null,
+      resolved_locale: 'zh_Hans',
+      user_preferred_locale: null,
+      accept_language: null,
+      fallback_locale: 'en_US',
+      supported_locales: ['zh_Hans', 'en_US']
+    },
+    i18n_catalog: {},
+    entries: []
+  }),
   listConsoleOfficialPluginCatalog: vi.fn().mockResolvedValue({
     source_kind: 'official_registry',
     entries: []
@@ -280,7 +302,7 @@ describe('settings api wrappers', () => {
       'provider-1'
     ]);
 
-    await fetchSettingsModelProviderCatalog();
+    await expect(fetchSettingsModelProviderCatalog()).resolves.toEqual([]);
     await fetchSettingsModelProviderInstances();
     await fetchSettingsModelProviderOptions();
     await fetchSettingsModelProviderModels('provider-1');
@@ -339,7 +361,7 @@ describe('settings api wrappers', () => {
       'official-catalog'
     ]);
 
-    await fetchSettingsPluginFamilies();
+    await expect(fetchSettingsPluginFamilies()).resolves.toEqual([]);
     await fetchSettingsOfficialPluginCatalog();
     await installSettingsOfficialPlugin('openai_compatible@0.2.0', 'csrf-123');
     await uploadSettingsPluginPackage(uploadFile, 'csrf-123');

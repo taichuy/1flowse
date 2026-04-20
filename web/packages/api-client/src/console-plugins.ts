@@ -76,6 +76,12 @@ export interface ConsolePluginFamilyEntry {
   installed_versions: ConsolePluginInstalledVersion[];
 }
 
+export interface ConsolePluginFamilyCatalogResponse {
+  locale_meta: Record<string, unknown>;
+  i18n_catalog: Record<string, unknown>;
+  entries: ConsolePluginFamilyEntry[];
+}
+
 export interface ConsolePluginTask {
   id: string;
   installation_id: string | null;
@@ -111,7 +117,7 @@ export function listConsolePluginCatalog(baseUrl?: string) {
 }
 
 export function listConsolePluginFamilies(baseUrl?: string) {
-  return apiFetch<ConsolePluginFamilyEntry[]>({
+  return apiFetch<ConsolePluginFamilyCatalogResponse>({
     path: '/api/console/plugins/families',
     baseUrl
   });

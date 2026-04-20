@@ -18,7 +18,7 @@ export function RouteGuard({
   const me = useAuthStore((state) => state.me);
 
   if (sessionStatus === 'unknown') {
-    return <Spin tip="正在恢复会话..." />;
+    return <Spin fullscreen tip="正在恢复会话..." />;
   }
 
   if (route.guard === 'public-only') {

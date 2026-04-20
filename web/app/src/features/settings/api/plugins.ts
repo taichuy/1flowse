@@ -35,7 +35,7 @@ export const settingsOfficialPluginsQueryKey = [
 ] as const;
 
 export function fetchSettingsPluginFamilies() {
-  return listConsolePluginFamilies();
+  return listConsolePluginFamilies().then((response) => response.entries);
 }
 
 export function fetchSettingsOfficialPluginCatalog() {

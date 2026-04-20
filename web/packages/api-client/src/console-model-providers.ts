@@ -80,6 +80,12 @@ export interface ConsoleModelProviderCatalogEntry {
   predefined_models: ConsoleProviderModelDescriptor[];
 }
 
+export interface ConsoleModelProviderCatalogResponse {
+  locale_meta: Record<string, unknown>;
+  i18n_catalog: Record<string, unknown>;
+  entries: ConsoleModelProviderCatalogEntry[];
+}
+
 export interface ConsoleModelProviderInstance {
   id: string;
   installation_id: string;
@@ -144,7 +150,7 @@ export interface DeleteConsoleModelProviderResult {
 }
 
 export function listConsoleModelProviderCatalog(baseUrl?: string) {
-  return apiFetch<ConsoleModelProviderCatalogEntry[]>({
+  return apiFetch<ConsoleModelProviderCatalogResponse>({
     path: '/api/console/model-providers/catalog',
     baseUrl
   });
