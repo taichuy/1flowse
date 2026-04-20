@@ -1,18 +1,18 @@
-# Plugin Derived Availability And Reconcile Implementation Plan
+# Plugin Lifecycle, Official Repo Taxonomy, And Reconcile Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Upgrade the existing provider-plugin install and consumption path from `enabled + install_path` to the finalized four-layer lifecycle model (`desired_state`, `artifact_status`, `runtime_status`, `availability_status`) with derived availability and reconcile checks, then expose that contract through the current model-provider settings surface.
+**Goal:** Upgrade the existing provider-plugin install and consumption path to the finalized four-layer lifecycle model (`desired_state`, `artifact_status`, `runtime_status`, `availability_status`), and in the same round reshape `../1flowbase-official-plugins` so the official source repo explicitly exposes `host_extension / runtime_extension / capability_plugin` directory pages plus one concrete runtime-extension example.
 
-**Architecture:** Keep the current `model_provider` package contract and settings page as the first implementation surface instead of trying to land generic node contributions in the same round. `plugin-framework` owns artifact fingerprinting and filesystem reconcile, `control-plane` owns lifecycle writes plus `availability_status` derivation, and `api-server` / `plugin-runner` only load installed artifacts after a critical-load reconcile. Browser contracts stop relying on raw filesystem paths and `enabled`; they render lifecycle status labels derived from the new backend fields.
+**Architecture:** This rollout now has two tightly related tracks. In `1flowbase`, keep the current `model_provider` package contract and settings page as the first lifecycle surface: `plugin-framework` owns artifact fingerprinting and filesystem reconcile, `control-plane` owns lifecycle writes plus `availability_status` derivation, and `api-server` / `plugin-runner` only load installed artifacts after a critical-load reconcile. In `../1flowbase-official-plugins`, make the source repo taxonomy mirror the new consumption-kind language through top-level directory pages, then move the existing `openai_compatible` source tree under the runtime-extension hierarchy so release scripts, workflows, and human-facing docs all point at the same structure.
 
-**Tech Stack:** Rust (`domain`, `plugin-framework`, `control-plane`, `storage-pg`, `api-server`, `plugin-runner`), PostgreSQL migrations with `sqlx`, TypeScript React (`TanStack Query`, `Ant Design`), Vitest, targeted `cargo test`, targeted `pnpm exec vitest`
+**Tech Stack:** Rust (`domain`, `plugin-framework`, `control-plane`, `storage-pg`, `api-server`, `plugin-runner`), PostgreSQL migrations with `sqlx`, TypeScript React (`TanStack Query`, `Ant Design`), Node.js repo scripts, sibling repo GitHub Actions, Vitest, targeted `cargo test`, targeted `pnpm exec vitest`, targeted `node --test`
 
-**Source Spec:** `docs/superpowers/specs/1flowbase/2026-04-20-plugin-architecture-and-node-contribution-design.md`, `docs/superpowers/specs/1flowbase/2026-04-19-plugin-trust-source-install-design.md`, `docs/superpowers/specs/1flowbase/modules/08-plugin-framework/README.md`, `.memory/project-memory/2026-04-20-plugin-kind-vs-execution-mode-evaluation.md`
+**Source Spec:** `docs/superpowers/specs/1flowbase/2026-04-20-plugin-architecture-and-node-contribution-design.md`, `docs/superpowers/specs/1flowbase/2026-04-19-plugin-trust-source-install-design.md`, `docs/superpowers/specs/1flowbase/2026-04-19-rust-provider-plugin-runtime-distribution-design.md`, `docs/superpowers/specs/1flowbase/modules/08-plugin-framework/README.md`, `.memory/project-memory/2026-04-20-plugin-kind-vs-execution-mode-evaluation.md`
 
-**Execution Note:** This plan intentionally upgrades the already-shipped provider-plugin line first. Generic `plugin manifest v1`, `node_contribution_registry`, `capability_plugin` runtime, and the real `host_extension` loader remain follow-up plans; however, `pending_restart` and the derived availability model must land now so those later plans do not need another storage/API migration.
+**Execution Note:** This plan spans two git repos. `1flowbase` lands the lifecycle, reconcile, API, and settings work. `../1flowbase-official-plugins` lands the source-repo taxonomy pages, path migration for the existing provider example, and the script/workflow updates required to keep release automation aligned with the new directory structure. Generic `plugin manifest v1`, `node_contribution_registry`, `capability_plugin` runtime, and the real `host_extension` loader still remain follow-up plans; however, `pending_restart`, derived availability, and official source-repo taxonomy should land in the same round so product language, source layout, and runtime state do not drift again.
 
-**Out Of Scope:** Canvas node contribution execution, marketplace UX beyond `/settings/model-providers`, hot unload, in-process third-party code, automatic migration of legacy rows into fully reconstructable `package_path` archives
+**Out Of Scope:** Canvas node contribution execution, marketplace UX beyond `/settings/model-providers`, hot unload, in-process third-party code, automatic migration of legacy rows into fully reconstructable `package_path` archives, and fully working official `host_extension` / `capability_plugin` sample plugins beyond directory pages plus one runtime-extension example
 
 ---
 
@@ -24,6 +24,11 @@
 - `api/crates/plugin-framework/src/_tests/artifact_reconcile_tests.rs`
 - `api/crates/control-plane/src/plugin_lifecycle.rs`
 - `web/app/src/features/settings/components/model-providers/plugin-installation-status.ts`
+- `../1flowbase-official-plugins/host-extensions/README.md`
+- `../1flowbase-official-plugins/runtime-extensions/README.md`
+- `../1flowbase-official-plugins/runtime-extensions/model-providers/README.md`
+- `../1flowbase-official-plugins/capability-plugins/README.md`
+- `../1flowbase-official-plugins/capability-plugins/nodes/README.md`
 - `docs/superpowers/plans/2026-04-20-plugin-derived-availability-and-reconcile.md`
 
 **Modify**
@@ -59,15 +64,270 @@
 - `web/app/src/features/settings/components/model-providers/PluginUploadInstallModal.tsx`
 - `web/app/src/features/settings/components/model-providers/PluginVersionManagementModal.tsx`
 - `web/app/src/features/settings/_tests/model-providers-page.test.tsx`
+- `../1flowbase-official-plugins/README.md`
+- `../1flowbase-official-plugins/official-registry.json`
+- `../1flowbase-official-plugins/.github/workflows/provider-ci.yml`
+- `../1flowbase-official-plugins/.github/workflows/provider-release.yml`
+- `../1flowbase-official-plugins/scripts/list-provider-package-targets.mjs`
+- `../1flowbase-official-plugins/scripts/detect-version-releases.mjs`
+- `../1flowbase-official-plugins/scripts/_tests/list-provider-package-targets.test.mjs`
+- `../1flowbase-official-plugins/scripts/_tests/detect-version-releases.test.mjs`
+- `../1flowbase-official-plugins/scripts/_tests/update-official-registry.test.mjs`
+- `../1flowbase-official-plugins/scripts/_tests/workflow-config.test.mjs`
+- `../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible/manifest.yaml`
+- `../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible/Cargo.toml`
+- `../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible/provider/openai_compatible.yaml`
+- `../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible/readme/README_en_US.md`
 
 **Notes**
 - `availability_status` remains persisted as a derived snapshot, but no route, UI, or caller may write it directly.
 - Split write ownership: control plane changes only `desired_state`; reconcile changes only artifact snapshot fields; runtime load paths change only `runtime_status` and `last_load_error`.
 - Existing rows with no real archived package file should be backfilled to `artifact_status=install_incomplete` and made recoverable through explicit reinstall or version switch; do not invent fake `package_path` values.
 - Browser responses should stop returning raw host filesystem paths.
+- `../1flowbase-official-plugins` must expose the three consumption kinds directly in the source tree, not just in host-side docs; otherwise future official plugins will keep being filed under the old `models/` mental model.
+- This round only needs one concrete official example: move the existing `openai_compatible` provider so it becomes the canonical `runtime_extension -> model_provider` example. `host-extensions/` and `capability-plugins/` only need directory pages and author guidance in this round.
 - During execution, update this plan file after every completed task so the user can track progress in `docs/superpowers/plans`.
 
-### Task 1: Replace Legacy Install Flags With Lifecycle Snapshots
+### Task 1: Reshape The Official Plugin Source Repo Taxonomy And Example
+
+**Files:**
+- Create: `../1flowbase-official-plugins/host-extensions/README.md`
+- Create: `../1flowbase-official-plugins/runtime-extensions/README.md`
+- Create: `../1flowbase-official-plugins/runtime-extensions/model-providers/README.md`
+- Create: `../1flowbase-official-plugins/capability-plugins/README.md`
+- Create: `../1flowbase-official-plugins/capability-plugins/nodes/README.md`
+- Modify: `../1flowbase-official-plugins/README.md`
+- Modify: `../1flowbase-official-plugins/scripts/list-provider-package-targets.mjs`
+- Modify: `../1flowbase-official-plugins/scripts/detect-version-releases.mjs`
+- Modify: `../1flowbase-official-plugins/scripts/_tests/list-provider-package-targets.test.mjs`
+- Modify: `../1flowbase-official-plugins/scripts/_tests/detect-version-releases.test.mjs`
+- Modify: `../1flowbase-official-plugins/scripts/_tests/update-official-registry.test.mjs`
+- Modify: `../1flowbase-official-plugins/scripts/_tests/workflow-config.test.mjs`
+- Modify: `../1flowbase-official-plugins/.github/workflows/provider-ci.yml`
+- Modify: `../1flowbase-official-plugins/.github/workflows/provider-release.yml`
+- Modify: `../1flowbase-official-plugins/official-registry.json`
+- Modify: `../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible/manifest.yaml`
+- Modify: `../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible/Cargo.toml`
+- Modify: `../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible/provider/openai_compatible.yaml`
+- Modify: `../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible/readme/README_en_US.md`
+
+- [ ] **Step 1: Write failing sibling-repo tests for the new taxonomy paths, README hierarchy, and release detection**
+
+Update these tests in `../1flowbase-official-plugins/scripts/_tests/`:
+
+```js
+test('listProviderPackageTargets scans runtime-extension model provider directories', () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'official-plugin-targets-'));
+  const pluginDir = path.join(
+    repoRoot,
+    'runtime-extensions',
+    'model-providers',
+    'alpha_provider'
+  );
+
+  fs.mkdirSync(pluginDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(pluginDir, 'manifest.yaml'),
+    [
+      'plugin_code: alpha_provider',
+      'runtime:',
+      '  executable:',
+      '    path: bin/alpha-provider',
+      '',
+    ].join('\n')
+  );
+
+  assert.deepEqual(listProviderPackageTargets(repoRoot), [
+    {
+      provider_code: 'alpha_provider',
+      plugin_dir: 'runtime-extensions/model-providers/alpha_provider',
+      binary_name: 'alpha-provider',
+    },
+  ]);
+});
+
+test('detectVersionReleases picks version bumps from runtime-extension manifests', () => {
+  assert.deepEqual(
+    detectVersionReleases([
+      {
+        path: 'runtime-extensions/model-providers/openai_compatible/manifest.yaml',
+        beforeContent: 'plugin_code: openai_compatible\nversion: 0.3.7\n',
+        afterContent: 'plugin_code: openai_compatible\nversion: 0.4.0\n',
+      },
+    ]),
+    [
+      {
+        plugin_dir: 'runtime-extensions/model-providers/openai_compatible',
+        provider_code: 'openai_compatible',
+        release_tag: 'openai_compatible-v0.4.0',
+        version: '0.4.0',
+      },
+    ]
+  );
+});
+
+test('README documents host, runtime, and capability plugin directories', () => {
+  const readme = readRepoFile('README.md');
+
+  assert.match(readme, /host-extensions\//);
+  assert.match(readme, /runtime-extensions\//);
+  assert.match(readme, /capability-plugins\//);
+  assert.match(readme, /runtime-extensions\/model-providers\/openai_compatible/);
+});
+```
+
+- [ ] **Step 2: Run the sibling-repo tests to capture the RED baseline**
+
+Run:
+
+```bash
+node --test ../1flowbase-official-plugins/scripts/_tests/list-provider-package-targets.test.mjs ../1flowbase-official-plugins/scripts/_tests/detect-version-releases.test.mjs ../1flowbase-official-plugins/scripts/_tests/update-official-registry.test.mjs ../1flowbase-official-plugins/scripts/_tests/workflow-config.test.mjs
+```
+
+Expected:
+
+- FAIL because the sibling repo still scans `models/*`, release detection still watches `models/**/manifest.yaml`, and the root README has no three-kind directory taxonomy.
+
+- [ ] **Step 3: Create the three top-level directory pages and move the existing provider example under the runtime-extension hierarchy**
+
+Create these directory pages:
+
+```md
+# Host Extensions
+
+`host_extension` 是宿主级特权扩展源码目录。
+
+本目录只承载需要随宿主启动生命周期生效的官方扩展源码；它们不进入普通 marketplace，也不要求 workspace 显式选择。
+
+本轮先只建立目录页，不提供可发布示例。
+```
+
+```md
+# Runtime Extensions
+
+`runtime_extension` 用于扩展宿主预定义 runtime slot。
+
+当前官方首个子目录是 `model-providers/`，其中的插件由宿主安装、分配并在 provider instance / 模型选择链路中消费。
+```
+
+```md
+# Capability Plugins
+
+`capability_plugin` 用于贡献需要用户显式选择的能力，例如节点、工具或触发器。
+
+本轮先只建立目录页和 author guidance，不提供正式可发布示例。
+```
+
+Move the existing example:
+
+```bash
+mkdir -p ../1flowbase-official-plugins/runtime-extensions/model-providers
+git -C ../1flowbase-official-plugins mv models/openai_compatible runtime-extensions/model-providers/openai_compatible
+```
+
+Then update `../1flowbase-official-plugins/README.md` so the canonical tree becomes:
+
+```text
+host-extensions/
+runtime-extensions/
+  model-providers/
+    openai_compatible/
+capability-plugins/
+  nodes/
+official-registry.json
+scripts/
+.github/workflows/
+```
+
+- [ ] **Step 4: Update sibling-repo scripts, workflows, and example docs to use the new canonical path**
+
+In `../1flowbase-official-plugins/scripts/detect-version-releases.mjs`:
+
+```js
+const PROVIDER_ROOT = 'runtime-extensions/model-providers';
+const MANIFEST_PATH_PATTERN = new RegExp(
+  `^${PROVIDER_ROOT.replace('/', '\\/')}/([^/]+)/manifest\\.yaml$`
+);
+...
+      return [
+        {
+          plugin_dir: `${PROVIDER_ROOT}/${providerCode}`,
+          provider_code: providerCode,
+          release_tag: `${providerCode}-v${nextVersion}`,
+          version: nextVersion,
+        },
+      ];
+...
+      `${PROVIDER_ROOT}/*/manifest.yaml`,
+...
+  const output = runGit(['ls-tree', '-r', '--name-only', headRef, '--', PROVIDER_ROOT]);
+```
+
+In `../1flowbase-official-plugins/scripts/list-provider-package-targets.mjs`:
+
+```js
+const providerRoot = path.join(rootDir, 'runtime-extensions', 'model-providers');
+if (!fs.existsSync(providerRoot)) {
+  return [];
+}
+
+return fs
+  .readdirSync(providerRoot, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => path.join(providerRoot, entry.name))
+  .filter((pluginDir) => fs.existsSync(path.join(pluginDir, 'manifest.yaml')))
+  .map((pluginDir) => readProviderPackageTarget(pluginDir, rootDir))
+  .sort((left, right) => left.provider_code.localeCompare(right.provider_code));
+```
+
+Update workflows:
+
+```yaml
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'runtime-extensions/model-providers/**/manifest.yaml'
+```
+
+And update all README / test references from:
+
+```text
+models/openai_compatible
+```
+
+to:
+
+```text
+runtime-extensions/model-providers/openai_compatible
+```
+
+`openai_compatible/readme/README_en_US.md` should explicitly say it is the canonical official runtime-extension example for model providers.
+
+- [ ] **Step 5: Re-run sibling-repo tests and whitespace checks**
+
+Run:
+
+```bash
+node --test ../1flowbase-official-plugins/scripts/_tests/list-provider-package-targets.test.mjs ../1flowbase-official-plugins/scripts/_tests/detect-version-releases.test.mjs ../1flowbase-official-plugins/scripts/_tests/update-official-registry.test.mjs ../1flowbase-official-plugins/scripts/_tests/workflow-config.test.mjs
+git -C ../1flowbase-official-plugins diff --check
+```
+
+Expected:
+
+- PASS with the official repo exposing three top-level plugin categories and `openai_compatible` discoverable under `runtime-extensions/model-providers/`.
+
+- [ ] **Step 6: Commit the sibling-repo taxonomy and example move**
+
+Run:
+
+```bash
+git -C ../1flowbase-official-plugins add README.md host-extensions runtime-extensions capability-plugins official-registry.json .github/workflows/provider-ci.yml .github/workflows/provider-release.yml scripts/list-provider-package-targets.mjs scripts/detect-version-releases.mjs scripts/_tests/list-provider-package-targets.test.mjs scripts/_tests/detect-version-releases.test.mjs scripts/_tests/update-official-registry.test.mjs scripts/_tests/workflow-config.test.mjs
+git -C ../1flowbase-official-plugins commit -m "feat: align official plugin repo taxonomy"
+```
+
+### Task 2: Replace Legacy Install Flags With Lifecycle Snapshots
 
 **Files:**
 - Create: `api/crates/storage-pg/migrations/20260420203000_add_plugin_lifecycle_snapshots.sql`
@@ -343,7 +603,7 @@ git add api/crates/domain/src/model_provider.rs api/crates/control-plane/src/por
 git commit -m "feat: add plugin lifecycle snapshot storage"
 ```
 
-### Task 2: Add Artifact Reconcile And Manifest Fingerprinting
+### Task 3: Add Artifact Reconcile And Manifest Fingerprinting
 
 **Files:**
 - Create: `api/crates/plugin-framework/src/artifact_reconcile.rs`
@@ -551,7 +811,7 @@ git add api/crates/plugin-framework/src/lib.rs api/crates/plugin-framework/src/p
 git commit -m "feat: add plugin artifact reconcile helper"
 ```
 
-### Task 3: Derive Availability In Control-Plane Reads And Writes
+### Task 4: Derive Availability In Control-Plane Reads And Writes
 
 **Files:**
 - Create: `api/crates/control-plane/src/plugin_lifecycle.rs`
@@ -809,7 +1069,7 @@ git add api/crates/control-plane/src/lib.rs api/crates/control-plane/src/ports.r
 git commit -m "feat: derive plugin availability in control plane"
 ```
 
-### Task 4: Expose Lifecycle Status Through API Startup And Settings UI
+### Task 5: Expose Lifecycle Status Through API Startup And Settings UI
 
 **Files:**
 - Modify: `api/apps/api-server/src/lib.rs`
@@ -1082,6 +1342,6 @@ git commit -m "feat: expose plugin lifecycle through settings"
 
 ## Self-Review
 
-- Spec coverage: this plan covers the finalized lifecycle layers, derived availability, startup plus critical-load reconcile, uploaded install backfill behavior, and current `/settings/model-providers` browser consumption. It intentionally does not attempt to implement generic node contribution execution or host-extension runtime loading in the same round.
+- Spec coverage: this plan now covers both sides of the current decision surface: sibling repo taxonomy (`host-extensions / runtime-extensions / capability-plugins` directory pages plus the `openai_compatible` runtime-extension example) and host-side lifecycle work (`desired_state`, `artifact_status`, `runtime_status`, `availability_status`, startup/critical-load reconcile, and `/settings/model-providers` consumption). It still intentionally leaves generic node contribution execution and real host-extension runtime loading to follow-up plans.
 - Placeholder scan: no `TODO`, `TBD`, or unnamed files remain. Every task names concrete files, concrete tests, concrete commands, and the code shapes expected in each step.
-- Type consistency: the plan consistently uses `PluginDesiredState`, `PluginArtifactStatus`, `PluginRuntimeStatus`, `PluginAvailabilityStatus`, `queued`, and `succeeded`; later tasks reuse the same names and do not fall back to `enabled` / `install_path`.
+- Type consistency: the plan consistently uses `PluginDesiredState`, `PluginArtifactStatus`, `PluginRuntimeStatus`, `PluginAvailabilityStatus`, `queued`, `succeeded`, and the canonical sibling repo path `runtime-extensions/model-providers/<provider_code>`; later tasks reuse the same names and do not fall back to `enabled` / `install_path` or the old `models/<provider_code>` layout.
