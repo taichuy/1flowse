@@ -9,9 +9,10 @@
 2.仓库级质量门禁入口固定为 `node scripts/node/test-scripts.js [filter]`、`node scripts/node/test-contracts.js`、`node scripts/node/test-frontend.js [fast|full]`、`node scripts/node/test-backend.js`、`node scripts/node/verify-repo.js`、`node scripts/node/verify-coverage.js [frontend|backend|all]`、`node scripts/node/verify-ci.js`、`node scripts/node/runtime-gate.js <page-debug args>`。
 3.`node scripts/node/verify-repo.js` 是仓库级 full gate，固定串联 `scripts/node` 测试、contract gate、前端 full gate 和后端 `verify-backend`。
 4.`node scripts/node/verify-ci.js` 是 CI 总入口，固定串联 `verify-repo` 与 `verify-coverage all`。
-5.前端质量规则、样式边界和页面验证看 `web/AGENTS.md`。
-6.后端分层规则、测试要求和验证入口看 `api/AGENTS.md`。
-7.warning 与 coverage 产物统一落到 `tmp/test-governance/`。
+5.需要判断“当前任务该跑哪条门禁、门禁如何组合、证据是否足以下 QA 结论、QA 报告怎么写”时，使用 `.agents/skills/qa-evaluation`；但命令入口真相源仍以上述 `AGENTS.md` 规则为准。
+6.前端质量规则、样式边界和页面验证看 `web/AGENTS.md`。
+7.后端分层规则、测试要求和验证入口看 `api/AGENTS.md`。
+8.warning 与 coverage 产物统一落到 `tmp/test-governance/`。
 # 文件管理约定
 1.理论上来说单个代码文件不应该超过1500行
 2.当前一个目录下不文件不应该超过15个，超过后应该收纳整理对应子目录
