@@ -83,6 +83,7 @@
 - `plugin CLI package` 的多平台二进制打包规则
 - 官方 plugin release workflow 的多 runner 分工
 - official registry 的轻量 i18n 摘要扩展
+- plugin official catalog 的分类过滤与平台过滤
 - 新增 `GET /api/console/system/runtime-profile`
 - 新增 `GET /system/runtime-profile`（`plugin-runner` 内部接口）
 - `api-server` 聚合 `plugin-runner` 运行时快照
@@ -158,6 +159,15 @@
 - 根据 locale 输出最终人类文案
 - 维护前端 UI 文本翻译逻辑
 
+### 5.7 官方目录默认只返回当前宿主可安装包
+
+- official catalog 支持按 `plugin_type` 过滤
+- official catalog 默认按当前宿主平台过滤 artifact
+- 普通前端页面不需要自行携带目标平台信息
+- 如果当前宿主是 `linux / amd64`，则 official catalog 默认只返回 `linux-amd64` 对应安装信息
+
+## 6. 多平台打包与官方 release 链
+
 ## 6. 多平台打包与官方 release 链
 
 ### 6.1 RuntimeTarget 统一模型
@@ -231,6 +241,7 @@ official registry 继续保持：
 ```json
 {
   "plugin_id": "1flowbase.openai_compatible",
+  "plugin_type": "model_provider",
   "provider_code": "openai_compatible",
   "protocol": "openai_compatible",
   "latest_version": "0.2.1",
@@ -262,6 +273,62 @@ official registry 继续保持：
 ```
 
 这里的 `i18n_summary` 是“官方目录列表需要的轻量资源”，不是把插件包完整 `i18n/` 全量塞进 registry。
+
+新增规则：
+
+- official registry entry 必须显式包含 `plugin_type`
+- 当前轮次 `openai_compatible` 固定为 `model_provider`
+- future plugin category 扩展时，继续复用 `plugin_type` 做 catalog 粗分类，而不是把分类逻辑硬编码在前端
+
+### 6.5 官方目录的分类与平台过滤
+
+official catalog 的产品目标不是“把所有平台的原始 release 元数据一次性全传给前端”，而是：
+
+- 让前端按插件分类拿到需要的插件集合
+- 让当前宿主只看到自己真正可安装的包
+
+因此接口规则固定为：
+
+- `GET /api/console/plugins/official-catalog` 支持 `plugin_type` 查询参数
+- `plugin_type=model_provider` 时，只返回模型供应商插件
+- official catalog 默认按当前宿主 `RuntimeTarget` 选择一个最匹配 artifact
+- 默认响应中不再返回其他平台的完整 `artifacts[]`
+
+这意味着：
+
+- 如果当前宿主是 `linux / amd64`，前端拿到的 official catalog 只包含 `linux-amd64` 对应包的下载信息
+- 真正下载时也只会继续拉取这个单一 thin package
+- console 页面不需要为了“普通安装列表”接收其他平台 artifact 元数据
+
+为保留运维和诊断扩展空间，可预留可选 query：
+
+- `target_os`
+- `target_arch`
+- `target_libc`
+
+但这些 query 仅作为后续“管理员预览其他目标平台可安装包”能力预留，不作为普通前端页面的默认输入。
+
+官方 catalog 的推荐查询示例：
+
+```text
+GET /api/console/plugins/official-catalog?plugin_type=model_provider
+```
+
+返回结果应已经是：
+
+- 分类上只包含 `model_provider`
+- 平台上只包含当前宿主可安装 artifact
+
+### 6.6 本地插件目录的分类过滤
+
+本地插件相关接口也应沿用相同分类字段，避免未来前端自己维护“哪类插件该打哪个接口”的分流逻辑。
+
+建议：
+
+- `/api/console/plugins/catalog` 支持 `plugin_type`
+- `/api/console/plugins/families` 支持 `plugin_type`
+
+当前轮次虽然实际插件主体仍以 `model_provider` 为主，但新接口契约要从第一天就显式带上分类维度。
 
 ## 7. 宿主运行时画像与拓扑聚合
 
@@ -598,6 +665,14 @@ official catalog 不再只依赖 `display_name`。
 - 写入 registry 的 `i18n_summary`
 - `api-server` 在 list official catalog 时，把 `i18n_summary` 转成统一 `i18n_catalog`
 
+同时：
+
+- official catalog 先按 `plugin_type` 过滤
+- 再按当前宿主平台选择单一 artifact
+- 最后再输出 `i18n_catalog`
+
+也就是说，前端拿到的是“分类正确 + 平台正确 + 带轻量 i18n”的最小列表，而不是包含全部平台 release 元数据的原始 registry 镜像
+
 这样：
 
 - 官方目录可国际化
@@ -632,6 +707,21 @@ official catalog 不再只依赖 `display_name`。
 - provider runtime 在调用结果中临时返回的自然语言文本
 
 这些内容先保持 pass-through，后续如果需要再为 provider runtime contract 增加显式 i18n key 设计。
+
+### 10.8 插件列表接口的查询语义
+
+插件列表相关接口首轮统一支持“分类优先”的查询方式：
+
+- `/api/console/plugins/official-catalog?plugin_type=model_provider`
+- `/api/console/plugins/catalog?plugin_type=model_provider`
+- `/api/console/plugins/families?plugin_type=model_provider`
+
+其中：
+
+- official catalog 默认返回当前宿主平台可安装包
+- local catalog / families 不需要再做平台过滤，因为它们描述的是本机已安装产物
+
+这样前端想“只查模型供应商”时，不需要再用协议名、provider_code 前缀或页面内硬编码规则自己二次筛选。
 
 ## 11. 契约重构原则
 
@@ -686,5 +776,6 @@ official catalog 不再只依赖 `display_name`。
 7. 用户可通过 `/api/console/me` 读写 `preferred_locale`
 8. locale 解析优先级严格遵守：
    `query > custom header > user preference > Accept-Language > en_US`
-9. official catalog、installed plugin catalog、model-provider catalog 能统一返回 `i18n_catalog + key`
+9. official catalog 支持 `plugin_type` 过滤，并默认只返回当前宿主平台可安装 artifact
+10. official catalog、installed plugin catalog、model-provider catalog 能统一返回 `i18n_catalog + key`
 10. 前端在不依赖后端翻译的前提下，能够基于 API 返回资源自己完成中英文切换
