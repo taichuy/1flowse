@@ -70,6 +70,8 @@ async fn openapi_contains_runtime_and_model_detail_routes() {
     for route in [
         "/api/console/models/{id}",
         "/api/console/models/{id}/fields",
+        "/api/console/model-providers/catalog",
+        "/api/console/model-providers/options",
         "/api/console/system/runtime-profile",
         "/api/runtime/models/{model_code}/records",
         "/api/runtime/models/{model_code}/records/{id}",

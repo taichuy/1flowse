@@ -1,15 +1,16 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    extract::{Path, Query, State},
+    http::{header::ACCEPT_LANGUAGE, HeaderMap, StatusCode},
     routing::{get, patch, post},
     Json, Router,
 };
 use control_plane::model_provider::{
     CreateModelProviderInstanceCommand, DeleteModelProviderInstanceCommand,
-    ModelProviderCatalogEntry, ModelProviderInstanceView, ModelProviderModelCatalog,
-    ModelProviderOptionEntry, ModelProviderService, UpdateModelProviderInstanceCommand,
+    LocalizedProviderModelDescriptor, ModelProviderCatalogEntry, ModelProviderCatalogView,
+    ModelProviderInstanceView, ModelProviderModelCatalog, ModelProviderOptionEntry,
+    ModelProviderOptionsView, ModelProviderService, UpdateModelProviderInstanceCommand,
     ValidateModelProviderResult,
 };
 use plugin_framework::{
@@ -21,7 +22,7 @@ use plugin_framework::{
 };
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
@@ -30,6 +31,7 @@ use crate::{
     middleware::{require_csrf::require_csrf, require_session::require_session},
     provider_runtime::ApiProviderRuntime,
     response::ApiSuccess,
+    routes::system::LocaleMetaResponse,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -52,6 +54,11 @@ pub struct RevealModelProviderSecretBody {
     pub key: String,
 }
 
+#[derive(Debug, Deserialize, IntoParams, Clone)]
+pub struct ModelProviderCatalogQuery {
+    pub locale: Option<String>,
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ModelProviderConfigFieldResponse {
     pub key: String,
@@ -63,6 +70,10 @@ pub struct ModelProviderConfigFieldResponse {
 pub struct ProviderModelDescriptorResponse {
     pub model_id: String,
     pub display_name: String,
+    pub namespace: Option<String>,
+    pub label_key: Option<String>,
+    pub description_key: Option<String>,
+    pub display_name_fallback: Option<String>,
     pub source: String,
     pub supports_streaming: bool,
     pub supports_tool_call: bool,
@@ -134,6 +145,10 @@ pub struct ModelProviderCatalogEntryResponse {
     pub provider_code: String,
     pub plugin_id: String,
     pub plugin_version: String,
+    pub plugin_type: String,
+    pub namespace: String,
+    pub label_key: String,
+    pub description_key: Option<String>,
     pub display_name: String,
     pub protocol: String,
     pub help_url: Option<String>,
@@ -143,6 +158,14 @@ pub struct ModelProviderCatalogEntryResponse {
     pub enabled: bool,
     pub form_schema: Vec<ModelProviderConfigFieldResponse>,
     pub predefined_models: Vec<ProviderModelDescriptorResponse>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ModelProviderCatalogResponse {
+    pub locale_meta: LocaleMetaResponse,
+    #[schema(value_type = Object)]
+    pub i18n_catalog: serde_json::Value,
+    pub entries: Vec<ModelProviderCatalogEntryResponse>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -191,6 +214,10 @@ pub struct RevealModelProviderSecretResponse {
 pub struct ModelProviderOptionResponse {
     pub provider_instance_id: String,
     pub provider_code: String,
+    pub plugin_type: String,
+    pub namespace: String,
+    pub label_key: String,
+    pub description_key: Option<String>,
     pub protocol: String,
     pub display_name: String,
     pub models: Vec<ProviderModelDescriptorResponse>,
@@ -198,6 +225,9 @@ pub struct ModelProviderOptionResponse {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ModelProviderOptionsResponse {
+    pub locale_meta: LocaleMetaResponse,
+    #[schema(value_type = Object)]
+    pub i18n_catalog: serde_json::Value,
     pub instances: Vec<ModelProviderOptionResponse>,
 }
 
@@ -255,18 +285,29 @@ fn to_config_field_response(field: ProviderConfigField) -> ModelProviderConfigFi
     }
 }
 
-fn to_model_descriptor_response(model: ProviderModelDescriptor) -> ProviderModelDescriptorResponse {
+fn to_model_descriptor_response(
+    model: LocalizedProviderModelDescriptor,
+) -> ProviderModelDescriptorResponse {
+    let descriptor = model.descriptor;
     ProviderModelDescriptorResponse {
-        model_id: model.model_id,
-        display_name: model.display_name,
-        source: format!("{:?}", model.source).to_ascii_lowercase(),
-        supports_streaming: model.supports_streaming,
-        supports_tool_call: model.supports_tool_call,
-        supports_multimodal: model.supports_multimodal,
-        context_window: model.context_window,
-        max_output_tokens: model.max_output_tokens,
-        parameter_form: model.parameter_form.map(to_plugin_form_schema_response),
-        provider_metadata: model.provider_metadata,
+        model_id: descriptor.model_id,
+        display_name: descriptor.display_name.clone(),
+        namespace: model.namespace,
+        label_key: model.label_key,
+        description_key: model.description_key,
+        display_name_fallback: model
+            .display_name_fallback
+            .or_else(|| Some(descriptor.display_name.clone())),
+        source: format!("{:?}", descriptor.source).to_ascii_lowercase(),
+        supports_streaming: descriptor.supports_streaming,
+        supports_tool_call: descriptor.supports_tool_call,
+        supports_multimodal: descriptor.supports_multimodal,
+        context_window: descriptor.context_window,
+        max_output_tokens: descriptor.max_output_tokens,
+        parameter_form: descriptor
+            .parameter_form
+            .map(to_plugin_form_schema_response),
+        provider_metadata: descriptor.provider_metadata,
     }
 }
 
@@ -349,6 +390,10 @@ fn to_catalog_response(entry: ModelProviderCatalogEntry) -> ModelProviderCatalog
         provider_code: entry.provider_code,
         plugin_id: entry.plugin_id,
         plugin_version: entry.plugin_version,
+        plugin_type: entry.plugin_type,
+        namespace: entry.namespace,
+        label_key: entry.label_key,
+        description_key: entry.description_key,
         display_name: entry.display_name,
         protocol: entry.protocol,
         help_url: entry.help_url,
@@ -366,6 +411,43 @@ fn to_catalog_response(entry: ModelProviderCatalogEntry) -> ModelProviderCatalog
             .into_iter()
             .map(to_model_descriptor_response)
             .collect(),
+    }
+}
+
+fn to_catalog_view_response(
+    locale_meta: LocaleMetaResponse,
+    catalog: ModelProviderCatalogView,
+) -> ModelProviderCatalogResponse {
+    ModelProviderCatalogResponse {
+        locale_meta,
+        i18n_catalog: serde_json::to_value(catalog.i18n_catalog).unwrap(),
+        entries: catalog
+            .entries
+            .into_iter()
+            .map(to_catalog_response)
+            .collect(),
+    }
+}
+
+fn to_runtime_model_descriptor_response(
+    model: ProviderModelDescriptor,
+) -> ProviderModelDescriptorResponse {
+    let display_name = model.display_name.clone();
+    ProviderModelDescriptorResponse {
+        model_id: model.model_id,
+        display_name: display_name.clone(),
+        namespace: None,
+        label_key: None,
+        description_key: None,
+        display_name_fallback: Some(display_name),
+        source: format!("{:?}", model.source).to_ascii_lowercase(),
+        supports_streaming: model.supports_streaming,
+        supports_tool_call: model.supports_tool_call,
+        supports_multimodal: model.supports_multimodal,
+        context_window: model.context_window,
+        max_output_tokens: model.max_output_tokens,
+        parameter_form: model.parameter_form.map(to_plugin_form_schema_response),
+        provider_metadata: model.provider_metadata,
     }
 }
 
@@ -427,7 +509,7 @@ fn to_model_catalog_response(
         models: catalog
             .models
             .into_iter()
-            .map(to_model_descriptor_response)
+            .map(to_runtime_model_descriptor_response)
             .collect(),
     }
 }
@@ -436,6 +518,10 @@ fn to_option_response(option: ModelProviderOptionEntry) -> ModelProviderOptionRe
     ModelProviderOptionResponse {
         provider_instance_id: option.provider_instance_id.to_string(),
         provider_code: option.provider_code,
+        plugin_type: option.plugin_type,
+        namespace: option.namespace,
+        label_key: option.label_key,
+        description_key: option.description_key,
         protocol: option.protocol,
         display_name: option.display_name,
         models: option
@@ -446,21 +532,74 @@ fn to_option_response(option: ModelProviderOptionEntry) -> ModelProviderOptionRe
     }
 }
 
+fn to_options_view_response(
+    locale_meta: LocaleMetaResponse,
+    options: ModelProviderOptionsView,
+) -> ModelProviderOptionsResponse {
+    ModelProviderOptionsResponse {
+        locale_meta,
+        i18n_catalog: serde_json::to_value(options.i18n_catalog).unwrap(),
+        instances: options
+            .instances
+            .into_iter()
+            .map(to_option_response)
+            .collect(),
+    }
+}
+
+fn resolve_locale_meta(
+    headers: &HeaderMap,
+    query_locale: Option<String>,
+    user_preferred_locale: Option<String>,
+) -> LocaleMetaResponse {
+    runtime_profile::resolve_locale(runtime_profile::LocaleResolutionInput {
+        query_locale,
+        explicit_header_locale: headers
+            .get("x-1flowbase-locale")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string),
+        user_preferred_locale,
+        accept_language: headers
+            .get(ACCEPT_LANGUAGE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string),
+        fallback_locale: runtime_profile::FALLBACK_LOCALE,
+        supported_locales: runtime_profile::SUPPORTED_LOCALES
+            .iter()
+            .map(|value| value.to_string())
+            .collect(),
+    })
+    .into()
+}
+
+fn requested_locales(locale_meta: &LocaleMetaResponse) -> control_plane::i18n::RequestedLocales {
+    control_plane::i18n::RequestedLocales::new(
+        locale_meta.resolved_locale.clone(),
+        locale_meta.fallback_locale.clone(),
+    )
+}
+
 #[utoipa::path(
     get,
     path = "/api/console/model-providers/catalog",
     operation_id = "model_provider_list_catalog",
-    responses((status = 200, body = [ModelProviderCatalogEntryResponse]), (status = 401, body = crate::error_response::ErrorBody))
+    params(ModelProviderCatalogQuery),
+    responses((status = 200, body = ModelProviderCatalogResponse), (status = 401, body = crate::error_response::ErrorBody))
 )]
 pub async fn list_catalog(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
-) -> Result<Json<ApiSuccess<Vec<ModelProviderCatalogEntryResponse>>>, ApiError> {
+    Query(query): Query<ModelProviderCatalogQuery>,
+) -> Result<Json<ApiSuccess<ModelProviderCatalogResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    let catalog = service(&state).list_catalog(context.user.id).await?;
-    Ok(Json(ApiSuccess::new(
-        catalog.into_iter().map(to_catalog_response).collect(),
-    )))
+    let locale_meta = resolve_locale_meta(&headers, query.locale, context.user.preferred_locale);
+    let catalog = service(&state)
+        .list_catalog(context.user.id, requested_locales(&locale_meta))
+        .await?;
+    Ok(Json(ApiSuccess::new(to_catalog_view_response(
+        locale_meta,
+        catalog,
+    ))))
 }
 
 #[utoipa::path(
@@ -640,15 +779,21 @@ pub async fn delete_instance(
     get,
     path = "/api/console/model-providers/options",
     operation_id = "model_provider_list_options",
+    params(ModelProviderCatalogQuery),
     responses((status = 200, body = ModelProviderOptionsResponse), (status = 401, body = crate::error_response::ErrorBody))
 )]
 pub async fn list_options(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
+    Query(query): Query<ModelProviderCatalogQuery>,
 ) -> Result<Json<ApiSuccess<ModelProviderOptionsResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    let options = service(&state).options(context.user.id).await?;
-    Ok(Json(ApiSuccess::new(ModelProviderOptionsResponse {
-        instances: options.into_iter().map(to_option_response).collect(),
-    })))
+    let locale_meta = resolve_locale_meta(&headers, query.locale, context.user.preferred_locale);
+    let options = service(&state)
+        .options(context.user.id, requested_locales(&locale_meta))
+        .await?;
+    Ok(Json(ApiSuccess::new(to_options_view_response(
+        locale_meta,
+        options,
+    ))))
 }

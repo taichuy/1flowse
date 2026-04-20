@@ -78,7 +78,42 @@ capabilities:
     .unwrap();
     fs::write(
         root.join("i18n/en_US.json"),
-        r#"{ "plugin": { "label": "Fixture Provider" } }"#,
+        r#"{
+  "plugin": {
+    "label": "Fixture Provider",
+    "description": "Fixture provider plugin"
+  },
+  "provider": {
+    "label": "Fixture Provider",
+    "description": "Fixture provider"
+  },
+  "models": {
+    "fixture_chat": {
+      "label": "Fixture Chat",
+      "description": "Fixture chat model"
+    }
+  }
+}"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("i18n/zh_Hans.json"),
+        r#"{
+  "plugin": {
+    "label": "示例供应商插件",
+    "description": "示例供应商插件"
+  },
+  "provider": {
+    "label": "示例供应商",
+    "description": "示例供应商"
+  },
+  "models": {
+    "fixture_chat": {
+      "label": "示例聊天模型",
+      "description": "示例聊天模型"
+    }
+  }
+}"#,
     )
     .unwrap();
     fs::write(root.join("demo/index.html"), "<html></html>").unwrap();
@@ -262,11 +297,45 @@ async fn model_provider_routes_mask_secret_until_reveal_and_keep_ready_options()
         Some("***")
     );
 
+    let catalog = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/console/model-providers/catalog?locale=zh_Hans")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(catalog.status(), StatusCode::OK);
+    let catalog_payload: Value =
+        serde_json::from_slice(&to_bytes(catalog.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(
+        catalog_payload["data"]["locale_meta"]["resolved_locale"].as_str(),
+        Some("zh_Hans")
+    );
+    assert!(
+        catalog_payload["data"]["i18n_catalog"]["plugin.fixture_provider"]["zh_Hans"].is_object()
+    );
+    assert_eq!(
+        catalog_payload["data"]["entries"][0]["namespace"].as_str(),
+        Some("plugin.fixture_provider")
+    );
+    assert_eq!(
+        catalog_payload["data"]["entries"][0]["label_key"].as_str(),
+        Some("provider.label")
+    );
+    assert_eq!(
+        catalog_payload["data"]["entries"][0]["predefined_models"][0]["label_key"].as_str(),
+        Some("models.fixture_chat.label")
+    );
+
     let options = app
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/api/console/model-providers/options")
+                .uri("/api/console/model-providers/options?locale=zh_Hans")
                 .header("cookie", &cookie)
                 .body(Body::empty())
                 .unwrap(),
@@ -284,8 +353,21 @@ async fn model_provider_routes_mask_secret_until_reveal_and_keep_ready_options()
         1
     );
     assert_eq!(
+        options_payload["data"]["locale_meta"]["resolved_locale"].as_str(),
+        Some("zh_Hans")
+    );
+    assert!(
+        options_payload["data"]["i18n_catalog"]["plugin.fixture_provider"]["zh_Hans"].is_object()
+    );
+    assert_eq!(
         options_payload["data"]["instances"][0]["models"][0]["model_id"].as_str(),
         Some("fixture_chat")
+    );
+    assert!(options_payload["data"]["instances"][0]["models"][0]["namespace"].is_null());
+    assert!(options_payload["data"]["instances"][0]["models"][0]["label_key"].is_null());
+    assert_eq!(
+        options_payload["data"]["instances"][0]["models"][0]["display_name_fallback"].as_str(),
+        Some("Fixture Chat")
     );
     assert_eq!(
         options_payload["data"]["instances"][0]["models"][0]["parameter_form"]["schema_version"]

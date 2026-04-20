@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::{
     errors::ControlPlaneError,
+    i18n::RequestedLocales,
     model_provider::{
         CreateModelProviderInstanceCommand, DeleteModelProviderInstanceCommand,
         ModelProviderService,
@@ -632,7 +633,7 @@ async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
     let runtime = MemoryProviderRuntime::default();
     let package_root = std::env::temp_dir().join(format!("provider-model-{}", Uuid::now_v7()));
     create_provider_fixture(&package_root);
-    let installation_id = repository
+    repository
         .seed_installation(&package_root.display().to_string(), true, true)
         .await;
 
@@ -694,12 +695,25 @@ async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
     );
     assert_eq!(validated.output["sanitized"]["api_key"], "***");
 
-    let options = service.options(repository.actor.user_id).await.unwrap();
-    assert_eq!(options.len(), 1);
-    assert_eq!(options[0].models.len(), 1);
-    assert_eq!(options[0].models[0].model_id, "fixture_chat");
+    let options = service
+        .options(
+            repository.actor.user_id,
+            RequestedLocales::new("zh_Hans", "en_US"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(options.instances.len(), 1);
+    assert!(options.i18n_catalog["plugin.fixture_provider"]
+        .get("zh_Hans")
+        .is_some());
+    assert_eq!(options.instances[0].models.len(), 1);
     assert_eq!(
-        options[0].models[0]
+        options.instances[0].models[0].descriptor.model_id,
+        "fixture_chat"
+    );
+    assert_eq!(
+        options.instances[0].models[0]
+            .descriptor
             .parameter_form
             .as_ref()
             .expect("parameter form should exist")
@@ -708,7 +722,8 @@ async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
         "temperature"
     );
     assert_eq!(
-        options[0].models[0]
+        options.instances[0].models[0]
+            .descriptor
             .parameter_form
             .as_ref()
             .unwrap()
@@ -737,6 +752,43 @@ async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
             "model_provider.validated",
             "model_provider.models_refreshed"
         ]
+    );
+}
+
+#[tokio::test]
+async fn list_catalog_returns_i18n_namespace_and_keys() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryModelProviderRepository::new(actor_with_permissions(
+        workspace_id,
+        &["state_model.view.all"],
+    ));
+    let package_root = std::env::temp_dir().join(format!("provider-catalog-{}", Uuid::now_v7()));
+    create_provider_fixture(&package_root);
+    let installation_id = repository
+        .seed_installation(&package_root.display().to_string(), true, true)
+        .await;
+    let service = ModelProviderService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        "provider-secret-master-key",
+    );
+
+    let entries = service
+        .list_catalog(
+            repository.actor.user_id,
+            RequestedLocales::new("zh_Hans", "en_US"),
+        )
+        .await
+        .unwrap();
+
+    assert!(entries.i18n_catalog["plugin.fixture_provider"]
+        .get("zh_Hans")
+        .is_some());
+    assert_eq!(entries.entries[0].namespace, "plugin.fixture_provider");
+    assert_eq!(entries.entries[0].label_key, "provider.label");
+    assert_eq!(
+        entries.entries[0].predefined_models[0].label_key.as_deref(),
+        Some("models.fixture_chat.label")
     );
 }
 
@@ -799,10 +851,13 @@ async fn model_provider_service_enforces_permissions_and_audits_delete_conflict(
         "provider-secret-master-key",
     );
     let catalog = viewer_service
-        .list_catalog(viewer_repository.actor.user_id)
+        .list_catalog(
+            viewer_repository.actor.user_id,
+            RequestedLocales::new("en_US", "en_US"),
+        )
         .await
         .unwrap();
-    assert!(catalog.is_empty());
+    assert!(catalog.entries.is_empty());
 
     let error = viewer_service
         .create_instance(CreateModelProviderInstanceCommand {

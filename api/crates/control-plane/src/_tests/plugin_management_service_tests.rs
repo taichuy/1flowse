@@ -909,7 +909,42 @@ capabilities:
     .unwrap();
     fs::write(
         root.join("i18n/en_US.json"),
-        r#"{ "plugin": { "label": "Fixture Provider" } }"#,
+        r#"{
+  "plugin": {
+    "label": "Fixture Provider",
+    "description": "Fixture provider plugin"
+  },
+  "provider": {
+    "label": "Fixture Provider",
+    "description": "Fixture provider"
+  },
+  "models": {
+    "fixture_chat": {
+      "label": "Fixture Chat",
+      "description": "Fixture chat model"
+    }
+  }
+}"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("i18n/zh_Hans.json"),
+        r#"{
+  "plugin": {
+    "label": "示例供应商插件",
+    "description": "示例供应商插件"
+  },
+  "provider": {
+    "label": "示例供应商",
+    "description": "示例供应商"
+  },
+  "models": {
+    "fixture_chat": {
+      "label": "示例聊天模型",
+      "description": "示例聊天模型"
+    }
+  }
+}"#,
     )
     .unwrap();
     fs::write(root.join("demo/index.html"), "<html></html>").unwrap();

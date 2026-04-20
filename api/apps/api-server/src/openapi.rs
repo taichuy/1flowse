@@ -144,6 +144,7 @@ use utoipa::OpenApi;
         crate::routes::plugins::SwitchPluginVersionBody,
         crate::routes::model_providers::CreateModelProviderBody,
         crate::routes::model_providers::UpdateModelProviderBody,
+        crate::routes::model_providers::ModelProviderCatalogResponse,
         crate::routes::model_providers::ModelProviderCatalogEntryResponse,
         crate::routes::model_providers::ModelProviderConfigFieldResponse,
         crate::routes::model_providers::ModelProviderInstanceResponse,

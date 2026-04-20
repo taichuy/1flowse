@@ -1186,7 +1186,7 @@ rtk git commit -m "feat: refactor plugin catalogs for i18n"
 - Modify: `api/apps/api-server/src/_tests/openapi_alignment.rs`
 - Modify: `api/apps/api-server/src/_tests/openapi_docs_tests.rs`
 
-- [ ] **Step 1: Write the failing model-provider catalog/option tests**
+- [x] **Step 1: Write the failing model-provider catalog/option tests**
 
 Add service coverage in `api/crates/control-plane/src/_tests/model_provider_service_tests.rs`:
 
@@ -1232,7 +1232,7 @@ assert_eq!(payload["data"]["entries"][0]["predefined_models"][0]["label_key"], "
 assert_eq!(payload["data"]["instances"][0]["models"][0]["display_name_fallback"], "gpt-4o");
 ```
 
-- [ ] **Step 2: Run the model-provider tests and confirm RED**
+- [x] **Step 2: Run the model-provider tests and confirm RED**
 
 Run:
 
@@ -1243,7 +1243,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p api-server model_provider_route
 
 Expected: FAIL because model-provider catalog and options responses still expose plain `display_name` fields instead of `namespace + key + i18n_catalog`, and predefined model descriptors do not carry key-based references yet.
 
-- [ ] **Step 3: Implement the model-provider response refactor**
+- [x] **Step 3: Implement the model-provider response refactor**
 
 Refactor the service view in `api/crates/control-plane/src/model_provider.rs`:
 
@@ -1307,7 +1307,7 @@ fn model_text_ref(namespace: &str, model: &ProviderModelDescriptor) -> ProviderM
 
 If a model comes from runtime discovery and there is no package-backed translation key, return `namespace: null`, `label_key: null`, `description_key: null`, and preserve `display_name_fallback` as pass-through.
 
-- [ ] **Step 4: Re-run the model-provider tests and confirm GREEN**
+- [x] **Step 4: Re-run the model-provider tests and confirm GREEN**
 
 Run:
 

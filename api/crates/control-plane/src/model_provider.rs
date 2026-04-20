@@ -1,8 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use anyhow::Result;
 use plugin_framework::{
-    provider_contract::{ModelDiscoveryMode, ProviderModelDescriptor},
+    provider_contract::{ModelDiscoveryMode, ProviderModelDescriptor, ProviderModelSource},
     provider_package::{ProviderConfigField, ProviderPackage},
 };
 use serde_json::{json, Map, Value};
@@ -12,6 +12,9 @@ use uuid::Uuid;
 use crate::{
     audit::audit_log,
     errors::ControlPlaneError,
+    i18n::{
+        merge_i18n_catalog, plugin_namespace, trim_provider_bundles, I18nCatalog, RequestedLocales,
+    },
     ports::{
         AuthRepository, CreateModelProviderInstanceInput, ModelProviderRepository,
         PluginRepository, ProviderRuntimePort, UpdateModelProviderInstanceInput,
@@ -45,6 +48,10 @@ pub struct ModelProviderCatalogEntry {
     pub provider_code: String,
     pub plugin_id: String,
     pub plugin_version: String,
+    pub plugin_type: String,
+    pub namespace: String,
+    pub label_key: String,
+    pub description_key: Option<String>,
     pub display_name: String,
     pub protocol: String,
     pub help_url: Option<String>,
@@ -53,7 +60,22 @@ pub struct ModelProviderCatalogEntry {
     pub supports_model_fetch_without_credentials: bool,
     pub enabled: bool,
     pub form_schema: Vec<ProviderConfigField>,
-    pub predefined_models: Vec<ProviderModelDescriptor>,
+    pub predefined_models: Vec<LocalizedProviderModelDescriptor>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModelProviderCatalogView {
+    pub entries: Vec<ModelProviderCatalogEntry>,
+    pub i18n_catalog: I18nCatalog,
+}
+
+#[derive(Debug, Clone)]
+pub struct LocalizedProviderModelDescriptor {
+    pub descriptor: ProviderModelDescriptor,
+    pub namespace: Option<String>,
+    pub label_key: Option<String>,
+    pub description_key: Option<String>,
+    pub display_name_fallback: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -83,9 +105,19 @@ pub struct ModelProviderModelCatalog {
 pub struct ModelProviderOptionEntry {
     pub provider_instance_id: Uuid,
     pub provider_code: String,
+    pub plugin_type: String,
+    pub namespace: String,
+    pub label_key: String,
+    pub description_key: Option<String>,
     pub protocol: String,
     pub display_name: String,
-    pub models: Vec<ProviderModelDescriptor>,
+    pub models: Vec<LocalizedProviderModelDescriptor>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModelProviderOptionsView {
+    pub instances: Vec<ModelProviderOptionEntry>,
+    pub i18n_catalog: I18nCatalog,
 }
 
 pub struct ModelProviderService<R, H> {
@@ -110,7 +142,8 @@ where
     pub async fn list_catalog(
         &self,
         actor_user_id: Uuid,
-    ) -> Result<Vec<ModelProviderCatalogEntry>> {
+        locales: RequestedLocales,
+    ) -> Result<ModelProviderCatalogView> {
         let actor = load_actor_context_for_user(&self.repository, actor_user_id).await?;
         ensure_state_model_permission(&actor, "view")?;
 
@@ -123,16 +156,26 @@ where
             .collect::<HashSet<_>>();
         let installations = self.repository.list_installations().await?;
         let mut catalog = Vec::new();
+        let mut i18n_catalog = BTreeMap::new();
         for installation in installations {
             if !installation.enabled || !assignments.contains(&installation.id) {
                 continue;
             }
             let package = load_provider_package(&installation.install_path)?;
+            let namespace = plugin_namespace(&installation.provider_code);
+            merge_i18n_catalog(
+                &mut i18n_catalog,
+                trim_provider_bundles(&namespace, &package.i18n, &locales),
+            );
             catalog.push(ModelProviderCatalogEntry {
                 installation_id: installation.id,
                 provider_code: installation.provider_code,
                 plugin_id: installation.plugin_id,
                 plugin_version: installation.plugin_version,
+                plugin_type: package.manifest.plugin_type.clone(),
+                namespace: namespace.clone(),
+                label_key: "provider.label".to_string(),
+                description_key: Some("provider.description".to_string()),
                 display_name: package.provider.display_name.clone(),
                 protocol: installation.protocol,
                 help_url: package.provider.help_url.clone(),
@@ -145,11 +188,18 @@ where
                     .supports_model_fetch_without_credentials,
                 enabled: installation.enabled,
                 form_schema: package.provider.form_schema.clone(),
-                predefined_models: package.predefined_models.clone(),
+                predefined_models: package
+                    .predefined_models
+                    .into_iter()
+                    .map(|model| localized_model_descriptor(&namespace, model))
+                    .collect(),
             });
         }
 
-        Ok(catalog)
+        Ok(ModelProviderCatalogView {
+            entries: catalog,
+            i18n_catalog,
+        })
     }
 
     pub async fn list_instances(
@@ -711,7 +761,11 @@ where
         Ok(())
     }
 
-    pub async fn options(&self, actor_user_id: Uuid) -> Result<Vec<ModelProviderOptionEntry>> {
+    pub async fn options(
+        &self,
+        actor_user_id: Uuid,
+        locales: RequestedLocales,
+    ) -> Result<ModelProviderOptionsView> {
         let actor = load_actor_context_for_user(&self.repository, actor_user_id).await?;
         ensure_state_model_permission(&actor, "view")?;
         let instances = self
@@ -727,6 +781,7 @@ where
             .collect::<HashMap<_, _>>();
 
         let mut options = Vec::new();
+        let mut i18n_catalog = BTreeMap::new();
         for instance in instances {
             if instance.status != domain::ModelProviderInstanceStatus::Ready {
                 continue;
@@ -735,19 +790,34 @@ where
                 continue;
             };
             let package = load_provider_package(&installation.install_path)?;
+            let namespace = plugin_namespace(&instance.provider_code);
+            merge_i18n_catalog(
+                &mut i18n_catalog,
+                trim_provider_bundles(&namespace, &package.i18n, &locales),
+            );
             let models = match self.repository.get_catalog_cache(instance.id).await? {
                 Some(cache) => serde_json::from_value(cache.models_json).unwrap_or_default(),
-                None => package.predefined_models,
+                None => package.predefined_models.clone(),
             };
             options.push(ModelProviderOptionEntry {
                 provider_instance_id: instance.id,
                 provider_code: instance.provider_code,
+                plugin_type: package.manifest.plugin_type.clone(),
+                namespace: namespace.clone(),
+                label_key: "provider.label".to_string(),
+                description_key: Some("provider.description".to_string()),
                 protocol: instance.protocol,
                 display_name: instance.display_name,
-                models,
+                models: models
+                    .into_iter()
+                    .map(|model| localized_model_descriptor(&namespace, model))
+                    .collect(),
             });
         }
-        Ok(options)
+        Ok(ModelProviderOptionsView {
+            instances: options,
+            i18n_catalog,
+        })
     }
 
     pub async fn reveal_secret(
@@ -1023,6 +1093,45 @@ fn is_secret_field(field_type: &str) -> bool {
 
 fn load_provider_package(path: &str) -> Result<ProviderPackage> {
     ProviderPackage::load_from_dir(path).map_err(map_framework_error)
+}
+
+fn localized_model_descriptor(
+    namespace: &str,
+    model: ProviderModelDescriptor,
+) -> LocalizedProviderModelDescriptor {
+    let display_name_fallback = Some(model.display_name.clone());
+    match model.source {
+        ProviderModelSource::Static => {
+            let model_key = model_i18n_key(&model.model_id);
+            LocalizedProviderModelDescriptor {
+                descriptor: model,
+                namespace: Some(namespace.to_string()),
+                label_key: Some(format!("models.{model_key}.label")),
+                description_key: Some(format!("models.{model_key}.description")),
+                display_name_fallback,
+            }
+        }
+        ProviderModelSource::Dynamic => LocalizedProviderModelDescriptor {
+            descriptor: model,
+            namespace: None,
+            label_key: None,
+            description_key: None,
+            display_name_fallback,
+        },
+    }
+}
+
+fn model_i18n_key(model_id: &str) -> String {
+    model_id
+        .chars()
+        .map(|value| {
+            if value.is_ascii_alphanumeric() {
+                value.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 fn model_discovery_mode_string(mode: ModelDiscoveryMode) -> String {
