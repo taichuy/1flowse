@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     fs,
     path::{Path, PathBuf},
     sync::{
@@ -22,17 +22,19 @@ use uuid::Uuid;
 
 use crate::{
     errors::ControlPlaneError,
+    i18n::RequestedLocales,
     plugin_management::{
         AssignPluginCommand, EnablePluginCommand, InstallOfficialPluginCommand,
-        InstallPluginCommand, InstallUploadedPluginCommand, PluginManagementService,
-        SwitchPluginVersionCommand, UpgradeLatestPluginFamilyCommand,
+        InstallPluginCommand, InstallUploadedPluginCommand, PluginCatalogFilter,
+        PluginManagementService, SwitchPluginVersionCommand, UpgradeLatestPluginFamilyCommand,
     },
     ports::{
         AuthRepository, CreateModelProviderInstanceInput, CreatePluginAssignmentInput,
         CreatePluginTaskInput, DownloadedOfficialPluginPackage, ModelProviderRepository,
-        OfficialPluginCatalogSnapshot, OfficialPluginCatalogSource, OfficialPluginSourceEntry,
-        OfficialPluginSourcePort, PluginRepository, ProviderRuntimeInvocationOutput,
-        ProviderRuntimePort, ReassignModelProviderInstancesInput, UpdateModelProviderInstanceInput,
+        OfficialPluginArtifact, OfficialPluginCatalogSnapshot, OfficialPluginCatalogSource,
+        OfficialPluginI18nSummary, OfficialPluginSourceEntry, OfficialPluginSourcePort,
+        PluginRepository, ProviderRuntimeInvocationOutput, ProviderRuntimePort,
+        ReassignModelProviderInstancesInput, UpdateModelProviderInstanceInput,
         UpdatePluginInstallationEnabledInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
         UpsertModelProviderCatalogCacheInput, UpsertModelProviderSecretInput,
         UpsertPluginInstallationInput,
@@ -574,6 +576,40 @@ impl Default for MemoryOfficialPluginSource {
     }
 }
 
+fn sample_artifact(os: &str, arch: &str, libc: Option<&str>) -> OfficialPluginArtifact {
+    OfficialPluginArtifact {
+        os: os.into(),
+        arch: arch.into(),
+        libc: libc.map(str::to_string),
+        rust_target: "x86_64-unknown-linux-musl".into(),
+        download_url: "https://example.test/openai_compatible.1flowbasepkg".into(),
+        checksum: format!("sha256:{}", "a".repeat(64)),
+        signature_algorithm: Some("ed25519".into()),
+        signing_key_id: Some("official-key".into()),
+    }
+}
+
+fn sample_i18n_summary() -> OfficialPluginI18nSummary {
+    OfficialPluginI18nSummary {
+        default_locale: "en_US".into(),
+        available_locales: vec!["en_US".into(), "zh_Hans".into()],
+        bundles: BTreeMap::from([
+            (
+                "en_US".into(),
+                serde_json::json!({ "plugin": { "label": "OpenAI-Compatible API Provider" } }),
+            ),
+            (
+                "zh_Hans".into(),
+                serde_json::json!({ "plugin": { "label": "OpenAI-Compatible API Provider" } }),
+            ),
+        ]),
+    }
+}
+
+fn requested_locales() -> RequestedLocales {
+    RequestedLocales::new("en_US", "en_US")
+}
+
 impl MemoryOfficialPluginSource {
     fn unsigned_required() -> Self {
         Self {
@@ -604,16 +640,18 @@ impl OfficialPluginSourcePort for MemoryOfficialPluginSource {
             },
             entries: vec![OfficialPluginSourceEntry {
                 plugin_id: "1flowbase.openai_compatible".to_string(),
+                plugin_type: "model_provider".to_string(),
                 provider_code: "openai_compatible".to_string(),
-                display_name: "OpenAI Compatible".to_string(),
+                namespace: "plugin.openai_compatible".to_string(),
                 protocol: "openai_compatible".to_string(),
                 latest_version: "0.1.0".to_string(),
+                selected_artifact: OfficialPluginArtifact {
+                    checksum: format!("sha256:{:x}", Sha256::digest(&package_bytes)),
+                    ..sample_artifact("linux", "amd64", Some("musl"))
+                },
+                i18n_summary: sample_i18n_summary(),
                 release_tag: "openai_compatible-v0.1.0".to_string(),
-                download_url: "https://example.com/openai-compatible.1flowbasepkg".to_string(),
-                checksum: format!("sha256:{:x}", Sha256::digest(&package_bytes)),
                 trust_mode: self.trust_mode.clone(),
-                signature_algorithm: None,
-                signing_key_id: None,
                 help_url: Some(
                     "https://github.com/taichuy/1flowbase-official-plugins/tree/main/models/openai_compatible"
                         .to_string(),
@@ -1150,16 +1188,15 @@ async fn plugin_management_service_lists_provider_families_with_current_and_late
                 },
                 entries: vec![OfficialPluginSourceEntry {
                     plugin_id: "1flowbase.openai_compatible".into(),
+                    plugin_type: "model_provider".into(),
                     provider_code: "openai_compatible".into(),
-                    display_name: "OpenAI Compatible".into(),
+                    namespace: "plugin.openai_compatible".into(),
                     protocol: "openai_compatible".into(),
                     latest_version: "0.2.0".into(),
+                    selected_artifact: sample_artifact("linux", "amd64", Some("musl")),
+                    i18n_summary: sample_i18n_summary(),
                     release_tag: "openai_compatible-v0.2.0".into(),
-                    download_url: "https://example.com/openai-compatible.1flowbasepkg".into(),
-                    checksum: "sha256:abc123".into(),
                     trust_mode: "allow_unsigned".into(),
-                    signature_algorithm: None,
-                    signing_key_id: None,
                     help_url: Some("https://example.com/help".into()),
                     model_discovery_mode: "hybrid".into(),
                 }],
@@ -1218,14 +1255,18 @@ async fn plugin_management_service_lists_provider_families_with_current_and_late
         .unwrap();
 
     let families = service
-        .list_families(repository.actor.user_id)
+        .list_families(
+            repository.actor.user_id,
+            PluginCatalogFilter::default(),
+            requested_locales(),
+        )
         .await
         .unwrap();
-    assert_eq!(families.len(), 1);
-    assert_eq!(families[0].provider_code, "openai_compatible");
-    assert_eq!(families[0].current_version, "0.1.0");
-    assert_eq!(families[0].latest_version.as_deref(), Some("0.2.0"));
-    assert!(families[0].has_update);
+    assert_eq!(families.entries.len(), 1);
+    assert_eq!(families.entries[0].provider_code, "openai_compatible");
+    assert_eq!(families.entries[0].current_version, "0.1.0");
+    assert_eq!(families.entries[0].latest_version.as_deref(), Some("0.2.0"));
+    assert!(families.entries[0].has_update);
 }
 
 #[tokio::test]
@@ -1245,33 +1286,29 @@ async fn plugin_management_service_keeps_only_latest_official_entry_per_provider
                 entries: vec![
                     OfficialPluginSourceEntry {
                         plugin_id: "1flowbase.openai_compatible".into(),
+                        plugin_type: "model_provider".into(),
                         provider_code: "openai_compatible".into(),
-                        display_name: "OpenAI-Compatible API Provider".into(),
+                        namespace: "plugin.openai_compatible".into(),
                         protocol: "openai_compatible".into(),
                         latest_version: "0.2.0".into(),
+                        selected_artifact: sample_artifact("linux", "amd64", Some("musl")),
+                        i18n_summary: sample_i18n_summary(),
                         release_tag: "openai_compatible-v0.2.0".into(),
-                        download_url: "https://example.com/openai-compatible-v020.1flowbasepkg"
-                            .into(),
-                        checksum: "sha256:abc123".into(),
                         trust_mode: "allow_unsigned".into(),
-                        signature_algorithm: None,
-                        signing_key_id: None,
                         help_url: Some("https://example.com/help".into()),
                         model_discovery_mode: "hybrid".into(),
                     },
                     OfficialPluginSourceEntry {
                         plugin_id: "1flowse.openai_compatible".into(),
+                        plugin_type: "model_provider".into(),
                         provider_code: "openai_compatible".into(),
-                        display_name: "OpenAI Compatible".into(),
+                        namespace: "plugin.openai_compatible".into(),
                         protocol: "openai_compatible".into(),
                         latest_version: "0.1.0".into(),
+                        selected_artifact: sample_artifact("linux", "amd64", Some("musl")),
+                        i18n_summary: sample_i18n_summary(),
                         release_tag: "openai_compatible-v0.1.0".into(),
-                        download_url: "https://example.com/openai-compatible-v010.1flowsepkg"
-                            .into(),
-                        checksum: "sha256:def456".into(),
                         trust_mode: "allow_unsigned".into(),
-                        signature_algorithm: None,
-                        signing_key_id: None,
                         help_url: Some("https://example.com/help".into()),
                         model_discovery_mode: "hybrid".into(),
                     },
@@ -1323,7 +1360,11 @@ async fn plugin_management_service_keeps_only_latest_official_entry_per_provider
         .unwrap();
 
     let catalog = service
-        .list_official_catalog(repository.actor.user_id)
+        .list_official_catalog(
+            repository.actor.user_id,
+            PluginCatalogFilter::default(),
+            requested_locales(),
+        )
         .await
         .unwrap();
     assert_eq!(catalog.entries.len(), 1);
@@ -1331,13 +1372,17 @@ async fn plugin_management_service_keeps_only_latest_official_entry_per_provider
     assert_eq!(catalog.entries[0].latest_version, "0.2.0");
 
     let families = service
-        .list_families(repository.actor.user_id)
+        .list_families(
+            repository.actor.user_id,
+            PluginCatalogFilter::default(),
+            requested_locales(),
+        )
         .await
         .unwrap();
-    assert_eq!(families.len(), 1);
-    assert_eq!(families[0].current_version, "0.1.0");
-    assert_eq!(families[0].latest_version.as_deref(), Some("0.2.0"));
-    assert!(families[0].has_update);
+    assert_eq!(families.entries.len(), 1);
+    assert_eq!(families.entries[0].current_version, "0.1.0");
+    assert_eq!(families.entries[0].latest_version.as_deref(), Some("0.2.0"));
+    assert!(families.entries[0].has_update);
 }
 
 #[tokio::test]
@@ -1497,16 +1542,15 @@ async fn plugin_management_service_upgrades_to_latest_without_redownloading_when
                 },
                 entries: vec![OfficialPluginSourceEntry {
                     plugin_id: "1flowbase.fixture_provider".into(),
+                    plugin_type: "model_provider".into(),
                     provider_code: "fixture_provider".into(),
-                    display_name: "Fixture Provider".into(),
+                    namespace: "plugin.fixture_provider".into(),
                     protocol: "openai_compatible".into(),
                     latest_version: "0.2.0".into(),
+                    selected_artifact: sample_artifact("linux", "amd64", Some("musl")),
+                    i18n_summary: sample_i18n_summary(),
                     release_tag: "fixture_provider-v0.2.0".into(),
-                    download_url: "https://example.com/fixture-provider.1flowbasepkg".into(),
-                    checksum: "sha256:fixture".into(),
                     trust_mode: "allow_unsigned".into(),
-                    signature_algorithm: None,
-                    signing_key_id: None,
                     help_url: Some("https://example.com/help".into()),
                     model_discovery_mode: "hybrid".into(),
                 }],
@@ -1642,12 +1686,16 @@ async fn plugin_management_service_installs_enables_assigns_and_lists_tasks() {
     assert_eq!(assign.status, PluginTaskStatus::Success);
 
     let catalog = service
-        .list_catalog(repository.actor.user_id)
+        .list_catalog(
+            repository.actor.user_id,
+            PluginCatalogFilter::default(),
+            requested_locales(),
+        )
         .await
         .unwrap();
-    assert_eq!(catalog.len(), 1);
-    assert!(catalog[0].assigned_to_current_workspace);
-    assert_eq!(catalog[0].model_discovery_mode, "hybrid");
+    assert_eq!(catalog.entries.len(), 1);
+    assert!(catalog.entries[0].assigned_to_current_workspace);
+    assert_eq!(catalog.entries[0].model_discovery_mode, "hybrid");
 
     let tasks = service.list_tasks(repository.actor.user_id).await.unwrap();
     assert_eq!(tasks.len(), 3);
@@ -1682,10 +1730,14 @@ async fn plugin_management_service_blocks_manage_actions_without_configure_permi
     );
 
     let catalog = service
-        .list_catalog(repository.actor.user_id)
+        .list_catalog(
+            repository.actor.user_id,
+            PluginCatalogFilter::default(),
+            requested_locales(),
+        )
         .await
         .unwrap();
-    assert!(catalog.is_empty());
+    assert!(catalog.entries.is_empty());
 
     let error = service
         .install_plugin(InstallPluginCommand {
@@ -1716,7 +1768,11 @@ async fn plugin_management_service_lists_official_catalog_and_installs_latest_re
     );
 
     let catalog = service
-        .list_official_catalog(repository.actor.user_id)
+        .list_official_catalog(
+            repository.actor.user_id,
+            PluginCatalogFilter::default(),
+            requested_locales(),
+        )
         .await
         .unwrap();
     assert_eq!(catalog.source_kind, "official_registry");
@@ -1745,6 +1801,58 @@ async fn plugin_management_service_lists_official_catalog_and_installs_latest_re
         Some("unsigned")
     );
     assert_eq!(install.task.status, PluginTaskStatus::Success);
+}
+
+#[tokio::test]
+async fn list_official_catalog_filters_by_plugin_type_and_trims_i18n_bundles() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all"],
+    ));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        std::env::temp_dir().join(format!("plugin-list-{}", Uuid::now_v7())),
+    );
+
+    let view = service
+        .list_official_catalog(
+            repository.actor.user_id,
+            PluginCatalogFilter {
+                plugin_type: Some("model_provider".into()),
+            },
+            RequestedLocales::new("zh_Hans", "en_US"),
+        )
+        .await
+        .unwrap();
+    let entry = &view.entries[0];
+
+    let reference = OfficialPluginSourceEntry {
+        plugin_id: "1flowbase.openai_compatible".into(),
+        plugin_type: "model_provider".into(),
+        provider_code: "openai_compatible".into(),
+        namespace: "plugin.openai_compatible".into(),
+        protocol: "openai_compatible".into(),
+        latest_version: "0.2.1".into(),
+        selected_artifact: sample_artifact("linux", "amd64", Some("musl")),
+        i18n_summary: sample_i18n_summary(),
+        release_tag: "openai_compatible-v0.2.1".into(),
+        trust_mode: "signature_required".into(),
+        help_url: Some("https://example.test/help".into()),
+        model_discovery_mode: "hybrid".into(),
+    };
+
+    assert_eq!(view.entries.len(), 1);
+    assert_eq!(entry.plugin_type, reference.plugin_type);
+    assert_eq!(entry.namespace, reference.namespace);
+    assert!(view.i18n_catalog["plugin.openai_compatible"]
+        .get("zh_Hans")
+        .is_some());
+    assert!(view.i18n_catalog["plugin.openai_compatible"]
+        .get("fr_FR")
+        .is_none());
 }
 
 #[tokio::test]

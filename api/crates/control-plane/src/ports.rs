@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use async_trait::async_trait;
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, DataModelScopeKind, ModelDefinitionRecord,
@@ -58,7 +60,10 @@ pub trait AuthRepository: Send + Sync {
     ) -> anyhow::Result<Option<UserRecord>>;
     async fn find_user_by_id(&self, user_id: Uuid) -> anyhow::Result<Option<UserRecord>>;
     async fn default_scope_for_user(&self, user_id: Uuid) -> anyhow::Result<ScopeContext>;
-    async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> anyhow::Result<ActorContext>;
+    async fn load_actor_context_for_user(
+        &self,
+        actor_user_id: Uuid,
+    ) -> anyhow::Result<ActorContext>;
     async fn load_actor_context(
         &self,
         user_id: Uuid,
@@ -651,18 +656,36 @@ pub struct OfficialPluginCatalogSource {
 }
 
 #[derive(Debug, Clone)]
-pub struct OfficialPluginSourceEntry {
-    pub plugin_id: String,
-    pub provider_code: String,
-    pub display_name: String,
-    pub protocol: String,
-    pub latest_version: String,
-    pub release_tag: String,
+pub struct OfficialPluginArtifact {
+    pub os: String,
+    pub arch: String,
+    pub libc: Option<String>,
+    pub rust_target: String,
     pub download_url: String,
     pub checksum: String,
-    pub trust_mode: String,
     pub signature_algorithm: Option<String>,
     pub signing_key_id: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OfficialPluginI18nSummary {
+    pub default_locale: String,
+    pub available_locales: Vec<String>,
+    pub bundles: BTreeMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OfficialPluginSourceEntry {
+    pub plugin_id: String,
+    pub plugin_type: String,
+    pub provider_code: String,
+    pub namespace: String,
+    pub protocol: String,
+    pub latest_version: String,
+    pub selected_artifact: OfficialPluginArtifact,
+    pub i18n_summary: OfficialPluginI18nSummary,
+    pub release_tag: String,
+    pub trust_mode: String,
     pub help_url: Option<String>,
     pub model_discovery_mode: String,
 }

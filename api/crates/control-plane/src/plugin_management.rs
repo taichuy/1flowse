@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -19,12 +19,17 @@ use uuid::Uuid;
 use crate::{
     audit::audit_log,
     errors::ControlPlaneError,
+    i18n::{
+        merge_i18n_catalog, plugin_namespace, trim_json_bundles, trim_provider_bundles,
+        I18nCatalog, RequestedLocales,
+    },
     ports::{
         AuthRepository, CreatePluginAssignmentInput, CreatePluginTaskInput,
-        ModelProviderRepository, OfficialPluginSourceEntry, OfficialPluginSourcePort,
-        PluginRepository, ProviderRuntimePort, ReassignModelProviderInstancesInput,
-        UpdatePluginInstallationEnabledInput, UpdatePluginTaskStatusInput,
-        UpsertModelProviderCatalogCacheInput, UpsertPluginInstallationInput,
+        ModelProviderRepository, OfficialPluginArtifact, OfficialPluginSourceEntry,
+        OfficialPluginSourcePort, PluginRepository, ProviderRuntimePort,
+        ReassignModelProviderInstancesInput, UpdatePluginInstallationEnabledInput,
+        UpdatePluginTaskStatusInput, UpsertModelProviderCatalogCacheInput,
+        UpsertPluginInstallationInput,
     },
     state_transition::ensure_plugin_task_transition,
 };
@@ -69,10 +74,34 @@ pub struct SwitchPluginVersionCommand {
 #[derive(Debug, Clone)]
 pub struct PluginCatalogEntry {
     pub installation: domain::PluginInstallationRecord,
+    pub plugin_type: String,
+    pub namespace: String,
+    pub label_key: String,
+    pub description_key: Option<String>,
+    pub provider_label_key: String,
     pub help_url: Option<String>,
     pub default_base_url: Option<String>,
     pub model_discovery_mode: String,
     pub assigned_to_current_workspace: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct PluginCatalogView {
+    pub entries: Vec<PluginCatalogEntry>,
+    pub i18n_catalog: I18nCatalog,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PluginCatalogFilter {
+    pub plugin_type: Option<String>,
+}
+
+impl PluginCatalogFilter {
+    fn matches(&self, plugin_type: &str) -> bool {
+        self.plugin_type
+            .as_deref()
+            .is_none_or(|value| value == plugin_type)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,10 +124,15 @@ impl OfficialPluginInstallStatus {
 #[derive(Debug, Clone)]
 pub struct OfficialPluginCatalogEntry {
     pub plugin_id: String,
+    pub plugin_type: String,
     pub provider_code: String,
-    pub display_name: String,
+    pub namespace: String,
+    pub label_key: String,
+    pub description_key: Option<String>,
+    pub provider_label_key: String,
     pub protocol: String,
     pub latest_version: String,
+    pub selected_artifact: OfficialPluginArtifact,
     pub help_url: Option<String>,
     pub model_discovery_mode: String,
     pub install_status: OfficialPluginInstallStatus,
@@ -109,6 +143,7 @@ pub struct OfficialPluginCatalogView {
     pub source_kind: String,
     pub source_label: String,
     pub registry_url: String,
+    pub i18n_catalog: I18nCatalog,
     pub entries: Vec<OfficialPluginCatalogEntry>,
 }
 
@@ -125,7 +160,11 @@ pub struct PluginInstalledVersionView {
 #[derive(Debug, Clone)]
 pub struct PluginFamilyView {
     pub provider_code: String,
-    pub display_name: String,
+    pub plugin_type: String,
+    pub namespace: String,
+    pub label_key: String,
+    pub description_key: Option<String>,
+    pub provider_label_key: String,
     pub protocol: String,
     pub help_url: Option<String>,
     pub default_base_url: Option<String>,
@@ -135,6 +174,12 @@ pub struct PluginFamilyView {
     pub latest_version: Option<String>,
     pub has_update: bool,
     pub installed_versions: Vec<PluginInstalledVersionView>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PluginFamilyCatalogView {
+    pub entries: Vec<PluginFamilyView>,
+    pub i18n_catalog: I18nCatalog,
 }
 
 #[derive(Debug, Clone)]
@@ -281,7 +326,12 @@ where
             .await
     }
 
-    pub async fn list_catalog(&self, actor_user_id: Uuid) -> Result<Vec<PluginCatalogEntry>> {
+    pub async fn list_catalog(
+        &self,
+        actor_user_id: Uuid,
+        filter: PluginCatalogFilter,
+        locales: RequestedLocales,
+    ) -> Result<PluginCatalogView> {
         let actor = load_actor_context_for_user(&self.repository, actor_user_id).await?;
         ensure_permission(&actor, "plugin_config.view.all")
             .map_err(ControlPlaneError::PermissionDenied)?;
@@ -295,9 +345,23 @@ where
             .collect::<HashSet<_>>();
         let installations = self.repository.list_installations().await?;
         let mut catalog = Vec::with_capacity(installations.len());
+        let mut i18n_catalog = BTreeMap::new();
         for installation in installations {
             let package = load_provider_package(&installation.install_path)?;
+            if !filter.matches(&package.manifest.plugin_type) {
+                continue;
+            }
+            let namespace = plugin_namespace(&installation.provider_code);
+            merge_i18n_catalog(
+                &mut i18n_catalog,
+                trim_provider_bundles(&namespace, &package.i18n, &locales),
+            );
             catalog.push(PluginCatalogEntry {
+                plugin_type: package.manifest.plugin_type.clone(),
+                namespace,
+                label_key: "plugin.label".to_string(),
+                description_key: Some("plugin.description".to_string()),
+                provider_label_key: "provider.label".to_string(),
                 help_url: package.provider.help_url.clone(),
                 default_base_url: package.provider.default_base_url.clone(),
                 model_discovery_mode: format!("{:?}", package.provider.model_discovery_mode)
@@ -307,12 +371,17 @@ where
             });
         }
 
-        Ok(catalog)
+        Ok(PluginCatalogView {
+            entries: catalog,
+            i18n_catalog,
+        })
     }
 
     pub async fn list_official_catalog(
         &self,
         actor_user_id: Uuid,
+        filter: PluginCatalogFilter,
+        locales: RequestedLocales,
     ) -> Result<OfficialPluginCatalogView> {
         let actor = load_actor_context_for_user(&self.repository, actor_user_id).await?;
         ensure_permission(&actor, "plugin_config.view.all")
@@ -328,9 +397,11 @@ where
         let installations = self.repository.list_installations().await?;
         let official_snapshot = self.official_source.list_official_catalog().await?;
         let normalized_entries = normalize_official_entries(official_snapshot.entries);
+        let mut i18n_catalog = BTreeMap::new();
 
         let entries = normalized_entries
             .into_iter()
+            .filter(|entry| filter.matches(&entry.plugin_type))
             .map(|entry| {
                 let matching_installations = installations
                     .iter()
@@ -346,13 +417,22 @@ where
                 } else {
                     OfficialPluginInstallStatus::NotInstalled
                 };
+                merge_i18n_catalog(
+                    &mut i18n_catalog,
+                    trim_json_bundles(&entry.namespace, &entry.i18n_summary.bundles, &locales),
+                );
 
                 OfficialPluginCatalogEntry {
                     plugin_id: entry.plugin_id,
+                    plugin_type: entry.plugin_type,
                     provider_code: entry.provider_code,
-                    display_name: entry.display_name,
+                    namespace: entry.namespace,
+                    label_key: "plugin.label".to_string(),
+                    description_key: Some("plugin.description".to_string()),
+                    provider_label_key: "provider.label".to_string(),
                     protocol: entry.protocol,
                     latest_version: entry.latest_version,
+                    selected_artifact: entry.selected_artifact,
                     help_url: entry.help_url,
                     model_discovery_mode: entry.model_discovery_mode,
                     install_status,
@@ -364,11 +444,17 @@ where
             source_kind: official_snapshot.source.source_kind,
             source_label: official_snapshot.source.source_label,
             registry_url: official_snapshot.source.registry_url,
+            i18n_catalog,
             entries,
         })
     }
 
-    pub async fn list_families(&self, actor_user_id: Uuid) -> Result<Vec<PluginFamilyView>> {
+    pub async fn list_families(
+        &self,
+        actor_user_id: Uuid,
+        filter: PluginCatalogFilter,
+        locales: RequestedLocales,
+    ) -> Result<PluginFamilyCatalogView> {
         let actor = load_actor_context_for_user(&self.repository, actor_user_id).await?;
         ensure_permission(&actor, "plugin_config.view.all")
             .map_err(ControlPlaneError::PermissionDenied)?;
@@ -406,12 +492,21 @@ where
             .collect::<HashMap<_, _>>();
 
         let mut families = Vec::with_capacity(assignments.len());
+        let mut i18n_catalog = BTreeMap::new();
         for assignment in assignments {
             let current = installation_map
                 .get(&assignment.installation_id)
                 .cloned()
                 .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
             let package = load_provider_package(&current.install_path)?;
+            if !filter.matches(&package.manifest.plugin_type) {
+                continue;
+            }
+            let namespace = plugin_namespace(&current.provider_code);
+            merge_i18n_catalog(
+                &mut i18n_catalog,
+                trim_provider_bundles(&namespace, &package.i18n, &locales),
+            );
             let latest_version = official_by_provider
                 .get(&assignment.provider_code)
                 .map(|entry| entry.latest_version.clone());
@@ -431,7 +526,11 @@ where
 
             families.push(PluginFamilyView {
                 provider_code: current.provider_code.clone(),
-                display_name: package.provider.display_name.clone(),
+                plugin_type: package.manifest.plugin_type.clone(),
+                namespace,
+                label_key: "plugin.label".to_string(),
+                description_key: Some("plugin.description".to_string()),
+                provider_label_key: "provider.label".to_string(),
                 protocol: current.protocol.clone(),
                 help_url: package.provider.help_url.clone(),
                 default_base_url: package.provider.default_base_url.clone(),
@@ -448,7 +547,10 @@ where
         }
         families.sort_by(|left, right| left.provider_code.cmp(&right.provider_code));
 
-        Ok(families)
+        Ok(PluginFamilyCatalogView {
+            entries: families,
+            i18n_catalog,
+        })
     }
 
     pub async fn install_plugin(
@@ -514,7 +616,7 @@ where
             &PackageIntakePolicy {
                 source_kind: snapshot.source.source_kind.clone(),
                 trust_mode: entry.trust_mode.clone(),
-                expected_artifact_sha256: Some(entry.checksum.clone()),
+                expected_artifact_sha256: Some(entry.selected_artifact.checksum.clone()),
                 trusted_public_keys: self.official_source.trusted_public_keys(),
                 original_filename: Some(downloaded.file_name.clone()),
             },
@@ -596,7 +698,9 @@ where
                     &PackageIntakePolicy {
                         source_kind: snapshot.source.source_kind.clone(),
                         trust_mode: snapshot_entry.trust_mode.clone(),
-                        expected_artifact_sha256: Some(snapshot_entry.checksum.clone()),
+                        expected_artifact_sha256: Some(
+                            snapshot_entry.selected_artifact.checksum.clone(),
+                        ),
                         trusted_public_keys: self.official_source.trusted_public_keys(),
                         original_filename: Some(downloaded.file_name.clone()),
                     },

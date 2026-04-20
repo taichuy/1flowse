@@ -976,7 +976,7 @@ rtk git commit -m "feat: add runtime profile system routes"
 - Modify: `api/apps/api-server/src/_tests/openapi_docs_tests.rs`
 - Modify: `api/apps/api-server/src/_tests/support.rs`
 
-- [ ] **Step 1: Write the failing plugin catalog tests**
+- [x] **Step 1: Write the failing plugin catalog tests**
 
 Extend `api/crates/control-plane/src/_tests/plugin_management_service_tests.rs` with:
 
@@ -1062,7 +1062,7 @@ assert!(payload["data"]["entries"][0].get("display_name").is_none());
 assert!(payload["data"]["i18n_catalog"]["plugin.openai_compatible"]["zh_Hans"].is_object());
 ```
 
-- [ ] **Step 2: Run the plugin catalog tests and confirm RED**
+- [x] **Step 2: Run the plugin catalog tests and confirm RED**
 
 Run:
 
@@ -1074,7 +1074,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p api-server plugin_routes -- --n
 
 Expected: FAIL because official entries still use `display_name` as the primary contract, `plugin_type` is missing, `artifacts[]` are flattened too early without i18n metadata, and route responses do not expose `namespace + key + i18n_catalog`.
 
-- [ ] **Step 3: Implement the new plugin catalog contract**
+- [x] **Step 3: Implement the new plugin catalog contract**
 
 Create `api/crates/control-plane/src/i18n.rs` with reusable trimming helpers:
 
@@ -1157,7 +1157,7 @@ pub struct PluginCatalogEntryResponse {
 }
 ```
 
-- [ ] **Step 4: Re-run the plugin catalog tests and confirm GREEN**
+- [x] **Step 4: Re-run the plugin catalog tests and confirm GREEN**
 
 Run:
 
@@ -1169,7 +1169,7 @@ rtk cargo test --manifest-path api/Cargo.toml -p api-server plugin_routes -- --n
 
 Expected: PASS with official catalog filtering on `plugin_type`, local catalog/family endpoints using the same classification field, and all plugin list routes returning `locale_meta + i18n_catalog + namespace + key` while defaulting to the current host’s selected artifact only.
 
-- [ ] **Step 5: Commit the plugin catalog contract refactor**
+- [x] **Step 5: Commit the plugin catalog contract refactor**
 
 ```bash
 rtk git add api/crates/control-plane/src/i18n.rs api/crates/control-plane/src/lib.rs api/crates/control-plane/src/ports.rs api/crates/control-plane/src/plugin_management.rs api/crates/control-plane/src/_tests/plugin_management_service_tests.rs api/apps/api-server/src/official_plugin_registry.rs api/apps/api-server/src/routes/plugins.rs api/apps/api-server/src/_tests/official_plugin_registry_tests.rs api/apps/api-server/src/_tests/plugin_routes.rs api/apps/api-server/src/_tests/openapi_alignment.rs api/apps/api-server/src/_tests/openapi_docs_tests.rs api/apps/api-server/src/_tests/support.rs

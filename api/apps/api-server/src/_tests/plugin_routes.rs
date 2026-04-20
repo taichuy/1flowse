@@ -436,10 +436,31 @@ async fn plugin_routes_install_enable_assign_and_query_tasks() {
     assert_eq!(catalog.status(), StatusCode::OK);
     let catalog_payload: Value =
         serde_json::from_slice(&to_bytes(catalog.into_body(), usize::MAX).await.unwrap()).unwrap();
-    assert_eq!(catalog_payload["data"].as_array().unwrap().len(), 1);
     assert_eq!(
-        catalog_payload["data"][0]["assigned_to_current_workspace"].as_bool(),
+        catalog_payload["data"]["entries"].as_array().unwrap().len(),
+        1
+    );
+    assert_eq!(
+        catalog_payload["data"]["entries"][0]["assigned_to_current_workspace"].as_bool(),
         Some(true)
+    );
+    assert_eq!(
+        catalog_payload["data"]["entries"][0]["plugin_type"],
+        "model_provider"
+    );
+    assert_eq!(
+        catalog_payload["data"]["entries"][0]["namespace"],
+        "plugin.fixture_provider"
+    );
+    assert_eq!(
+        catalog_payload["data"]["entries"][0]["label_key"],
+        "plugin.label"
+    );
+    assert!(catalog_payload["data"]["entries"][0]
+        .get("display_name")
+        .is_none());
+    assert!(
+        catalog_payload["data"]["i18n_catalog"]["plugin.fixture_provider"]["en_US"].is_object()
     );
 
     let tasks = app

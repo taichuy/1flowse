@@ -6,6 +6,7 @@ pub mod auth;
 pub mod bootstrap;
 pub mod errors;
 pub mod flow;
+pub mod i18n;
 pub mod member;
 pub mod model_definition;
 pub mod model_provider;

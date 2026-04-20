@@ -12,8 +12,9 @@ use axum::{
 };
 use control_plane::bootstrap::{BootstrapConfig, BootstrapService};
 use control_plane::ports::{
-    DownloadedOfficialPluginPackage, OfficialPluginCatalogSnapshot, OfficialPluginCatalogSource,
-    OfficialPluginSourceEntry, OfficialPluginSourcePort,
+    DownloadedOfficialPluginPackage, OfficialPluginArtifact, OfficialPluginCatalogSnapshot,
+    OfficialPluginCatalogSource, OfficialPluginI18nSummary, OfficialPluginSourceEntry,
+    OfficialPluginSourcePort,
 };
 use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
 use ed25519_dalek::{pkcs8::EncodePublicKey, SigningKey};
@@ -189,16 +190,54 @@ impl OfficialPluginSourcePort for InMemoryOfficialPluginSource {
             },
             entries: vec![OfficialPluginSourceEntry {
                 plugin_id: "1flowbase.openai_compatible".to_string(),
+                plugin_type: "model_provider".to_string(),
                 provider_code: "openai_compatible".to_string(),
-                display_name: "OpenAI Compatible".to_string(),
+                namespace: "plugin.openai_compatible".to_string(),
                 protocol: "openai_compatible".to_string(),
                 latest_version: "0.2.0".to_string(),
+                selected_artifact: OfficialPluginArtifact {
+                    os: "linux".to_string(),
+                    arch: "amd64".to_string(),
+                    libc: Some("musl".to_string()),
+                    rust_target: "x86_64-unknown-linux-musl".to_string(),
+                    download_url: "https://example.com/openai-compatible.1flowbasepkg"
+                        .to_string(),
+                    checksum: format!("sha256:{:x}", Sha256::digest(&package_bytes)),
+                    signature_algorithm: None,
+                    signing_key_id: None,
+                },
+                i18n_summary: OfficialPluginI18nSummary {
+                    default_locale: "en_US".to_string(),
+                    available_locales: vec!["en_US".to_string(), "zh_Hans".to_string()],
+                    bundles: std::collections::BTreeMap::from([
+                        (
+                            "en_US".to_string(),
+                            json!({
+                                "plugin": {
+                                    "label": "OpenAI Compatible",
+                                    "description": "Official provider plugin"
+                                },
+                                "provider": {
+                                    "label": "OpenAI Compatible"
+                                }
+                            }),
+                        ),
+                        (
+                            "zh_Hans".to_string(),
+                            json!({
+                                "plugin": {
+                                    "label": "OpenAI Compatible",
+                                    "description": "官方 Provider 插件"
+                                },
+                                "provider": {
+                                    "label": "OpenAI Compatible"
+                                }
+                            }),
+                        ),
+                    ]),
+                },
                 release_tag: "openai_compatible-v0.2.0".to_string(),
-                download_url: "https://example.com/openai-compatible.1flowbasepkg".to_string(),
-                checksum: format!("sha256:{:x}", Sha256::digest(&package_bytes)),
                 trust_mode: "allow_unsigned".to_string(),
-                signature_algorithm: None,
-                signing_key_id: None,
                 help_url: Some(
                     "https://github.com/taichuy/1flowbase-official-plugins/tree/main/models/openai_compatible"
                         .to_string(),

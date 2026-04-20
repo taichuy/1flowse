@@ -1,20 +1,21 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Multipart, Path, State},
-    http::{HeaderMap, StatusCode},
+    extract::{Multipart, Path, Query, State},
+    http::{header::ACCEPT_LANGUAGE, HeaderMap, StatusCode},
     routing::{get, post},
     Json, Router,
 };
 use control_plane::plugin_management::{
     AssignPluginCommand, EnablePluginCommand, InstallOfficialPluginCommand, InstallPluginCommand,
     InstallPluginResult, InstallUploadedPluginCommand, OfficialPluginCatalogEntry,
-    OfficialPluginCatalogView, PluginCatalogEntry, PluginFamilyView, PluginInstalledVersionView,
-    PluginManagementService, SwitchPluginVersionCommand, UpgradeLatestPluginFamilyCommand,
+    OfficialPluginCatalogView, PluginCatalogEntry, PluginCatalogFilter, PluginFamilyView,
+    PluginInstalledVersionView, PluginManagementService, SwitchPluginVersionCommand,
+    UpgradeLatestPluginFamilyCommand,
 };
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
@@ -23,6 +24,7 @@ use crate::{
     middleware::{require_csrf::require_csrf, require_session::require_session},
     provider_runtime::ApiProviderRuntime,
     response::ApiSuccess,
+    routes::system::LocaleMetaResponse,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -38,6 +40,12 @@ pub struct InstallOfficialPluginBody {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SwitchPluginVersionBody {
     pub installation_id: String,
+}
+
+#[derive(Debug, Deserialize, IntoParams, Clone)]
+pub struct PluginCatalogQuery {
+    pub plugin_type: Option<String>,
+    pub locale: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -66,8 +74,12 @@ pub struct PluginInstallationResponse {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct PluginCatalogEntryResponse {
-    #[serde(flatten)]
     pub installation: PluginInstallationResponse,
+    pub plugin_type: String,
+    pub namespace: String,
+    pub label_key: String,
+    pub description_key: Option<String>,
+    pub provider_label_key: String,
     pub help_url: Option<String>,
     pub default_base_url: Option<String>,
     pub model_discovery_mode: String,
@@ -75,12 +87,37 @@ pub struct PluginCatalogEntryResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+pub struct PluginCatalogResponse {
+    pub locale_meta: LocaleMetaResponse,
+    #[schema(value_type = Object)]
+    pub i18n_catalog: serde_json::Value,
+    pub entries: Vec<PluginCatalogEntryResponse>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OfficialPluginArtifactResponse {
+    pub os: String,
+    pub arch: String,
+    pub libc: Option<String>,
+    pub rust_target: String,
+    pub download_url: String,
+    pub checksum: String,
+    pub signature_algorithm: Option<String>,
+    pub signing_key_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct OfficialPluginCatalogEntryResponse {
     pub plugin_id: String,
+    pub plugin_type: String,
     pub provider_code: String,
-    pub display_name: String,
+    pub namespace: String,
+    pub label_key: String,
+    pub description_key: Option<String>,
+    pub provider_label_key: String,
     pub protocol: String,
     pub latest_version: String,
+    pub selected_artifact: OfficialPluginArtifactResponse,
     pub help_url: Option<String>,
     pub model_discovery_mode: String,
     pub install_status: String,
@@ -91,6 +128,9 @@ pub struct OfficialPluginCatalogResponse {
     pub source_kind: String,
     pub source_label: String,
     pub registry_url: String,
+    pub locale_meta: LocaleMetaResponse,
+    #[schema(value_type = Object)]
+    pub i18n_catalog: serde_json::Value,
     pub entries: Vec<OfficialPluginCatalogEntryResponse>,
 }
 
@@ -107,7 +147,11 @@ pub struct PluginInstalledVersionResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct PluginFamilyResponse {
     pub provider_code: String,
-    pub display_name: String,
+    pub plugin_type: String,
+    pub namespace: String,
+    pub label_key: String,
+    pub description_key: Option<String>,
+    pub provider_label_key: String,
     pub protocol: String,
     pub help_url: Option<String>,
     pub default_base_url: Option<String>,
@@ -117,6 +161,14 @@ pub struct PluginFamilyResponse {
     pub latest_version: Option<String>,
     pub has_update: bool,
     pub installed_versions: Vec<PluginInstalledVersionResponse>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PluginFamilyCatalogResponse {
+    pub locale_meta: LocaleMetaResponse,
+    #[schema(value_type = Object)]
+    pub i18n_catalog: serde_json::Value,
+    pub entries: Vec<PluginFamilyResponse>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -255,6 +307,11 @@ fn to_install_response(result: InstallPluginResult) -> InstallPluginResponse {
 fn to_catalog_response(entry: PluginCatalogEntry) -> PluginCatalogEntryResponse {
     PluginCatalogEntryResponse {
         installation: to_installation_response(entry.installation),
+        plugin_type: entry.plugin_type,
+        namespace: entry.namespace,
+        label_key: entry.label_key,
+        description_key: entry.description_key,
+        provider_label_key: entry.provider_label_key,
         help_url: entry.help_url,
         default_base_url: entry.default_base_url,
         model_discovery_mode: entry.model_discovery_mode,
@@ -267,10 +324,24 @@ fn to_official_catalog_entry_response(
 ) -> OfficialPluginCatalogEntryResponse {
     OfficialPluginCatalogEntryResponse {
         plugin_id: entry.plugin_id,
+        plugin_type: entry.plugin_type,
         provider_code: entry.provider_code,
-        display_name: entry.display_name,
+        namespace: entry.namespace,
+        label_key: entry.label_key,
+        description_key: entry.description_key,
+        provider_label_key: entry.provider_label_key,
         protocol: entry.protocol,
         latest_version: entry.latest_version,
+        selected_artifact: OfficialPluginArtifactResponse {
+            os: entry.selected_artifact.os,
+            arch: entry.selected_artifact.arch,
+            libc: entry.selected_artifact.libc,
+            rust_target: entry.selected_artifact.rust_target,
+            download_url: entry.selected_artifact.download_url,
+            checksum: entry.selected_artifact.checksum,
+            signature_algorithm: entry.selected_artifact.signature_algorithm,
+            signing_key_id: entry.selected_artifact.signing_key_id,
+        },
         help_url: entry.help_url,
         model_discovery_mode: entry.model_discovery_mode,
         install_status: entry.install_status.as_str().to_string(),
@@ -278,12 +349,15 @@ fn to_official_catalog_entry_response(
 }
 
 fn to_official_catalog_response(
+    locale_meta: LocaleMetaResponse,
     catalog: OfficialPluginCatalogView,
 ) -> OfficialPluginCatalogResponse {
     OfficialPluginCatalogResponse {
         source_kind: catalog.source_kind,
         source_label: catalog.source_label,
         registry_url: catalog.registry_url,
+        locale_meta,
+        i18n_catalog: serde_json::to_value(catalog.i18n_catalog).unwrap(),
         entries: catalog
             .entries
             .into_iter()
@@ -308,7 +382,11 @@ fn to_installed_version_response(
 fn to_family_response(entry: PluginFamilyView) -> PluginFamilyResponse {
     PluginFamilyResponse {
         provider_code: entry.provider_code,
-        display_name: entry.display_name,
+        plugin_type: entry.plugin_type,
+        namespace: entry.namespace,
+        label_key: entry.label_key,
+        description_key: entry.description_key,
+        provider_label_key: entry.provider_label_key,
         protocol: entry.protocol,
         help_url: entry.help_url,
         default_base_url: entry.default_base_url,
@@ -341,55 +419,145 @@ fn to_task_response(task: domain::PluginTaskRecord) -> PluginTaskResponse {
     }
 }
 
+fn resolve_locale_meta(
+    headers: &HeaderMap,
+    query_locale: Option<String>,
+    user_preferred_locale: Option<String>,
+) -> LocaleMetaResponse {
+    runtime_profile::resolve_locale(runtime_profile::LocaleResolutionInput {
+        query_locale,
+        explicit_header_locale: headers
+            .get("x-1flowbase-locale")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string),
+        user_preferred_locale,
+        accept_language: headers
+            .get(ACCEPT_LANGUAGE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string),
+        fallback_locale: runtime_profile::FALLBACK_LOCALE,
+        supported_locales: runtime_profile::SUPPORTED_LOCALES
+            .iter()
+            .map(|value| value.to_string())
+            .collect(),
+    })
+    .into()
+}
+
+fn requested_locales(locale_meta: &LocaleMetaResponse) -> control_plane::i18n::RequestedLocales {
+    control_plane::i18n::RequestedLocales::new(
+        locale_meta.resolved_locale.clone(),
+        locale_meta.fallback_locale.clone(),
+    )
+}
+
+fn filter_from_query(query: &PluginCatalogQuery) -> PluginCatalogFilter {
+    PluginCatalogFilter {
+        plugin_type: query.plugin_type.clone(),
+    }
+}
+
 #[utoipa::path(
     get,
     path = "/api/console/plugins/catalog",
+    params(PluginCatalogQuery),
     operation_id = "plugin_list_catalog",
-    responses((status = 200, body = [PluginCatalogEntryResponse]), (status = 401, body = crate::error_response::ErrorBody))
+    responses((status = 200, body = PluginCatalogResponse), (status = 401, body = crate::error_response::ErrorBody))
 )]
 pub async fn list_catalog(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
-) -> Result<Json<ApiSuccess<Vec<PluginCatalogEntryResponse>>>, ApiError> {
+    Query(query): Query<PluginCatalogQuery>,
+) -> Result<Json<ApiSuccess<PluginCatalogResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    let catalog = service(&state).list_catalog(context.user.id).await?;
-    Ok(Json(ApiSuccess::new(
-        catalog.into_iter().map(to_catalog_response).collect(),
-    )))
+    let locale_meta = resolve_locale_meta(
+        &headers,
+        query.locale.clone(),
+        context.user.preferred_locale,
+    );
+    let catalog = service(&state)
+        .list_catalog(
+            context.user.id,
+            filter_from_query(&query),
+            requested_locales(&locale_meta),
+        )
+        .await?;
+    Ok(Json(ApiSuccess::new(PluginCatalogResponse {
+        locale_meta,
+        i18n_catalog: serde_json::to_value(catalog.i18n_catalog).unwrap(),
+        entries: catalog
+            .entries
+            .into_iter()
+            .map(to_catalog_response)
+            .collect(),
+    })))
 }
 
 #[utoipa::path(
     get,
     path = "/api/console/plugins/families",
+    params(PluginCatalogQuery),
     operation_id = "plugin_list_families",
-    responses((status = 200, body = [PluginFamilyResponse]), (status = 401, body = crate::error_response::ErrorBody))
+    responses((status = 200, body = PluginFamilyCatalogResponse), (status = 401, body = crate::error_response::ErrorBody))
 )]
 pub async fn list_families(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
-) -> Result<Json<ApiSuccess<Vec<PluginFamilyResponse>>>, ApiError> {
+    Query(query): Query<PluginCatalogQuery>,
+) -> Result<Json<ApiSuccess<PluginFamilyCatalogResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    let families = service(&state).list_families(context.user.id).await?;
-    Ok(Json(ApiSuccess::new(
-        families.into_iter().map(to_family_response).collect(),
-    )))
+    let locale_meta = resolve_locale_meta(
+        &headers,
+        query.locale.clone(),
+        context.user.preferred_locale,
+    );
+    let families = service(&state)
+        .list_families(
+            context.user.id,
+            filter_from_query(&query),
+            requested_locales(&locale_meta),
+        )
+        .await?;
+    Ok(Json(ApiSuccess::new(PluginFamilyCatalogResponse {
+        locale_meta,
+        i18n_catalog: serde_json::to_value(families.i18n_catalog).unwrap(),
+        entries: families
+            .entries
+            .into_iter()
+            .map(to_family_response)
+            .collect(),
+    })))
 }
 
 #[utoipa::path(
     get,
     path = "/api/console/plugins/official-catalog",
+    params(PluginCatalogQuery),
     operation_id = "plugin_list_official_catalog",
     responses((status = 200, body = OfficialPluginCatalogResponse), (status = 401, body = crate::error_response::ErrorBody))
 )]
 pub async fn list_official_catalog(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
+    Query(query): Query<PluginCatalogQuery>,
 ) -> Result<Json<ApiSuccess<OfficialPluginCatalogResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
+    let locale_meta = resolve_locale_meta(
+        &headers,
+        query.locale.clone(),
+        context.user.preferred_locale,
+    );
     let catalog = service(&state)
-        .list_official_catalog(context.user.id)
+        .list_official_catalog(
+            context.user.id,
+            filter_from_query(&query),
+            requested_locales(&locale_meta),
+        )
         .await?;
-    Ok(Json(ApiSuccess::new(to_official_catalog_response(catalog))))
+    Ok(Json(ApiSuccess::new(to_official_catalog_response(
+        locale_meta,
+        catalog,
+    ))))
 }
 
 #[utoipa::path(

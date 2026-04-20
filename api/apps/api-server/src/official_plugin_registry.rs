@@ -1,12 +1,16 @@
+use std::collections::BTreeMap;
+
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use control_plane::ports::{
-    DownloadedOfficialPluginPackage, OfficialPluginCatalogSnapshot, OfficialPluginCatalogSource,
-    OfficialPluginSourceEntry, OfficialPluginSourcePort,
+    DownloadedOfficialPluginPackage, OfficialPluginArtifact, OfficialPluginCatalogSnapshot,
+    OfficialPluginCatalogSource, OfficialPluginI18nSummary, OfficialPluginSourceEntry,
+    OfficialPluginSourcePort,
 };
 use plugin_framework::RuntimeTarget;
 use reqwest::Client;
 use serde::Deserialize;
+use serde_json::{json, Value};
 
 use crate::config::ResolvedOfficialPluginSourceConfig;
 
@@ -80,18 +84,28 @@ impl OfficialPluginSourcePort for ApiOfficialPluginRegistry {
                 .into_iter()
                 .filter_map(|entry| {
                     let selected = select_artifact_for_host(&entry, &host)?;
+                    let namespace = format!("plugin.{}", entry.provider_code);
+                    let i18n_summary = normalize_i18n_summary(&entry);
                     Some(OfficialPluginSourceEntry {
                         release_tag: format!("{}-v{}", entry.provider_code, entry.latest_version),
                         plugin_id: entry.plugin_id,
+                        plugin_type: entry.plugin_type,
                         provider_code: entry.provider_code,
-                        display_name: entry.display_name,
+                        namespace,
                         protocol: entry.protocol,
                         latest_version: entry.latest_version,
-                        download_url: selected.download_url,
-                        checksum: selected.checksum,
+                        selected_artifact: OfficialPluginArtifact {
+                            os: selected.os,
+                            arch: selected.arch,
+                            libc: selected.libc,
+                            rust_target: selected.rust_target,
+                            download_url: selected.download_url,
+                            checksum: selected.checksum,
+                            signature_algorithm: selected.signature_algorithm,
+                            signing_key_id: selected.signing_key_id,
+                        },
+                        i18n_summary,
                         trust_mode: default_trust_mode(),
-                        signature_algorithm: selected.signature_algorithm,
-                        signing_key_id: selected.signing_key_id,
                         help_url: entry.help_url,
                         model_discovery_mode: entry.model_discovery_mode,
                     })
@@ -109,7 +123,9 @@ impl OfficialPluginSourcePort for ApiOfficialPluginRegistry {
                 "{}-{}.1flowbasepkg",
                 entry.provider_code, entry.latest_version
             ),
-            package_bytes: self.download_bytes(&entry.download_url).await?,
+            package_bytes: self
+                .download_bytes(&entry.selected_artifact.download_url)
+                .await?,
         })
     }
 
@@ -146,12 +162,16 @@ pub struct OfficialRegistryArtifact {
 #[derive(Debug, Clone, Deserialize)]
 pub struct OfficialRegistryEntry {
     pub plugin_id: String,
+    #[serde(default = "default_plugin_type")]
+    pub plugin_type: String,
     pub provider_code: String,
     pub display_name: String,
     pub protocol: String,
     pub latest_version: String,
     pub help_url: Option<String>,
     pub model_discovery_mode: String,
+    #[serde(default)]
+    pub i18n_summary: OfficialRegistryI18nSummary,
     #[serde(default)]
     pub artifacts: Vec<OfficialRegistryArtifact>,
 }
@@ -182,4 +202,51 @@ pub fn select_artifact_for_host(
 
 fn default_trust_mode() -> String {
     "signature_required".to_string()
+}
+
+fn default_plugin_type() -> String {
+    "model_provider".to_string()
+}
+
+fn default_registry_locale() -> String {
+    "en_US".to_string()
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct OfficialRegistryI18nSummary {
+    #[serde(default = "default_registry_locale")]
+    pub default_locale: String,
+    #[serde(default)]
+    pub available_locales: Vec<String>,
+    #[serde(default)]
+    pub bundles: BTreeMap<String, Value>,
+}
+
+fn normalize_i18n_summary(entry: &OfficialRegistryEntry) -> OfficialPluginI18nSummary {
+    let mut bundles = entry.i18n_summary.bundles.clone();
+    let default_locale = if entry.i18n_summary.default_locale.trim().is_empty() {
+        default_registry_locale()
+    } else {
+        entry.i18n_summary.default_locale.clone()
+    };
+    if bundles.is_empty() {
+        bundles.insert(
+            default_locale.clone(),
+            json!({
+                "plugin": { "label": entry.display_name },
+                "provider": { "label": entry.display_name },
+            }),
+        );
+    }
+
+    let mut available_locales = entry.i18n_summary.available_locales.clone();
+    if available_locales.is_empty() {
+        available_locales = bundles.keys().cloned().collect();
+    }
+
+    OfficialPluginI18nSummary {
+        default_locale,
+        available_locales,
+        bundles,
+    }
 }

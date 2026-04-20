@@ -1,7 +1,9 @@
 use plugin_framework::RuntimeTarget;
+use serde_json::json;
 
 use crate::official_plugin_registry::{
     select_artifact_for_host, OfficialRegistryArtifact, OfficialRegistryEntry,
+    OfficialRegistryI18nSummary,
 };
 
 #[test]
@@ -14,12 +16,27 @@ fn select_artifact_prefers_exact_linux_match() {
     };
     let entry = OfficialRegistryEntry {
         plugin_id: "1flowbase.openai_compatible".into(),
+        plugin_type: "model_provider".into(),
         provider_code: "openai_compatible".into(),
         display_name: "OpenAI-Compatible API Provider".into(),
         protocol: "openai_compatible".into(),
         latest_version: "0.2.1".into(),
         help_url: None,
         model_discovery_mode: "hybrid".into(),
+        i18n_summary: OfficialRegistryI18nSummary {
+            default_locale: "en_US".into(),
+            available_locales: vec!["en_US".into(), "zh_Hans".into()],
+            bundles: std::collections::BTreeMap::from([
+                (
+                    "en_US".into(),
+                    json!({ "plugin": { "label": "OpenAI-Compatible API Provider" } }),
+                ),
+                (
+                    "zh_Hans".into(),
+                    json!({ "plugin": { "label": "OpenAI-Compatible API Provider" } }),
+                ),
+            ]),
+        },
         artifacts: vec![
             OfficialRegistryArtifact {
                 os: "linux".into(),
@@ -61,12 +78,27 @@ fn select_artifact_returns_none_when_no_platform_matches() {
     };
     let entry = OfficialRegistryEntry {
         plugin_id: "1flowbase.openai_compatible".into(),
+        plugin_type: "model_provider".into(),
         provider_code: "openai_compatible".into(),
         display_name: "OpenAI-Compatible API Provider".into(),
         protocol: "openai_compatible".into(),
         latest_version: "0.2.1".into(),
         help_url: None,
         model_discovery_mode: "hybrid".into(),
+        i18n_summary: OfficialRegistryI18nSummary {
+            default_locale: "en_US".into(),
+            available_locales: vec!["en_US".into(), "zh_Hans".into()],
+            bundles: std::collections::BTreeMap::from([
+                (
+                    "en_US".into(),
+                    json!({ "plugin": { "label": "OpenAI-Compatible API Provider" } }),
+                ),
+                (
+                    "zh_Hans".into(),
+                    json!({ "plugin": { "label": "OpenAI-Compatible API Provider" } }),
+                ),
+            ]),
+        },
         artifacts: vec![OfficialRegistryArtifact {
             os: "linux".into(),
             arch: "amd64".into(),
