@@ -7,6 +7,7 @@ pub mod me;
 pub mod members;
 pub mod model_definitions;
 pub mod model_providers;
+pub mod node_contributions;
 pub mod permissions;
 pub mod plugins;
 pub mod roles;

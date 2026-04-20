@@ -127,6 +127,7 @@ fn console_router(state: Arc<ApiState>) -> Router {
         .nest("/api/console", routes::members::router())
         .nest("/api/console", routes::model_definitions::router())
         .nest("/api/console", routes::model_providers::router())
+        .nest("/api/console", routes::node_contributions::router())
         .nest("/api/console", routes::roles::router())
         .nest("/api/console", routes::permissions::router())
         .nest("/api/console", routes::plugins::router())
