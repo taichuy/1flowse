@@ -1,15 +1,14 @@
 # ai必读
-1.所有任务开始前需要先阅读相关记忆，并且与用户沟通完决策性沟通时候应该主动维护记忆内容，对应记忆请先阅读：`.memory/AGENTS.md`
-2.回复前应该先阅读用户偏好：`.memory/user-memory.md`
+@.memory/AGENTS.md
+@.memory/user-memory.md
 # 本项目相关skill在
 .agents/skills
 如果没有注册，请自行更新到对应约定目录
 # 质量控制
-1.开发阶段默认只按当前作用域 `AGENTS.md` 的实现规则推进，不在仓库根自动注入完整质量门禁脚本清单。
-2.进入自检、验收、回归或交付阶段时，使用 `.agents/skills/qa-evaluation`；由 agent 自行选择并执行对应脚本。
-3.前端实现规则与前端 QA 边界看 `web/AGENTS.md`。
-4.后端实现规则与后端 QA 边界看 `api/AGENTS.md`。
-5.warning 与 coverage 产物统一落到 `tmp/test-governance/`。
+1.进入自检、验收、回归或交付阶段时，使用skill `qa-evaluation`；
+2.前端实现规则与前端 QA 边界看 `web/AGENTS.md`。
+3.后端实现规则与后端 QA 边界看 `api/AGENTS.md`。
+4.warning 与 coverage 产物统一落到 `tmp/test-governance/`。
 # 文件管理约定
 1.理论上来说单个代码文件不应该超过1500行
 2.当前一个目录下不文件不应该超过15个，超过后应该收纳整理对应子目录

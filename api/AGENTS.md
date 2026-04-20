@@ -50,7 +50,7 @@
 - runtime 模型或字段对应物理表/列缺失时，必须标记不可用；不健康元数据不得继续进入 runtime registry。
 
 ## Verification
-- 开发阶段不自动注入后端脚本清单；进入自检、验收、回归或交付阶段时，使用 `qa-evaluation` 并自行执行对应脚本。
+- 进入自检、验收、回归或交付阶段时，使用 `qa-evaluation` 并自行执行对应脚本。
 - 新增后端功能的 QA 结论必须覆盖 service 测试与 route 测试。
 - 同一工作区内 `cargo` 验证命令默认串行执行，不并发抢锁。
 - 修改 `storage-pg/migrations` 下历史 migration 文件后，数据库测试优先使用独立 schema，避免 `sqlx` migration checksum 污染共享 schema。

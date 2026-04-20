@@ -37,6 +37,6 @@
 - 管理台/后台页面禁止 `Card` 套 `Card` 和卡片墙式堆叠；优先使用 `Table`、`Descriptions`、`Form`、`Typography`、`Divider`、`Space/Flex` 组织信息。
 
 ## Verification
-- 开发阶段不自动注入前端脚本清单；进入自检、验收、回归或交付阶段时，使用 `qa-evaluation` 并自行执行对应脚本。
+- 进入自检、验收、回归或交付阶段时，使用 `qa-evaluation` 并自行执行对应脚本。
 - 改动导航、壳层、共享样式、全局样式或第三方 slot 覆写后，QA 结论必须包含 `style-boundary` 证据。
 - 需要页面结论时，必须检查桌面端和移动端关键页面；不能只看代码就判 UI 通过。
