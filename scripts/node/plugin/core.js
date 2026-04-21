@@ -901,6 +901,11 @@ function createPluginPackage(pluginPath, outputDir, options = {}) {
   const stagedRoot = createPackageArtifactRoot(resolvedPluginPath);
   const pluginCode = readPluginCode(resolvedPluginPath);
   const version = readManifestField(resolvedPluginPath, 'version', '0.1.0');
+  const manifestPluginId = readManifestField(
+    resolvedPluginPath,
+    'plugin_id',
+    `${pluginCode}@${version}`
+  );
   const vendor = readManifestField(resolvedPluginPath, 'vendor', '1flowbase');
   const contractVersion = readManifestField(
     resolvedPluginPath,
@@ -929,7 +934,7 @@ function createPluginPackage(pluginPath, outputDir, options = {}) {
     let signatureMetadata = null;
     if (options.signingKeyPemFile && options.signingKeyId) {
       signatureMetadata = writeOfficialSignatureFiles(stagedRoot, {
-        pluginId: `${vendor}.${pluginCode}`,
+        pluginId: manifestPluginId,
         providerCode: pluginCode,
         version,
         contractVersion,

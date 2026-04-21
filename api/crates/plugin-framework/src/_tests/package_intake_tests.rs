@@ -2,10 +2,11 @@ use std::{
     fs,
     io::{Cursor, Write},
     path::{Path, PathBuf},
+    process::Command,
 };
 
-use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
-use ed25519_dalek::{pkcs8::EncodePublicKey, Signer, SigningKey};
+use ed25519_dalek::pkcs8::{spki::der::pem::LineEnding, DecodePublicKey, EncodePublicKey};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use flate2::{write::GzEncoder, Compression};
 use plugin_framework::{intake_package_bytes, PackageIntakePolicy, TrustedPublicKey};
 use serde::Serialize;
@@ -232,6 +233,76 @@ async fn package_intake_rejects_signed_archive_with_release_identity_mismatch() 
     assert!(error
         .to_string()
         .contains("official release metadata must match package manifest identity"));
+}
+
+#[test]
+fn node_generated_ed25519_signature_verifies_with_rust() {
+    let fixture_dir = TempFixtureDir::new();
+    let message_path = fixture_dir.path().join("message.json");
+    let signature_path = fixture_dir.path().join("message.sig");
+    let private_key_path = fixture_dir.path().join("node-signing-key.pem");
+    let public_key_path = fixture_dir.path().join("node-signing-public.pem");
+    let message = br#"{"schema_version":1,"message":"node-to-rust"}"#;
+
+    fs::write(&message_path, message).unwrap();
+    generate_node_ed25519_keypair(&private_key_path, &public_key_path);
+    sign_file_with_node(&private_key_path, &message_path, &signature_path);
+
+    let public_key = fs::read_to_string(&public_key_path).unwrap();
+    let verifying_key = VerifyingKey::from_public_key_pem(&public_key).unwrap();
+    let signature_bytes = fs::read(&signature_path).unwrap();
+    let signature = Signature::from_slice(&signature_bytes).unwrap();
+
+    verifying_key.verify(message, &signature).unwrap();
+}
+
+#[tokio::test]
+async fn package_intake_accepts_node_packaged_signed_archive() {
+    let fixture_dir = TempFixtureDir::new();
+    let output_dir = TempFixtureDir::new();
+    let private_key_path = output_dir.path().join("node-signing-key.pem");
+    let public_key_path = output_dir.path().join("node-signing-public.pem");
+    let runtime_binary_path = output_dir.path().join("openai_compatible-provider");
+
+    write_provider_fixture(
+        &fixture_dir,
+        "openai_compatible",
+        "0.2.0",
+        "official_registry",
+        "verified_official",
+    );
+    write_fake_runtime_binary(&runtime_binary_path);
+    generate_node_ed25519_keypair(&private_key_path, &public_key_path);
+
+    let package = package_plugin_with_node(
+        fixture_dir.path(),
+        output_dir.path(),
+        &runtime_binary_path,
+        &private_key_path,
+    );
+    let package_bytes = fs::read(&package.package_file).unwrap();
+    let public_key_pem = fs::read_to_string(&public_key_path).unwrap();
+
+    let result = intake_package_bytes(
+        &package_bytes,
+        &PackageIntakePolicy {
+            source_kind: "official_registry".to_string(),
+            trust_mode: "signature_required".to_string(),
+            expected_artifact_sha256: Some(format!("sha256:{}", package.checksum)),
+            trusted_public_keys: vec![TrustedPublicKey {
+                key_id: "official-key-2026-04".to_string(),
+                algorithm: "ed25519".to_string(),
+                public_key_pem,
+            }],
+            original_filename: Some(package.package_name),
+        },
+    )
+    .await
+    .expect("node-packaged signed archive should be accepted by rust intake");
+
+    assert_eq!(result.signature_status, "verified");
+    assert_eq!(result.trust_level, "verified_official");
+    assert_eq!(result.manifest.plugin_id, "openai_compatible@0.2.0");
 }
 
 fn create_signed_package_fixture(input: SignedFixtureInput<'_>) -> SignedPackageFixture {
@@ -465,5 +536,124 @@ fn append_dir_to_zip(
         }
         writer.start_file(relative, options).unwrap();
         writer.write_all(&fs::read(&path).unwrap()).unwrap();
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct NodePackageResult {
+    #[serde(rename = "packageFile")]
+    package_file: String,
+    #[serde(rename = "packageName")]
+    package_name: String,
+    checksum: String,
+}
+
+struct NodePackagedArchive {
+    package_file: PathBuf,
+    package_name: String,
+    checksum: String,
+}
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
+}
+
+fn generate_node_ed25519_keypair(private_key_path: &Path, public_key_path: &Path) {
+    let script = r#"
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
+fs.writeFileSync(process.env.PRIVATE_KEY_PATH, privateKey.export({ format: 'pem', type: 'pkcs8' }));
+fs.writeFileSync(process.env.PUBLIC_KEY_PATH, publicKey.export({ format: 'pem', type: 'spki' }));
+"#;
+    let status = Command::new("node")
+        .arg("-e")
+        .arg(script)
+        .env("PRIVATE_KEY_PATH", private_key_path)
+        .env("PUBLIC_KEY_PATH", public_key_path)
+        .status()
+        .unwrap();
+
+    assert!(status.success(), "node key generation failed");
+}
+
+fn sign_file_with_node(private_key_path: &Path, message_path: &Path, signature_path: &Path) {
+    let script = r#"
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const privateKey = crypto.createPrivateKey(fs.readFileSync(process.env.PRIVATE_KEY_PATH, 'utf8'));
+const message = fs.readFileSync(process.env.MESSAGE_PATH);
+const signature = crypto.sign(null, message, privateKey);
+fs.writeFileSync(process.env.SIGNATURE_PATH, signature);
+"#;
+    let status = Command::new("node")
+        .arg("-e")
+        .arg(script)
+        .env("PRIVATE_KEY_PATH", private_key_path)
+        .env("MESSAGE_PATH", message_path)
+        .env("SIGNATURE_PATH", signature_path)
+        .status()
+        .unwrap();
+
+    assert!(status.success(), "node signing failed");
+}
+
+fn package_plugin_with_node(
+    plugin_path: &Path,
+    output_dir: &Path,
+    runtime_binary_path: &Path,
+    private_key_path: &Path,
+) -> NodePackagedArchive {
+    let script = r#"
+const core = require(process.env.CORE_JS_PATH);
+const result = core.createPluginPackage(process.env.PLUGIN_PATH, process.env.OUTPUT_DIR, {
+  runtimeBinaryFile: process.env.RUNTIME_BINARY_PATH,
+  targetTriple: 'x86_64-unknown-linux-musl',
+  signingKeyPemFile: process.env.PRIVATE_KEY_PATH,
+  signingKeyId: 'official-key-2026-04',
+  issuedAt: '2026-04-21T09:30:00Z',
+});
+process.stdout.write(JSON.stringify(result));
+"#;
+    let output = Command::new("node")
+        .arg("-e")
+        .arg(script)
+        .env(
+            "CORE_JS_PATH",
+            repo_root().join("scripts/node/plugin/core.js"),
+        )
+        .env("PLUGIN_PATH", plugin_path)
+        .env("OUTPUT_DIR", output_dir)
+        .env("RUNTIME_BINARY_PATH", runtime_binary_path)
+        .env("PRIVATE_KEY_PATH", private_key_path)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "node package failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let result: NodePackageResult = serde_json::from_slice(&output.stdout).unwrap();
+    NodePackagedArchive {
+        package_file: PathBuf::from(result.package_file),
+        package_name: result.package_name,
+        checksum: result.checksum,
+    }
+}
+
+fn write_fake_runtime_binary(path: &Path) {
+    fs::write(path, b"#!/usr/bin/env sh\nexit 0\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut permissions = fs::metadata(path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).unwrap();
     }
 }

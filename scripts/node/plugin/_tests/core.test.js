@@ -436,7 +436,7 @@ test('plugin package writes official signature metadata when signing inputs are 
   const signature = fs.readFileSync(signaturePath);
 
   assert.equal(release.schema_version, 1);
-  assert.equal(release.plugin_id, '1flowbase.acme_openai_compatible');
+  assert.equal(release.plugin_id, 'acme_openai_compatible@0.1.0');
   assert.equal(release.provider_code, 'acme_openai_compatible');
   assert.equal(release.version, '0.1.0');
   assert.equal(release.contract_version, '1flowbase.provider/v1');
