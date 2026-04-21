@@ -1,5 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Card, Col, Descriptions, Empty, Row, Space, Tag, Typography } from 'antd';
+import {
+  Alert,
+  Card,
+  Col,
+  Descriptions,
+  Empty,
+  Row,
+  Space,
+  Tag,
+  Typography
+} from 'antd';
 
 import {
   fetchSettingsSystemRuntimeProfile,
@@ -45,7 +55,8 @@ export function SystemRuntimePanel() {
         <div>
           <Typography.Title level={4}>系统运行</Typography.Title>
           <Typography.Text type="secondary">
-            查看 API Server 与 Plugin Runner 的部署关系、宿主机信息和当前解析到的运行时环境。
+            查看 API Server 与 Plugin Runner
+            的部署关系、宿主机信息和当前解析到的运行时环境。
           </Typography.Text>
         </div>
 
@@ -72,7 +83,9 @@ export function SystemRuntimePanel() {
               <Descriptions column={{ xs: 1, md: 2 }} layout="vertical">
                 <Descriptions.Item label="部署关系">
                   {relationshipTag ? (
-                    <Tag color={relationshipTag.color}>{relationshipTag.label}</Tag>
+                    <Tag color={relationshipTag.color}>
+                      {relationshipTag.label}
+                    </Tag>
                   ) : null}
                 </Descriptions.Item>
                 <Descriptions.Item label="当前语言解析">
@@ -83,6 +96,12 @@ export function SystemRuntimePanel() {
                 </Descriptions.Item>
                 <Descriptions.Item label="支持语言">
                   {runtimeQuery.data.locale_meta.supported_locales.join(', ')}
+                </Descriptions.Item>
+                <Descriptions.Item label="插件安装根目录">
+                  {runtimeQuery.data.provider_install_root}
+                </Descriptions.Item>
+                <Descriptions.Item label="Host Extension Dropin 目录">
+                  {runtimeQuery.data.host_extension_dropin_root}
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -99,9 +118,13 @@ export function SystemRuntimePanel() {
                     <Card size="small" title={service.service}>
                       <Space direction="vertical" size={8}>
                         <Space wrap size={8}>
-                          <Tag color={reachability.color}>{reachability.label}</Tag>
+                          <Tag color={reachability.color}>
+                            {reachability.label}
+                          </Tag>
                           {service.status ? <Tag>{service.status}</Tag> : null}
-                          {service.version ? <Tag>{service.version}</Tag> : null}
+                          {service.version ? (
+                            <Tag>{service.version}</Tag>
+                          ) : null}
                         </Space>
                         <Typography.Text type="secondary">
                           宿主指纹 {service.host_fingerprint ?? '未知'}

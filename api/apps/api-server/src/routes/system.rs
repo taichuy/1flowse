@@ -102,6 +102,8 @@ pub struct SystemRuntimeHostResponse {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SystemRuntimeProfileResponse {
+    pub provider_install_root: String,
+    pub host_extension_dropin_root: String,
     pub locale_meta: LocaleMetaResponse,
     pub topology: SystemRuntimeTopologyResponse,
     pub services: SystemRuntimeServicesResponse,
@@ -158,6 +160,8 @@ pub async fn get_runtime_profile(
         locale,
         api_profile,
         runner_profile,
+        state.provider_install_root.clone(),
+        state.host_extension_dropin_root.clone(),
     ))))
 }
 
@@ -179,6 +183,8 @@ fn merge_runtime_profiles(
     locale_meta: LocaleResolution,
     api_profile: RuntimeProfile,
     runner_profile: Option<RuntimeProfile>,
+    provider_install_root: String,
+    host_extension_dropin_root: String,
 ) -> SystemRuntimeProfileResponse {
     let relationship = match runner_profile.as_ref() {
         Some(profile) if profile.host_fingerprint == api_profile.host_fingerprint => {
@@ -203,6 +209,8 @@ fn merge_runtime_profiles(
     };
 
     SystemRuntimeProfileResponse {
+        provider_install_root,
+        host_extension_dropin_root,
         locale_meta: locale_meta.into(),
         topology: SystemRuntimeTopologyResponse { relationship },
         services: SystemRuntimeServicesResponse {

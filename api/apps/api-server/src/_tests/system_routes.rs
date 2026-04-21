@@ -20,6 +20,15 @@ async fn runtime_profile_merges_same_host_services() {
         payload["data"]["locale_meta"]["source"],
         "user_preferred_locale"
     );
+    let provider_install_root = payload["data"]["provider_install_root"].as_str().unwrap();
+    let host_extension_dropin_root = payload["data"]["host_extension_dropin_root"]
+        .as_str()
+        .unwrap();
+    assert!(provider_install_root.ends_with("/plugins"));
+    assert_eq!(
+        host_extension_dropin_root,
+        format!("{provider_install_root}/host-extension/dropins")
+    );
 }
 
 #[tokio::test]

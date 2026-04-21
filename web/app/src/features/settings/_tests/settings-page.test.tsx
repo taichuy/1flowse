@@ -54,9 +54,21 @@ const docsApi = vi.hoisted(() => ({
 }));
 
 const modelProvidersApi = vi.hoisted(() => ({
-  settingsModelProviderCatalogQueryKey: ['settings', 'model-providers', 'catalog'],
-  settingsModelProviderInstancesQueryKey: ['settings', 'model-providers', 'instances'],
-  settingsModelProviderOptionsQueryKey: ['settings', 'model-providers', 'options'],
+  settingsModelProviderCatalogQueryKey: [
+    'settings',
+    'model-providers',
+    'catalog'
+  ],
+  settingsModelProviderInstancesQueryKey: [
+    'settings',
+    'model-providers',
+    'instances'
+  ],
+  settingsModelProviderOptionsQueryKey: [
+    'settings',
+    'model-providers',
+    'options'
+  ],
   fetchSettingsModelProviderCatalog: vi.fn(),
   fetchSettingsModelProviderInstances: vi.fn(),
   createSettingsModelProviderInstance: vi.fn(),
@@ -236,6 +248,9 @@ describe('SettingsPage', () => {
       finished_at: '2026-04-18T21:00:00Z'
     });
     systemRuntimeApi.fetchSettingsSystemRuntimeProfile.mockResolvedValue({
+      provider_install_root: '/home/taichu/git/1flowbase/plugins',
+      host_extension_dropin_root:
+        '/home/taichu/git/1flowbase/plugins/host-extension/dropins',
       locale_meta: {
         requested_locale: null,
         resolved_locale: 'zh_Hans',
@@ -297,17 +312,24 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/docs');
     });
-    expect(await screen.findByRole('heading', { name: 'API 文档', level: 3 })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'API 文档', level: 3 })
+    ).toBeInTheDocument();
     rootView.unmount();
 
     resetAuthStore();
-    authenticateWithPermissions(['route_page.view.all', 'api_reference.view.all']);
+    authenticateWithPermissions([
+      'route_page.view.all',
+      'api_reference.view.all'
+    ]);
     const view = renderApp('/settings');
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/docs');
     });
-    expect(await screen.findByRole('heading', { name: 'API 文档', level: 3 })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'API 文档', level: 3 })
+    ).toBeInTheDocument();
     view.unmount();
 
     resetAuthStore();
@@ -317,7 +339,9 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/members');
     });
-    expect(screen.queryByRole('heading', { name: 'API 文档', level: 3 })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'API 文档', level: 3 })
+    ).not.toBeInTheDocument();
   }, 10000);
 
   test('renders /settings/members when user.view.all is present', async () => {
@@ -328,62 +352,80 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/members');
     });
-    expect(await screen.findByRole('heading', { name: '设置', level: 4 })).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Section navigation' })).toBeInTheDocument();
-    expect(screen.getByTestId('section-page-layout')).toHaveClass('section-page-layout--wide');
-    expect(screen.getByRole('heading', { name: '用户管理', level: 4 })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '新建用户' })).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: '设置', level: 4 })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('navigation', { name: 'Section navigation' })
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('section-page-layout')).toHaveClass(
+      'section-page-layout--wide'
+    );
+    expect(
+      screen.getByRole('heading', { name: '用户管理', level: 4 })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '新建用户' })
+    ).not.toBeInTheDocument();
   });
 
-  test(
-    'disables root member write actions while leaving normal members operable',
-    async () => {
-      authenticateWithPermissions([], 'root');
-      membersApi.fetchSettingsMembers.mockResolvedValue([
-        {
-          id: 'root-user',
-          account: 'root',
-          email: 'root@example.com',
-          phone: null,
-          name: 'Root',
-          nickname: 'Root',
-          introduction: '',
-          default_display_role: 'root',
-          email_login_enabled: true,
-          phone_login_enabled: false,
-          status: 'active',
-          role_codes: ['root']
-        },
-        {
-          id: 'manager-1',
-          account: 'manager-1',
-          email: 'manager-1@example.com',
-          phone: null,
-          name: 'Manager 1',
-          nickname: 'Manager 1',
-          introduction: '',
-          default_display_role: 'manager',
-          email_login_enabled: true,
-          phone_login_enabled: false,
-          status: 'active',
-          role_codes: ['manager']
-        }
-      ]);
+  test('disables root member write actions while leaving normal members operable', async () => {
+    authenticateWithPermissions([], 'root');
+    membersApi.fetchSettingsMembers.mockResolvedValue([
+      {
+        id: 'root-user',
+        account: 'root',
+        email: 'root@example.com',
+        phone: null,
+        name: 'Root',
+        nickname: 'Root',
+        introduction: '',
+        default_display_role: 'root',
+        email_login_enabled: true,
+        phone_login_enabled: false,
+        status: 'active',
+        role_codes: ['root']
+      },
+      {
+        id: 'manager-1',
+        account: 'manager-1',
+        email: 'manager-1@example.com',
+        phone: null,
+        name: 'Manager 1',
+        nickname: 'Manager 1',
+        introduction: '',
+        default_display_role: 'manager',
+        email_login_enabled: true,
+        phone_login_enabled: false,
+        status: 'active',
+        role_codes: ['manager']
+      }
+    ]);
 
-      renderApp('/settings/members');
+    renderApp('/settings/members');
 
-      const rootRow = await screen.findByRole('row', { name: /Root/ });
-      const managerRow = await screen.findByRole('row', { name: /Manager 1/ });
+    const rootRow = await screen.findByRole('row', { name: /Root/ });
+    const managerRow = await screen.findByRole('row', { name: /Manager 1/ });
 
-      expect(within(rootRow).getByRole('button', { name: /编辑$/ })).toBeDisabled();
-      expect(within(rootRow).getByRole('button', { name: /停用$/ })).toBeDisabled();
-      expect(within(rootRow).getByRole('button', { name: /重置密码$/ })).toBeDisabled();
-      expect(within(managerRow).getByRole('button', { name: /编辑$/ })).toBeEnabled();
-      expect(within(managerRow).getByRole('button', { name: /停用$/ })).toBeEnabled();
-      expect(within(managerRow).getByRole('button', { name: /重置密码$/ })).toBeEnabled();
-    },
-    10000
-  );
+    expect(
+      within(rootRow).getByRole('button', { name: /编辑$/ })
+    ).toBeDisabled();
+    expect(
+      within(rootRow).getByRole('button', { name: /停用$/ })
+    ).toBeDisabled();
+    expect(
+      within(rootRow).getByRole('button', { name: /重置密码$/ })
+    ).toBeDisabled();
+    expect(
+      within(managerRow).getByRole('button', { name: /编辑$/ })
+    ).toBeEnabled();
+    expect(
+      within(managerRow).getByRole('button', { name: /停用$/ })
+    ).toBeEnabled();
+    expect(
+      within(managerRow).getByRole('button', { name: /重置密码$/ })
+    ).toBeEnabled();
+  }, 10000);
 
   test('redirects /settings/docs to /settings/members when docs is hidden but members is visible', async () => {
     authenticateWithPermissions(['route_page.view.all', 'user.view.all']);
@@ -393,31 +435,57 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/members');
     });
-    expect(await screen.findByRole('heading', { name: '设置', level: 4 })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '用户管理', level: 4 })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: '设置', level: 4 })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '用户管理', level: 4 })
+    ).toBeInTheDocument();
   });
 
   test('shows 模型供应商 when state_model.view.all is the only visible settings section', async () => {
-    authenticateWithPermissions(['route_page.view.all', 'state_model.view.all']);
+    authenticateWithPermissions([
+      'route_page.view.all',
+      'state_model.view.all'
+    ]);
 
     renderApp('/settings');
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/model-providers');
     });
-    expect(await screen.findByRole('heading', { name: '模型供应商', level: 4 })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: '模型供应商', level: 4 })
+    ).toBeInTheDocument();
   });
 
   test('shows 系统运行 when system_runtime.view.all is the only visible settings section', async () => {
-    authenticateWithPermissions(['route_page.view.all', 'system_runtime.view.all']);
+    authenticateWithPermissions([
+      'route_page.view.all',
+      'system_runtime.view.all'
+    ]);
 
     renderApp('/settings');
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/system-runtime');
     });
-    expect(await screen.findByRole('heading', { name: '系统运行', level: 4 })).toBeInTheDocument();
-    expect(systemRuntimeApi.fetchSettingsSystemRuntimeProfile).toHaveBeenCalled();
+    expect(
+      await screen.findByRole('heading', { name: '系统运行', level: 4 })
+    ).toBeInTheDocument();
+    expect(screen.getByText('插件安装根目录')).toBeInTheDocument();
+    expect(
+      screen.getByText('/home/taichu/git/1flowbase/plugins')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Host Extension Dropin 目录')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '/home/taichu/git/1flowbase/plugins/host-extension/dropins'
+      )
+    ).toBeInTheDocument();
+    expect(
+      systemRuntimeApi.fetchSettingsSystemRuntimeProfile
+    ).toHaveBeenCalled();
   });
 
   test('renders the empty settings state when no section is visible', async () => {
@@ -428,7 +496,11 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings');
     });
-    expect(await screen.findByText(/当前账号暂无可访问内容/)).toBeInTheDocument();
-    expect(screen.queryByRole('navigation', { name: 'Section navigation' })).not.toBeInTheDocument();
+    expect(
+      await screen.findByText(/当前账号暂无可访问内容/)
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('navigation', { name: 'Section navigation' })
+    ).not.toBeInTheDocument();
   });
 });

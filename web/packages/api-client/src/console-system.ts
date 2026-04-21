@@ -54,6 +54,8 @@ export interface ConsoleSystemRuntimeHost {
 }
 
 export interface ConsoleSystemRuntimeProfile {
+  provider_install_root: string;
+  host_extension_dropin_root: string;
   locale_meta: ConsoleSystemRuntimeLocaleMeta;
   topology: ConsoleSystemRuntimeTopology;
   services: ConsoleSystemRuntimeServices;
