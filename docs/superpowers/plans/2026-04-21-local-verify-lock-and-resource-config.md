@@ -1242,8 +1242,8 @@ Create `.1flowbase.verify.local.json.example`:
 ```json
 {
   "backend": {
-    "cargoJobs": 4,
-    "cargoTestThreads": 2
+    "cargoJobs": 1,
+    "cargoTestThreads": 1
   },
   "locks": {
     "waitTimeoutMinutes": 30,
@@ -1309,7 +1309,7 @@ git commit -m "docs: update local verify lock plan progress"
 
 ## Self-Review Checklist
 
-- [ ] Plan covers spec requirements for:
+- [x] Plan covers spec requirements for:
   - local config path and `.json.example`
   - `CI/GITHUB_ACTIONS` ignoring local config
   - `waitTimeoutMinutes` input with internal millisecond conversion
@@ -1320,8 +1320,8 @@ git commit -m "docs: update local verify lock plan progress"
   - token reentrancy for `verify-ci -> verify-repo -> verify-backend`
   - heavy lock coverage for `verify-backend` / `test-backend` / `verify-repo` / `verify-ci` / `verify-coverage` / `test-frontend full` / `test-contracts`
   - `test-frontend fast` staying outside the lock
-- [ ] Placeholder scan passes: no `TODO`, `TBD`, “implement later”, or vague “add validation” steps remain.
-- [ ] Function and constant names remain consistent across tasks:
+- [x] Placeholder scan passes: no `TODO`, `TBD`, “implement later”, or vague “add validation” steps remain.
+- [x] Function and constant names remain consistent across tasks:
   - `loadVerifyRuntimeConfig`
   - `acquireHeavyVerifyLock`
   - `withHeavyVerifyLock`
