@@ -79,7 +79,7 @@
     "cargoTestThreads": 2
   },
   "locks": {
-    "waitTimeoutMs": 1800000,
+    "waitTimeoutMinutes": 30,
     "pollIntervalMs": 5000
   }
 }
@@ -91,10 +91,15 @@
   - 覆盖后端 `cargo --jobs` 与 `CARGO_BUILD_JOBS`
 - `backend.cargoTestThreads`
   - 只覆盖 `cargo test -- --test-threads=...`
-- `locks.waitTimeoutMs`
-  - 遇到重型锁占用时，最多等待多久后退出
+- `locks.waitTimeoutMinutes`
+  - 遇到重型锁占用时，最多等待多少分钟后退出
 - `locks.pollIntervalMs`
   - 等待期间轮询 owner 状态的时间间隔
+
+其中：
+
+- `waitTimeoutMinutes` 只作为对外配置表达，运行时再换算成毫秒处理
+- `pollIntervalMs` 继续保留毫秒，是因为轮询间隔需要比“分钟”更细
 
 约束固定为：
 
@@ -129,7 +134,7 @@
 
 推荐默认值固定为：
 
-- `waitTimeoutMs = 1800000`
+- `waitTimeoutMinutes = 30`
 - `pollIntervalMs = 5000`
 
 等待期间控制台必须持续输出状态，格式保持稳定，例如：
@@ -249,8 +254,8 @@
   - 默认为 `Math.max(1, floor(availableParallelism / 2))`
 - `cargoTestThreads`
   - 默认为与 `cargoJobs` 相同
-- `waitTimeoutMs`
-  - 默认为 `1800000`
+- `waitTimeoutMinutes`
+  - 默认为 `30`
 - `pollIntervalMs`
   - 默认为 `5000`
 
@@ -262,7 +267,7 @@
 
 - `cargoJobs >= 1`
 - `cargoTestThreads >= 1`
-- `waitTimeoutMs >= 1`
+- `waitTimeoutMinutes >= 1`
 - `pollIntervalMs >= 1`
 - `cargoJobs` 与 `cargoTestThreads` 不允许超过 `availableParallelism`
 
@@ -319,7 +324,7 @@
 5. 如果 `owner.token === currentToken`，则视为重入成功，不等待
 6. 如果 `owner.pid` 仍存活，则进入等待循环
 7. 如果 `owner.pid` 已失活，则清理 stale lock 并重试抢锁
-8. 超过 `waitTimeoutMs` 后退出，并打印当前 owner 信息
+8. 超过 `waitTimeoutMinutes` 对应的等待时长后退出，并打印当前 owner 信息
 
 ### stale lock 清理规则
 
@@ -432,7 +437,7 @@
 - 空闲时成功拿锁并写入 `owner.json`
 - 已有活跃 owner 时进入等待
 - stale lock 被自动清理
-- 超过 `waitTimeoutMs` 后退出
+- 超过 `waitTimeoutMinutes` 对应的等待时长后退出
 - 同 token 重入不死锁
 - 非 owner token 不能删除现有锁
 
