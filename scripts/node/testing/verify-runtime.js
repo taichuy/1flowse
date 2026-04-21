@@ -1,9 +1,11 @@
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
 const LOCAL_VERIFY_CONFIG_FILE = '.1flowbase.verify.local.json';
 const VERIFY_LOCK_TOKEN_ENV = 'ONEFLOWBASE_VERIFY_LOCK_TOKEN';
+const HEAVY_VERIFY_LOCK_DIR = path.join('tmp', 'test-governance', 'locks', 'heavy-verify');
 const DEFAULT_WAIT_TIMEOUT_MINUTES = 30;
 const DEFAULT_POLL_INTERVAL_MS = 5000;
 
@@ -82,6 +84,283 @@ function readLocalVerifyConfig(repoRoot, env = process.env) {
   }
 }
 
+function getHeavyVerifyLockDir(repoRoot) {
+  return path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR);
+}
+
+function getHeavyVerifyLockOwnerPath(repoRoot) {
+  return path.join(getHeavyVerifyLockDir(repoRoot), 'owner.json');
+}
+
+function isValidHeavyVerifyLockOwner(owner) {
+  return isPlainObject(owner)
+    && typeof owner.token === 'string'
+    && owner.token.length > 0
+    && Number.isInteger(owner.pid)
+    && owner.pid > 0
+    && typeof owner.scope === 'string'
+    && owner.scope.length > 0
+    && typeof owner.command === 'string'
+    && owner.command.length > 0
+    && typeof owner.cwd === 'string'
+    && owner.cwd.length > 0
+    && typeof owner.startedAt === 'string'
+    && owner.startedAt.length > 0
+    && typeof owner.hostname === 'string'
+    && owner.hostname.length > 0;
+}
+
+function readHeavyVerifyLockOwner({ repoRoot } = {}) {
+  if (typeof repoRoot !== 'string' || repoRoot.trim() === '') {
+    throw new Error('repoRoot must be a non-empty string');
+  }
+
+  const ownerPath = getHeavyVerifyLockOwnerPath(repoRoot);
+
+  if (!fs.existsSync(ownerPath)) {
+    return null;
+  }
+
+  try {
+    const owner = JSON.parse(fs.readFileSync(ownerPath, 'utf8'));
+    return isValidHeavyVerifyLockOwner(owner) ? owner : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function getVerifyLockToken(env = process.env) {
+  const token = env?.[VERIFY_LOCK_TOKEN_ENV];
+
+  if (typeof token === 'string' && token.trim() !== '') {
+    return token;
+  }
+
+  return typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function writeHeavyVerifyLockOwner({
+  repoRoot,
+  token,
+  scope,
+  command,
+  cwd,
+  startedAt,
+  pid,
+  hostname,
+}) {
+  const ownerPath = getHeavyVerifyLockOwnerPath(repoRoot);
+
+  fs.mkdirSync(path.dirname(ownerPath), { recursive: true });
+  fs.writeFileSync(
+    ownerPath,
+    `${JSON.stringify({
+      token,
+      pid,
+      scope,
+      command,
+      cwd,
+      startedAt,
+      hostname,
+    }, null, 2)}\n`
+  );
+
+  return {
+    token,
+    pid,
+    scope,
+    command,
+    cwd,
+    startedAt,
+    hostname,
+    ownerPath,
+  };
+}
+
+function removeHeavyVerifyLock({ repoRoot, token }) {
+  const owner = readHeavyVerifyLockOwner({ repoRoot });
+
+  if (owner !== null && owner.token !== token) {
+    return false;
+  }
+
+  fs.rmSync(getHeavyVerifyLockDir(repoRoot), { recursive: true, force: true });
+  return true;
+}
+
+async function acquireHeavyVerifyLock({
+  repoRoot,
+  env = process.env,
+  scope,
+  command,
+  runtimeConfig = loadVerifyRuntimeConfig({ repoRoot, env }),
+  writeStdout = (text) => process.stdout.write(text),
+  sleepImpl = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  isProcessAliveImpl = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      if (error.code === 'ESRCH') {
+        return false;
+      }
+
+      throw error;
+    }
+  },
+  now = () => new Date(),
+  hostname = os.hostname(),
+  processId = process.pid,
+} = {}) {
+  if (typeof repoRoot !== 'string' || repoRoot.trim() === '') {
+    throw new Error('repoRoot must be a non-empty string');
+  }
+
+  if (typeof scope !== 'string' || scope.trim() === '') {
+    throw new Error('scope must be a non-empty string');
+  }
+
+  if (typeof command !== 'string' || command.trim() === '') {
+    throw new Error('command must be a non-empty string');
+  }
+
+  assertPlainObject('runtimeConfig', runtimeConfig);
+  assertPlainObject('runtimeConfig.backend', runtimeConfig.backend);
+  assertPlainObject('runtimeConfig.locks', runtimeConfig.locks);
+  assertPositiveInteger('runtimeConfig.locks.waitTimeoutMs', runtimeConfig.locks.waitTimeoutMs);
+  assertPositiveInteger('runtimeConfig.locks.pollIntervalMs', runtimeConfig.locks.pollIntervalMs);
+
+  const lockDir = getHeavyVerifyLockDir(repoRoot);
+  const token = getVerifyLockToken(env);
+  const startedAtDate = now();
+  const startedAt = startedAtDate.toISOString();
+  const timeoutAt = startedAtDate.getTime() + runtimeConfig.locks.waitTimeoutMs;
+  const ownerRecord = {
+    token,
+    pid: processId,
+    scope,
+    command,
+    cwd: repoRoot,
+    startedAt,
+    hostname,
+  };
+
+  fs.mkdirSync(path.dirname(lockDir), { recursive: true });
+
+  let released = false;
+
+  const lock = {
+    token,
+    reentrant: false,
+    release() {
+      if (released) {
+        return false;
+      }
+
+      released = true;
+      return removeHeavyVerifyLock({ repoRoot, token });
+    },
+  };
+
+  while (true) {
+    try {
+      fs.mkdirSync(lockDir);
+      try {
+        writeHeavyVerifyLockOwner({ repoRoot, ...ownerRecord });
+      } catch (error) {
+        fs.rmSync(lockDir, { recursive: true, force: true });
+        throw error;
+      }
+      writeStdout(
+        `[1flowbase-verify-lock] acquired: scope=${scope} pid=${processId} token=${token}\n`
+      );
+      return lock;
+    } catch (error) {
+      if (error.code !== 'EEXIST') {
+        throw error;
+      }
+    }
+
+    const owner = readHeavyVerifyLockOwner({ repoRoot });
+
+    if (owner?.token === token) {
+      writeStdout(
+        `[1flowbase-verify-lock] reentrant: scope=${scope} pid=${processId} token=${token}\n`
+      );
+      return {
+        token,
+        reentrant: true,
+        release() {
+          return false;
+        },
+      };
+    }
+
+    if (owner === null || !isProcessAliveImpl(owner.pid)) {
+      writeStdout('[1flowbase-verify-lock] stale lock detected, cleaning...\n');
+      fs.rmSync(lockDir, { recursive: true, force: true });
+      continue;
+    }
+
+    writeStdout(
+      `[1flowbase-verify-lock] busy: scope=${owner.scope} pid=${owner.pid} startedAt=${owner.startedAt}\n`
+    );
+
+    if (now().getTime() >= timeoutAt) {
+      throw new Error('timeout waiting for heavy-verify lock');
+    }
+
+    writeStdout('[1flowbase-verify-lock] waiting...\n');
+    await sleepImpl(runtimeConfig.locks.pollIntervalMs);
+  }
+}
+
+async function withHeavyVerifyLock(options = {}, run) {
+  const lock = await acquireHeavyVerifyLock(options);
+  const baseEnv = options.env ?? process.env;
+  const callbackEnv = {
+    ...baseEnv,
+    [VERIFY_LOCK_TOKEN_ENV]: lock.token,
+  };
+  const processEmitter = options.processEmitter ?? process;
+  const cleanupEvents = ['SIGINT', 'SIGTERM', 'uncaughtException', 'unhandledRejection'];
+  const cleanupHandlers = cleanupEvents.map((eventName) => {
+    const handler = () => {
+      lock.release();
+    };
+
+    if (typeof processEmitter.once === 'function') {
+      processEmitter.once(eventName, handler);
+    } else if (typeof processEmitter.on === 'function') {
+      processEmitter.on(eventName, handler);
+    } else {
+      throw new Error('processEmitter must support once or on');
+    }
+
+    return { eventName, handler };
+  });
+
+  try {
+    return await run(callbackEnv);
+  } finally {
+    const remover = typeof processEmitter.removeListener === 'function'
+      ? processEmitter.removeListener.bind(processEmitter)
+      : typeof processEmitter.off === 'function'
+        ? processEmitter.off.bind(processEmitter)
+        : null;
+
+    if (remover !== null) {
+      for (const { eventName, handler } of cleanupHandlers) {
+        remover(eventName, handler);
+      }
+    }
+
+    lock.release();
+  }
+}
+
 function resolveRuntimeConfig(config, availableParallelism) {
   assertPlainObject('verify runtime config root', config);
   const defaults = resolveCargoDefaults(availableParallelism);
@@ -141,9 +420,13 @@ function loadVerifyRuntimeConfig({
 }
 
 module.exports = {
+  HEAVY_VERIFY_LOCK_DIR,
   LOCAL_VERIFY_CONFIG_FILE,
   VERIFY_LOCK_TOKEN_ENV,
+  acquireHeavyVerifyLock,
   getAvailableParallelism,
   isCiEnvironment,
   loadVerifyRuntimeConfig,
+  readHeavyVerifyLockOwner,
+  withHeavyVerifyLock,
 };

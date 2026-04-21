@@ -5,9 +5,13 @@ const os = require('node:os');
 const path = require('node:path');
 
 const {
+  HEAVY_VERIFY_LOCK_DIR,
   LOCAL_VERIFY_CONFIG_FILE,
+  acquireHeavyVerifyLock,
   isCiEnvironment,
   loadVerifyRuntimeConfig,
+  readHeavyVerifyLockOwner,
+  withHeavyVerifyLock,
 } = require('../verify-runtime.js');
 
 function createRepoRoot() {
@@ -383,4 +387,229 @@ test('loadVerifyRuntimeConfig rejects invalid JSON', () => {
     }),
     /Unexpected token|JSON/i
   );
+});
+
+test('acquireHeavyVerifyLock writes owner.json with the expected metadata', async () => {
+  const repoRoot = createRepoRoot();
+
+  const lock = await acquireHeavyVerifyLock({
+    repoRoot,
+    env: {},
+    scope: 'verify-backend',
+    command: 'node scripts/node/verify-backend.js',
+    now: () => new Date('2026-04-21T12:10:00.000Z'),
+    hostname: 'devbox',
+    processId: 321,
+    sleepImpl: async () => {},
+    isProcessAliveImpl: () => true,
+    writeStdout() {},
+  });
+
+  const owner = readHeavyVerifyLockOwner({ repoRoot });
+
+  assert.equal(owner.pid, 321);
+  assert.equal(owner.scope, 'verify-backend');
+  assert.equal(owner.command, 'node scripts/node/verify-backend.js');
+  assert.equal(owner.cwd, repoRoot);
+  assert.equal(owner.startedAt, '2026-04-21T12:10:00.000Z');
+  assert.equal(owner.hostname, 'devbox');
+  assert.equal(typeof owner.token, 'string');
+  assert.equal(owner.token.length > 0, true);
+
+  lock.release();
+  assert.equal(fs.existsSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR)), false);
+});
+
+test('acquireHeavyVerifyLock waits for a live owner and times out', async () => {
+  const repoRoot = createRepoRoot();
+  const output = [];
+
+  fs.mkdirSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR), { recursive: true });
+  fs.writeFileSync(
+    path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR, 'owner.json'),
+    JSON.stringify({
+      token: 'existing-token',
+      pid: 999,
+      scope: 'verify-repo',
+      command: 'node scripts/node/verify-repo.js',
+      cwd: repoRoot,
+      startedAt: '2026-04-21T12:00:00.000Z',
+      hostname: 'devbox',
+    }, null, 2)
+  );
+
+  const nowValues = [
+    new Date('2026-04-21T12:00:00.000Z'),
+    new Date('2026-04-21T12:00:30.000Z'),
+    new Date('2026-04-21T12:01:01.000Z'),
+  ];
+
+  await assert.rejects(
+    acquireHeavyVerifyLock({
+      repoRoot,
+      env: {},
+      scope: 'verify-backend',
+      command: 'node scripts/node/verify-backend.js',
+      runtimeConfig: {
+        backend: {
+          cargoJobs: 1,
+          cargoTestThreads: 1,
+        },
+        locks: {
+          waitTimeoutMinutes: 1,
+          waitTimeoutMs: 60_000,
+          pollIntervalMs: 1000,
+        },
+      },
+      writeStdout: (text) => output.push(text),
+      now: () => nowValues.shift() ?? new Date('2026-04-21T12:01:01.000Z'),
+      sleepImpl: async () => {},
+      isProcessAliveImpl: () => true,
+      processId: 654,
+    }),
+    /timeout waiting for heavy-verify lock/u
+  );
+
+  assert.match(output.join(''), /\[1flowbase-verify-lock\] busy: scope=verify-repo pid=999/u);
+  assert.match(output.join(''), /\[1flowbase-verify-lock\] waiting.../u);
+});
+
+test('acquireHeavyVerifyLock cleans a stale owner before retrying', async () => {
+  const repoRoot = createRepoRoot();
+  const output = [];
+
+  fs.mkdirSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR), { recursive: true });
+  fs.writeFileSync(
+    path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR, 'owner.json'),
+    JSON.stringify({
+      token: 'stale-token',
+      pid: 555,
+      scope: 'verify-ci',
+      command: 'node scripts/node/verify-ci.js',
+      cwd: repoRoot,
+      startedAt: '2026-04-21T11:00:00.000Z',
+      hostname: 'devbox',
+    }, null, 2)
+  );
+
+  const lock = await acquireHeavyVerifyLock({
+    repoRoot,
+    env: {},
+    scope: 'verify-backend',
+    command: 'node scripts/node/verify-backend.js',
+    writeStdout: (text) => output.push(text),
+    isProcessAliveImpl: () => false,
+    sleepImpl: async () => {},
+    processId: 777,
+  });
+
+  assert.match(output.join(''), /\[1flowbase-verify-lock\] stale lock detected, cleaning/u);
+  assert.equal(readHeavyVerifyLockOwner({ repoRoot }).pid, 777);
+  lock.release();
+});
+
+test('acquireHeavyVerifyLock cleans a damaged owner before retrying', async () => {
+  const repoRoot = createRepoRoot();
+  const output = [];
+
+  fs.mkdirSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR), { recursive: true });
+  fs.writeFileSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR, 'owner.json'), '{ not valid json');
+
+  const lock = await acquireHeavyVerifyLock({
+    repoRoot,
+    env: {},
+    scope: 'verify-backend',
+    command: 'node scripts/node/verify-backend.js',
+    writeStdout: (text) => output.push(text),
+    isProcessAliveImpl: () => true,
+    sleepImpl: async () => {},
+    processId: 778,
+  });
+
+  assert.match(output.join(''), /\[1flowbase-verify-lock\] stale lock detected, cleaning/u);
+  assert.equal(readHeavyVerifyLockOwner({ repoRoot }).pid, 778);
+  lock.release();
+});
+
+test('acquireHeavyVerifyLock treats matching token as a reentrant owner', async () => {
+  const repoRoot = createRepoRoot();
+  const token = '11111111-2222-4333-8444-555555555555';
+
+  fs.mkdirSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR), { recursive: true });
+  fs.writeFileSync(
+    path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR, 'owner.json'),
+    JSON.stringify({
+      token,
+      pid: 444,
+      scope: 'verify-repo',
+      command: 'node scripts/node/verify-repo.js',
+      cwd: repoRoot,
+      startedAt: '2026-04-21T12:00:00.000Z',
+      hostname: 'devbox',
+    }, null, 2)
+  );
+
+  const lock = await acquireHeavyVerifyLock({
+    repoRoot,
+    env: { ONEFLOWBASE_VERIFY_LOCK_TOKEN: token },
+    scope: 'verify-backend',
+    command: 'node scripts/node/verify-backend.js',
+    processId: 444,
+    sleepImpl: async () => {},
+    isProcessAliveImpl: () => true,
+  });
+
+  assert.equal(lock.token, token);
+  assert.equal(lock.reentrant, true);
+});
+
+test('withHeavyVerifyLock releases the lock when cleanup events fire', async () => {
+  const cleanupEvents = ['SIGINT', 'SIGTERM', 'uncaughtException', 'unhandledRejection'];
+
+  for (const eventName of cleanupEvents) {
+    const repoRoot = createRepoRoot();
+    const listeners = new Map();
+
+    await withHeavyVerifyLock(
+      {
+        repoRoot,
+        env: {},
+        scope: 'verify-backend',
+        command: 'node scripts/node/verify-backend.js',
+        runtimeConfig: {
+          backend: {
+            cargoJobs: 1,
+            cargoTestThreads: 1,
+          },
+          locks: {
+            waitTimeoutMinutes: 1,
+            waitTimeoutMs: 60_000,
+            pollIntervalMs: 1000,
+          },
+        },
+        processEmitter: {
+          once(name, handler) {
+            listeners.set(name, handler);
+          },
+          removeListener(name, handler) {
+            if (listeners.get(name) === handler) {
+              listeners.delete(name);
+            }
+          },
+        },
+        sleepImpl: async () => {},
+        isProcessAliveImpl: () => true,
+        processId: 888,
+      },
+      async () => {
+        for (const name of cleanupEvents) {
+          assert.equal(typeof listeners.get(name), 'function');
+        }
+
+        listeners.get(eventName)();
+        assert.equal(fs.existsSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR)), false);
+        return 0;
+      }
+    );
+  }
 });
