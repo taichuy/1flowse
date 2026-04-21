@@ -1328,3 +1328,8 @@ git commit -m "docs: update local verify lock plan progress"
   - `runManagedCommandSequence`
   - `VERIFY_LOCK_TOKEN_ENV`
   - `HEAVY_VERIFY_LOCK_DIR`
+
+## Post-Review Follow-Up
+
+- [x] Final review feedback addressed:
+  - `scripts/node/verify-coverage/_tests/cli.test.js` no longer hard-codes host-dependent default `cargoTestThreads`; the test now injects an explicit `runtimeConfig` so it stays stable across machines with different `availableParallelism()`.

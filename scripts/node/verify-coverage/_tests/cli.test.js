@@ -153,8 +153,18 @@ test('main cleans llvm-cov artifacts before and after backend coverage runs', as
 
   const status = await main(['backend'], {
     repoRoot,
-    cargoParallelism: 2,
     env: {},
+    runtimeConfig: {
+      backend: {
+        cargoJobs: 2,
+        cargoTestThreads: 4,
+      },
+      locks: {
+        waitTimeoutMinutes: 30,
+        waitTimeoutMs: 30 * 60 * 1000,
+        pollIntervalMs: 5000,
+      },
+    },
     writeStdout() {},
     writeStderr() {},
     preflightSpawnSyncImpl() {
