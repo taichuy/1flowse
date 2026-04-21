@@ -37,6 +37,7 @@
 - 管理台/后台页面禁止 `Card` 套 `Card` 和卡片墙式堆叠；优先使用 `Table`、`Descriptions`、`Form`、`Typography`、`Divider`、`Space/Flex` 组织信息。
 - 前端测试资源限制统一由仓库根 `.1flowbase.verify.local.json` 驱动；需要调整 `turbo` 并发或 `vitest` workers 时，同步更新 `.1flowbase.verify.local.json.example`，不要在 `web/package.json` 或 `web/app/package.json` 重新写死并发。
 - 需要吃到本地资源限制时，优先走仓库标准入口：`pnpm --dir web test`、`pnpm --dir web/app test`、`node scripts/node/test-frontend.js fast|full`；不要直接用裸 `pnpm exec vitest` 或 `pnpm exec turbo` 绕过限制。
+- 页面开发顺序先做“页面 + 组件组合”，再做“页面布局 + 组件样式调整”，除非用户同意，否则不对上层或者全局样式进行修改或者调整
 
 ## Verification
 - 进入自检、验收、回归或交付阶段时，使用 `qa-evaluation` 并自行执行对应脚本。
