@@ -14,8 +14,8 @@
 
 .model-provider-panel__main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 24px;
   align-items: start;
 }
 
@@ -66,11 +66,14 @@
 
 .model-provider-panel__sidebar {
   min-width: 0;
+  width: 100%;
 }
 
 .model-provider-panel__official {
   position: sticky;
   top: 24px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .model-provider-panel__section-head {
@@ -217,7 +220,7 @@
 .model-provider-panel__catalog-description,
 .model-provider-panel__catalog-version {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .model-provider-panel__catalog-name .ant-typography,
@@ -229,6 +232,7 @@
 .model-provider-panel__catalog-description-text {
   margin: 0;
   color: rgba(15, 23, 42, 0.88);
+  line-height: 1.6;
 }
 
 .model-provider-panel__catalog-status {
@@ -237,6 +241,7 @@
 
 .model-provider-panel__catalog-actions {
   width: 100%;
+  justify-content: flex-start;
 }
 
 .model-provider-panel__catalog-actions .ant-btn-link {

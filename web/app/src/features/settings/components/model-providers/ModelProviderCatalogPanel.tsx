@@ -4,36 +4,15 @@ import type { SettingsPluginFamilyEntry } from '../../api/plugins';
 import type { SettingsModelProviderCatalogEntry } from '../../api/model-providers';
 import { formatPluginAvailabilityStatus } from './plugin-installation-status';
 
-function getCatalogSummary(
-  _family: SettingsPluginFamilyEntry,
-  currentCatalogEntry: SettingsModelProviderCatalogEntry | null | undefined
-) {
-  if (currentCatalogEntry?.predefined_models.length) {
-    return `内置 ${currentCatalogEntry.predefined_models.length} 个预置模型`;
-  }
-
-  if (currentCatalogEntry?.supports_model_fetch_without_credentials) {
-    return '可在未配置密钥前拉取模型目录';
-  }
-
-  return '配置凭据后可校验连接并同步模型目录';
-}
-
 function getCatalogDescription(
   family: SettingsPluginFamilyEntry,
   currentCatalogEntry: SettingsModelProviderCatalogEntry | null | undefined
 ) {
   return (
-    family.description?.trim() || getCatalogSummary(family, currentCatalogEntry)
+    family.description?.trim() ||
+    currentCatalogEntry?.description?.trim() ||
+    '未提供说明'
   );
-}
-
-function getCatalogSupportingText(
-  family: SettingsPluginFamilyEntry,
-  currentCatalogEntry: SettingsModelProviderCatalogEntry | null | undefined
-) {
-  const summary = getCatalogSummary(family, currentCatalogEntry);
-  return family.description?.trim() ? summary : null;
 }
 
 export function ModelProviderCatalogPanel({
@@ -93,15 +72,10 @@ export function ModelProviderCatalogPanel({
           {
             title: '名称',
             key: 'provider',
-            width: 200,
+            width: 260,
             render: (_, entry) => (
               <div className="model-provider-panel__catalog-name">
                 <Typography.Text strong>{entry.display_name}</Typography.Text>
-                <Typography.Text type="secondary">
-                  {(instanceCounts[entry.provider_code] ?? 0) > 0
-                    ? `已创建 ${instanceCounts[entry.provider_code] ?? 0} 个实例`
-                    : '尚未创建实例'}
-                </Typography.Text>
               </div>
             )
           },
@@ -132,15 +106,11 @@ export function ModelProviderCatalogPanel({
           {
             title: '说明',
             key: 'summary',
-            width: 280,
+            width: 420,
             render: (_, entry) => {
               const currentCatalogEntry =
                 currentCatalogEntries[entry.provider_code];
               const description = getCatalogDescription(
-                entry,
-                currentCatalogEntry
-              );
-              const supportingText = getCatalogSupportingText(
                 entry,
                 currentCatalogEntry
               );
@@ -153,11 +123,6 @@ export function ModelProviderCatalogPanel({
                   >
                     {description}
                   </Typography.Paragraph>
-                  {supportingText ? (
-                    <Typography.Text type="secondary">
-                      {supportingText}
-                    </Typography.Text>
-                  ) : null}
                 </div>
               );
             }
@@ -165,16 +130,11 @@ export function ModelProviderCatalogPanel({
           {
             title: '版本',
             key: 'version',
-            width: 180,
+            width: 120,
             render: (_, entry) => (
               <div className="model-provider-panel__catalog-version">
                 <Typography.Text strong>
                   {entry.current_version}
-                </Typography.Text>
-                <Typography.Text type="secondary">
-                  {entry.has_update && entry.latest_version
-                    ? `当前使用 ${entry.current_version}，最新版本 ${entry.latest_version}`
-                    : `当前已是最新版本 ${entry.latest_version ?? entry.current_version}`}
                 </Typography.Text>
               </div>
             )
@@ -184,7 +144,7 @@ export function ModelProviderCatalogPanel({
                 {
                   title: '操作',
                   key: 'actions',
-                  width: 170,
+                  width: 220,
                   render: (_: unknown, entry: SettingsPluginFamilyEntry) => (
                     <Space
                       size={[4, 4]}

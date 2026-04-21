@@ -417,9 +417,10 @@ describe('ModelProvidersPage', () => {
     await waitFor(() => {
       expect(pluginsApi.fetchSettingsPluginFamilies).toHaveBeenCalled();
     });
+    expect(await screen.findByText('0.1.0')).toBeInTheDocument();
     expect(
-      await screen.findByText('当前使用 0.1.0，最新版本 0.2.0')
-    ).toBeInTheDocument();
+      screen.queryByText('当前使用 0.1.0，最新版本 0.2.0')
+    ).not.toBeInTheDocument();
 
     const catalogRow = await screen.findByRole('row', {
       name: /OpenAI Compatible/
@@ -529,19 +530,19 @@ describe('ModelProvidersPage', () => {
     });
     fireEvent.click(within(catalogRow).getByRole('button', { name: '删除' }));
 
-      expect((await screen.findAllByText('删除供应商')).length).toBeGreaterThan(
-        0
-      );
-      expect(
-        screen.getByText(
-          '删除后会一并清理该供应商的全部实例、安装记录和本地插件文件。'
-        )
-      ).toBeInTheDocument();
+    expect((await screen.findAllByText('删除供应商')).length).toBeGreaterThan(
+      0
+    );
+    expect(
+      screen.getByText(
+        '删除后会一并清理该供应商的全部实例、安装记录和本地插件文件。'
+      )
+    ).toBeInTheDocument();
 
-      const confirmDialog = await screen.findByRole('dialog');
-      fireEvent.click(
-        within(confirmDialog).getByRole('button', { name: /删\s*除/ })
-      );
+    const confirmDialog = await screen.findByRole('dialog');
+    fireEvent.click(
+      within(confirmDialog).getByRole('button', { name: /删\s*除/ })
+    );
 
     await waitFor(() => {
       expect(pluginsApi.deleteSettingsPluginFamily).toHaveBeenCalledWith(
