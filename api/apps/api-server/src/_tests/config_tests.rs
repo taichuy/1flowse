@@ -115,6 +115,53 @@ fn api_config_reads_bootstrap_workspace_name() {
 }
 
 #[test]
+fn api_config_defaults_host_extension_settings() {
+    let config = ApiConfig::from_env_map(&[
+        (
+            "API_DATABASE_URL",
+            "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
+        ),
+        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_PROVIDER_INSTALL_ROOT", "/srv/1flowbase/plugins"),
+        ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
+        ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
+        ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
+        ("BOOTSTRAP_WORKSPACE_NAME", "1flowbase"),
+    ])
+    .unwrap();
+
+    assert_eq!(
+        config.host_extension_dropin_root,
+        "/srv/1flowbase/plugins/host-extension/dropins"
+    );
+    assert!(config.allow_unverified_filesystem_dropins);
+    assert!(!config.allow_uploaded_host_extensions);
+}
+
+#[test]
+fn api_config_reads_host_extension_overrides() {
+    let config = ApiConfig::from_env_map(&[
+        (
+            "API_DATABASE_URL",
+            "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
+        ),
+        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_HOST_EXTENSION_DROPIN_ROOT", "/opt/host-dropins"),
+        ("API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS", "false"),
+        ("API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS", "true"),
+        ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
+        ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
+        ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
+        ("BOOTSTRAP_WORKSPACE_NAME", "1flowbase"),
+    ])
+    .unwrap();
+
+    assert_eq!(config.host_extension_dropin_root, "/opt/host-dropins");
+    assert!(!config.allow_unverified_filesystem_dropins);
+    assert!(config.allow_uploaded_host_extensions);
+}
+
+#[test]
 fn api_config_reads_provider_secret_master_key() {
     let config = ApiConfig::from_env_map(&[
         (

@@ -4,7 +4,7 @@
 
 **Goal:** Close the real `HostExtension` path around `filesystem_dropin`, uploaded `pending_restart`, startup reconcile, and restart-time activation without allowing third-party hot load or hot unload in the host process.
 
-**Architecture:** Keep `HostExtension` as a special host-owned path. `plugin-framework` scans and validates `plugins/host-extension/dropins/`, the control plane stores installation rows with `desired_state=pending_restart` for uploaded host extensions, and `api-server` performs startup reconcile plus one-shot activation before the HTTP app serves traffic. The loader only writes `runtime_status` and `last_load_error`; `availability_status` remains derived from the existing lifecycle plan.
+**Architecture:** Keep `HostExtension` as a special host-owned path. `plugin-framework` scans and validates `plugins/host-extension/dropins/`, the control plane stores installation rows with `desired_state=pending_restart` for uploaded host extensions, and `api-server` performs startup reconcile plus one-shot activation before the HTTP app serves traffic. Startup activation first promotes uploaded rows from `pending_restart` to `active_requested`, then writes `runtime_status` / `last_load_error`; `availability_status` remains derived from the existing lifecycle plan.
 
 **Tech Stack:** Rust (`plugin-framework`, `control-plane`, `storage-pg`, `api-server`), filesystem scanning, startup tests, targeted `cargo test`.
 
@@ -45,7 +45,7 @@
 - Create: `api/crates/plugin-framework/src/_tests/host_extension_dropin_tests.rs`
 - Modify: `api/crates/plugin-framework/src/lib.rs`
 
-- [ ] **Step 1: Write failing drop-in scanner tests**
+- [x] **Step 1: Write failing drop-in scanner tests**
 
 Create tests like:
 
@@ -72,7 +72,7 @@ fn scan_dropins_rejects_unverified_package_when_policy_disallows_it() {
 }
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -84,7 +84,7 @@ Expected:
 
 - FAIL because there is no dedicated drop-in scanner or host-extension policy adapter yet.
 
-- [ ] **Step 3: Implement drop-in scanning and policy validation**
+- [x] **Step 3: Implement drop-in scanning and policy validation**
 
 Create a scanner shaped like:
 
@@ -116,7 +116,7 @@ if manifest.source_kind != "filesystem_dropin" {
 }
 ```
 
-- [ ] **Step 4: Re-run the drop-in scanner tests**
+- [x] **Step 4: Re-run the drop-in scanner tests**
 
 Run:
 
@@ -128,7 +128,7 @@ Expected:
 
 - PASS with `filesystem_dropin` scans producing installable host-extension snapshots.
 
-- [ ] **Step 5: Commit the drop-in scanner**
+- [x] **Step 5: Commit the drop-in scanner**
 
 ```bash
 git add api/crates/plugin-framework/src/lib.rs api/crates/plugin-framework/src/host_extension_dropin.rs api/crates/plugin-framework/src/_tests/host_extension_dropin_tests.rs
@@ -148,7 +148,7 @@ git commit -m "feat: scan host extension filesystem dropins"
 - Modify: `api/apps/api-server/src/routes/plugins.rs`
 - Modify: `api/apps/api-server/src/_tests/plugin_routes.rs`
 
-- [ ] **Step 1: Write failing service and route tests**
+- [x] **Step 1: Write failing service and route tests**
 
 Add cases like:
 
@@ -169,7 +169,7 @@ async fn non_root_cannot_upload_host_extension() {
 }
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -182,7 +182,7 @@ Expected:
 
 - FAIL because uploaded installs currently follow the provider path and do not branch on `consumption_kind=host_extension`.
 
-- [ ] **Step 3: Split host-extension install semantics from generic provider enable semantics**
+- [x] **Step 3: Split host-extension install semantics from generic provider enable semantics**
 
 Keep the install branch explicit:
 
@@ -209,7 +209,7 @@ pub struct PluginInstallationResponse {
 }
 ```
 
-- [ ] **Step 4: Re-run service and route tests**
+- [x] **Step 4: Re-run service and route tests**
 
 Run:
 
@@ -222,7 +222,7 @@ Expected:
 
 - PASS with uploaded host extensions entering `pending_restart` and never self-activating in the request path.
 
-- [ ] **Step 5: Commit the upload semantics**
+- [x] **Step 5: Commit the upload semantics**
 
 ```bash
 git add api/crates/control-plane/src/lib.rs api/crates/control-plane/src/ports.rs api/crates/control-plane/src/plugin_management.rs api/crates/control-plane/src/host_extension.rs api/crates/control-plane/src/_tests/host_extension_service_tests.rs api/crates/storage-pg/src/plugin_repository.rs api/crates/storage-pg/src/_tests/plugin_repository_tests.rs api/apps/api-server/src/routes/plugins.rs api/apps/api-server/src/_tests/plugin_routes.rs
@@ -236,7 +236,7 @@ git commit -m "feat: persist uploaded host extensions as pending restart"
 - Create: `api/apps/api-server/src/_tests/host_extension_loader_tests.rs`
 - Modify: `api/apps/api-server/src/lib.rs`
 
-- [ ] **Step 1: Write failing startup-loader tests**
+- [x] **Step 1: Write failing startup-loader tests**
 
 Add tests like:
 
@@ -259,7 +259,7 @@ async fn startup_loader_only_writes_runtime_status_on_failure() {
 }
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -271,7 +271,7 @@ Expected:
 
 - FAIL because `api-server` startup does not have a host-extension loader phase.
 
-- [ ] **Step 3: Implement startup reconcile and one-shot activation**
+- [x] **Step 3: Implement startup reconcile and one-shot activation**
 
 Create a startup helper:
 
@@ -299,7 +299,7 @@ repository
 
 Do not let the startup loader write `availability_status` directly.
 
-- [ ] **Step 4: Re-run startup verification**
+- [x] **Step 4: Re-run startup verification**
 
 Run:
 
@@ -312,7 +312,7 @@ Expected:
 
 - PASS with host extensions loaded only during startup, runtime failures captured in `runtime_status`, and no request-time auto-activation path added.
 
-- [ ] **Step 5: Commit the startup loader**
+- [x] **Step 5: Commit the startup loader**
 
 ```bash
 git add api/apps/api-server/src/lib.rs api/apps/api-server/src/host_extension_loader.rs api/apps/api-server/src/_tests/host_extension_loader_tests.rs

@@ -8,9 +8,9 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::{
+    capability_kind::PluginConsumptionKind,
     error::{FrameworkResult, PluginFrameworkError},
     manifest_v1::{parse_plugin_manifest, PluginManifestV1},
-    capability_kind::PluginConsumptionKind,
     provider_contract::{ModelDiscoveryMode, ProviderModelDescriptor, ProviderModelSource},
 };
 
@@ -179,6 +179,10 @@ impl ProviderPackage {
 
     pub fn identifier(&self) -> String {
         self.manifest.plugin_id.clone()
+    }
+
+    pub fn manifest_path(&self) -> PathBuf {
+        self.root.join("manifest.yaml")
     }
 
     pub fn runtime_entry(&self) -> PathBuf {

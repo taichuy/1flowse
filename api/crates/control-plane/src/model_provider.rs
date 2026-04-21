@@ -15,6 +15,7 @@ use crate::{
     i18n::{
         merge_i18n_catalog, plugin_namespace, trim_provider_bundles, I18nCatalog, RequestedLocales,
     },
+    plugin_lifecycle::reconcile_installation_snapshot,
     ports::{
         AuthRepository, CreateModelProviderInstanceInput, ModelProviderRepository,
         PluginRepository, ProviderRuntimePort, UpdateModelProviderInstanceInput,
@@ -58,7 +59,8 @@ pub struct ModelProviderCatalogEntry {
     pub default_base_url: Option<String>,
     pub model_discovery_mode: String,
     pub supports_model_fetch_without_credentials: bool,
-    pub enabled: bool,
+    pub desired_state: String,
+    pub availability_status: String,
     pub form_schema: Vec<ProviderConfigField>,
     pub predefined_models: Vec<LocalizedProviderModelDescriptor>,
 }
@@ -158,10 +160,17 @@ where
         let mut catalog = Vec::new();
         let mut i18n_catalog = BTreeMap::new();
         for installation in installations {
-            if !installation.enabled || !assignments.contains(&installation.id) {
+            let installation =
+                reconcile_installation_snapshot(&self.repository, installation.id).await?;
+            if matches!(
+                installation.desired_state,
+                domain::PluginDesiredState::Disabled
+            ) || !assignments.contains(&installation.id)
+                || installation.availability_status != domain::PluginAvailabilityStatus::Available
+            {
                 continue;
             }
-            let package = load_provider_package(&installation.install_path)?;
+            let package = load_provider_package(&installation.installed_path)?;
             let namespace = plugin_namespace(&installation.provider_code);
             merge_i18n_catalog(
                 &mut i18n_catalog,
@@ -186,7 +195,8 @@ where
                 supports_model_fetch_without_credentials: package
                     .provider
                     .supports_model_fetch_without_credentials,
-                enabled: installation.enabled,
+                desired_state: installation.desired_state.as_str().to_string(),
+                availability_status: installation.availability_status.as_str().to_string(),
                 form_schema: package.provider.form_schema.clone(),
                 predefined_models: package
                     .predefined_models
@@ -225,7 +235,7 @@ where
                         .get_installation(instance.installation_id)
                         .await?
                         .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
-                    let package = load_provider_package(&installation.install_path)?;
+                    let package = load_provider_package(&installation.installed_path)?;
                     let form_schema = package.provider.form_schema;
                     form_schemas.insert(instance.installation_id, form_schema.clone());
                     form_schema
@@ -256,11 +266,14 @@ where
             command.installation_id,
         )
         .await?;
-        if !installation.enabled {
+        if matches!(
+            installation.desired_state,
+            domain::PluginDesiredState::Disabled
+        ) {
             return Err(ControlPlaneError::Conflict("plugin_installation_disabled").into());
         }
 
-        let package = load_provider_package(&installation.install_path)?;
+        let package = load_provider_package(&installation.installed_path)?;
         let (public_config, secret_config) =
             split_provider_config(&package.provider.form_schema, &command.config_json)?;
         validate_required_fields(
@@ -328,7 +341,7 @@ where
             .get_installation(existing.installation_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
-        let package = load_provider_package(&installation.install_path)?;
+        let package = load_provider_package(&installation.installed_path)?;
 
         let (patch_public_config, patch_secret_config) =
             split_provider_config(&package.provider.form_schema, &command.config_json)?;
@@ -418,12 +431,12 @@ where
             .get_instance(actor.current_workspace_id, instance_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("model_provider_instance"))?;
-        let installation = self
-            .repository
-            .get_installation(instance.installation_id)
-            .await?
-            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
-        let package = load_provider_package(&installation.install_path)?;
+        let installation =
+            reconcile_installation_snapshot(&self.repository, instance.installation_id).await?;
+        if installation.availability_status != domain::PluginAvailabilityStatus::Available {
+            return Err(ControlPlaneError::Conflict("plugin_installation_unavailable").into());
+        }
+        let package = load_provider_package(&installation.installed_path)?;
         let provider_config = self
             .build_provider_runtime_config(&package, &instance)
             .await?;
@@ -586,7 +599,7 @@ where
             .get_installation(instance.installation_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
-        let package = load_provider_package(&installation.install_path)?;
+        let package = load_provider_package(&installation.installed_path)?;
         if let Some(cache) = self.repository.get_catalog_cache(instance.id).await? {
             return Ok(ModelProviderModelCatalog {
                 provider_instance_id: instance.id,
@@ -620,12 +633,12 @@ where
             .get_instance(actor.current_workspace_id, instance_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("model_provider_instance"))?;
-        let installation = self
-            .repository
-            .get_installation(instance.installation_id)
-            .await?
-            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
-        let package = load_provider_package(&installation.install_path)?;
+        let installation =
+            reconcile_installation_snapshot(&self.repository, instance.installation_id).await?;
+        if installation.availability_status != domain::PluginAvailabilityStatus::Available {
+            return Err(ControlPlaneError::Conflict("plugin_installation_unavailable").into());
+        }
+        let package = load_provider_package(&installation.installed_path)?;
         let provider_config = self
             .build_provider_runtime_config(&package, &instance)
             .await?;
@@ -772,13 +785,12 @@ where
             .repository
             .list_instances(actor.current_workspace_id)
             .await?;
-        let installation_map = self
-            .repository
-            .list_installations()
-            .await?
-            .into_iter()
-            .map(|installation| (installation.id, installation))
-            .collect::<HashMap<_, _>>();
+        let mut installation_map = HashMap::new();
+        for installation in self.repository.list_installations().await? {
+            let installation =
+                reconcile_installation_snapshot(&self.repository, installation.id).await?;
+            installation_map.insert(installation.id, installation);
+        }
 
         let mut options = Vec::new();
         let mut i18n_catalog = BTreeMap::new();
@@ -789,7 +801,10 @@ where
             let Some(installation) = installation_map.get(&instance.installation_id) else {
                 continue;
             };
-            let package = load_provider_package(&installation.install_path)?;
+            if installation.availability_status != domain::PluginAvailabilityStatus::Available {
+                continue;
+            }
+            let package = load_provider_package(&installation.installed_path)?;
             let namespace = plugin_namespace(&instance.provider_code);
             merge_i18n_catalog(
                 &mut i18n_catalog,
@@ -838,7 +853,7 @@ where
             .get_installation(instance.installation_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
-        let package = load_provider_package(&installation.install_path)?;
+        let package = load_provider_package(&installation.installed_path)?;
         let field = package
             .provider
             .form_schema

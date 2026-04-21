@@ -4,6 +4,7 @@ mod application_runtime_routes;
 mod auth_routes;
 mod config_tests;
 mod docs_routes;
+mod host_extension_loader_tests;
 mod me_routes;
 mod member_routes;
 mod model_definition_routes;

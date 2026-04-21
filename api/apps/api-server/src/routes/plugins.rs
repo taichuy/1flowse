@@ -66,12 +66,18 @@ pub struct PluginInstallationResponse {
     pub source_kind: String,
     pub trust_level: String,
     pub verification_status: String,
-    pub enabled: bool,
-    pub install_path: String,
+    pub desired_state: String,
+    pub artifact_status: String,
+    pub runtime_status: String,
+    pub availability_status: String,
+    pub package_path: Option<String>,
+    pub installed_path: String,
     pub checksum: Option<String>,
+    pub manifest_fingerprint: Option<String>,
     pub signature_status: Option<String>,
     pub signature_algorithm: Option<String>,
     pub signing_key_id: Option<String>,
+    pub last_load_error: Option<String>,
     #[schema(value_type = Object)]
     pub metadata_json: serde_json::Value,
     pub created_at: String,
@@ -152,6 +158,8 @@ pub struct PluginInstalledVersionResponse {
     pub plugin_version: String,
     pub source_kind: String,
     pub trust_level: String,
+    pub desired_state: String,
+    pub availability_status: String,
     pub created_at: String,
     pub is_current: bool,
 }
@@ -239,6 +247,7 @@ fn service(
         state.official_plugin_source.clone(),
         state.provider_install_root.clone(),
     )
+    .with_allow_uploaded_host_extensions(state.allow_uploaded_host_extensions)
 }
 
 fn format_time(value: time::OffsetDateTime) -> String {
@@ -300,12 +309,18 @@ fn to_installation_response(
         source_kind: installation.source_kind,
         trust_level: installation.trust_level,
         verification_status: installation.verification_status.as_str().to_string(),
-        enabled: installation.enabled,
-        install_path: installation.install_path,
+        desired_state: installation.desired_state.as_str().to_string(),
+        artifact_status: installation.artifact_status.as_str().to_string(),
+        runtime_status: installation.runtime_status.as_str().to_string(),
+        availability_status: installation.availability_status.as_str().to_string(),
+        package_path: installation.package_path,
+        installed_path: installation.installed_path,
         checksum: installation.checksum,
+        manifest_fingerprint: installation.manifest_fingerprint,
         signature_status: installation.signature_status,
         signature_algorithm: installation.signature_algorithm,
         signing_key_id: installation.signing_key_id,
+        last_load_error: installation.last_load_error,
         metadata_json: installation.metadata_json,
         created_at: format_time(installation.created_at),
         updated_at: format_time(installation.updated_at),
@@ -389,6 +404,8 @@ fn to_installed_version_response(
         plugin_version: version.plugin_version,
         source_kind: version.source_kind,
         trust_level: version.trust_level,
+        desired_state: version.desired_state,
+        availability_status: version.availability_status,
         created_at: format_time(version.created_at),
         is_current: version.is_current,
     }

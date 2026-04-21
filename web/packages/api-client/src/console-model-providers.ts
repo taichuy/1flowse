@@ -79,7 +79,8 @@ export interface ConsoleModelProviderCatalogEntry {
   default_base_url: string | null;
   model_discovery_mode: string;
   supports_model_fetch_without_credentials: boolean;
-  enabled: boolean;
+  desired_state: string;
+  availability_status: string;
   form_schema: ConsoleModelProviderConfigField[];
   predefined_models: ConsoleProviderModelDescriptor[];
 }

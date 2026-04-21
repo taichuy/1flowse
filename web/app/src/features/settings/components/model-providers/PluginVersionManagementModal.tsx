@@ -1,6 +1,7 @@
 import { Alert, Button, Empty, Modal, Space, Tag, Typography } from 'antd';
 
 import type { SettingsPluginFamilyEntry } from '../../api/plugins';
+import { formatPluginAvailabilityStatus } from './plugin-installation-status';
 
 function formatVersionMeta(family: SettingsPluginFamilyEntry) {
   if (family.latest_version && family.has_update) {
@@ -41,12 +42,16 @@ function renderTrustTag(trustLevel: string) {
 function renderInstalledVersionSummary(
   sourceKind: string,
   trustLevel: string,
+  availabilityStatus: string,
   createdAt: string
 ) {
+  const availability = formatPluginAvailabilityStatus(availabilityStatus);
+
   return (
     <Space wrap size={6}>
       <Tag>{formatSourceLabel(sourceKind)}</Tag>
       {renderTrustTag(trustLevel)}
+      <Tag color={availability.color}>{availability.label}</Tag>
       <Typography.Text type="secondary">
         {createdAt.slice(0, 10)}
       </Typography.Text>
@@ -149,6 +154,7 @@ export function PluginVersionManagementModal({
                     ? renderInstalledVersionSummary(
                         latestInstalledVersion.source_kind,
                         latestInstalledVersion.trust_level,
+                        latestInstalledVersion.availability_status,
                         latestInstalledVersion.created_at
                       )
                     : '官方目录最新版本，当前本地尚未下载'}
@@ -214,6 +220,7 @@ export function PluginVersionManagementModal({
                         {renderInstalledVersionSummary(
                           version.source_kind,
                           version.trust_level,
+                          version.availability_status,
                           version.created_at
                         )}
                       </div>

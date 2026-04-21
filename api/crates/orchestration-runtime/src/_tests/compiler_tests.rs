@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use orchestration_runtime::compiled_plan::CompileIssueCode;
 use orchestration_runtime::compiler::{
-    FlowCompileContext, FlowCompileProviderInstance, FlowCompiler,
+    FlowCompileContext, FlowCompileNodeContribution, FlowCompileProviderInstance, FlowCompiler,
 };
 use serde_json::json;
 use uuid::Uuid;
@@ -20,7 +20,26 @@ fn compile_context() -> FlowCompileContext {
                 allow_custom_models: false,
             },
         )]),
+        node_contributions: BTreeMap::new(),
     }
+}
+
+fn plugin_compile_context() -> FlowCompileContext {
+    let mut context = compile_context();
+    context.node_contributions.insert(
+        "prompt_pack@0.1.0::0.1.0::openai_prompt::action::1flowbase.node-contribution/v1"
+            .to_string(),
+        FlowCompileNodeContribution {
+            installation_id: Uuid::now_v7(),
+            plugin_id: "prompt_pack@0.1.0".to_string(),
+            plugin_version: "0.1.0".to_string(),
+            contribution_code: "openai_prompt".to_string(),
+            node_shell: "action".to_string(),
+            schema_version: "1flowbase.node-contribution/v1".to_string(),
+            dependency_status: "ready".to_string(),
+        },
+    );
+    context
 }
 
 fn sample_document(flow_id: Uuid) -> serde_json::Value {
@@ -66,6 +85,62 @@ fn sample_document(flow_id: Uuid) -> serde_json::Value {
                     "id": "edge-start-llm",
                     "source": "node-start",
                     "target": "node-llm",
+                    "sourceHandle": null,
+                    "targetHandle": null,
+                    "containerId": null,
+                    "points": []
+                }
+            ]
+        },
+        "editor": { "viewport": { "x": 0, "y": 0, "zoom": 1 }, "annotations": [], "activeContainerPath": [] }
+    })
+}
+
+fn plugin_document(flow_id: Uuid) -> serde_json::Value {
+    json!({
+        "schemaVersion": "1flowbase.flow/v1",
+        "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
+        "graph": {
+            "nodes": [
+                {
+                    "id": "node-start",
+                    "type": "start",
+                    "alias": "Start",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 0, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {},
+                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                },
+                {
+                    "id": "node-plugin",
+                    "type": "plugin_node",
+                    "alias": "Plugin Node",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 480, "y": 0 },
+                    "configVersion": 1,
+                    "plugin_id": "prompt_pack@0.1.0",
+                    "plugin_version": "0.1.0",
+                    "contribution_code": "openai_prompt",
+                    "node_shell": "action",
+                    "schema_version": "1flowbase.node-contribution/v1",
+                    "config": {
+                        "prompt": "Hello {{ node-start.query }}"
+                    },
+                    "bindings": {
+                        "query": { "kind": "selector", "value": ["node-start", "query"] }
+                    },
+                    "outputs": [{ "key": "answer", "title": "回答", "valueType": "string" }]
+                }
+            ],
+            "edges": [
+                {
+                    "id": "edge-start-plugin",
+                    "source": "node-start",
+                    "target": "node-plugin",
                     "sourceHandle": null,
                     "targetHandle": null,
                     "containerId": null,
@@ -136,5 +211,59 @@ fn compile_collects_provider_compile_issues() {
     assert_eq!(
         plan.compile_issues[0].code,
         CompileIssueCode::ModelNotAvailable
+    );
+}
+
+#[test]
+fn compile_plugin_node_emits_runtime_reference_from_registry_identity() {
+    let flow_id = Uuid::now_v7();
+    let plugin_context = plugin_compile_context();
+    let installation_id = plugin_context
+        .node_contributions
+        .values()
+        .next()
+        .expect("plugin contribution should exist")
+        .installation_id;
+    let plan = FlowCompiler::compile(
+        flow_id,
+        "draft-1",
+        &plugin_document(flow_id),
+        &plugin_context,
+    )
+    .unwrap();
+
+    let plan_json = serde_json::to_value(&plan).unwrap();
+
+    assert_eq!(
+        plan_json["nodes"]["node-plugin"]["node_type"],
+        "plugin_node"
+    );
+    assert_eq!(
+        plan_json["nodes"]["node-plugin"]["plugin_runtime"]["contribution_code"],
+        "openai_prompt"
+    );
+    assert_eq!(
+        plan_json["nodes"]["node-plugin"]["plugin_runtime"]["installation_id"],
+        installation_id.to_string()
+    );
+}
+
+#[test]
+fn compile_plugin_node_reports_dependency_issue_when_registry_information_is_missing() {
+    let flow_id = Uuid::now_v7();
+    let plan = FlowCompiler::compile(
+        flow_id,
+        "draft-1",
+        &plugin_document(flow_id),
+        &compile_context(),
+    )
+    .unwrap();
+
+    assert!(
+        plan.compile_issues
+            .iter()
+            .any(|issue| issue.node_id == "node-plugin"),
+        "expected a compile issue for the plugin node, got {:?}",
+        plan.compile_issues
     );
 }

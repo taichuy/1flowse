@@ -17,6 +17,7 @@ import { ModelProviderInstancesModal } from '../components/model-providers/Model
 import { OfficialPluginInstallPanel } from '../components/model-providers/OfficialPluginInstallPanel';
 import { PluginUploadInstallModal } from '../components/model-providers/PluginUploadInstallModal';
 import { PluginVersionManagementModal } from '../components/model-providers/PluginVersionManagementModal';
+import { formatPluginAvailabilityStatus } from '../components/model-providers/plugin-installation-status';
 import {
   getVisibleSettingsSections,
   type SettingsSectionKey
@@ -63,10 +64,15 @@ function getErrorMessage(error: unknown) {
 function isTaskTerminal(status: string | null | undefined) {
   return (
     status === 'success' ||
+    status === 'succeeded' ||
     status === 'failed' ||
     status === 'canceled' ||
     status === 'timed_out'
   );
+}
+
+function isTaskSucceeded(status: string | null | undefined) {
+  return status === 'success' || status === 'succeeded';
 }
 
 const EMPTY_MODEL_PROVIDER_INSTANCES: SettingsModelProviderInstance[] = [];
@@ -137,6 +143,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     displayName: string;
     version: string;
     trustLabel: string;
+    availabilityLabel: string;
   } | null>(null);
   const [recentVersionSwitchNotice, setRecentVersionSwitchNotice] = useState<{
     providerCode: string;
@@ -465,7 +472,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     },
     onSuccess: async (result, pluginId) => {
       if (result.task.finished_at || isTaskTerminal(result.task.status)) {
-        const status = result.task.status === 'success' ? 'success' : 'failed';
+        const status = isTaskSucceeded(result.task.status) ? 'success' : 'failed';
         setOfficialInstallState({
           pluginId,
           taskId: null,
@@ -502,7 +509,10 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
       setUploadResultSummary({
         displayName: result.installation.display_name,
         version: result.installation.plugin_version,
-        trustLabel: formatTrustLabel(result.installation.trust_level)
+        trustLabel: formatTrustLabel(result.installation.trust_level),
+        availabilityLabel: formatPluginAvailabilityStatus(
+          result.installation.availability_status
+        ).label
       });
       await invalidateModelProviderQueries();
     }
@@ -529,7 +539,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
       const resolvedTask = await task;
       if (
         isTaskTerminal(resolvedTask.status) &&
-        resolvedTask.status !== 'success'
+        !isTaskSucceeded(resolvedTask.status)
       ) {
         throw new Error(resolvedTask.status_message ?? '版本切换失败');
       }
@@ -598,7 +608,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
       return;
     }
 
-    const status = task.status === 'success' ? 'success' : 'failed';
+    const status = isTaskSucceeded(task.status) ? 'success' : 'failed';
     setOfficialInstallState((current) => ({
       pluginId: current.pluginId,
       taskId: null,

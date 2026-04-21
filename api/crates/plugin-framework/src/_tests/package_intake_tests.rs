@@ -128,7 +128,10 @@ async fn package_intake_verifies_signed_official_archive_and_exposes_manifest_sn
         result.manifest.consumption_kind,
         plugin_framework::PluginConsumptionKind::RuntimeExtension
     );
-    assert_eq!(result.manifest.runtime.entry, "bin/openai_compatible-provider");
+    assert_eq!(
+        result.manifest.runtime.entry,
+        "bin/openai_compatible-provider"
+    );
 }
 
 #[tokio::test]
@@ -351,8 +354,14 @@ config_schema:
 "#
         ),
     );
-    dir.write_str(&format!("bin/{provider_code}-provider"), "#!/usr/bin/env bash\nexit 0\n");
-    dir.write_str("i18n/en_US.json", "{ \"plugin\": { \"label\": \"Acme\" } }\n");
+    dir.write_str(
+        &format!("bin/{provider_code}-provider"),
+        "#!/usr/bin/env bash\nexit 0\n",
+    );
+    dir.write_str(
+        "i18n/en_US.json",
+        "{ \"plugin\": { \"label\": \"Acme\" } }\n",
+    );
 }
 
 fn pack_tar_gz(root: &Path) -> Vec<u8> {

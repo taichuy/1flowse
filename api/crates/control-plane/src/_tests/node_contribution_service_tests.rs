@@ -7,9 +7,7 @@ use control_plane::{
     node_contribution::{ListNodeContributionsQuery, NodeContributionService},
     ports::{AuthRepository, NodeContributionRepository},
 };
-use domain::{
-    ActorContext, NodeContributionDependencyStatus, NodeContributionRegistryEntry,
-};
+use domain::{ActorContext, NodeContributionDependencyStatus, NodeContributionRegistryEntry};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -36,7 +34,10 @@ impl AuthRepository for MemoryNodeContributionRepository {
         Ok(None)
     }
 
-    async fn find_user_for_password_login(&self, _identifier: &str) -> Result<Option<domain::UserRecord>> {
+    async fn find_user_for_password_login(
+        &self,
+        _identifier: &str,
+    ) -> Result<Option<domain::UserRecord>> {
         Ok(None)
     }
 
@@ -75,11 +76,19 @@ impl AuthRepository for MemoryNodeContributionRepository {
         Ok(actor)
     }
 
-    async fn update_password_hash(&self, _user_id: Uuid, _password_hash: &str, _actor_id: Uuid) -> Result<i64> {
+    async fn update_password_hash(
+        &self,
+        _user_id: Uuid,
+        _password_hash: &str,
+        _actor_id: Uuid,
+    ) -> Result<i64> {
         Ok(1)
     }
 
-    async fn update_profile(&self, _input: &control_plane::ports::UpdateProfileInput) -> Result<domain::UserRecord> {
+    async fn update_profile(
+        &self,
+        _input: &control_plane::ports::UpdateProfileInput,
+    ) -> Result<domain::UserRecord> {
         anyhow::bail!("not implemented")
     }
 
@@ -113,7 +122,10 @@ impl NodeContributionRepository for MemoryNodeContributionRepository {
     }
 }
 
-fn sample_entry(contribution_code: &str, status: NodeContributionDependencyStatus) -> NodeContributionRegistryEntry {
+fn sample_entry(
+    contribution_code: &str,
+    status: NodeContributionDependencyStatus,
+) -> NodeContributionRegistryEntry {
     NodeContributionRegistryEntry {
         installation_id: Uuid::now_v7(),
         provider_code: "prompt_pack".into(),
@@ -142,7 +154,10 @@ async fn node_contribution_service_lists_workspace_entries() {
     let workspace_id = Uuid::now_v7();
     let repository = MemoryNodeContributionRepository::new(
         actor_with_permissions(workspace_id, &["plugin_config.view.all"]),
-        vec![sample_entry("openai_prompt", NodeContributionDependencyStatus::Ready)],
+        vec![sample_entry(
+            "openai_prompt",
+            NodeContributionDependencyStatus::Ready,
+        )],
     );
     let service = NodeContributionService::new(repository);
 
@@ -163,7 +178,10 @@ async fn node_contribution_service_requires_plugin_config_view_permission() {
     let workspace_id = Uuid::now_v7();
     let repository = MemoryNodeContributionRepository::new(
         actor_with_permissions(workspace_id, &[]),
-        vec![sample_entry("openai_prompt", NodeContributionDependencyStatus::Ready)],
+        vec![sample_entry(
+            "openai_prompt",
+            NodeContributionDependencyStatus::Ready,
+        )],
     );
     let service = NodeContributionService::new(repository);
 

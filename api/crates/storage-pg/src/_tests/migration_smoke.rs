@@ -208,8 +208,48 @@ async fn migration_smoke_creates_plugin_trust_columns_and_constraints() {
     .fetch_all(&pool)
     .await
     .unwrap();
+    let task_columns: Vec<String> = sqlx::query_scalar(
+        r#"
+        select column_name
+        from information_schema.columns
+        where table_schema = $1
+          and table_name = 'plugin_tasks'
+        "#,
+    )
+    .bind(&schema)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let task_status_check: String = sqlx::query_scalar(
+        r#"
+        select pg_get_constraintdef(c.oid)
+        from pg_constraint c
+        join pg_class r on r.oid = c.conrelid
+        join pg_namespace n on n.oid = r.relnamespace
+        where n.nspname = $1
+          and r.relname = 'plugin_tasks'
+          and c.conname = 'plugin_tasks_status_check'
+        "#,
+    )
+    .bind(&schema)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
 
     assert!(columns.contains(&"trust_level".to_string()));
     assert!(columns.contains(&"signature_algorithm".to_string()));
     assert!(columns.contains(&"signing_key_id".to_string()));
+    assert!(columns.contains(&"desired_state".to_string()));
+    assert!(columns.contains(&"artifact_status".to_string()));
+    assert!(columns.contains(&"runtime_status".to_string()));
+    assert!(columns.contains(&"availability_status".to_string()));
+    assert!(columns.contains(&"package_path".to_string()));
+    assert!(columns.contains(&"installed_path".to_string()));
+    assert!(columns.contains(&"manifest_fingerprint".to_string()));
+    assert!(columns.contains(&"last_load_error".to_string()));
+    assert!(!columns.contains(&"enabled".to_string()));
+    assert!(!columns.contains(&"install_path".to_string()));
+    assert!(task_columns.contains(&"status".to_string()));
+    assert!(task_status_check.contains("queued"));
+    assert!(task_status_check.contains("succeeded"));
 }

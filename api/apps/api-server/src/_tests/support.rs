@@ -32,6 +32,7 @@ use uuid::Uuid;
 use crate::{
     app_state::{ApiState, SessionStoreHandle},
     config::ApiConfig,
+    provider_runtime::ApiRuntimeServices,
     runtime_profile_client::{
         ApiRuntimeProfilePort, HostApiRuntimeProfileCollector, PluginRunnerSystemPort,
     },
@@ -285,6 +286,7 @@ fn default_test_config() -> ApiConfig {
     ApiConfig::from_env_map(&[
         ("API_DATABASE_URL", database_url.as_str()),
         ("API_REDIS_URL", redis_url.as_str()),
+        ("API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS", "true"),
         ("BOOTSTRAP_ROOT_ACCOUNT", root_account.as_str()),
         ("BOOTSTRAP_ROOT_EMAIL", root_email.as_str()),
         ("BOOTSTRAP_ROOT_PASSWORD", root_password.as_str()),
@@ -304,11 +306,11 @@ async fn isolated_database_url(base_url: &str) -> String {
     format!("{base_url}?options=-csearch_path%3D{schema}")
 }
 
-async fn test_app_with_runtime_profile_state(
+async fn test_state_with_runtime_profile_state(
     process_started_at: OffsetDateTime,
     api_runtime_profile: Arc<dyn ApiRuntimeProfilePort>,
     plugin_runner_system: Arc<dyn PluginRunnerSystemPort>,
-) -> (Router, String) {
+) -> (Arc<ApiState>, String) {
     let mut config = default_test_config();
     config.database_url = isolated_database_url(&config.database_url).await;
     let pool = storage_pg::connect(&config.database_url).await.unwrap();
@@ -343,12 +345,17 @@ async fn test_app_with_runtime_profile_state(
             .unwrap(),
     );
 
-    let app = crate::app_with_state_and_config(
+    (
         Arc::new(ApiState {
             store,
             runtime_engine,
-            provider_runtime: Arc::new(RwLock::new(
-                plugin_runner::provider_host::ProviderHost::default(),
+            provider_runtime: Arc::new(ApiRuntimeServices::new(
+                Arc::new(RwLock::new(
+                    plugin_runner::provider_host::ProviderHost::default(),
+                )),
+                Arc::new(RwLock::new(
+                    plugin_runner::capability_host::CapabilityHost::default(),
+                )),
             )),
             process_started_at,
             api_runtime_profile,
@@ -356,6 +363,9 @@ async fn test_app_with_runtime_profile_state(
             official_plugin_source: Arc::new(InMemoryOfficialPluginSource),
             provider_install_root: config.provider_install_root.clone(),
             provider_secret_master_key: config.provider_secret_master_key.clone(),
+            host_extension_dropin_root: config.host_extension_dropin_root.clone(),
+            allow_unverified_filesystem_dropins: config.allow_unverified_filesystem_dropins,
+            allow_uploaded_host_extensions: config.allow_uploaded_host_extensions,
             session_store: SessionStoreHandle::InMemory(
                 storage_redis::InMemorySessionStore::default(),
             ),
@@ -364,10 +374,25 @@ async fn test_app_with_runtime_profile_state(
             session_ttl_days: config.session_ttl_days,
             bootstrap_workspace_name: config.bootstrap_workspace_name.clone(),
         }),
-        &config,
-    );
+        config.database_url,
+    )
+}
 
-    (app, config.database_url)
+async fn test_app_with_runtime_profile_state(
+    process_started_at: OffsetDateTime,
+    api_runtime_profile: Arc<dyn ApiRuntimeProfilePort>,
+    plugin_runner_system: Arc<dyn PluginRunnerSystemPort>,
+) -> (Router, String) {
+    let (state, database_url) = test_state_with_runtime_profile_state(
+        process_started_at,
+        api_runtime_profile,
+        plugin_runner_system,
+    )
+    .await;
+    let config = default_test_config();
+    let app = crate::app_with_state_and_config(state, &config);
+
+    (app, database_url)
 }
 
 pub async fn test_app_with_database_url() -> (Router, String) {
@@ -383,6 +408,17 @@ pub async fn test_app_with_database_url() -> (Router, String) {
 
 pub async fn test_app() -> Router {
     test_app_with_database_url().await.0
+}
+
+pub(super) async fn test_api_state_with_database_url() -> (Arc<ApiState>, String) {
+    test_state_with_runtime_profile_state(
+        OffsetDateTime::now_utc(),
+        Arc::new(HostApiRuntimeProfileCollector),
+        Arc::new(StubPluginRunnerSystemClient {
+            result: Err("plugin runner unavailable".to_string()),
+        }),
+    )
+    .await
 }
 
 pub async fn login_and_capture_cookie(

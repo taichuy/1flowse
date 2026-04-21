@@ -206,10 +206,7 @@ fn validate_plugin_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> 
             &node_contribution.node_shell,
             "node_contributions[].node_shell",
         )?;
-        validate_non_empty(
-            &node_contribution.category,
-            "node_contributions[].category",
-        )?;
+        validate_non_empty(&node_contribution.category, "node_contributions[].category")?;
         validate_non_empty(&node_contribution.title, "node_contributions[].title")?;
         validate_non_empty(
             &node_contribution.description,
@@ -296,13 +293,21 @@ fn validate_binding_targets(binding_targets: &[String]) -> FrameworkResult<()> {
 }
 
 fn validate_permission_values(permissions: &PluginPermissionManifest) -> FrameworkResult<()> {
-    validate_allowed(&permissions.network, "permissions.network", &["none", "outbound_only"])?;
+    validate_allowed(
+        &permissions.network,
+        "permissions.network",
+        &["none", "outbound_only"],
+    )?;
     validate_allowed(
         &permissions.secrets,
         "permissions.secrets",
         &["none", "provider_instance_only"],
     )?;
-    validate_allowed(&permissions.storage, "permissions.storage", &["none", "host_managed"])?;
+    validate_allowed(
+        &permissions.storage,
+        "permissions.storage",
+        &["none", "host_managed"],
+    )?;
     validate_allowed(&permissions.mcp, "permissions.mcp", &["none"])?;
     validate_allowed(&permissions.subprocess, "permissions.subprocess", &["deny"])?;
     Ok(())

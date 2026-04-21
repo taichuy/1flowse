@@ -603,12 +603,18 @@ pub struct UpsertPluginInstallationInput {
     pub source_kind: String,
     pub trust_level: String,
     pub verification_status: domain::PluginVerificationStatus,
-    pub enabled: bool,
-    pub install_path: String,
+    pub desired_state: domain::PluginDesiredState,
+    pub artifact_status: domain::PluginArtifactStatus,
+    pub runtime_status: domain::PluginRuntimeStatus,
+    pub availability_status: domain::PluginAvailabilityStatus,
+    pub package_path: Option<String>,
+    pub installed_path: String,
     pub checksum: Option<String>,
+    pub manifest_fingerprint: Option<String>,
     pub signature_status: Option<String>,
     pub signature_algorithm: Option<String>,
     pub signing_key_id: Option<String>,
+    pub last_load_error: Option<String>,
     pub metadata_json: serde_json::Value,
     pub actor_user_id: Uuid,
 }
@@ -643,9 +649,29 @@ pub struct UpdatePluginTaskStatusInput {
 }
 
 #[derive(Debug, Clone)]
-pub struct UpdatePluginInstallationEnabledInput {
+pub struct UpdatePluginDesiredStateInput {
     pub installation_id: Uuid,
-    pub enabled: bool,
+    pub desired_state: domain::PluginDesiredState,
+    pub availability_status: domain::PluginAvailabilityStatus,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdatePluginArtifactSnapshotInput {
+    pub installation_id: Uuid,
+    pub artifact_status: domain::PluginArtifactStatus,
+    pub availability_status: domain::PluginAvailabilityStatus,
+    pub package_path: Option<String>,
+    pub installed_path: String,
+    pub checksum: Option<String>,
+    pub manifest_fingerprint: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdatePluginRuntimeSnapshotInput {
+    pub installation_id: Uuid,
+    pub runtime_status: domain::PluginRuntimeStatus,
+    pub availability_status: domain::PluginAvailabilityStatus,
+    pub last_load_error: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -723,9 +749,20 @@ pub trait PluginRepository: Send + Sync {
         installation_id: Uuid,
     ) -> anyhow::Result<Option<domain::PluginInstallationRecord>>;
     async fn list_installations(&self) -> anyhow::Result<Vec<domain::PluginInstallationRecord>>;
-    async fn update_installation_enabled(
+    async fn list_pending_restart_host_extensions(
         &self,
-        input: &UpdatePluginInstallationEnabledInput,
+    ) -> anyhow::Result<Vec<domain::PluginInstallationRecord>>;
+    async fn update_desired_state(
+        &self,
+        input: &UpdatePluginDesiredStateInput,
+    ) -> anyhow::Result<domain::PluginInstallationRecord>;
+    async fn update_artifact_snapshot(
+        &self,
+        input: &UpdatePluginArtifactSnapshotInput,
+    ) -> anyhow::Result<domain::PluginInstallationRecord>;
+    async fn update_runtime_snapshot(
+        &self,
+        input: &UpdatePluginRuntimeSnapshotInput,
     ) -> anyhow::Result<domain::PluginInstallationRecord>;
     async fn create_assignment(
         &self,

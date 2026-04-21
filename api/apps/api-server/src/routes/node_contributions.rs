@@ -15,9 +15,7 @@ use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
-    app_state::ApiState,
-    error_response::ApiError,
-    middleware::require_session::require_session,
+    app_state::ApiState, error_response::ApiError, middleware::require_session::require_session,
     response::ApiSuccess,
 };
 

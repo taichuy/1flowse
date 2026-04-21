@@ -1,7 +1,11 @@
 use control_plane::ports::{
-    CreatePluginWorkerLeaseInput, PluginRepository, PluginWorkerRepository, UpsertPluginInstallationInput,
+    CreatePluginWorkerLeaseInput, PluginRepository, PluginWorkerRepository,
+    UpsertPluginInstallationInput,
 };
-use domain::{PluginVerificationStatus, PluginWorkerStatus};
+use domain::{
+    PluginArtifactStatus, PluginAvailabilityStatus, PluginDesiredState, PluginRuntimeStatus,
+    PluginVerificationStatus, PluginWorkerStatus,
+};
 use serde_json::json;
 use sqlx::PgPool;
 use storage_pg::{connect, run_migrations, PgControlPlaneStore};
@@ -81,12 +85,18 @@ async fn plugin_worker_repository_tracks_process_per_call_worker_lifecycle() {
             source_kind: "uploaded".into(),
             trust_level: "unverified".into(),
             verification_status: PluginVerificationStatus::Valid,
-            enabled: true,
-            install_path: "/tmp/plugin-installed/capability_provider/0.1.0".into(),
+            desired_state: PluginDesiredState::ActiveRequested,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: PluginRuntimeStatus::Inactive,
+            availability_status: PluginAvailabilityStatus::InstallIncomplete,
+            package_path: None,
+            installed_path: "/tmp/plugin-installed/capability_provider/0.1.0".into(),
             checksum: None,
+            manifest_fingerprint: None,
             signature_status: None,
             signature_algorithm: None,
             signing_key_id: None,
+            last_load_error: None,
             metadata_json: json!({}),
             actor_user_id: _actor_id,
         },

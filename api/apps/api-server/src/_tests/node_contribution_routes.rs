@@ -8,12 +8,7 @@ use sqlx::PgPool;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-async fn create_application(
-    app: &axum::Router,
-    cookie: &str,
-    csrf: &str,
-    name: &str,
-) -> String {
+async fn create_application(app: &axum::Router, cookie: &str, csrf: &str, name: &str) -> String {
     let response = app
         .clone()
         .oneshot(
@@ -53,11 +48,10 @@ async fn seed_node_contribution_registry(database_url: &str) -> (Uuid, Uuid) {
             .fetch_one(&pool)
             .await
             .unwrap();
-    let actor_id: Uuid =
-        sqlx::query_scalar("select id from users where account = 'root' limit 1")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let actor_id: Uuid = sqlx::query_scalar("select id from users where account = 'root' limit 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
 
     let installation_id = Uuid::now_v7();
     let contribution_id = Uuid::now_v7();
@@ -221,6 +215,9 @@ async fn node_contribution_routes_list_registry_entries_for_application_workspac
     assert_eq!(entry["title"].as_str(), Some("Fixture Prompt"));
     assert_eq!(entry["description"].as_str(), Some("Prompt node fixture"));
     assert_eq!(entry["dependency_status"].as_str(), Some("ready"));
-    assert_eq!(entry["schema_version"].as_str(), Some("1flowbase.node-contribution/v1"));
+    assert_eq!(
+        entry["schema_version"].as_str(),
+        Some("1flowbase.node-contribution/v1")
+    );
     assert_eq!(entry["experimental"].as_bool(), Some(false));
 }

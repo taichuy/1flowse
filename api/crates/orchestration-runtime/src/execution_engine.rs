@@ -13,7 +13,7 @@ use serde_json::{json, Map, Value};
 
 use crate::{
     binding_runtime::{render_templated_bindings, resolve_node_inputs},
-    compiled_plan::{CompiledLlmRuntime, CompiledNode, CompiledPlan},
+    compiled_plan::{CompiledLlmRuntime, CompiledNode, CompiledPlan, CompiledPluginRuntime},
     execution_state::{
         CheckpointSnapshot, ExecutionStopReason, FlowDebugExecutionOutcome, NodeExecutionFailure,
         NodeExecutionTrace, PendingCallbackTask, PendingHumanInput,
@@ -36,11 +36,33 @@ pub trait ProviderInvoker: Send + Sync {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct CapabilityInvocationOutput {
+    pub output_payload: Value,
+}
+
+#[async_trait]
+pub trait CapabilityInvoker: Send + Sync {
+    async fn invoke_capability_node(
+        &self,
+        runtime: &CompiledPluginRuntime,
+        config_payload: Value,
+        input_payload: Value,
+    ) -> Result<CapabilityInvocationOutput>;
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct LlmNodeExecution {
     pub output_payload: Value,
     pub error_payload: Option<Value>,
     pub metrics_payload: Value,
     pub provider_events: Vec<ProviderStreamEvent>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct CapabilityNodeExecution {
+    pub output_payload: Value,
+    pub error_payload: Option<Value>,
+    pub metrics_payload: Value,
 }
 
 pub async fn start_flow_debug_run<I>(
@@ -49,7 +71,7 @@ pub async fn start_flow_debug_run<I>(
     invoker: &I,
 ) -> Result<FlowDebugExecutionOutcome>
 where
-    I: ProviderInvoker + ?Sized,
+    I: ProviderInvoker + CapabilityInvoker + ?Sized,
 {
     let variable_pool = input_payload
         .as_object()
@@ -66,7 +88,7 @@ pub async fn resume_flow_debug_run<I>(
     invoker: &I,
 ) -> Result<FlowDebugExecutionOutcome>
 where
-    I: ProviderInvoker + ?Sized,
+    I: ProviderInvoker + CapabilityInvoker + ?Sized,
 {
     let patch = resume_payload
         .as_object()
@@ -87,7 +109,7 @@ async fn execute_from<I>(
     invoker: &I,
 ) -> Result<FlowDebugExecutionOutcome>
 where
-    I: ProviderInvoker + ?Sized,
+    I: ProviderInvoker + CapabilityInvoker + ?Sized,
 {
     let mut node_traces = Vec::new();
 
@@ -133,6 +155,41 @@ where
                     error_payload: execution.error_payload.clone(),
                     metrics_payload: execution.metrics_payload.clone(),
                     provider_events: execution.provider_events.clone(),
+                };
+                node_traces.push(trace);
+
+                if let Some(error_payload) = execution.error_payload {
+                    return Ok(FlowDebugExecutionOutcome {
+                        stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
+                            node_id: node.node_id.clone(),
+                            node_alias: node.alias.clone(),
+                            error_payload,
+                        }),
+                        variable_pool,
+                        checkpoint_snapshot: None,
+                        node_traces,
+                    });
+                }
+
+                variable_pool.insert(node.node_id.clone(), execution.output_payload);
+            }
+            "plugin_node" => {
+                let execution = execute_capability_plugin_node(
+                    node,
+                    &resolved_inputs,
+                    &rendered_templates,
+                    invoker,
+                )
+                .await?;
+                let trace = NodeExecutionTrace {
+                    node_id: node.node_id.clone(),
+                    node_type: node.node_type.clone(),
+                    node_alias: node.alias.clone(),
+                    input_payload: Value::Object(resolved_inputs),
+                    output_payload: execution.output_payload.clone(),
+                    error_payload: execution.error_payload.clone(),
+                    metrics_payload: execution.metrics_payload.clone(),
+                    provider_events: Vec::new(),
                 };
                 node_traces.push(trace);
 
@@ -325,6 +382,56 @@ where
         metrics_payload,
         provider_events: output.events,
     })
+}
+
+pub(crate) async fn execute_capability_plugin_node<I>(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    _rendered_templates: &Map<String, Value>,
+    invoker: &I,
+) -> Result<CapabilityNodeExecution>
+where
+    I: CapabilityInvoker + ?Sized,
+{
+    let runtime = node.plugin_runtime.as_ref().ok_or_else(|| {
+        anyhow!(
+            "compiled plugin node is missing runtime metadata: {}",
+            node.node_id
+        )
+    })?;
+    let config_payload = node.config.clone();
+    let input_payload = Value::Object(resolved_inputs.clone());
+
+    match invoker
+        .invoke_capability_node(runtime, config_payload, input_payload)
+        .await
+    {
+        Ok(output) => Ok(CapabilityNodeExecution {
+            output_payload: output.output_payload,
+            error_payload: None,
+            metrics_payload: json!({
+                "plugin_id": runtime.plugin_id,
+                "plugin_version": runtime.plugin_version,
+                "contribution_code": runtime.contribution_code,
+                "node_shell": runtime.node_shell,
+                "schema_version": runtime.schema_version,
+            }),
+        }),
+        Err(error) => Ok(CapabilityNodeExecution {
+            output_payload: json!({ first_output_key(node): Value::Null }),
+            error_payload: Some(json!({
+                "message": error.to_string(),
+            })),
+            metrics_payload: json!({
+                "plugin_id": runtime.plugin_id,
+                "plugin_version": runtime.plugin_version,
+                "contribution_code": runtime.contribution_code,
+                "node_shell": runtime.node_shell,
+                "schema_version": runtime.schema_version,
+                "error": true,
+            }),
+        }),
+    }
 }
 
 fn build_provider_invocation_input(

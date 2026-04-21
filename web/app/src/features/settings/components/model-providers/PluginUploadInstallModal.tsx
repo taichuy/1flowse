@@ -13,7 +13,12 @@ export function PluginUploadInstallModal({
 }: {
   open: boolean;
   submitting: boolean;
-  resultSummary: { displayName: string; version: string; trustLabel: string } | null;
+  resultSummary: {
+    displayName: string;
+    version: string;
+    trustLabel: string;
+    availabilityLabel: string;
+  } | null;
   errorMessage: string | null;
   fileList: UploadFile[];
   onClose: () => void;
@@ -45,7 +50,7 @@ export function PluginUploadInstallModal({
             type="success"
             showIcon
             message={`${resultSummary.displayName} ${resultSummary.version}`}
-            description={`来源：手工上传；信任级别：${resultSummary.trustLabel}`}
+            description={`来源：手工上传；信任级别：${resultSummary.trustLabel}；状态：${resultSummary.availabilityLabel}`}
           />
         ) : null}
         {errorMessage ? <Alert type="error" showIcon message={errorMessage} /> : null}

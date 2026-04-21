@@ -3,6 +3,7 @@ extern crate self as api_server;
 pub mod app_state;
 pub mod config;
 pub mod error_response;
+pub mod host_extension_loader;
 pub mod middleware;
 pub mod official_plugin_registry;
 pub mod openapi;
@@ -39,6 +40,9 @@ use utoipa_swagger_ui::SwaggerUi;
 use crate::{
     app_state::{ApiState, SessionStoreHandle},
     config::{ApiConfig, ApiEnvironment},
+    host_extension_loader::load_host_extensions_at_startup,
+    provider_runtime::ApiProviderRuntime,
+    provider_runtime::ApiRuntimeServices,
     runtime_profile_client::{HostApiRuntimeProfileCollector, HttpPluginRunnerSystemClient},
 };
 
@@ -186,34 +190,49 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
     let trusted_public_keys = config.official_plugin_trusted_public_keys()?;
     let process_started_at = OffsetDateTime::now_utc();
 
-    Ok(app_with_state_and_config(
-        Arc::new(ApiState {
-            store,
-            runtime_engine,
-            provider_runtime: Arc::new(RwLock::new(
+    let state = Arc::new(ApiState {
+        store,
+        runtime_engine,
+        provider_runtime: Arc::new(ApiRuntimeServices::new(
+            Arc::new(RwLock::new(
                 plugin_runner::provider_host::ProviderHost::default(),
             )),
-            process_started_at,
-            api_runtime_profile: Arc::new(HostApiRuntimeProfileCollector),
-            plugin_runner_system: Arc::new(HttpPluginRunnerSystemClient::new(
-                config.plugin_runner_internal_base_url.clone(),
+            Arc::new(RwLock::new(
+                plugin_runner::capability_host::CapabilityHost::default(),
             )),
-            official_plugin_source: Arc::new(
-                official_plugin_registry::ApiOfficialPluginRegistry::new(
-                    resolved_official_source,
-                    trusted_public_keys,
-                ),
-            ),
-            provider_install_root: config.provider_install_root.clone(),
-            provider_secret_master_key: config.provider_secret_master_key.clone(),
-            session_store: SessionStoreHandle::Redis(Box::new(session_store)),
-            api_docs,
-            cookie_name: config.cookie_name.clone(),
-            session_ttl_days: config.session_ttl_days,
-            bootstrap_workspace_name: config.bootstrap_workspace_name.clone(),
-        }),
-        config,
-    ))
+        )),
+        process_started_at,
+        api_runtime_profile: Arc::new(HostApiRuntimeProfileCollector),
+        plugin_runner_system: Arc::new(HttpPluginRunnerSystemClient::new(
+            config.plugin_runner_internal_base_url.clone(),
+        )),
+        official_plugin_source: Arc::new(official_plugin_registry::ApiOfficialPluginRegistry::new(
+            resolved_official_source,
+            trusted_public_keys,
+        )),
+        provider_install_root: config.provider_install_root.clone(),
+        provider_secret_master_key: config.provider_secret_master_key.clone(),
+        host_extension_dropin_root: config.host_extension_dropin_root.clone(),
+        allow_unverified_filesystem_dropins: config.allow_unverified_filesystem_dropins,
+        allow_uploaded_host_extensions: config.allow_uploaded_host_extensions,
+        session_store: SessionStoreHandle::Redis(Box::new(session_store)),
+        api_docs,
+        cookie_name: config.cookie_name.clone(),
+        session_ttl_days: config.session_ttl_days,
+        bootstrap_workspace_name: config.bootstrap_workspace_name.clone(),
+    });
+    control_plane::plugin_management::PluginManagementService::new(
+        state.store.clone(),
+        ApiProviderRuntime::new(state.provider_runtime.clone()),
+        state.official_plugin_source.clone(),
+        state.provider_install_root.clone(),
+    )
+    .with_allow_uploaded_host_extensions(state.allow_uploaded_host_extensions)
+    .reconcile_all_installations()
+    .await?;
+    load_host_extensions_at_startup(&state).await?;
+
+    Ok(app_with_state_and_config(state, config))
 }
 
 pub fn init_tracing() {

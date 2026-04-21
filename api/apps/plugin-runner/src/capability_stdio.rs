@@ -121,11 +121,13 @@ fn parse_stdio_response(
         provider_summary: None,
     });
 
-    Err(PluginFrameworkError::runtime(ProviderRuntimeError::normalize(
-        "capability_runtime",
-        error.message,
-        error.provider_summary.as_deref(),
-    )))
+    Err(PluginFrameworkError::runtime(
+        ProviderRuntimeError::normalize(
+            "capability_runtime",
+            error.message,
+            error.provider_summary.as_deref(),
+        ),
+    ))
 }
 
 fn apply_memory_limit(command: &mut Command, memory_bytes: Option<u64>) -> FrameworkResult<()> {

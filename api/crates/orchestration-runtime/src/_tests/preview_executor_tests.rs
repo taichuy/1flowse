@@ -101,6 +101,7 @@ fn sample_compiled_plan() -> CompiledPlan {
                 "provider_instance_id": "provider-ready",
                 "model": "gpt-5.4-mini"
             }),
+            plugin_runtime: None,
             llm_runtime: Some(CompiledLlmRuntime {
                 provider_instance_id: "provider-ready".to_string(),
                 provider_code: "fixture_provider".to_string(),

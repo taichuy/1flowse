@@ -16,12 +16,15 @@ export interface ConsolePluginInstallation {
   source_kind: string;
   trust_level: string;
   verification_status: string;
-  enabled: boolean;
-  install_path: string;
+  desired_state: string;
+  artifact_status: string;
+  runtime_status: string;
+  availability_status: string;
   checksum: string | null;
   signature_status: string | null;
   signature_algorithm: string | null;
   signing_key_id: string | null;
+  last_load_error: string | null;
   metadata_json: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -92,6 +95,8 @@ export interface ConsolePluginInstalledVersion {
   plugin_version: string;
   source_kind: string;
   trust_level: string;
+  desired_state: string;
+  availability_status: string;
   created_at: string;
   is_current: boolean;
 }

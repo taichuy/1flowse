@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use domain::{
-    PluginAssignmentRecord, PluginInstallationRecord, PluginTaskKind, PluginTaskRecord,
+    PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
+    PluginInstallationRecord, PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord,
     PluginTaskStatus, PluginVerificationStatus,
 };
 use time::OffsetDateTime;
@@ -18,12 +19,18 @@ pub struct StoredPluginInstallationRow {
     pub source_kind: String,
     pub trust_level: String,
     pub verification_status: String,
-    pub enabled: bool,
-    pub install_path: String,
+    pub desired_state: String,
+    pub artifact_status: String,
+    pub runtime_status: String,
+    pub availability_status: String,
+    pub package_path: Option<String>,
+    pub installed_path: String,
     pub checksum: Option<String>,
+    pub manifest_fingerprint: Option<String>,
     pub signature_status: Option<String>,
     pub signature_algorithm: Option<String>,
     pub signing_key_id: Option<String>,
+    pub last_load_error: Option<String>,
     pub metadata_json: serde_json::Value,
     pub created_by: Uuid,
     pub created_at: OffsetDateTime,
@@ -73,12 +80,18 @@ impl PgPluginMapper {
             source_kind: row.source_kind,
             trust_level: row.trust_level,
             verification_status: parse_verification_status(&row.verification_status)?,
-            enabled: row.enabled,
-            install_path: row.install_path,
+            desired_state: parse_desired_state(&row.desired_state)?,
+            artifact_status: parse_artifact_status(&row.artifact_status)?,
+            runtime_status: parse_runtime_status(&row.runtime_status)?,
+            availability_status: parse_availability_status(&row.availability_status)?,
+            package_path: row.package_path,
+            installed_path: row.installed_path,
             checksum: row.checksum,
+            manifest_fingerprint: row.manifest_fingerprint,
             signature_status: row.signature_status,
             signature_algorithm: row.signature_algorithm,
             signing_key_id: row.signing_key_id,
+            last_load_error: row.last_load_error,
             metadata_json: row.metadata_json,
             created_by: row.created_by,
             created_at: row.created_at,
@@ -124,6 +137,47 @@ pub fn parse_verification_status(value: &str) -> Result<PluginVerificationStatus
     }
 }
 
+pub fn parse_desired_state(value: &str) -> Result<PluginDesiredState> {
+    match value {
+        "disabled" => Ok(PluginDesiredState::Disabled),
+        "pending_restart" => Ok(PluginDesiredState::PendingRestart),
+        "active_requested" => Ok(PluginDesiredState::ActiveRequested),
+        _ => Err(anyhow!("unknown plugin desired_state: {value}")),
+    }
+}
+
+pub fn parse_artifact_status(value: &str) -> Result<PluginArtifactStatus> {
+    match value {
+        "missing" => Ok(PluginArtifactStatus::Missing),
+        "staged" => Ok(PluginArtifactStatus::Staged),
+        "ready" => Ok(PluginArtifactStatus::Ready),
+        "corrupted" => Ok(PluginArtifactStatus::Corrupted),
+        "install_incomplete" => Ok(PluginArtifactStatus::InstallIncomplete),
+        _ => Err(anyhow!("unknown plugin artifact_status: {value}")),
+    }
+}
+
+pub fn parse_runtime_status(value: &str) -> Result<PluginRuntimeStatus> {
+    match value {
+        "inactive" => Ok(PluginRuntimeStatus::Inactive),
+        "active" => Ok(PluginRuntimeStatus::Active),
+        "load_failed" => Ok(PluginRuntimeStatus::LoadFailed),
+        _ => Err(anyhow!("unknown plugin runtime_status: {value}")),
+    }
+}
+
+pub fn parse_availability_status(value: &str) -> Result<PluginAvailabilityStatus> {
+    match value {
+        "disabled" => Ok(PluginAvailabilityStatus::Disabled),
+        "pending_restart" => Ok(PluginAvailabilityStatus::PendingRestart),
+        "artifact_missing" => Ok(PluginAvailabilityStatus::ArtifactMissing),
+        "install_incomplete" => Ok(PluginAvailabilityStatus::InstallIncomplete),
+        "load_failed" => Ok(PluginAvailabilityStatus::LoadFailed),
+        "available" => Ok(PluginAvailabilityStatus::Available),
+        _ => Err(anyhow!("unknown plugin availability_status: {value}")),
+    }
+}
+
 pub fn parse_task_kind(value: &str) -> Result<PluginTaskKind> {
     match value {
         "install" => Ok(PluginTaskKind::Install),
@@ -140,9 +194,9 @@ pub fn parse_task_kind(value: &str) -> Result<PluginTaskKind> {
 
 pub fn parse_task_status(value: &str) -> Result<PluginTaskStatus> {
     match value {
-        "pending" => Ok(PluginTaskStatus::Pending),
+        "queued" => Ok(PluginTaskStatus::Queued),
         "running" => Ok(PluginTaskStatus::Running),
-        "success" => Ok(PluginTaskStatus::Success),
+        "succeeded" => Ok(PluginTaskStatus::Succeeded),
         "failed" => Ok(PluginTaskStatus::Failed),
         "canceled" => Ok(PluginTaskStatus::Canceled),
         "timed_out" => Ok(PluginTaskStatus::TimedOut),

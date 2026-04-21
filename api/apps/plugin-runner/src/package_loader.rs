@@ -53,7 +53,9 @@ impl PackageLoader {
         package_root.join("demo").exists() || package_root.join("scripts").exists()
     }
 
-    pub fn load_capability(package_root: impl AsRef<Path>) -> FrameworkResult<LoadedCapabilityPackage> {
+    pub fn load_capability(
+        package_root: impl AsRef<Path>,
+    ) -> FrameworkResult<LoadedCapabilityPackage> {
         let package_root = fs::canonicalize(package_root.as_ref()).map_err(|error| {
             PluginFrameworkError::invalid_provider_package(format!(
                 "cannot resolve package root: {error}"

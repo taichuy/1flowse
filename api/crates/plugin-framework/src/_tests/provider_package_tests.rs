@@ -158,7 +158,10 @@ fn provider_package_loads_manifest_v1_runtime_entry_and_static_models() {
         package.manifest.consumption_kind,
         PluginConsumptionKind::RuntimeExtension
     );
-    assert_eq!(package.runtime_entry(), fixture.path().join("bin/acme_openai_compatible-provider"));
+    assert_eq!(
+        package.runtime_entry(),
+        fixture.path().join("bin/acme_openai_compatible-provider")
+    );
     assert_eq!(package.provider.provider_code, "acme_openai_compatible");
     assert_eq!(package.provider.protocol, "openai_compatible");
     assert_eq!(

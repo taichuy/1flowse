@@ -1,15 +1,16 @@
 use async_trait::async_trait;
 use control_plane::ports::{OfficialPluginSourcePort, SessionStore};
 use domain::SessionRecord;
-use plugin_runner::provider_host::ProviderHost;
 use runtime_core::runtime_engine::RuntimeEngine;
 use storage_pg::PgControlPlaneStore;
 use storage_redis::{InMemorySessionStore, RedisSessionStore};
 use time::OffsetDateTime;
-use tokio::sync::RwLock;
 
 use crate::openapi_docs::ApiDocsRegistry;
-use crate::runtime_profile_client::{ApiRuntimeProfilePort, PluginRunnerSystemPort};
+use crate::{
+    provider_runtime::ApiRuntimeServices,
+    runtime_profile_client::{ApiRuntimeProfilePort, PluginRunnerSystemPort},
+};
 
 #[derive(Clone)]
 pub enum SessionStoreHandle {
@@ -52,13 +53,16 @@ impl SessionStore for SessionStoreHandle {
 pub struct ApiState {
     pub store: PgControlPlaneStore,
     pub runtime_engine: std::sync::Arc<RuntimeEngine>,
-    pub provider_runtime: std::sync::Arc<RwLock<ProviderHost>>,
+    pub provider_runtime: std::sync::Arc<ApiRuntimeServices>,
     pub process_started_at: OffsetDateTime,
     pub api_runtime_profile: std::sync::Arc<dyn ApiRuntimeProfilePort>,
     pub plugin_runner_system: std::sync::Arc<dyn PluginRunnerSystemPort>,
     pub official_plugin_source: std::sync::Arc<dyn OfficialPluginSourcePort>,
     pub provider_install_root: String,
     pub provider_secret_master_key: String,
+    pub host_extension_dropin_root: String,
+    pub allow_unverified_filesystem_dropins: bool,
+    pub allow_uploaded_host_extensions: bool,
     pub session_store: SessionStoreHandle,
     pub api_docs: std::sync::Arc<ApiDocsRegistry>,
     pub cookie_name: String,

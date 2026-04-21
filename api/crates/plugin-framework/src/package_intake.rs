@@ -14,7 +14,7 @@ use zip::ZipArchive;
 
 use crate::{
     error::PluginFrameworkError,
-    manifest_v1::PluginManifestV1,
+    manifest_v1::{parse_plugin_manifest, PluginManifestV1},
     provider_package::ProviderPackage,
 };
 
@@ -38,7 +38,6 @@ pub struct PackageIntakePolicy {
 pub struct PackageIntakeResult {
     pub extracted_root: PathBuf,
     pub manifest: PluginManifestV1,
-    pub package: ProviderPackage,
     pub source_kind: String,
     pub trust_level: String,
     pub signature_status: String,
@@ -93,25 +92,44 @@ pub async fn intake_package_bytes(
     policy: &PackageIntakePolicy,
 ) -> Result<PackageIntakeResult, PluginFrameworkError> {
     let extracted = safe_unpack_to_temp_dir(package_bytes, policy.original_filename.as_deref())?;
-    let package = match ProviderPackage::load_from_dir(&extracted.package_root) {
-        Ok(package) => package,
+    let manifest_path = extracted.package_root.join("manifest.yaml");
+    let manifest_raw = match fs::read_to_string(&manifest_path) {
+        Ok(raw) => raw,
+        Err(error) => {
+            let _ = fs::remove_dir_all(&extracted.temp_dir);
+            return Err(PluginFrameworkError::io(
+                Some(&manifest_path),
+                error.to_string(),
+            ));
+        }
+    };
+    let manifest = match parse_plugin_manifest(&manifest_raw) {
+        Ok(manifest) => manifest,
         Err(error) => {
             let _ = fs::remove_dir_all(&extracted.temp_dir);
             return Err(error);
         }
     };
+    match ProviderPackage::load_from_dir(&extracted.package_root) {
+        Ok(_) => {}
+        Err(error) if manifest.contract_version == "1flowbase.provider/v1" => {
+            let _ = fs::remove_dir_all(&extracted.temp_dir);
+            return Err(error);
+        }
+        Err(_) => {}
+    }
     let signature = match verify_official_release_signature(
         &extracted.package_root,
-        &package,
+        &manifest,
         package_bytes,
         policy,
     ) {
-            Ok(signature) => signature,
-            Err(error) => {
-                let _ = fs::remove_dir_all(&extracted.temp_dir);
-                return Err(error);
-            }
-        };
+        Ok(signature) => signature,
+        Err(error) => {
+            let _ = fs::remove_dir_all(&extracted.temp_dir);
+            return Err(error);
+        }
+    };
     if let Err(error) = reject_signature_required_failure(policy, &signature) {
         let _ = fs::remove_dir_all(&extracted.temp_dir);
         return Err(error);
@@ -119,8 +137,7 @@ pub async fn intake_package_bytes(
 
     Ok(PackageIntakeResult {
         extracted_root: extracted.package_root,
-        manifest: package.manifest.clone(),
-        package,
+        manifest,
         source_kind: policy.source_kind.clone(),
         trust_level: derive_trust_level(policy, &signature),
         signature_status: signature.status,
@@ -289,7 +306,7 @@ fn validate_relative_path(path: &Path) -> Result<(), PluginFrameworkError> {
 
 fn verify_official_release_signature(
     extracted_root: &Path,
-    package: &ProviderPackage,
+    manifest: &PluginManifestV1,
     package_bytes: &[u8],
     policy: &PackageIntakePolicy,
 ) -> Result<SignatureVerificationResult, PluginFrameworkError> {
@@ -353,7 +370,7 @@ fn verify_official_release_signature(
             signing_key_id: Some(release.signing_key_id),
         });
     }
-    validate_release_identity(&release, package)?;
+    validate_release_identity(&release, manifest)?;
 
     let trusted_key = match policy
         .trusted_public_keys
@@ -415,12 +432,12 @@ fn verify_official_release_signature(
 
 fn validate_release_identity(
     release: &OfficialReleaseDocument,
-    package: &ProviderPackage,
+    manifest: &PluginManifestV1,
 ) -> Result<(), PluginFrameworkError> {
-    if release.plugin_id != package.manifest.plugin_id
-        || release.provider_code != package.provider.provider_code
-        || release.version != package.manifest.version
-        || release.contract_version != package.manifest.contract_version
+    if release.plugin_id != manifest.plugin_id
+        || release.provider_code != plugin_code_from_plugin_id(manifest)?
+        || release.version != manifest.version
+        || release.contract_version != manifest.contract_version
     {
         return Err(PluginFrameworkError::invalid_provider_package(
             "official release metadata must match package manifest identity",
@@ -428,6 +445,20 @@ fn validate_release_identity(
     }
 
     Ok(())
+}
+
+fn plugin_code_from_plugin_id(manifest: &PluginManifestV1) -> Result<&str, PluginFrameworkError> {
+    let (plugin_code, version) = manifest.plugin_id.split_once('@').ok_or_else(|| {
+        PluginFrameworkError::invalid_provider_package(
+            "manifest.plugin_id must use <plugin_code>@<version>",
+        )
+    })?;
+    if plugin_code.trim().is_empty() || version.trim().is_empty() || version != manifest.version {
+        return Err(PluginFrameworkError::invalid_provider_package(
+            "manifest.plugin_id must use <plugin_code>@<version>",
+        ));
+    }
+    Ok(plugin_code)
 }
 
 fn parse_signature(bytes: &[u8]) -> Result<Signature, PluginFrameworkError> {

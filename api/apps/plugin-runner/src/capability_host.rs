@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use plugin_framework::{
-    error::{FrameworkResult, PluginFrameworkError},
-};
+use plugin_framework::error::{FrameworkResult, PluginFrameworkError};
 use serde::Serialize;
 use serde_json::{json, Value};
 

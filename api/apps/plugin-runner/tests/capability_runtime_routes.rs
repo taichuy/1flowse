@@ -299,5 +299,8 @@ async fn capability_runtime_routes_cover_validate_resolve_and_execute() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(execute_payload["output_payload"]["answer"], "echo:fixture_capability");
+    assert_eq!(
+        execute_payload["output_payload"]["answer"],
+        "echo:fixture_capability"
+    );
 }

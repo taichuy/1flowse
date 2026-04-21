@@ -6,10 +6,10 @@ pub mod auth;
 pub mod base;
 pub mod flow;
 pub mod model_provider;
-pub mod node_contribution;
-pub mod plugin_worker;
 pub mod modeling;
+pub mod node_contribution;
 pub mod orchestration;
+pub mod plugin_worker;
 pub mod resource;
 pub mod scope;
 
@@ -32,21 +32,22 @@ pub use flow::{
 pub use model_provider::{
     ModelProviderCatalogCacheRecord, ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource,
     ModelProviderDiscoveryMode, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
-    ModelProviderSecretRecord, ModelProviderValidationStatus, PluginAssignmentRecord,
-    PluginInstallationRecord, PluginTaskKind, PluginTaskRecord, PluginTaskStatus,
+    ModelProviderSecretRecord, ModelProviderValidationStatus, PluginArtifactStatus,
+    PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState, PluginInstallationRecord,
+    PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord, PluginTaskStatus,
     PluginVerificationStatus,
 };
-pub use node_contribution::{NodeContributionDependencyStatus, NodeContributionRegistryEntry};
-pub use plugin_worker::{PluginWorkerLeaseRecord, PluginWorkerStatus};
 pub use modeling::{
     DataModelScopeKind, MetadataAvailabilityStatus, ModelDefinitionRecord, ModelFieldKind,
     ModelFieldRecord,
 };
+pub use node_contribution::{NodeContributionDependencyStatus, NodeContributionRegistryEntry};
 pub use orchestration::{
     ApplicationRunDetail, ApplicationRunSummary, CallbackTaskRecord, CallbackTaskStatus,
     CheckpointRecord, CompiledPlanRecord, FlowRunMode, FlowRunRecord, FlowRunStatus,
     NodeDebugPreviewResult, NodeLastRun, NodeRunRecord, NodeRunStatus, RunEventRecord,
 };
+pub use plugin_worker::{PluginWorkerLeaseRecord, PluginWorkerStatus};
 pub use resource::runtime_model_resource_code;
 pub use scope::{ScopeContext, TenantRecord, WorkspaceRecord, SYSTEM_SCOPE_ID};
 

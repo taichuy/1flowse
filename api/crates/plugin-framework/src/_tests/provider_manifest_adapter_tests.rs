@@ -103,7 +103,10 @@ config_schema:
         "bin/acme_openai_compatible-provider",
         "#!/usr/bin/env bash\nexit 0\n",
     );
-    fixture.write("i18n/en_US.json", "{ \"plugin\": { \"label\": \"Acme\" } }\n");
+    fixture.write(
+        "i18n/en_US.json",
+        "{ \"plugin\": { \"label\": \"Acme\" } }\n",
+    );
     fixture
 }
 
@@ -132,9 +135,9 @@ fn provider_package_rejects_provider_code_prefix_mismatch() {
 
     let error = ProviderPackage::load_from_dir(fixture.path()).unwrap_err();
 
-    assert!(error
-        .to_string()
-        .contains("provider_code different_provider does not match plugin_id prefix acme_openai_compatible"));
+    assert!(error.to_string().contains(
+        "provider_code different_provider does not match plugin_id prefix acme_openai_compatible"
+    ));
 }
 
 #[test]

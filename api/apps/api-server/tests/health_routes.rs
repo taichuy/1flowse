@@ -3,6 +3,7 @@ use api_server::{
     app_state::{ApiState, SessionStoreHandle},
     app_with_state_and_config,
     config::{ApiConfig, ApiEnvironment},
+    provider_runtime::ApiRuntimeServices,
     runtime_profile_client::{HostApiRuntimeProfileCollector, PluginRunnerSystemPort},
 };
 use argon2::{
@@ -132,8 +133,13 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
         std::sync::Arc::new(ApiState {
             store,
             runtime_engine,
-            provider_runtime: std::sync::Arc::new(RwLock::new(
-                plugin_runner::provider_host::ProviderHost::default(),
+            provider_runtime: std::sync::Arc::new(ApiRuntimeServices::new(
+                std::sync::Arc::new(RwLock::new(
+                    plugin_runner::provider_host::ProviderHost::default(),
+                )),
+                std::sync::Arc::new(RwLock::new(
+                    plugin_runner::capability_host::CapabilityHost::default(),
+                )),
             )),
             process_started_at: OffsetDateTime::now_utc(),
             api_runtime_profile: std::sync::Arc::new(HostApiRuntimeProfileCollector),
@@ -141,6 +147,9 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
             official_plugin_source: std::sync::Arc::new(NoopOfficialPluginSource),
             provider_install_root: config.provider_install_root.clone(),
             provider_secret_master_key: config.provider_secret_master_key.clone(),
+            host_extension_dropin_root: config.host_extension_dropin_root.clone(),
+            allow_unverified_filesystem_dropins: config.allow_unverified_filesystem_dropins,
+            allow_uploaded_host_extensions: config.allow_uploaded_host_extensions,
             session_store: SessionStoreHandle::InMemory(
                 storage_redis::InMemorySessionStore::default(),
             ),

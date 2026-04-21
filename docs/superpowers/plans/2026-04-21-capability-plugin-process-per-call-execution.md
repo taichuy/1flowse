@@ -275,7 +275,7 @@ git commit -m "feat: add capability plugin runner endpoints"
 - Modify: `api/apps/api-server/src/provider_runtime.rs`
 - Modify: `api/apps/api-server/src/lib.rs`
 
-- [ ] **Step 1: Write failing orchestration tests for plugin nodes**
+- [x] **Step 1: Write failing orchestration tests for plugin nodes**
 
 Add cases like:
 
@@ -289,7 +289,7 @@ async fn execution_engine_routes_plugin_node_to_capability_runtime() {
 }
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -302,7 +302,7 @@ Expected:
 
 - FAIL because the compiler and runtime only understand built-in node execution branches.
 
-- [ ] **Step 3: Extend compiled-plan and execution dispatch**
+- [x] **Step 3: Extend compiled-plan and execution dispatch**
 
 Introduce a compiled node reference shaped like:
 
@@ -325,7 +325,7 @@ match node.node_type.as_str() {
 }
 ```
 
-- [ ] **Step 4: Re-run orchestration verification**
+- [x] **Step 4: Re-run orchestration verification**
 
 Run:
 
@@ -339,7 +339,7 @@ Expected:
 
 - PASS with plugin-contributed action nodes executing through `CapabilityPluginRuntimePort` and recording worker lease snapshots.
 
-- [ ] **Step 5: Commit the orchestration execute path**
+- [x] **Step 5: Commit the orchestration execute path**
 
 ```bash
 git add api/crates/control-plane/src/orchestration_runtime.rs api/crates/orchestration-runtime/src/compiler.rs api/crates/orchestration-runtime/src/compiled_plan.rs api/crates/orchestration-runtime/src/execution_engine.rs api/apps/api-server/src/provider_runtime.rs api/apps/api-server/src/lib.rs

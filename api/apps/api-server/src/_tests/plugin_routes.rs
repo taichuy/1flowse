@@ -239,6 +239,46 @@ capabilities:
     .unwrap();
 }
 
+fn create_host_extension_package(root: &Path, version: &str) {
+    fs::create_dir_all(root.join("bin")).unwrap();
+    fs::write(
+        root.join("manifest.yaml"),
+        format!(
+            r#"manifest_version: 1
+plugin_id: fixture_host_extension@{version}
+version: {version}
+vendor: 1flowbase tests
+display_name: Fixture Host Extension
+description: Fixture startup-only host extension
+icon: icon.svg
+source_kind: uploaded
+trust_level: unverified
+consumption_kind: host_extension
+execution_mode: in_process
+slot_codes:
+  - host_bootstrap
+binding_targets: []
+selection_mode: auto_activate
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.host_extension/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: native_host
+  entry: bin/fixture_host_extension
+  limits: {{}}
+"#
+        ),
+    )
+    .unwrap();
+    fs::write(root.join("bin/fixture_host_extension"), "host extension").unwrap();
+}
+
 fn build_signed_openai_upload_package(version: &str) -> Vec<u8> {
     let package_root = std::env::temp_dir().join(format!(
         "plugin-route-upload-openai-{}",
@@ -385,12 +425,31 @@ async fn plugin_routes_install_enable_assign_and_query_tasks() {
         install_payload["data"]["installation"]["signature_status"],
         "unsigned"
     );
-    let install_path = install_payload["data"]["installation"]["install_path"]
+    assert_eq!(
+        install_payload["data"]["installation"]["desired_state"],
+        "disabled"
+    );
+    assert_eq!(
+        install_payload["data"]["installation"]["artifact_status"],
+        "ready"
+    );
+    assert_eq!(
+        install_payload["data"]["installation"]["runtime_status"],
+        "inactive"
+    );
+    assert_eq!(
+        install_payload["data"]["installation"]["availability_status"],
+        "disabled"
+    );
+    assert!(install_payload["data"]["installation"]["package_path"].is_null());
+    assert!(install_payload["data"]["installation"]["manifest_fingerprint"].is_string());
+    assert!(install_payload["data"]["installation"]["last_load_error"].is_null());
+    let installed_path = install_payload["data"]["installation"]["installed_path"]
         .as_str()
         .unwrap()
         .to_string();
-    assert!(!Path::new(&install_path).join("demo").exists());
-    assert!(!Path::new(&install_path).join("scripts").exists());
+    assert!(!Path::new(&installed_path).join("demo").exists());
+    assert!(!Path::new(&installed_path).join("scripts").exists());
 
     let enable = app
         .clone()
@@ -663,6 +722,132 @@ async fn plugin_routes_install_upload_accepts_multipart_package() {
         payload["data"]["installation"]["signature_status"],
         "verified"
     );
+}
+
+#[tokio::test]
+async fn plugin_routes_install_upload_persists_host_extension_as_pending_restart() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let boundary = "----1flowbase-host-extension-boundary";
+    let package_root =
+        std::env::temp_dir().join(format!("host-extension-route-{}", uuid::Uuid::now_v7()));
+    create_host_extension_package(&package_root, "0.1.0");
+    let package_bytes = pack_tar_gz(&package_root);
+    let body = build_upload_body(
+        boundary,
+        "fixture_host_extension-0.1.0.1flowbasepkg",
+        &package_bytes,
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/plugins/install-upload")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header(
+                    "content-type",
+                    format!("multipart/form-data; boundary={boundary}"),
+                )
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let payload: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(
+        payload["data"]["installation"]["desired_state"],
+        "pending_restart"
+    );
+    assert_eq!(
+        payload["data"]["installation"]["runtime_status"],
+        "inactive"
+    );
+    assert_eq!(
+        payload["data"]["installation"]["availability_status"],
+        "pending_restart"
+    );
+    assert_eq!(
+        payload["data"]["task"]["status_message"],
+        "installed; restart required"
+    );
+
+    let _ = fs::remove_dir_all(package_root);
+}
+
+#[tokio::test]
+async fn plugin_routes_forbid_non_root_host_extension_upload() {
+    let app = test_app().await;
+    let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    create_role(&app, &root_cookie, &root_csrf, "plugin_manager").await;
+    replace_role_permissions(
+        &app,
+        &root_cookie,
+        &root_csrf,
+        "plugin_manager",
+        &["plugin_config.configure.all"],
+    )
+    .await;
+    let member_id = create_member(
+        &app,
+        &root_cookie,
+        &root_csrf,
+        "plugin-manager",
+        "change-me",
+    )
+    .await;
+    replace_member_roles(
+        &app,
+        &root_cookie,
+        &root_csrf,
+        &member_id,
+        &["plugin_manager"],
+    )
+    .await;
+    let (manager_cookie, manager_csrf) =
+        login_and_capture_cookie(&app, "plugin-manager", "change-me").await;
+
+    let boundary = "----1flowbase-host-extension-forbidden-boundary";
+    let package_root = std::env::temp_dir().join(format!(
+        "host-extension-route-forbidden-{}",
+        uuid::Uuid::now_v7()
+    ));
+    create_host_extension_package(&package_root, "0.1.0");
+    let package_bytes = pack_tar_gz(&package_root);
+    let body = build_upload_body(
+        boundary,
+        "fixture_host_extension-0.1.0.1flowbasepkg",
+        &package_bytes,
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/plugins/install-upload")
+                .header("cookie", &manager_cookie)
+                .header("x-csrf-token", &manager_csrf)
+                .header(
+                    "content-type",
+                    format!("multipart/form-data; boundary={boundary}"),
+                )
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+    let _ = fs::remove_dir_all(package_root);
 }
 
 #[tokio::test]

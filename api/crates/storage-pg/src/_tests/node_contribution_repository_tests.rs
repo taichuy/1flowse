@@ -2,7 +2,10 @@ use control_plane::ports::{
     CreatePluginAssignmentInput, NodeContributionRegistryInput, NodeContributionRepository,
     PluginRepository, ReplaceInstallationNodeContributionsInput, UpsertPluginInstallationInput,
 };
-use domain::{NodeContributionDependencyStatus, PluginVerificationStatus};
+use domain::{
+    NodeContributionDependencyStatus, PluginArtifactStatus, PluginAvailabilityStatus,
+    PluginDesiredState, PluginRuntimeStatus, PluginVerificationStatus,
+};
 use serde_json::json;
 use sqlx::PgPool;
 use storage_pg::{connect, run_migrations, PgControlPlaneStore};
@@ -76,6 +79,16 @@ async fn insert_installation(
     version: &str,
     enabled: bool,
 ) -> domain::PluginInstallationRecord {
+    let desired_state = if enabled {
+        PluginDesiredState::ActiveRequested
+    } else {
+        PluginDesiredState::Disabled
+    };
+    let availability_status = if enabled {
+        PluginAvailabilityStatus::InstallIncomplete
+    } else {
+        PluginAvailabilityStatus::Disabled
+    };
     PluginRepository::upsert_installation(
         store,
         &UpsertPluginInstallationInput {
@@ -89,12 +102,18 @@ async fn insert_installation(
             source_kind: "uploaded".into(),
             trust_level: "unverified".into(),
             verification_status: PluginVerificationStatus::Valid,
-            enabled,
-            install_path: format!("/tmp/plugins/{provider_code}/{version}"),
+            desired_state,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: PluginRuntimeStatus::Inactive,
+            availability_status,
+            package_path: None,
+            installed_path: format!("/tmp/plugins/{provider_code}/{version}"),
             checksum: None,
+            manifest_fingerprint: None,
             signature_status: None,
             signature_algorithm: None,
             signing_key_id: None,
+            last_load_error: None,
             metadata_json: json!({}),
             actor_user_id: actor_id,
         },

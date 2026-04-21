@@ -111,7 +111,7 @@
 - Modify: `../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible/provider/openai_compatible.yaml`
 - Modify: `../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible/readme/README_en_US.md`
 
-- [ ] **Step 1: Write failing sibling-repo tests for the new taxonomy paths, README hierarchy, and release detection**
+- [x] **Step 1: Write failing sibling-repo tests for the new taxonomy paths, README hierarchy, and release detection**
 
 Update these tests in `../1flowbase-official-plugins/scripts/_tests/`:
 
@@ -176,7 +176,7 @@ test('README documents host, runtime, and capability plugin directories', () => 
 });
 ```
 
-- [ ] **Step 2: Run the sibling-repo tests to capture the RED baseline**
+- [x] **Step 2: Run the sibling-repo tests to capture the RED baseline**
 
 Run:
 
@@ -188,7 +188,7 @@ Expected:
 
 - FAIL because the sibling repo still scans `models/*`, release detection still watches `models/**/manifest.yaml`, and the root README has no three-kind directory taxonomy.
 
-- [ ] **Step 3: Create the three top-level directory pages and move the existing provider example under the runtime-extension hierarchy**
+- [x] **Step 3: Create the three top-level directory pages and move the existing provider example under the runtime-extension hierarchy**
 
 Create these directory pages:
 
@@ -239,7 +239,7 @@ scripts/
 .github/workflows/
 ```
 
-- [ ] **Step 4: Update sibling-repo scripts, workflows, and example docs to use the new canonical path**
+- [x] **Step 4: Update sibling-repo scripts, workflows, and example docs to use the new canonical path**
 
 In `../1flowbase-official-plugins/scripts/detect-version-releases.mjs`:
 
@@ -305,7 +305,7 @@ runtime-extensions/model-providers/openai_compatible
 
 `openai_compatible/readme/README_en_US.md` should explicitly say it is the canonical official runtime-extension example for model providers.
 
-- [ ] **Step 5: Re-run sibling-repo tests and whitespace checks**
+- [x] **Step 5: Re-run sibling-repo tests and whitespace checks**
 
 Run:
 
@@ -318,7 +318,7 @@ Expected:
 
 - PASS with the official repo exposing three top-level plugin categories and `openai_compatible` discoverable under `runtime-extensions/model-providers/`.
 
-- [ ] **Step 6: Commit the sibling-repo taxonomy and example move**
+- [x] **Step 6: Commit the sibling-repo taxonomy and example move**
 
 Run:
 
@@ -338,7 +338,7 @@ git -C ../1flowbase-official-plugins commit -m "feat: align official plugin repo
 - Test: `api/crates/storage-pg/src/_tests/plugin_repository_tests.rs`
 - Test: `api/crates/storage-pg/src/_tests/migration_smoke.rs`
 
-- [ ] **Step 1: Write failing storage tests for lifecycle fields and renamed task terminal states**
+- [x] **Step 1: Write failing storage tests for lifecycle fields and renamed task terminal states**
 
 Add tests like these to `api/crates/storage-pg/src/_tests/plugin_repository_tests.rs`:
 
@@ -417,7 +417,7 @@ async fn plugin_repository_maps_succeeded_task_status() {
 }
 ```
 
-- [ ] **Step 2: Run the storage tests to capture the RED baseline**
+- [x] **Step 2: Run the storage tests to capture the RED baseline**
 
 Run:
 
@@ -429,7 +429,7 @@ Expected:
 
 - FAIL because `PluginInstallationRecord`, repository inputs, SQL mappers, and task status enums still use `enabled`, `install_path`, `pending`, and `success`.
 
-- [ ] **Step 3: Add the migration that backfills lifecycle snapshots and replaces task terminal strings**
+- [x] **Step 3: Add the migration that backfills lifecycle snapshots and replaces task terminal strings**
 
 Create `api/crates/storage-pg/migrations/20260420203000_add_plugin_lifecycle_snapshots.sql` with:
 
@@ -484,7 +484,7 @@ alter table plugin_tasks
         check (status in ('queued', 'running', 'succeeded', 'failed', 'canceled', 'timed_out'));
 ```
 
-- [ ] **Step 4: Update domain and repository contracts so legacy booleans disappear from the write path**
+- [x] **Step 4: Update domain and repository contracts so legacy booleans disappear from the write path**
 
 Apply these shapes:
 
@@ -581,7 +581,7 @@ pub struct UpdatePluginRuntimeSnapshotInput {
 
 Repository SQL must insert/select/update the new columns and drop every read of `enabled` / `install_path`.
 
-- [ ] **Step 5: Re-run storage tests and migration smoke**
+- [x] **Step 5: Re-run storage tests and migration smoke**
 
 Run:
 
@@ -594,7 +594,7 @@ Expected:
 
 - PASS with lifecycle fields persisted and task statuses stored as `queued` / `succeeded`.
 
-- [ ] **Step 6: Commit the lifecycle storage contract**
+- [x] **Step 6: Commit the lifecycle storage contract**
 
 Run:
 
@@ -611,7 +611,7 @@ git commit -m "feat: add plugin lifecycle snapshot storage"
 - Modify: `api/crates/plugin-framework/src/lib.rs`
 - Modify: `api/crates/plugin-framework/src/provider_package.rs`
 
-- [ ] **Step 1: Write failing reconcile tests for ready, missing, and corrupted artifacts**
+- [x] **Step 1: Write failing reconcile tests for ready, missing, and corrupted artifacts**
 
 Add tests like these to `api/crates/plugin-framework/src/_tests/artifact_reconcile_tests.rs`:
 
@@ -670,7 +670,7 @@ fn reconcile_provider_artifact_reports_corrupted_when_manifest_fingerprint_drift
 }
 ```
 
-- [ ] **Step 2: Run `plugin-framework` tests to capture the RED baseline**
+- [x] **Step 2: Run `plugin-framework` tests to capture the RED baseline**
 
 Run:
 
@@ -682,7 +682,7 @@ Expected:
 
 - FAIL because the reconcile module, outcome enum, and manifest fingerprint helper do not exist.
 
-- [ ] **Step 3: Implement the reconcile helper and manifest fingerprint function**
+- [x] **Step 3: Implement the reconcile helper and manifest fingerprint function**
 
 Create `api/crates/plugin-framework/src/artifact_reconcile.rs` with:
 
@@ -770,7 +770,7 @@ pub fn reconcile_provider_artifact(
 }
 ```
 
-- [ ] **Step 4: Export the module and reuse the helper from package-loading code**
+- [x] **Step 4: Export the module and reuse the helper from package-loading code**
 
 Wire `api/crates/plugin-framework/src/lib.rs`:
 
@@ -790,7 +790,7 @@ impl ProviderPackage {
 }
 ```
 
-- [ ] **Step 5: Re-run `plugin-framework` reconcile tests**
+- [x] **Step 5: Re-run `plugin-framework` reconcile tests**
 
 Run:
 
@@ -802,7 +802,7 @@ Expected:
 
 - PASS with explicit outcomes for `missing`, `install_incomplete`, `ready`, and `corrupted`.
 
-- [ ] **Step 6: Commit the reconcile helper**
+- [x] **Step 6: Commit the reconcile helper**
 
 Run:
 
@@ -824,7 +824,7 @@ git commit -m "feat: add plugin artifact reconcile helper"
 - Test: `api/crates/control-plane/src/_tests/model_provider_service_tests.rs`
 - Test: `api/crates/control-plane/src/_tests/orchestration_runtime_service_tests.rs`
 
-- [ ] **Step 1: Write failing control-plane tests for derived availability and reconcile downgrade**
+- [x] **Step 1: Write failing control-plane tests for derived availability and reconcile downgrade**
 
 Add tests like these:
 
@@ -898,7 +898,7 @@ async fn orchestration_runtime_rejects_non_available_installation_after_reconcil
 }
 ```
 
-- [ ] **Step 2: Run control-plane tests to capture the RED baseline**
+- [x] **Step 2: Run control-plane tests to capture the RED baseline**
 
 Run:
 
@@ -912,7 +912,7 @@ Expected:
 
 - FAIL because services still persist `enabled`, load from `install_path`, skip reconcile, and filter availability with a boolean.
 
-- [ ] **Step 3: Implement a shared lifecycle derivation helper**
+- [x] **Step 3: Implement a shared lifecycle derivation helper**
 
 Create `api/crates/control-plane/src/plugin_lifecycle.rs` with:
 
@@ -950,7 +950,7 @@ pub fn derive_availability_status(
 }
 ```
 
-- [ ] **Step 4: Rework install, enable, list, and invoke paths to reconcile before load and to write only owned lifecycle fields**
+- [x] **Step 4: Rework install, enable, list, and invoke paths to reconcile before load and to write only owned lifecycle fields**
 
 Update the write path in `api/crates/control-plane/src/plugin_management.rs`:
 
@@ -1046,7 +1046,7 @@ let runtime_status = match self.runtime.ensure_loaded(&installation).await {
 };
 ```
 
-- [ ] **Step 5: Re-run control-plane tests**
+- [x] **Step 5: Re-run control-plane tests**
 
 Run:
 
@@ -1060,7 +1060,7 @@ Expected:
 
 - PASS with `availability_status` derived from the three owned layers and stale artifacts downgraded before load.
 
-- [ ] **Step 6: Commit the control-plane lifecycle rewrite**
+- [x] **Step 6: Commit the control-plane lifecycle rewrite**
 
 Run:
 
@@ -1091,7 +1091,7 @@ git commit -m "feat: derive plugin availability in control plane"
 - Modify: `web/app/src/features/settings/components/model-providers/PluginVersionManagementModal.tsx`
 - Test: `web/app/src/features/settings/_tests/model-providers-page.test.tsx`
 
-- [ ] **Step 1: Write failing route and page tests for lifecycle fields and status tags**
+- [x] **Step 1: Write failing route and page tests for lifecycle fields and status tags**
 
 Add tests like these:
 
@@ -1153,7 +1153,7 @@ test('renders pending restart and load failed lifecycle tags instead of enabled 
 });
 ```
 
-- [ ] **Step 2: Run API route tests and settings-page tests to capture RED**
+- [x] **Step 2: Run API route tests and settings-page tests to capture RED**
 
 Run:
 
@@ -1167,7 +1167,7 @@ Expected:
 
 - FAIL because API DTOs still expose `enabled` / `install_path`, startup does not reconcile stale installations, and the settings page still renders `已启用`.
 
-- [ ] **Step 3: Reconcile installations on startup and expose lifecycle DTOs through API routes**
+- [x] **Step 3: Reconcile installations on startup and expose lifecycle DTOs through API routes**
 
 In `api/apps/api-server/src/lib.rs`, call a system reconcile before serving routes:
 
@@ -1258,7 +1258,7 @@ pub struct ModelProviderCatalogEntryResponse {
 }
 ```
 
-- [ ] **Step 4: Update browser DTOs and render lifecycle labels through a shared formatter**
+- [x] **Step 4: Update browser DTOs and render lifecycle labels through a shared formatter**
 
 Create `web/app/src/features/settings/components/model-providers/plugin-installation-status.ts`:
 
@@ -1317,7 +1317,7 @@ Use the helper in settings components so:
 - `PluginVersionManagementModal` shows lifecycle state beside each installed version
 - `OfficialPluginInstallPanel` keeps source/trust labels but no longer implies “assigned == enabled”
 
-- [ ] **Step 5: Re-run route tests and settings-page tests**
+- [x] **Step 5: Re-run route tests and settings-page tests**
 
 Run:
 
@@ -1331,7 +1331,7 @@ Expected:
 
 - PASS with lifecycle DTOs in API responses, startup reconcile in place, and the settings page rendering derived availability labels instead of `enabled`.
 
-- [ ] **Step 6: Commit the API and UI lifecycle surface**
+- [x] **Step 6: Commit the API and UI lifecycle surface**
 
 Run:
 

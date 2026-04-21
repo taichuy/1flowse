@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fs, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -17,7 +17,8 @@ use crate::{
         AuthRepository, CreateModelProviderInstanceInput, CreatePluginAssignmentInput,
         CreatePluginTaskInput, ModelProviderRepository, PluginRepository,
         ProviderRuntimeInvocationOutput, ProviderRuntimePort, ReassignModelProviderInstancesInput,
-        UpdateModelProviderInstanceInput, UpdatePluginInstallationEnabledInput,
+        UpdateModelProviderInstanceInput, UpdatePluginArtifactSnapshotInput,
+        UpdatePluginDesiredStateInput, UpdatePluginRuntimeSnapshotInput,
         UpdatePluginTaskStatusInput, UpdateProfileInput, UpsertModelProviderCatalogCacheInput,
         UpsertModelProviderSecretInput, UpsertPluginInstallationInput,
     },
@@ -26,7 +27,8 @@ use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, ModelProviderCatalogCacheRecord,
     ModelProviderCatalogRefreshStatus, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
     ModelProviderSecretRecord, ModelProviderValidationStatus, PermissionDefinition,
-    PluginAssignmentRecord, PluginInstallationRecord, PluginTaskRecord, PluginVerificationStatus,
+    PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
+    PluginInstallationRecord, PluginRuntimeStatus, PluginTaskRecord, PluginVerificationStatus,
     ScopeContext, UserRecord,
 };
 use plugin_framework::provider_contract::{
@@ -64,7 +66,12 @@ impl MemoryModelProviderRepository {
         }
     }
 
-    async fn seed_installation(&self, install_path: &str, enabled: bool, assigned: bool) -> Uuid {
+    async fn seed_installation(
+        &self,
+        install_path: &str,
+        desired_state: PluginDesiredState,
+        assigned: bool,
+    ) -> Uuid {
         let installation_id = Uuid::now_v7();
         let installation = PluginInstallationRecord {
             id: installation_id,
@@ -77,12 +84,26 @@ impl MemoryModelProviderRepository {
             source_kind: "uploaded".to_string(),
             trust_level: "unverified".to_string(),
             verification_status: PluginVerificationStatus::Valid,
-            enabled,
-            install_path: install_path.to_string(),
+            desired_state,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: if matches!(desired_state, PluginDesiredState::Disabled) {
+                PluginRuntimeStatus::Inactive
+            } else {
+                PluginRuntimeStatus::Active
+            },
+            availability_status: if matches!(desired_state, PluginDesiredState::Disabled) {
+                PluginAvailabilityStatus::Disabled
+            } else {
+                PluginAvailabilityStatus::Available
+            },
+            package_path: None,
+            installed_path: install_path.to_string(),
             checksum: None,
+            manifest_fingerprint: None,
             signature_status: None,
             signature_algorithm: None,
             signing_key_id: None,
+            last_load_error: None,
             metadata_json: json!({}),
             created_by: self.actor.user_id,
             created_at: OffsetDateTime::now_utc(),
@@ -128,6 +149,15 @@ impl MemoryModelProviderRepository {
 
     async fn audit_events(&self) -> Vec<String> {
         self.audit_events.read().await.clone()
+    }
+
+    async fn installation(&self, installation_id: Uuid) -> PluginInstallationRecord {
+        self.installations
+            .read()
+            .await
+            .get(&installation_id)
+            .cloned()
+            .expect("installation should exist for test")
     }
 }
 
@@ -223,12 +253,18 @@ impl PluginRepository for MemoryModelProviderRepository {
             source_kind: input.source_kind.clone(),
             trust_level: input.trust_level.clone(),
             verification_status: input.verification_status,
-            enabled: input.enabled,
-            install_path: input.install_path.clone(),
+            desired_state: input.desired_state,
+            artifact_status: input.artifact_status,
+            runtime_status: input.runtime_status,
+            availability_status: input.availability_status,
+            package_path: input.package_path.clone(),
+            installed_path: input.installed_path.clone(),
             checksum: input.checksum.clone(),
+            manifest_fingerprint: input.manifest_fingerprint.clone(),
             signature_status: input.signature_status.clone(),
             signature_algorithm: input.signature_algorithm.clone(),
             signing_key_id: input.signing_key_id.clone(),
+            last_load_error: input.last_load_error.clone(),
             metadata_json: input.metadata_json.clone(),
             created_by: input.actor_user_id,
             created_at: OffsetDateTime::now_utc(),
@@ -257,15 +293,63 @@ impl PluginRepository for MemoryModelProviderRepository {
         Ok(self.installations.read().await.values().cloned().collect())
     }
 
-    async fn update_installation_enabled(
+    async fn list_pending_restart_host_extensions(&self) -> Result<Vec<PluginInstallationRecord>> {
+        Ok(self
+            .installations
+            .read()
+            .await
+            .values()
+            .filter(|installation| {
+                matches!(
+                    installation.desired_state,
+                    PluginDesiredState::PendingRestart
+                )
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn update_desired_state(
         &self,
-        input: &UpdatePluginInstallationEnabledInput,
+        input: &UpdatePluginDesiredStateInput,
     ) -> Result<PluginInstallationRecord> {
         let mut installations = self.installations.write().await;
         let installation = installations
             .get_mut(&input.installation_id)
             .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
-        installation.enabled = input.enabled;
+        installation.desired_state = input.desired_state;
+        installation.availability_status = input.availability_status;
+        Ok(installation.clone())
+    }
+
+    async fn update_artifact_snapshot(
+        &self,
+        input: &UpdatePluginArtifactSnapshotInput,
+    ) -> Result<PluginInstallationRecord> {
+        let mut installations = self.installations.write().await;
+        let installation = installations
+            .get_mut(&input.installation_id)
+            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        installation.artifact_status = input.artifact_status;
+        installation.availability_status = input.availability_status;
+        installation.package_path = input.package_path.clone();
+        installation.installed_path = input.installed_path.clone();
+        installation.checksum = input.checksum.clone();
+        installation.manifest_fingerprint = input.manifest_fingerprint.clone();
+        Ok(installation.clone())
+    }
+
+    async fn update_runtime_snapshot(
+        &self,
+        input: &UpdatePluginRuntimeSnapshotInput,
+    ) -> Result<PluginInstallationRecord> {
+        let mut installations = self.installations.write().await;
+        let installation = installations
+            .get_mut(&input.installation_id)
+            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        installation.runtime_status = input.runtime_status;
+        installation.availability_status = input.availability_status;
+        installation.last_load_error = input.last_load_error.clone();
         Ok(installation.clone())
     }
 
@@ -634,7 +718,11 @@ async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
     let package_root = std::env::temp_dir().join(format!("provider-model-{}", Uuid::now_v7()));
     create_provider_fixture(&package_root);
     let installation_id = repository
-        .seed_installation(&package_root.display().to_string(), true, true)
+        .seed_installation(
+            &package_root.display().to_string(),
+            PluginDesiredState::ActiveRequested,
+            true,
+        )
         .await;
 
     let service =
@@ -763,7 +851,11 @@ async fn list_catalog_returns_i18n_namespace_and_keys() {
     let package_root = std::env::temp_dir().join(format!("provider-catalog-{}", Uuid::now_v7()));
     create_provider_fixture(&package_root);
     repository
-        .seed_installation(&package_root.display().to_string(), true, true)
+        .seed_installation(
+            &package_root.display().to_string(),
+            PluginDesiredState::ActiveRequested,
+            true,
+        )
         .await;
     let service = ModelProviderService::new(
         repository.clone(),
@@ -789,6 +881,47 @@ async fn list_catalog_returns_i18n_namespace_and_keys() {
 }
 
 #[tokio::test]
+async fn list_catalog_reconciles_missing_artifacts_before_returning_entries() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryModelProviderRepository::new(actor_with_permissions(
+        workspace_id,
+        &["state_model.view.all"],
+    ));
+    let package_root =
+        std::env::temp_dir().join(format!("provider-catalog-missing-{}", Uuid::now_v7()));
+    create_provider_fixture(&package_root);
+    let installation_id = repository
+        .seed_installation(
+            &package_root.display().to_string(),
+            PluginDesiredState::ActiveRequested,
+            true,
+        )
+        .await;
+    fs::remove_dir_all(&package_root).unwrap();
+    let service = ModelProviderService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        "provider-secret-master-key",
+    );
+
+    let catalog = service
+        .list_catalog(
+            repository.actor.user_id,
+            RequestedLocales::new("zh_Hans", "en_US"),
+        )
+        .await
+        .unwrap();
+    let installation = repository.installation(installation_id).await;
+
+    assert!(catalog.entries.is_empty());
+    assert_eq!(installation.artifact_status, PluginArtifactStatus::Missing);
+    assert_eq!(
+        installation.availability_status,
+        PluginAvailabilityStatus::ArtifactMissing
+    );
+}
+
+#[tokio::test]
 async fn model_provider_service_enforces_permissions_and_audits_delete_conflict() {
     let workspace_id = Uuid::now_v7();
     let manager_repository = MemoryModelProviderRepository::new(actor_with_permissions(
@@ -798,7 +931,11 @@ async fn model_provider_service_enforces_permissions_and_audits_delete_conflict(
     let package_root = std::env::temp_dir().join(format!("provider-model-{}", Uuid::now_v7()));
     create_provider_fixture(&package_root);
     let installation_id = manager_repository
-        .seed_installation(&package_root.display().to_string(), true, true)
+        .seed_installation(
+            &package_root.display().to_string(),
+            PluginDesiredState::ActiveRequested,
+            true,
+        )
         .await;
     let manager_service = ModelProviderService::new(
         manager_repository.clone(),
@@ -881,7 +1018,11 @@ async fn model_provider_service_rejects_validating_disabled_instance() {
         std::env::temp_dir().join(format!("provider-model-disabled-{}", Uuid::now_v7()));
     create_provider_fixture(&package_root);
     let installation_id = repository
-        .seed_installation(&package_root.display().to_string(), true, true)
+        .seed_installation(
+            &package_root.display().to_string(),
+            PluginDesiredState::ActiveRequested,
+            true,
+        )
         .await;
     let service = ModelProviderService::new(
         repository.clone(),

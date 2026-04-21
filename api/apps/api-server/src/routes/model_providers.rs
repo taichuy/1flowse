@@ -155,7 +155,8 @@ pub struct ModelProviderCatalogEntryResponse {
     pub default_base_url: Option<String>,
     pub model_discovery_mode: String,
     pub supports_model_fetch_without_credentials: bool,
-    pub enabled: bool,
+    pub desired_state: String,
+    pub availability_status: String,
     pub form_schema: Vec<ModelProviderConfigFieldResponse>,
     pub predefined_models: Vec<ProviderModelDescriptorResponse>,
 }
@@ -400,7 +401,8 @@ fn to_catalog_response(entry: ModelProviderCatalogEntry) -> ModelProviderCatalog
         default_base_url: entry.default_base_url,
         model_discovery_mode: entry.model_discovery_mode,
         supports_model_fetch_without_credentials: entry.supports_model_fetch_without_credentials,
-        enabled: entry.enabled,
+        desired_state: entry.desired_state,
+        availability_status: entry.availability_status,
         form_schema: entry
             .form_schema
             .into_iter()

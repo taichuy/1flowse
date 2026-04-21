@@ -50,10 +50,92 @@ impl PluginTaskKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub enum PluginDesiredState {
+    Disabled,
+    PendingRestart,
+    ActiveRequested,
+}
+
+impl PluginDesiredState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::PendingRestart => "pending_restart",
+            Self::ActiveRequested => "active_requested",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginArtifactStatus {
+    Missing,
+    Staged,
+    Ready,
+    Corrupted,
+    InstallIncomplete,
+}
+
+impl PluginArtifactStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Missing => "missing",
+            Self::Staged => "staged",
+            Self::Ready => "ready",
+            Self::Corrupted => "corrupted",
+            Self::InstallIncomplete => "install_incomplete",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginRuntimeStatus {
+    Inactive,
+    Active,
+    LoadFailed,
+}
+
+impl PluginRuntimeStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Inactive => "inactive",
+            Self::Active => "active",
+            Self::LoadFailed => "load_failed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginAvailabilityStatus {
+    Disabled,
+    PendingRestart,
+    ArtifactMissing,
+    InstallIncomplete,
+    LoadFailed,
+    Available,
+}
+
+impl PluginAvailabilityStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::PendingRestart => "pending_restart",
+            Self::ArtifactMissing => "artifact_missing",
+            Self::InstallIncomplete => "install_incomplete",
+            Self::LoadFailed => "load_failed",
+            Self::Available => "available",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PluginTaskStatus {
-    Pending,
+    Queued,
     Running,
-    Success,
+    Succeeded,
     Failed,
     Canceled,
     TimedOut,
@@ -62,9 +144,9 @@ pub enum PluginTaskStatus {
 impl PluginTaskStatus {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Pending => "pending",
+            Self::Queued => "queued",
             Self::Running => "running",
-            Self::Success => "success",
+            Self::Succeeded => "succeeded",
             Self::Failed => "failed",
             Self::Canceled => "canceled",
             Self::TimedOut => "timed_out",
@@ -74,7 +156,7 @@ impl PluginTaskStatus {
     pub fn is_terminal(self) -> bool {
         matches!(
             self,
-            Self::Success | Self::Failed | Self::Canceled | Self::TimedOut
+            Self::Succeeded | Self::Failed | Self::Canceled | Self::TimedOut
         )
     }
 }
@@ -91,12 +173,18 @@ pub struct PluginInstallationRecord {
     pub source_kind: String,
     pub trust_level: String,
     pub verification_status: PluginVerificationStatus,
-    pub enabled: bool,
-    pub install_path: String,
+    pub desired_state: PluginDesiredState,
+    pub artifact_status: PluginArtifactStatus,
+    pub runtime_status: PluginRuntimeStatus,
+    pub availability_status: PluginAvailabilityStatus,
+    pub package_path: Option<String>,
+    pub installed_path: String,
     pub checksum: Option<String>,
+    pub manifest_fingerprint: Option<String>,
     pub signature_status: Option<String>,
     pub signature_algorithm: Option<String>,
     pub signing_key_id: Option<String>,
+    pub last_load_error: Option<String>,
     pub metadata_json: serde_json::Value,
     pub created_by: Uuid,
     pub created_at: OffsetDateTime,

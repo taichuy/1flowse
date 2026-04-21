@@ -36,7 +36,8 @@ use crate::{
         OfficialPluginSourcePort, PluginRepository, ProviderRuntimeInvocationOutput,
         ProviderRuntimePort, ReassignModelProviderInstancesInput,
         ReplaceInstallationNodeContributionsInput, UpdateModelProviderInstanceInput,
-        UpdatePluginInstallationEnabledInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
+        UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
+        UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
         UpsertModelProviderCatalogCacheInput, UpsertModelProviderSecretInput,
         UpsertPluginInstallationInput,
     },
@@ -45,8 +46,9 @@ use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, ModelProviderCatalogCacheRecord,
     ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource, ModelProviderDiscoveryMode,
     ModelProviderInstanceRecord, ModelProviderInstanceStatus, ModelProviderSecretRecord,
-    NodeContributionDependencyStatus, PermissionDefinition, PluginAssignmentRecord,
-    PluginInstallationRecord, PluginTaskKind, PluginTaskRecord, PluginTaskStatus, ScopeContext,
+    NodeContributionDependencyStatus, PermissionDefinition, PluginArtifactStatus,
+    PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState, PluginInstallationRecord,
+    PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord, PluginTaskStatus, ScopeContext,
     UserRecord,
 };
 use plugin_framework::provider_contract::{
@@ -55,8 +57,8 @@ use plugin_framework::provider_contract::{
 use time::OffsetDateTime;
 
 #[derive(Clone)]
-struct MemoryPluginManagementRepository {
-    actor: ActorContext,
+pub(super) struct MemoryPluginManagementRepository {
+    pub(super) actor: ActorContext,
     installations: Arc<RwLock<HashMap<Uuid, PluginInstallationRecord>>>,
     plugin_ids: Arc<RwLock<HashMap<String, Uuid>>>,
     assignments: Arc<RwLock<Vec<PluginAssignmentRecord>>>,
@@ -69,7 +71,7 @@ struct MemoryPluginManagementRepository {
 }
 
 impl MemoryPluginManagementRepository {
-    fn new(actor: ActorContext) -> Self {
+    pub(super) fn new(actor: ActorContext) -> Self {
         Self {
             actor,
             installations: Arc::new(RwLock::new(HashMap::new())),
@@ -259,12 +261,18 @@ impl PluginRepository for MemoryPluginManagementRepository {
             source_kind: input.source_kind.clone(),
             trust_level: input.trust_level.clone(),
             verification_status: input.verification_status,
-            enabled: input.enabled,
-            install_path: input.install_path.clone(),
+            desired_state: input.desired_state,
+            artifact_status: input.artifact_status,
+            runtime_status: input.runtime_status,
+            availability_status: input.availability_status,
+            package_path: input.package_path.clone(),
+            installed_path: input.installed_path.clone(),
             checksum: input.checksum.clone(),
+            manifest_fingerprint: input.manifest_fingerprint.clone(),
             signature_status: input.signature_status.clone(),
             signature_algorithm: input.signature_algorithm.clone(),
             signing_key_id: input.signing_key_id.clone(),
+            last_load_error: input.last_load_error.clone(),
             metadata_json: input.metadata_json.clone(),
             created_by: input.actor_user_id,
             created_at,
@@ -294,15 +302,65 @@ impl PluginRepository for MemoryPluginManagementRepository {
         Ok(self.installations.read().await.values().cloned().collect())
     }
 
-    async fn update_installation_enabled(
+    async fn list_pending_restart_host_extensions(&self) -> Result<Vec<PluginInstallationRecord>> {
+        Ok(self
+            .installations
+            .read()
+            .await
+            .values()
+            .filter(|installation| {
+                matches!(
+                    installation.desired_state,
+                    PluginDesiredState::PendingRestart
+                )
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn update_desired_state(
         &self,
-        input: &UpdatePluginInstallationEnabledInput,
+        input: &UpdatePluginDesiredStateInput,
     ) -> Result<PluginInstallationRecord> {
         let mut installations = self.installations.write().await;
         let installation = installations
             .get_mut(&input.installation_id)
             .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
-        installation.enabled = input.enabled;
+        installation.desired_state = input.desired_state;
+        installation.availability_status = input.availability_status;
+        installation.updated_at = OffsetDateTime::now_utc();
+        Ok(installation.clone())
+    }
+
+    async fn update_artifact_snapshot(
+        &self,
+        input: &UpdatePluginArtifactSnapshotInput,
+    ) -> Result<PluginInstallationRecord> {
+        let mut installations = self.installations.write().await;
+        let installation = installations
+            .get_mut(&input.installation_id)
+            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        installation.artifact_status = input.artifact_status;
+        installation.availability_status = input.availability_status;
+        installation.package_path = input.package_path.clone();
+        installation.installed_path = input.installed_path.clone();
+        installation.checksum = input.checksum.clone();
+        installation.manifest_fingerprint = input.manifest_fingerprint.clone();
+        installation.updated_at = OffsetDateTime::now_utc();
+        Ok(installation.clone())
+    }
+
+    async fn update_runtime_snapshot(
+        &self,
+        input: &UpdatePluginRuntimeSnapshotInput,
+    ) -> Result<PluginInstallationRecord> {
+        let mut installations = self.installations.write().await;
+        let installation = installations
+            .get_mut(&input.installation_id)
+            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        installation.runtime_status = input.runtime_status;
+        installation.availability_status = input.availability_status;
+        installation.last_load_error = input.last_load_error.clone();
         installation.updated_at = OffsetDateTime::now_utc();
         Ok(installation.clone())
     }
@@ -398,27 +456,32 @@ impl NodeContributionRepository for MemoryPluginManagementRepository {
     ) -> Result<()> {
         let mut rows = self.node_contributions.write().await;
         rows.retain(|entry| entry.installation_id != input.installation_id);
-        rows.extend(input.entries.iter().map(|entry| domain::NodeContributionRegistryEntry {
-            installation_id: input.installation_id,
-            provider_code: input.provider_code.clone(),
-            plugin_id: input.plugin_id.clone(),
-            plugin_version: input.plugin_version.clone(),
-            contribution_code: entry.contribution_code.clone(),
-            node_shell: entry.node_shell.clone(),
-            category: entry.category.clone(),
-            title: entry.title.clone(),
-            description: entry.description.clone(),
-            icon: entry.icon.clone(),
-            schema_ui: entry.schema_ui.clone(),
-            schema_version: entry.schema_version.clone(),
-            output_schema: entry.output_schema.clone(),
-            required_auth: entry.required_auth.clone(),
-            visibility: entry.visibility.clone(),
-            experimental: entry.experimental,
-            dependency_installation_kind: entry.dependency_installation_kind.clone(),
-            dependency_plugin_version_range: entry.dependency_plugin_version_range.clone(),
-            dependency_status: NodeContributionDependencyStatus::MissingPlugin,
-        }));
+        rows.extend(
+            input
+                .entries
+                .iter()
+                .map(|entry| domain::NodeContributionRegistryEntry {
+                    installation_id: input.installation_id,
+                    provider_code: input.provider_code.clone(),
+                    plugin_id: input.plugin_id.clone(),
+                    plugin_version: input.plugin_version.clone(),
+                    contribution_code: entry.contribution_code.clone(),
+                    node_shell: entry.node_shell.clone(),
+                    category: entry.category.clone(),
+                    title: entry.title.clone(),
+                    description: entry.description.clone(),
+                    icon: entry.icon.clone(),
+                    schema_ui: entry.schema_ui.clone(),
+                    schema_version: entry.schema_version.clone(),
+                    output_schema: entry.output_schema.clone(),
+                    required_auth: entry.required_auth.clone(),
+                    visibility: entry.visibility.clone(),
+                    experimental: entry.experimental,
+                    dependency_installation_kind: entry.dependency_installation_kind.clone(),
+                    dependency_plugin_version_range: entry.dependency_plugin_version_range.clone(),
+                    dependency_status: NodeContributionDependencyStatus::MissingPlugin,
+                }),
+        );
         Ok(())
     }
 
@@ -442,7 +505,9 @@ impl NodeContributionRepository for MemoryPluginManagementRepository {
                     .and_then(|assignment| installations.get(&assignment.installation_id));
                 entry.dependency_status = match assigned_installation {
                     None => NodeContributionDependencyStatus::MissingPlugin,
-                    Some(installation) if !installation.enabled => {
+                    Some(installation)
+                        if matches!(installation.desired_state, PluginDesiredState::Disabled) =>
+                    {
                         NodeContributionDependencyStatus::DisabledPlugin
                     }
                     Some(installation)
@@ -620,7 +685,7 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
 }
 
 #[derive(Clone, Default)]
-struct MemoryProviderRuntime {
+pub(super) struct MemoryProviderRuntime {
     loaded_installations: Arc<RwLock<Vec<Uuid>>>,
 }
 
@@ -631,7 +696,7 @@ impl MemoryProviderRuntime {
 }
 
 #[derive(Clone)]
-struct MemoryOfficialPluginSource {
+pub(super) struct MemoryOfficialPluginSource {
     source_kind: String,
     source_label: String,
     trust_mode: String,
@@ -837,7 +902,7 @@ struct SignedUploadPackageFixture {
 #[async_trait]
 impl ProviderRuntimePort for MemoryProviderRuntime {
     async fn ensure_loaded(&self, installation: &PluginInstallationRecord) -> Result<()> {
-        if !Path::new(&installation.install_path).is_dir() {
+        if !Path::new(&installation.installed_path).is_dir() {
             return Err(ControlPlaneError::NotFound("provider_install_path").into());
         }
         self.loaded_installations
@@ -1310,7 +1375,7 @@ async fn seed_test_installation(
     install_root: &Path,
     provider_code: &str,
     plugin_version: &str,
-    enabled: bool,
+    desired_state: PluginDesiredState,
 ) -> Uuid {
     let package_root = install_root.join(format!("{provider_code}-{plugin_version}"));
     fs::create_dir_all(package_root.join("provider")).unwrap();
@@ -1369,13 +1434,28 @@ capabilities:
             source_kind: "official_registry".into(),
             trust_level: "checksum_only".into(),
             verification_status: domain::PluginVerificationStatus::Valid,
-            enabled,
-            install_path: package_root.display().to_string(),
+            desired_state,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: PluginRuntimeStatus::Inactive,
+            availability_status: if matches!(desired_state, PluginDesiredState::Disabled) {
+                PluginAvailabilityStatus::Disabled
+            } else {
+                PluginAvailabilityStatus::InstallIncomplete
+            },
+            package_path: None,
+            installed_path: package_root.display().to_string(),
             checksum: None,
+            manifest_fingerprint: None,
             signature_status: None,
             signature_algorithm: None,
             signing_key_id: None,
-            metadata_json: json!({}),
+            last_load_error: None,
+            metadata_json: json!({
+                "help_url": "https://example.com/help",
+                "default_base_url": "https://api.example.com",
+                "model_discovery_mode": "hybrid",
+                "supported_model_types": ["llm"],
+            }),
             actor_user_id: repository.actor.user_id,
         })
         .await
@@ -1444,7 +1524,7 @@ async fn plugin_management_service_lists_provider_families_with_current_and_late
         &install_root,
         "openai_compatible",
         "0.1.0",
-        true,
+        PluginDesiredState::ActiveRequested,
     )
     .await;
     let _installation_v2 = seed_test_installation(
@@ -1452,7 +1532,7 @@ async fn plugin_management_service_lists_provider_families_with_current_and_late
         &install_root,
         "openai_compatible",
         "0.2.0",
-        true,
+        PluginDesiredState::ActiveRequested,
     )
     .await;
     repository
@@ -1557,7 +1637,7 @@ async fn plugin_management_service_keeps_only_latest_official_entry_per_provider
         &install_root,
         "openai_compatible",
         "0.1.0",
-        true,
+        PluginDesiredState::ActiveRequested,
     )
     .await;
     repository
@@ -1617,7 +1697,7 @@ async fn plugin_management_service_switches_to_a_local_version_without_redownloa
         &install_root,
         "fixture_provider",
         "0.1.0",
-        true,
+        PluginDesiredState::ActiveRequested,
     )
     .await;
     let target_installation = seed_test_installation(
@@ -1625,7 +1705,7 @@ async fn plugin_management_service_switches_to_a_local_version_without_redownloa
         &install_root,
         "fixture_provider",
         "0.2.0",
-        true,
+        PluginDesiredState::ActiveRequested,
     )
     .await;
     repository
@@ -1651,7 +1731,7 @@ async fn plugin_management_service_switches_to_a_local_version_without_redownloa
     assert_eq!(assignments.len(), 1);
     assert_eq!(assignments[0].installation_id, target_installation);
     assert_eq!(task.task_kind, PluginTaskKind::SwitchVersion);
-    assert_eq!(task.status, PluginTaskStatus::Success);
+    assert_eq!(task.status, PluginTaskStatus::Succeeded);
 }
 
 #[tokio::test]
@@ -1676,7 +1756,7 @@ async fn plugin_management_service_switches_version_and_invalidates_provider_cac
         &install_root,
         "fixture_provider",
         "0.1.0",
-        true,
+        PluginDesiredState::ActiveRequested,
     )
     .await;
     let target_installation = seed_test_installation(
@@ -1684,7 +1764,7 @@ async fn plugin_management_service_switches_version_and_invalidates_provider_cac
         &install_root,
         "fixture_provider",
         "0.2.0",
-        true,
+        PluginDesiredState::ActiveRequested,
     )
     .await;
     repository
@@ -1804,7 +1884,7 @@ async fn plugin_management_service_upgrades_to_latest_without_redownloading_when
         &install_root,
         "fixture_provider",
         "0.1.0",
-        true,
+        PluginDesiredState::ActiveRequested,
     )
     .await;
     let target_installation = seed_test_installation(
@@ -1812,7 +1892,7 @@ async fn plugin_management_service_upgrades_to_latest_without_redownloading_when
         &install_root,
         "fixture_provider",
         "0.2.0",
-        false,
+        PluginDesiredState::Disabled,
     )
     .await;
     repository
@@ -1837,7 +1917,7 @@ async fn plugin_management_service_upgrades_to_latest_without_redownloading_when
     assert_eq!(assignments.len(), 1);
     assert_eq!(assignments[0].installation_id, target_installation);
     assert_eq!(task.task_kind, PluginTaskKind::SwitchVersion);
-    assert_eq!(task.status, PluginTaskStatus::Success);
+    assert_eq!(task.status, PluginTaskStatus::Succeeded);
     assert_eq!(download_calls.load(Ordering::SeqCst), 0);
 }
 
@@ -1868,13 +1948,16 @@ async fn plugin_management_service_installs_enables_assigns_and_lists_tasks() {
         })
         .await
         .unwrap();
-    assert_eq!(install.task.status, PluginTaskStatus::Success);
-    assert!(!install.installation.enabled);
-    assert!(PathBuf::from(&install.installation.install_path).is_dir());
-    assert!(!Path::new(&install.installation.install_path)
+    assert_eq!(install.task.status, PluginTaskStatus::Succeeded);
+    assert!(matches!(
+        install.installation.desired_state,
+        PluginDesiredState::Disabled
+    ));
+    assert!(PathBuf::from(&install.installation.installed_path).is_dir());
+    assert!(!Path::new(&install.installation.installed_path)
         .join("demo")
         .exists());
-    assert!(!Path::new(&install.installation.install_path)
+    assert!(!Path::new(&install.installation.installed_path)
         .join("scripts")
         .exists());
 
@@ -1885,7 +1968,7 @@ async fn plugin_management_service_installs_enables_assigns_and_lists_tasks() {
         })
         .await
         .unwrap();
-    assert_eq!(enable.status, PluginTaskStatus::Success);
+    assert_eq!(enable.status, PluginTaskStatus::Succeeded);
 
     let assign = service
         .assign_plugin(AssignPluginCommand {
@@ -1894,7 +1977,7 @@ async fn plugin_management_service_installs_enables_assigns_and_lists_tasks() {
         })
         .await
         .unwrap();
-    assert_eq!(assign.status, PluginTaskStatus::Success);
+    assert_eq!(assign.status, PluginTaskStatus::Succeeded);
 
     let catalog = service
         .list_catalog(
@@ -1922,6 +2005,67 @@ async fn plugin_management_service_installs_enables_assigns_and_lists_tasks() {
     assert_eq!(
         repository.audit_events().await,
         vec!["plugin.installed", "plugin.enabled", "plugin.assigned"]
+    );
+}
+
+#[tokio::test]
+async fn plugin_management_service_degrades_catalog_entry_when_artifact_is_missing() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let install_root =
+        std::env::temp_dir().join(format!("plugin-missing-catalog-{}", Uuid::now_v7()));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &install_root,
+    );
+    let installation_id = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.1.0",
+        PluginDesiredState::ActiveRequested,
+    )
+    .await;
+    let install_path = repository
+        .get_installation(installation_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .installed_path;
+    fs::remove_dir_all(&install_path).unwrap();
+
+    let catalog = service
+        .list_catalog(
+            repository.actor.user_id,
+            PluginCatalogFilter::default(),
+            requested_locales(),
+        )
+        .await
+        .unwrap();
+    let installation = repository
+        .get_installation(installation_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(catalog.entries.len(), 1);
+    assert_eq!(
+        catalog.entries[0].installation.artifact_status,
+        PluginArtifactStatus::Missing
+    );
+    assert_eq!(
+        catalog.entries[0].installation.availability_status,
+        PluginAvailabilityStatus::ArtifactMissing
+    );
+    assert_eq!(catalog.entries[0].model_discovery_mode, "hybrid");
+    assert_eq!(
+        installation.availability_status,
+        PluginAvailabilityStatus::ArtifactMissing
     );
 }
 
@@ -2011,7 +2155,7 @@ async fn plugin_management_service_lists_official_catalog_and_installs_latest_re
         install.installation.signature_status.as_deref(),
         Some("unsigned")
     );
-    assert_eq!(install.task.status, PluginTaskStatus::Success);
+    assert_eq!(install.task.status, PluginTaskStatus::Succeeded);
 }
 
 #[tokio::test]
@@ -2136,7 +2280,7 @@ async fn plugin_management_service_rejects_restarting_terminal_task() {
     let install_root = std::env::temp_dir().join(format!("plugin-terminal-task-installed-{nonce}"));
     create_provider_fixture(&package_root);
     repository
-        .set_created_task_status_override(PluginTaskStatus::Success)
+        .set_created_task_status_override(PluginTaskStatus::Succeeded)
         .await;
 
     let service = PluginManagementService::new(
@@ -2157,7 +2301,7 @@ async fn plugin_management_service_rejects_restarting_terminal_task() {
     assert!(matches!(
         error.downcast_ref::<ControlPlaneError>(),
         Some(ControlPlaneError::InvalidStateTransition { resource, from, to, .. })
-            if *resource == "plugin_task" && from == "success" && to == "running"
+            if *resource == "plugin_task" && from == "succeeded" && to == "running"
     ));
 }
 

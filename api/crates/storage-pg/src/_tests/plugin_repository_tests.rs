@@ -2,7 +2,10 @@ use control_plane::ports::{
     CreatePluginAssignmentInput, CreatePluginTaskInput, PluginRepository,
     UpdatePluginTaskStatusInput, UpsertPluginInstallationInput,
 };
-use domain::{PluginTaskKind, PluginTaskStatus, PluginVerificationStatus};
+use domain::{
+    PluginArtifactStatus, PluginAvailabilityStatus, PluginDesiredState, PluginRuntimeStatus,
+    PluginTaskKind, PluginTaskStatus, PluginVerificationStatus,
+};
 use serde_json::json;
 use sqlx::PgPool;
 use storage_pg::{connect, run_migrations, PgControlPlaneStore};
@@ -88,12 +91,18 @@ async fn plugin_repository_persists_installations_assignments_and_tasks() {
             source_kind: "uploaded".into(),
             trust_level: "unverified".into(),
             verification_status: PluginVerificationStatus::Valid,
-            enabled: true,
-            install_path: "/tmp/plugin-installed/fixture_provider/0.1.0".into(),
+            desired_state: PluginDesiredState::PendingRestart,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: PluginRuntimeStatus::Inactive,
+            availability_status: PluginAvailabilityStatus::PendingRestart,
+            package_path: Some("/tmp/plugin-packages/fixture_provider/0.1.0.1flowbasepkg".into()),
+            installed_path: "/tmp/plugin-installed/fixture_provider/0.1.0".into(),
             checksum: Some("abc123".into()),
+            manifest_fingerprint: Some("sha256:manifest".into()),
             signature_status: Some("unsigned".into()),
             signature_algorithm: None,
             signing_key_id: None,
+            last_load_error: None,
             metadata_json: json!({ "help_url": "https://example.com/help" }),
             actor_user_id: actor.id,
         },
@@ -102,7 +111,28 @@ async fn plugin_repository_persists_installations_assignments_and_tasks() {
     .unwrap();
 
     assert_eq!(installation.id, installation_id);
-    assert!(installation.enabled);
+    assert_eq!(
+        installation.desired_state,
+        PluginDesiredState::PendingRestart
+    );
+    assert_eq!(installation.artifact_status, PluginArtifactStatus::Ready);
+    assert_eq!(installation.runtime_status, PluginRuntimeStatus::Inactive);
+    assert_eq!(
+        installation.availability_status,
+        PluginAvailabilityStatus::PendingRestart
+    );
+    assert_eq!(
+        installation.package_path.as_deref(),
+        Some("/tmp/plugin-packages/fixture_provider/0.1.0.1flowbasepkg")
+    );
+    assert_eq!(
+        installation.installed_path,
+        "/tmp/plugin-installed/fixture_provider/0.1.0"
+    );
+    assert_eq!(
+        installation.manifest_fingerprint.as_deref(),
+        Some("sha256:manifest")
+    );
 
     let assignment = PluginRepository::create_assignment(
         &store,
@@ -125,7 +155,7 @@ async fn plugin_repository_persists_installations_assignments_and_tasks() {
             workspace_id: Some(workspace.id),
             provider_code: "fixture_provider".into(),
             task_kind: PluginTaskKind::Install,
-            status: PluginTaskStatus::Pending,
+            status: PluginTaskStatus::Queued,
             status_message: Some("waiting".into()),
             detail_json: json!({ "step": "download" }),
             actor_user_id: Some(actor.id),
@@ -133,13 +163,13 @@ async fn plugin_repository_persists_installations_assignments_and_tasks() {
     )
     .await
     .unwrap();
-    assert_eq!(task.status, PluginTaskStatus::Pending);
+    assert_eq!(task.status, PluginTaskStatus::Queued);
 
     let completed_task = PluginRepository::update_task_status(
         &store,
         &UpdatePluginTaskStatusInput {
             task_id,
-            status: PluginTaskStatus::Success,
+            status: PluginTaskStatus::Succeeded,
             status_message: Some("done".into()),
             detail_json: json!({ "step": "enabled" }),
         },
@@ -147,7 +177,7 @@ async fn plugin_repository_persists_installations_assignments_and_tasks() {
     .await
     .unwrap();
 
-    assert_eq!(completed_task.status, PluginTaskStatus::Success);
+    assert_eq!(completed_task.status, PluginTaskStatus::Succeeded);
     assert!(completed_task.finished_at.is_some());
 
     let installations = PluginRepository::list_installations(&store).await.unwrap();
@@ -174,12 +204,18 @@ async fn plugin_repository_repoints_assignment_by_workspace_and_provider_code() 
             source_kind: "official_registry".into(),
             trust_level: "checksum_only".into(),
             verification_status: PluginVerificationStatus::Valid,
-            enabled: true,
-            install_path: "/tmp/plugin-installed/fixture_provider/0.1.0".into(),
+            desired_state: PluginDesiredState::ActiveRequested,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: PluginRuntimeStatus::Inactive,
+            availability_status: PluginAvailabilityStatus::InstallIncomplete,
+            package_path: None,
+            installed_path: "/tmp/plugin-installed/fixture_provider/0.1.0".into(),
             checksum: None,
+            manifest_fingerprint: None,
             signature_status: None,
             signature_algorithm: None,
             signing_key_id: None,
+            last_load_error: None,
             metadata_json: json!({}),
             actor_user_id: actor.id,
         },
@@ -199,12 +235,18 @@ async fn plugin_repository_repoints_assignment_by_workspace_and_provider_code() 
             source_kind: "official_registry".into(),
             trust_level: "checksum_only".into(),
             verification_status: PluginVerificationStatus::Valid,
-            enabled: true,
-            install_path: "/tmp/plugin-installed/fixture_provider/0.2.0".into(),
+            desired_state: PluginDesiredState::ActiveRequested,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: PluginRuntimeStatus::Inactive,
+            availability_status: PluginAvailabilityStatus::InstallIncomplete,
+            package_path: None,
+            installed_path: "/tmp/plugin-installed/fixture_provider/0.2.0".into(),
             checksum: None,
+            manifest_fingerprint: None,
             signature_status: None,
             signature_algorithm: None,
             signing_key_id: None,
+            last_load_error: None,
             metadata_json: json!({}),
             actor_user_id: actor.id,
         },
@@ -259,12 +301,18 @@ async fn plugin_repository_persists_trust_level_and_signature_metadata() {
             source_kind: "mirror_registry".into(),
             trust_level: "verified_official".into(),
             verification_status: PluginVerificationStatus::Valid,
-            enabled: true,
-            install_path: "/tmp/plugin-installed/openai_compatible/0.2.0".into(),
+            desired_state: PluginDesiredState::ActiveRequested,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: PluginRuntimeStatus::Inactive,
+            availability_status: PluginAvailabilityStatus::InstallIncomplete,
+            package_path: None,
+            installed_path: "/tmp/plugin-installed/openai_compatible/0.2.0".into(),
             checksum: Some("sha256:abc123".into()),
+            manifest_fingerprint: None,
             signature_status: Some("verified".into()),
             signature_algorithm: Some("ed25519".into()),
             signing_key_id: Some("official-key-2026-04".into()),
+            last_load_error: None,
             metadata_json: json!({}),
             actor_user_id: actor.id,
         },
@@ -279,4 +327,103 @@ async fn plugin_repository_persists_trust_level_and_signature_metadata() {
         installation.signing_key_id.as_deref(),
         Some("official-key-2026-04")
     );
+}
+
+#[tokio::test]
+async fn plugin_repository_maps_succeeded_task_status() {
+    let (store, _, actor) = seed_store().await;
+
+    let task = PluginRepository::create_task(
+        &store,
+        &CreatePluginTaskInput {
+            task_id: Uuid::now_v7(),
+            installation_id: None,
+            workspace_id: None,
+            provider_code: "fixture_provider".into(),
+            task_kind: PluginTaskKind::Install,
+            status: PluginTaskStatus::Succeeded,
+            status_message: Some("installed".into()),
+            detail_json: json!({}),
+            actor_user_id: Some(actor.id),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(task.status, PluginTaskStatus::Succeeded);
+}
+
+#[tokio::test]
+async fn plugin_repository_lists_only_pending_restart_host_extensions() {
+    let (store, _workspace, actor) = seed_store().await;
+
+    PluginRepository::upsert_installation(
+        &store,
+        &UpsertPluginInstallationInput {
+            installation_id: Uuid::now_v7(),
+            provider_code: "fixture_host_extension".into(),
+            plugin_id: "fixture_host_extension@0.1.0".into(),
+            plugin_version: "0.1.0".into(),
+            contract_version: "1flowbase.host_extension/v1".into(),
+            protocol: "native_host".into(),
+            display_name: "Fixture Host Extension".into(),
+            source_kind: "uploaded".into(),
+            trust_level: "checksum_only".into(),
+            verification_status: PluginVerificationStatus::Valid,
+            desired_state: PluginDesiredState::PendingRestart,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: PluginRuntimeStatus::Inactive,
+            availability_status: PluginAvailabilityStatus::PendingRestart,
+            package_path: None,
+            installed_path: "/tmp/plugin-installed/fixture_host_extension/0.1.0".into(),
+            checksum: None,
+            manifest_fingerprint: None,
+            signature_status: None,
+            signature_algorithm: None,
+            signing_key_id: None,
+            last_load_error: None,
+            metadata_json: json!({}),
+            actor_user_id: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+    PluginRepository::upsert_installation(
+        &store,
+        &UpsertPluginInstallationInput {
+            installation_id: Uuid::now_v7(),
+            provider_code: "fixture_provider".into(),
+            plugin_id: "fixture_provider@0.1.0".into(),
+            plugin_version: "0.1.0".into(),
+            contract_version: "1flowbase.provider/v1".into(),
+            protocol: "openai_compatible".into(),
+            display_name: "Fixture Provider".into(),
+            source_kind: "uploaded".into(),
+            trust_level: "checksum_only".into(),
+            verification_status: PluginVerificationStatus::Valid,
+            desired_state: PluginDesiredState::PendingRestart,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: PluginRuntimeStatus::Inactive,
+            availability_status: PluginAvailabilityStatus::PendingRestart,
+            package_path: None,
+            installed_path: "/tmp/plugin-installed/fixture_provider/0.1.0".into(),
+            checksum: None,
+            manifest_fingerprint: None,
+            signature_status: None,
+            signature_algorithm: None,
+            signing_key_id: None,
+            last_load_error: None,
+            metadata_json: json!({}),
+            actor_user_id: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    let pending = PluginRepository::list_pending_restart_host_extensions(&store)
+        .await
+        .unwrap();
+
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].contract_version, "1flowbase.host_extension/v1");
 }

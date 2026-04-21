@@ -9,8 +9,8 @@ use std::{
 use access_control::ensure_permission;
 use anyhow::{Context, Result};
 use plugin_framework::{
-    intake_package_bytes, parse_plugin_manifest, provider_package::ProviderPackage,
-    PackageIntakePolicy, PackageIntakeResult, PluginManifestV1,
+    compute_manifest_fingerprint, intake_package_bytes, parse_plugin_manifest,
+    provider_package::ProviderPackage, PackageIntakePolicy, PackageIntakeResult, PluginManifestV1,
 };
 use serde_json::json;
 use time::OffsetDateTime;
@@ -19,18 +19,23 @@ use uuid::Uuid;
 use crate::{
     audit::audit_log,
     errors::ControlPlaneError,
+    host_extension::{
+        ensure_root_actor, ensure_uploaded_host_extensions_enabled, is_host_extension_installation,
+        is_host_extension_manifest, is_model_provider_installation, plugin_code_from_plugin_id,
+    },
     i18n::{
         merge_i18n_catalog, plugin_namespace, trim_json_bundles, trim_provider_bundles,
         I18nCatalog, RequestedLocales,
     },
+    plugin_lifecycle::{derive_availability_status, reconcile_installation_snapshot},
     ports::{
         AuthRepository, CreatePluginAssignmentInput, CreatePluginTaskInput,
         ModelProviderRepository, NodeContributionRegistryInput, NodeContributionRepository,
         OfficialPluginArtifact, OfficialPluginSourceEntry, OfficialPluginSourcePort,
-        PluginRepository, ProviderRuntimePort, ReplaceInstallationNodeContributionsInput,
-        ReassignModelProviderInstancesInput, UpdatePluginInstallationEnabledInput,
-        UpdatePluginTaskStatusInput, UpsertModelProviderCatalogCacheInput,
-        UpsertPluginInstallationInput,
+        PluginRepository, ProviderRuntimePort, ReassignModelProviderInstancesInput,
+        ReplaceInstallationNodeContributionsInput, UpdatePluginDesiredStateInput,
+        UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput,
+        UpsertModelProviderCatalogCacheInput, UpsertPluginInstallationInput,
     },
     state_transition::ensure_plugin_task_transition,
 };
@@ -154,6 +159,8 @@ pub struct PluginInstalledVersionView {
     pub plugin_version: String,
     pub source_kind: String,
     pub trust_level: String,
+    pub desired_state: String,
+    pub availability_status: String,
     pub created_at: OffsetDateTime,
     pub is_current: bool,
 }
@@ -194,6 +201,7 @@ pub struct PluginManagementService<R, H> {
     runtime: H,
     official_source: Arc<dyn OfficialPluginSourcePort>,
     install_root: PathBuf,
+    allow_uploaded_host_extensions: bool,
 }
 
 struct InstallSourceMetadata {
@@ -203,6 +211,7 @@ struct InstallSourceMetadata {
     signature_status: Option<String>,
     signature_algorithm: Option<String>,
     signing_key_id: Option<String>,
+    package_bytes: Option<Vec<u8>>,
 }
 
 impl InstallSourceMetadata {
@@ -214,6 +223,7 @@ impl InstallSourceMetadata {
             signature_status: Some("unsigned".to_string()),
             signature_algorithm: None,
             signing_key_id: None,
+            package_bytes: None,
         }
     }
 }
@@ -306,7 +316,13 @@ where
             runtime,
             official_source,
             install_root: install_root.into(),
+            allow_uploaded_host_extensions: true,
         }
+    }
+
+    pub fn with_allow_uploaded_host_extensions(mut self, allow: bool) -> Self {
+        self.allow_uploaded_host_extensions = allow;
+        self
     }
 
     async fn transition_task(
@@ -348,25 +364,34 @@ where
         let mut catalog = Vec::with_capacity(installations.len());
         let mut i18n_catalog = BTreeMap::new();
         for installation in installations {
-            let package = load_provider_package(&installation.install_path)?;
+            let installation =
+                reconcile_installation_snapshot(&self.repository, installation.id).await?;
             if !filter.matches("model_provider") {
                 continue;
             }
+            if !is_model_provider_installation(&installation) {
+                continue;
+            }
             let namespace = plugin_namespace(&installation.provider_code);
-            merge_i18n_catalog(
-                &mut i18n_catalog,
-                trim_provider_bundles(&namespace, &package.i18n, &locales),
-            );
+            let package = load_provider_package(&installation.installed_path).ok();
+            if let Some(package) = package.as_ref() {
+                merge_i18n_catalog(
+                    &mut i18n_catalog,
+                    trim_provider_bundles(&namespace, &package.i18n, &locales),
+                );
+            }
             catalog.push(PluginCatalogEntry {
                 plugin_type: "model_provider".to_string(),
                 namespace,
                 label_key: "plugin.label".to_string(),
                 description_key: Some("plugin.description".to_string()),
                 provider_label_key: "provider.label".to_string(),
-                help_url: package.provider.help_url.clone(),
-                default_base_url: package.provider.default_base_url.clone(),
-                model_discovery_mode: format!("{:?}", package.provider.model_discovery_mode)
-                    .to_ascii_lowercase(),
+                help_url: provider_help_url(&installation, package.as_ref()),
+                default_base_url: provider_default_base_url(&installation, package.as_ref()),
+                model_discovery_mode: provider_model_discovery_mode(
+                    &installation,
+                    package.as_ref(),
+                ),
                 assigned_to_current_workspace: assigned_installation_ids.contains(&installation.id),
                 installation,
             });
@@ -465,14 +490,13 @@ where
             .list_assignments(actor.current_workspace_id)
             .await?;
         let installations = self.repository.list_installations().await?;
-        let installation_map = installations
-            .iter()
-            .cloned()
-            .map(|installation| (installation.id, installation))
-            .collect::<HashMap<_, _>>();
+        let mut installation_map = HashMap::new();
         let mut installations_by_provider =
             HashMap::<String, Vec<domain::PluginInstallationRecord>>::new();
         for installation in installations {
+            let installation =
+                reconcile_installation_snapshot(&self.repository, installation.id).await?;
+            installation_map.insert(installation.id, installation.clone());
             installations_by_provider
                 .entry(installation.provider_code.clone())
                 .or_default()
@@ -495,19 +519,24 @@ where
         let mut families = Vec::with_capacity(assignments.len());
         let mut i18n_catalog = BTreeMap::new();
         for assignment in assignments {
+            if !filter.matches("model_provider") {
+                continue;
+            }
             let current = installation_map
                 .get(&assignment.installation_id)
                 .cloned()
                 .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
-            let package = load_provider_package(&current.install_path)?;
-            if !filter.matches("model_provider") {
+            if !is_model_provider_installation(&current) {
                 continue;
             }
             let namespace = plugin_namespace(&current.provider_code);
-            merge_i18n_catalog(
-                &mut i18n_catalog,
-                trim_provider_bundles(&namespace, &package.i18n, &locales),
-            );
+            let package = load_provider_package(&current.installed_path).ok();
+            if let Some(package) = package.as_ref() {
+                merge_i18n_catalog(
+                    &mut i18n_catalog,
+                    trim_provider_bundles(&namespace, &package.i18n, &locales),
+                );
+            }
             let latest_version = official_by_provider
                 .get(&assignment.provider_code)
                 .map(|entry| entry.latest_version.clone());
@@ -520,6 +549,8 @@ where
                     plugin_version: installation.plugin_version.clone(),
                     source_kind: installation.source_kind.clone(),
                     trust_level: installation.trust_level.clone(),
+                    desired_state: installation.desired_state.as_str().to_string(),
+                    availability_status: installation.availability_status.as_str().to_string(),
                     created_at: installation.created_at,
                     is_current: installation.id == current.id,
                 })
@@ -533,10 +564,9 @@ where
                 description_key: Some("plugin.description".to_string()),
                 provider_label_key: "provider.label".to_string(),
                 protocol: current.protocol.clone(),
-                help_url: package.provider.help_url.clone(),
-                default_base_url: package.provider.default_base_url.clone(),
-                model_discovery_mode: format!("{:?}", package.provider.model_discovery_mode)
-                    .to_ascii_lowercase(),
+                help_url: provider_help_url(&current, package.as_ref()),
+                default_base_url: provider_default_base_url(&current, package.as_ref()),
+                model_discovery_mode: provider_model_discovery_mode(&current, package.as_ref()),
                 current_installation_id: current.id,
                 current_version: current.plugin_version.clone(),
                 latest_version: latest_version.clone(),
@@ -570,6 +600,14 @@ where
         .await
     }
 
+    pub async fn reconcile_all_installations(&self) -> Result<()> {
+        for installation in self.repository.list_installations().await? {
+            let _ = reconcile_installation_snapshot(&self.repository, installation.id).await?;
+        }
+
+        Ok(())
+    }
+
     pub async fn install_uploaded_plugin(
         &self,
         command: InstallUploadedPluginCommand,
@@ -589,6 +627,7 @@ where
         self.install_intake_result(
             command.actor_user_id,
             intake,
+            Some(command.package_bytes),
             json!({
                 "install_kind": "upload",
                 "file_name": file_name,
@@ -628,6 +667,7 @@ where
                 .install_intake_result(
                     command.actor_user_id,
                     intake,
+                    Some(downloaded.package_bytes.clone()),
                     json!({
                         "install_kind": "official_source",
                         "plugin_id": command.plugin_id,
@@ -635,6 +675,9 @@ where
                     }),
                 )
                 .await?;
+            if is_host_extension_installation(&install.installation) {
+                return Ok::<InstallPluginResult, anyhow::Error>(install);
+            }
             self.enable_plugin(EnablePluginCommand {
                 actor_user_id: command.actor_user_id,
                 installation_id: install.installation.id,
@@ -710,6 +753,7 @@ where
                 self.install_intake_result(
                     command.actor_user_id,
                     intake,
+                    Some(downloaded.package_bytes.clone()),
                     json!({
                         "install_kind": "official_upgrade",
                         "plugin_id": snapshot_entry.plugin_id,
@@ -739,6 +783,7 @@ where
         &self,
         actor_user_id: Uuid,
         intake: PackageIntakeResult,
+        package_bytes: Option<Vec<u8>>,
         detail_json: serde_json::Value,
     ) -> Result<InstallPluginResult> {
         let package_root = intake.extracted_root.clone();
@@ -755,6 +800,7 @@ where
                     signature_status: Some(intake.signature_status),
                     signature_algorithm: intake.signature_algorithm,
                     signing_key_id: intake.signing_key_id,
+                    package_bytes,
                 },
                 detail_json,
             )
@@ -782,7 +828,7 @@ where
                 workspace_id: None,
                 provider_code: "pending_provider".to_string(),
                 task_kind: domain::PluginTaskKind::Install,
-                status: domain::PluginTaskStatus::Pending,
+                status: domain::PluginTaskStatus::Queued,
                 status_message: Some("pending".to_string()),
                 detail_json: detail_json.clone(),
                 actor_user_id: Some(command.actor_user_id),
@@ -798,12 +844,93 @@ where
             .await?;
 
         let installation_result = async {
-            let source_package = load_provider_package(&command.package_root)?;
+            let manifest = load_plugin_manifest(&command.package_root)?;
+            let plugin_code = plugin_code_from_plugin_id(&manifest.plugin_id)?;
             let install_path = self
                 .install_root
-                .join(&source_package.provider.provider_code)
-                .join(&source_package.manifest.version);
+                .join("installed")
+                .join(&plugin_code)
+                .join(&manifest.version);
+            let package_archive_path = self
+                .install_root
+                .join("packages")
+                .join(&plugin_code)
+                .join(format!("{}.1flowbasepkg", manifest.plugin_id));
+            if let Some(package_bytes) = source_metadata.package_bytes.as_ref() {
+                if let Some(parent) = package_archive_path.parent() {
+                    fs::create_dir_all(parent).with_context(|| {
+                        format!(
+                            "failed to create plugin package archive directory {}",
+                            parent.display()
+                        )
+                    })?;
+                }
+                fs::write(&package_archive_path, package_bytes).with_context(|| {
+                    format!(
+                        "failed to persist plugin package archive at {}",
+                        package_archive_path.display()
+                    )
+                })?;
+            }
             copy_installation_artifact(Path::new(&command.package_root), &install_path)?;
+            let manifest_fingerprint =
+                compute_manifest_fingerprint(&install_path.join("manifest.yaml"))
+                    .map_err(map_framework_error)?;
+            if is_host_extension_manifest(&manifest) {
+                ensure_root_actor(&actor)?;
+                ensure_uploaded_host_extensions_enabled(self.allow_uploaded_host_extensions)?;
+                let installation = self
+                    .repository
+                    .upsert_installation(&UpsertPluginInstallationInput {
+                        installation_id: Uuid::now_v7(),
+                        provider_code: plugin_code.clone(),
+                        plugin_id: manifest.plugin_id.clone(),
+                        plugin_version: manifest.version.clone(),
+                        contract_version: manifest.contract_version.clone(),
+                        protocol: manifest.runtime.protocol.clone(),
+                        display_name: manifest.display_name.clone(),
+                        source_kind: source_metadata.source_kind.clone(),
+                        trust_level: source_metadata.trust_level.clone(),
+                        verification_status: domain::PluginVerificationStatus::Valid,
+                        desired_state: domain::PluginDesiredState::PendingRestart,
+                        artifact_status: domain::PluginArtifactStatus::Ready,
+                        runtime_status: domain::PluginRuntimeStatus::Inactive,
+                        availability_status: derive_availability_status(
+                            domain::PluginDesiredState::PendingRestart,
+                            domain::PluginArtifactStatus::Ready,
+                            domain::PluginRuntimeStatus::Inactive,
+                        ),
+                        package_path: source_metadata.package_bytes.as_ref().map(|_| {
+                            package_archive_path.display().to_string()
+                        }),
+                        installed_path: install_path.display().to_string(),
+                        checksum: source_metadata.checksum.clone(),
+                        manifest_fingerprint: Some(manifest_fingerprint),
+                        signature_status: source_metadata.signature_status.clone(),
+                        signature_algorithm: source_metadata.signature_algorithm.clone(),
+                        signing_key_id: source_metadata.signing_key_id.clone(),
+                        last_load_error: None,
+                        metadata_json: json!({}),
+                        actor_user_id: command.actor_user_id,
+                    })
+                    .await?;
+                self.repository
+                    .append_audit_log(&audit_log(
+                        Some(actor.current_workspace_id),
+                        Some(command.actor_user_id),
+                        "plugin_installation",
+                        Some(installation.id),
+                        "plugin.installed",
+                        json!({
+                            "provider_code": installation.provider_code,
+                            "plugin_id": installation.plugin_id,
+                            "restart_required": true,
+                        }),
+                    ))
+                    .await?;
+                return Ok::<domain::PluginInstallationRecord, anyhow::Error>(installation);
+            }
+
             let installed_package = load_provider_package(&install_path)?;
             let installation = self
                 .repository
@@ -818,12 +945,24 @@ where
                     source_kind: source_metadata.source_kind.clone(),
                     trust_level: source_metadata.trust_level.clone(),
                     verification_status: domain::PluginVerificationStatus::Valid,
-                    enabled: false,
-                    install_path: install_path.display().to_string(),
+                    desired_state: domain::PluginDesiredState::Disabled,
+                    artifact_status: domain::PluginArtifactStatus::Ready,
+                    runtime_status: domain::PluginRuntimeStatus::Inactive,
+                    availability_status: derive_availability_status(
+                        domain::PluginDesiredState::Disabled,
+                        domain::PluginArtifactStatus::Ready,
+                        domain::PluginRuntimeStatus::Inactive,
+                    ),
+                    package_path: source_metadata.package_bytes.as_ref().map(|_| {
+                        package_archive_path.display().to_string()
+                    }),
+                    installed_path: install_path.display().to_string(),
                     checksum: source_metadata.checksum.clone(),
+                    manifest_fingerprint: Some(manifest_fingerprint),
                     signature_status: source_metadata.signature_status.clone(),
                     signature_algorithm: source_metadata.signature_algorithm.clone(),
                     signing_key_id: source_metadata.signing_key_id.clone(),
+                    last_load_error: None,
                     metadata_json: json!({
                         "help_url": installed_package.provider.help_url,
                         "default_base_url": installed_package.provider.default_base_url,
@@ -858,16 +997,21 @@ where
 
         match installation_result {
             Ok(installation) => {
+                let installed_message = if is_host_extension_installation(&installation) {
+                    "installed; restart required"
+                } else {
+                    "installed"
+                };
                 let task = self
                     .transition_task(
                         &running_task,
-                        domain::PluginTaskStatus::Success,
-                        Some("installed".to_string()),
+                        domain::PluginTaskStatus::Succeeded,
+                        Some(installed_message.to_string()),
                         json!({
                             "installation_id": installation.id,
                             "provider_code": installation.provider_code,
                             "plugin_id": installation.plugin_id,
-                            "install_path": installation.install_path,
+                            "installed_path": installation.installed_path,
                         }),
                     )
                     .await?;
@@ -899,6 +1043,9 @@ where
             .get_installation(command.installation_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        if is_host_extension_installation(&installation) {
+            return Err(ControlPlaneError::Conflict("plugin_installation_requires_restart").into());
+        }
 
         let task_id = Uuid::now_v7();
         let task = self
@@ -909,7 +1056,7 @@ where
                 workspace_id: None,
                 provider_code: installation.provider_code.clone(),
                 task_kind: domain::PluginTaskKind::Enable,
-                status: domain::PluginTaskStatus::Pending,
+                status: domain::PluginTaskStatus::Queued,
                 status_message: Some("pending".to_string()),
                 detail_json: json!({}),
                 actor_user_id: Some(command.actor_user_id),
@@ -925,27 +1072,62 @@ where
             .await?;
 
         let enable_result = async {
-            self.runtime.ensure_loaded(&installation).await?;
             let updated = self
                 .repository
-                .update_installation_enabled(&UpdatePluginInstallationEnabledInput {
+                .update_desired_state(&UpdatePluginDesiredStateInput {
                     installation_id: command.installation_id,
-                    enabled: true,
+                    desired_state: domain::PluginDesiredState::ActiveRequested,
+                    availability_status: derive_availability_status(
+                        domain::PluginDesiredState::ActiveRequested,
+                        installation.artifact_status,
+                        installation.runtime_status,
+                    ),
                 })
                 .await?;
+            let loaded = match self.runtime.ensure_loaded(&updated).await {
+                Ok(()) => {
+                    self.repository
+                        .update_runtime_snapshot(&UpdatePluginRuntimeSnapshotInput {
+                            installation_id: updated.id,
+                            runtime_status: domain::PluginRuntimeStatus::Active,
+                            availability_status: derive_availability_status(
+                                updated.desired_state,
+                                updated.artifact_status,
+                                domain::PluginRuntimeStatus::Active,
+                            ),
+                            last_load_error: None,
+                        })
+                        .await?
+                }
+                Err(error) => {
+                    self.repository
+                        .update_runtime_snapshot(&UpdatePluginRuntimeSnapshotInput {
+                            installation_id: updated.id,
+                            runtime_status: domain::PluginRuntimeStatus::LoadFailed,
+                            availability_status: derive_availability_status(
+                                updated.desired_state,
+                                updated.artifact_status,
+                                domain::PluginRuntimeStatus::LoadFailed,
+                            ),
+                            last_load_error: Some(error.to_string()),
+                        })
+                        .await?;
+                    return Err(error);
+                }
+            };
             self.repository
                 .append_audit_log(&audit_log(
                     Some(actor.current_workspace_id),
                     Some(command.actor_user_id),
                     "plugin_installation",
-                    Some(updated.id),
+                    Some(loaded.id),
                     "plugin.enabled",
                     json!({
-                        "provider_code": updated.provider_code,
+                        "provider_code": loaded.provider_code,
                     }),
                 ))
                 .await?;
-            Ok::<domain::PluginInstallationRecord, anyhow::Error>(updated)
+            Ok::<domain::PluginInstallationRecord, anyhow::Error>(loaded)
         }
         .await;
 
@@ -953,11 +1135,14 @@ where
             Ok(updated) => {
                 self.transition_task(
                     &running_task,
-                    domain::PluginTaskStatus::Success,
+                    domain::PluginTaskStatus::Succeeded,
                     Some("enabled".to_string()),
                     json!({
                         "installation_id": updated.id,
-                        "enabled": updated.enabled,
+                        "enabled": !matches!(
+                            updated.desired_state,
+                            domain::PluginDesiredState::Disabled
+                        ),
                     }),
                 )
                 .await
@@ -990,7 +1175,13 @@ where
             .get_installation(command.installation_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
-        if !installation.enabled {
+        if !is_model_provider_installation(&installation) {
+            return Err(ControlPlaneError::Conflict("plugin_assignment_not_supported").into());
+        }
+        if matches!(
+            installation.desired_state,
+            domain::PluginDesiredState::Disabled
+        ) {
             return Err(ControlPlaneError::Conflict("plugin_installation_disabled").into());
         }
 
@@ -1003,7 +1194,7 @@ where
                 workspace_id: Some(actor.current_workspace_id),
                 provider_code: installation.provider_code.clone(),
                 task_kind: domain::PluginTaskKind::Assign,
-                status: domain::PluginTaskStatus::Pending,
+                status: domain::PluginTaskStatus::Queued,
                 status_message: Some("pending".to_string()),
                 detail_json: json!({}),
                 actor_user_id: Some(command.actor_user_id),
@@ -1047,7 +1238,7 @@ where
             Ok(()) => {
                 self.transition_task(
                     &running_task,
-                    domain::PluginTaskStatus::Success,
+                    domain::PluginTaskStatus::Succeeded,
                     Some("assigned".to_string()),
                     json!({
                         "installation_id": command.installation_id,
@@ -1154,7 +1345,7 @@ where
         target: &domain::PluginInstallationRecord,
         actor_user_id: Uuid,
     ) -> Result<domain::PluginTaskRecord> {
-        if !target.enabled {
+        if matches!(target.desired_state, domain::PluginDesiredState::Disabled) {
             self.enable_plugin(EnablePluginCommand {
                 actor_user_id,
                 installation_id: target.id,
@@ -1171,7 +1362,7 @@ where
                 workspace_id: Some(actor.current_workspace_id),
                 provider_code: provider_code.to_string(),
                 task_kind: domain::PluginTaskKind::SwitchVersion,
-                status: domain::PluginTaskStatus::Pending,
+                status: domain::PluginTaskStatus::Queued,
                 status_message: Some("pending".into()),
                 detail_json: json!({}),
                 actor_user_id: Some(actor_user_id),
@@ -1193,7 +1384,7 @@ where
             .await?;
 
         let switch_result = async {
-            let package = load_provider_package(&target.install_path)?;
+            let package = load_provider_package(&target.installed_path)?;
             let migrated_instances = self
                 .repository
                 .reassign_instances_to_installation(&ReassignModelProviderInstancesInput {
@@ -1265,7 +1456,7 @@ where
             Ok(migrated_instance_count) => {
                 self.transition_task(
                     &running_task,
-                    domain::PluginTaskStatus::Success,
+                    domain::PluginTaskStatus::Succeeded,
                     Some("switched".into()),
                     json!({
                         "provider_code": provider_code,
@@ -1297,6 +1488,38 @@ where
     }
 }
 
+fn provider_help_url(
+    installation: &domain::PluginInstallationRecord,
+    package: Option<&ProviderPackage>,
+) -> Option<String> {
+    package
+        .and_then(|package| package.provider.help_url.clone())
+        .or_else(|| metadata_string(&installation.metadata_json, "help_url"))
+}
+
+fn provider_default_base_url(
+    installation: &domain::PluginInstallationRecord,
+    package: Option<&ProviderPackage>,
+) -> Option<String> {
+    package
+        .and_then(|package| package.provider.default_base_url.clone())
+        .or_else(|| metadata_string(&installation.metadata_json, "default_base_url"))
+}
+
+fn provider_model_discovery_mode(
+    installation: &domain::PluginInstallationRecord,
+    package: Option<&ProviderPackage>,
+) -> String {
+    package
+        .map(|package| format!("{:?}", package.provider.model_discovery_mode).to_ascii_lowercase())
+        .or_else(|| metadata_string(&installation.metadata_json, "model_discovery_mode"))
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn metadata_string(metadata: &serde_json::Value, key: &str) -> Option<String> {
+    metadata.get(key)?.as_str().map(str::to_string)
+}
+
 async fn load_actor_context_for_user<R>(
     repository: &R,
     actor_user_id: Uuid,
@@ -1317,7 +1540,10 @@ fn load_provider_package(path: impl AsRef<Path>) -> Result<ProviderPackage> {
 fn load_plugin_manifest(path: impl AsRef<Path>) -> Result<PluginManifestV1> {
     let manifest_path = path.as_ref().join("manifest.yaml");
     let raw = fs::read_to_string(&manifest_path).with_context(|| {
-        format!("failed to read plugin manifest at {}", manifest_path.display())
+        format!(
+            "failed to read plugin manifest at {}",
+            manifest_path.display()
+        )
     })?;
     parse_plugin_manifest(&raw).map_err(map_framework_error)
 }

@@ -12,14 +12,16 @@ use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::{
+    capability_plugin_runtime::{CapabilityPluginRuntimePort, ExecuteCapabilityNodeInput},
     errors::ControlPlaneError,
     flow::FlowService,
+    plugin_lifecycle::reconcile_installation_snapshot,
     ports::{
         AppendRunEventInput, ApplicationRepository, CompleteCallbackTaskInput,
         CompleteFlowRunInput, CompleteNodeRunInput, CreateCallbackTaskInput, CreateCheckpointInput,
         CreateFlowRunInput, CreateNodeRunInput, FlowRepository, ModelProviderRepository,
-        OrchestrationRuntimeRepository, PluginRepository, ProviderRuntimePort, UpdateFlowRunInput,
-        UpdateNodeRunInput, UpsertCompiledPlanInput,
+        NodeContributionRepository, OrchestrationRuntimeRepository, PluginRepository,
+        ProviderRuntimePort, UpdateFlowRunInput, UpdateNodeRunInput, UpsertCompiledPlanInput,
     },
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
@@ -88,9 +90,10 @@ where
         + FlowRepository
         + OrchestrationRuntimeRepository
         + ModelProviderRepository
+        + NodeContributionRepository
         + PluginRepository
         + Clone,
-    H: ProviderRuntimePort + Clone,
+    H: ProviderRuntimePort + CapabilityPluginRuntimePort + Clone,
 {
     pub fn new(repository: R, runtime: H, provider_secret_master_key: impl Into<String>) -> Self {
         Self {
@@ -114,7 +117,12 @@ where
         workspace_id: Uuid,
     ) -> Result<orchestration_runtime::compiler::FlowCompileContext> {
         let instances = self.repository.list_instances(workspace_id).await?;
+        let contributions = self
+            .repository
+            .list_node_contributions(workspace_id)
+            .await?;
         let mut provider_instances = BTreeMap::new();
+        let mut node_contributions = BTreeMap::new();
 
         for instance in instances {
             let available_models = self
@@ -145,7 +153,32 @@ where
             );
         }
 
-        Ok(orchestration_runtime::compiler::FlowCompileContext { provider_instances })
+        for entry in contributions {
+            let key = node_contribution_lookup_key(
+                &entry.plugin_id,
+                &entry.plugin_version,
+                &entry.contribution_code,
+                &entry.node_shell,
+                &entry.schema_version,
+            );
+            node_contributions.insert(
+                key,
+                orchestration_runtime::compiler::FlowCompileNodeContribution {
+                    installation_id: entry.installation_id,
+                    plugin_id: entry.plugin_id,
+                    plugin_version: entry.plugin_version,
+                    contribution_code: entry.contribution_code,
+                    node_shell: entry.node_shell,
+                    schema_version: entry.schema_version,
+                    dependency_status: entry.dependency_status.as_str().to_string(),
+                },
+            );
+        }
+
+        Ok(orchestration_runtime::compiler::FlowCompileContext {
+            provider_instances,
+            node_contributions,
+        })
     }
 
     pub async fn start_node_debug_preview(
@@ -696,22 +729,27 @@ where
         if instance.status != domain::ModelProviderInstanceStatus::Ready {
             return Err(ControlPlaneError::InvalidInput("provider_instance_id").into());
         }
-        let installation = self
-            .repository
-            .get_installation(instance.installation_id)
-            .await?
-            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        let installation =
+            reconcile_installation_snapshot(&self.repository, instance.installation_id).await?;
         let assigned = self
             .repository
             .list_assignments(self.workspace_id)
             .await?
             .into_iter()
             .any(|assignment| assignment.installation_id == installation.id);
-        if !assigned || !installation.enabled {
+        if !assigned
+            || matches!(
+                installation.desired_state,
+                domain::PluginDesiredState::Disabled
+            )
+        {
             return Err(ControlPlaneError::InvalidInput("provider_instance_id").into());
         }
+        if installation.availability_status != domain::PluginAvailabilityStatus::Available {
+            return Err(ControlPlaneError::Conflict("plugin_installation_unavailable").into());
+        }
 
-        let package = load_provider_package(&installation.install_path)?;
+        let package = load_provider_package(&installation.installed_path)?;
         input.provider_config = build_provider_runtime_config(
             &self.repository,
             &self.provider_secret_master_key,
@@ -729,6 +767,57 @@ where
                     result: output.result,
                 },
             )
+    }
+}
+
+#[async_trait]
+impl<R, H> orchestration_runtime::execution_engine::CapabilityInvoker
+    for RuntimeProviderInvoker<R, H>
+where
+    R: PluginRepository + Clone + Send + Sync,
+    H: ProviderRuntimePort + CapabilityPluginRuntimePort + Clone + Send + Sync,
+{
+    async fn invoke_capability_node(
+        &self,
+        runtime: &orchestration_runtime::compiled_plan::CompiledPluginRuntime,
+        config_payload: Value,
+        input_payload: Value,
+    ) -> Result<orchestration_runtime::execution_engine::CapabilityInvocationOutput> {
+        let installation =
+            reconcile_installation_snapshot(&self.repository, runtime.installation_id).await?;
+        let assigned = self
+            .repository
+            .list_assignments(self.workspace_id)
+            .await?
+            .into_iter()
+            .any(|assignment| assignment.installation_id == installation.id);
+        if !assigned
+            || matches!(
+                installation.desired_state,
+                domain::PluginDesiredState::Disabled
+            )
+        {
+            return Err(ControlPlaneError::InvalidInput("installation_id").into());
+        }
+        if installation.availability_status != domain::PluginAvailabilityStatus::Available {
+            return Err(ControlPlaneError::Conflict("plugin_installation_unavailable").into());
+        }
+
+        let output = self
+            .runtime
+            .execute_node(ExecuteCapabilityNodeInput {
+                installation,
+                contribution_code: runtime.contribution_code.clone(),
+                config_payload,
+                input_payload,
+            })
+            .await?;
+
+        Ok(
+            orchestration_runtime::execution_engine::CapabilityInvocationOutput {
+                output_payload: output.output_payload,
+            },
+        )
     }
 }
 
@@ -845,11 +934,37 @@ fn ensure_compiled_plan_runnable(
             }
             orchestration_runtime::compiled_plan::CompileIssueCode::MissingModel
             | orchestration_runtime::compiled_plan::CompileIssueCode::ModelNotAvailable => "model",
+            orchestration_runtime::compiled_plan::CompileIssueCode::MissingPluginId => "plugin_id",
+            orchestration_runtime::compiled_plan::CompileIssueCode::MissingPluginVersion => {
+                "plugin_version"
+            }
+            orchestration_runtime::compiled_plan::CompileIssueCode::MissingContributionCode => {
+                "contribution_code"
+            }
+            orchestration_runtime::compiled_plan::CompileIssueCode::MissingNodeShell => {
+                "node_shell"
+            }
+            orchestration_runtime::compiled_plan::CompileIssueCode::MissingSchemaVersion => {
+                "schema_version"
+            }
+            orchestration_runtime::compiled_plan::CompileIssueCode::MissingPluginContribution
+            | orchestration_runtime::compiled_plan::CompileIssueCode::PluginContributionDependencyNotReady =>
+                "contribution_code",
         };
         return Err(ControlPlaneError::InvalidInput(field).into());
     }
 
     Ok(())
+}
+
+fn node_contribution_lookup_key(
+    plugin_id: &str,
+    plugin_version: &str,
+    contribution_code: &str,
+    node_shell: &str,
+    schema_version: &str,
+) -> String {
+    format!("{plugin_id}::{plugin_version}::{contribution_code}::{node_shell}::{schema_version}")
 }
 
 async fn append_provider_stream_events<R>(
@@ -1160,6 +1275,12 @@ use std::{
 };
 
 #[cfg(test)]
+use crate::capability_plugin_runtime::{
+    CapabilityExecutionOutput, ResolveCapabilityOptionsInput, ResolveCapabilityOutputSchemaInput,
+    ValidateCapabilityConfigInput,
+};
+
+#[cfg(test)]
 use crate::{
     flow::InMemoryFlowRepository,
     ports::{
@@ -1179,6 +1300,7 @@ struct InMemoryOrchestrationRuntimeState {
     events_by_flow_run_id: HashMap<Uuid, Vec<domain::RunEventRecord>>,
     installations_by_id: HashMap<Uuid, domain::PluginInstallationRecord>,
     assignments_by_workspace: HashMap<Uuid, Vec<domain::PluginAssignmentRecord>>,
+    node_contributions_by_workspace: HashMap<Uuid, Vec<domain::NodeContributionRegistryEntry>>,
     instances_by_id: HashMap<Uuid, domain::ModelProviderInstanceRecord>,
     caches_by_instance_id: HashMap<Uuid, domain::ModelProviderCatalogCacheRecord>,
     secret_json_by_instance_id: HashMap<Uuid, Value>,
@@ -1197,9 +1319,11 @@ impl InMemoryOrchestrationRuntimeRepository {
     fn with_permissions(permissions: Vec<&str>) -> Self {
         let flow = InMemoryFlowRepository::with_permissions(permissions);
         let installation_id = Uuid::now_v7();
+        let capability_installation_id = Uuid::now_v7();
         let provider_instance_id = Uuid::now_v7();
         let workspace_id = Uuid::nil();
         let install_path = write_test_provider_package();
+        let capability_install_path = write_test_capability_package();
         let now = OffsetDateTime::now_utc();
         let installation = domain::PluginInstallationRecord {
             id: installation_id,
@@ -1212,12 +1336,46 @@ impl InMemoryOrchestrationRuntimeRepository {
             source_kind: "uploaded".to_string(),
             trust_level: "unverified".to_string(),
             verification_status: domain::PluginVerificationStatus::Valid,
-            enabled: true,
-            install_path,
+            desired_state: domain::PluginDesiredState::ActiveRequested,
+            artifact_status: domain::PluginArtifactStatus::Ready,
+            runtime_status: domain::PluginRuntimeStatus::Active,
+            availability_status: domain::PluginAvailabilityStatus::Available,
+            package_path: None,
+            installed_path: install_path,
             checksum: None,
+            manifest_fingerprint: None,
             signature_status: None,
             signature_algorithm: None,
             signing_key_id: None,
+            last_load_error: None,
+            metadata_json: json!({}),
+            created_by: Uuid::nil(),
+            created_at: now,
+            updated_at: now,
+        };
+        let capability_installation = domain::PluginInstallationRecord {
+            id: capability_installation_id,
+            provider_code: "fixture_capability".to_string(),
+            plugin_id: "fixture_capability@0.1.0".to_string(),
+            plugin_version: "0.1.0".to_string(),
+            contract_version: "1flowbase.capability/v1".to_string(),
+            protocol: "stdio_json".to_string(),
+            display_name: "Fixture Capability".to_string(),
+            source_kind: "uploaded".to_string(),
+            trust_level: "unverified".to_string(),
+            verification_status: domain::PluginVerificationStatus::Valid,
+            desired_state: domain::PluginDesiredState::ActiveRequested,
+            artifact_status: domain::PluginArtifactStatus::Ready,
+            runtime_status: domain::PluginRuntimeStatus::Active,
+            availability_status: domain::PluginAvailabilityStatus::Available,
+            package_path: None,
+            installed_path: capability_install_path,
+            checksum: None,
+            manifest_fingerprint: None,
+            signature_status: None,
+            signature_algorithm: None,
+            signing_key_id: None,
+            last_load_error: None,
             metadata_json: json!({}),
             created_by: Uuid::nil(),
             created_at: now,
@@ -1230,6 +1388,35 @@ impl InMemoryOrchestrationRuntimeRepository {
             provider_code: "fixture_provider".to_string(),
             assigned_by: Uuid::nil(),
             created_at: now,
+        };
+        let capability_assignment = domain::PluginAssignmentRecord {
+            id: Uuid::now_v7(),
+            installation_id: capability_installation_id,
+            workspace_id,
+            provider_code: "fixture_capability".to_string(),
+            assigned_by: Uuid::nil(),
+            created_at: now,
+        };
+        let capability_node_contribution = domain::NodeContributionRegistryEntry {
+            installation_id: capability_installation_id,
+            provider_code: "fixture_capability".to_string(),
+            plugin_id: "fixture_capability@0.1.0".to_string(),
+            plugin_version: "0.1.0".to_string(),
+            contribution_code: "fixture_action".to_string(),
+            node_shell: "action".to_string(),
+            category: "automation".to_string(),
+            title: "Fixture Action".to_string(),
+            description: "Fixture capability node".to_string(),
+            icon: "puzzle".to_string(),
+            schema_ui: json!({}),
+            schema_version: "1flowbase.node-contribution/v1".to_string(),
+            output_schema: json!({}),
+            required_auth: vec!["provider_instance".to_string()],
+            visibility: "public".to_string(),
+            experimental: false,
+            dependency_installation_kind: "optional".to_string(),
+            dependency_plugin_version_range: ">=0.1.0".to_string(),
+            dependency_status: domain::NodeContributionDependencyStatus::Ready,
         };
         let instance = domain::ModelProviderInstanceRecord {
             id: provider_instance_id,
@@ -1277,8 +1464,18 @@ impl InMemoryOrchestrationRuntimeRepository {
         Self {
             flow,
             inner: Arc::new(Mutex::new(InMemoryOrchestrationRuntimeState {
-                installations_by_id: HashMap::from([(installation_id, installation)]),
-                assignments_by_workspace: HashMap::from([(workspace_id, vec![assignment])]),
+                installations_by_id: HashMap::from([
+                    (installation_id, installation),
+                    (capability_installation_id, capability_installation),
+                ]),
+                assignments_by_workspace: HashMap::from([(
+                    workspace_id,
+                    vec![assignment, capability_assignment],
+                )]),
+                node_contributions_by_workspace: HashMap::from([(
+                    workspace_id,
+                    vec![capability_node_contribution],
+                )]),
                 instances_by_id: HashMap::from([(provider_instance_id, instance)]),
                 caches_by_instance_id: HashMap::from([(provider_instance_id, cache)]),
                 secret_json_by_instance_id: HashMap::from([(
@@ -1460,11 +1657,68 @@ impl PluginRepository for InMemoryOrchestrationRuntimeRepository {
         Ok(inner.installations_by_id.values().cloned().collect())
     }
 
-    async fn update_installation_enabled(
+    async fn list_pending_restart_host_extensions(
         &self,
-        _input: &crate::ports::UpdatePluginInstallationEnabledInput,
+    ) -> Result<Vec<domain::PluginInstallationRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .installations_by_id
+            .values()
+            .filter(|installation| {
+                matches!(
+                    installation.desired_state,
+                    domain::PluginDesiredState::PendingRestart
+                )
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn update_desired_state(
+        &self,
+        input: &crate::ports::UpdatePluginDesiredStateInput,
     ) -> Result<domain::PluginInstallationRecord> {
-        unimplemented!("not needed in orchestration runtime tests")
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let installation = inner
+            .installations_by_id
+            .get_mut(&input.installation_id)
+            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        installation.desired_state = input.desired_state;
+        installation.availability_status = input.availability_status;
+        Ok(installation.clone())
+    }
+
+    async fn update_artifact_snapshot(
+        &self,
+        input: &crate::ports::UpdatePluginArtifactSnapshotInput,
+    ) -> Result<domain::PluginInstallationRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let installation = inner
+            .installations_by_id
+            .get_mut(&input.installation_id)
+            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        installation.artifact_status = input.artifact_status;
+        installation.availability_status = input.availability_status;
+        installation.package_path = input.package_path.clone();
+        installation.installed_path = input.installed_path.clone();
+        installation.checksum = input.checksum.clone();
+        installation.manifest_fingerprint = input.manifest_fingerprint.clone();
+        Ok(installation.clone())
+    }
+
+    async fn update_runtime_snapshot(
+        &self,
+        input: &crate::ports::UpdatePluginRuntimeSnapshotInput,
+    ) -> Result<domain::PluginInstallationRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let installation = inner
+            .installations_by_id
+            .get_mut(&input.installation_id)
+            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        installation.runtime_status = input.runtime_status;
+        installation.availability_status = input.availability_status;
+        installation.last_load_error = input.last_load_error.clone();
+        Ok(installation.clone())
     }
 
     async fn create_assignment(
@@ -1506,6 +1760,29 @@ impl PluginRepository for InMemoryOrchestrationRuntimeRepository {
 
     async fn list_tasks(&self) -> Result<Vec<domain::PluginTaskRecord>> {
         Ok(Vec::new())
+    }
+}
+
+#[cfg(test)]
+#[async_trait]
+impl NodeContributionRepository for InMemoryOrchestrationRuntimeRepository {
+    async fn replace_installation_node_contributions(
+        &self,
+        _input: &crate::ports::ReplaceInstallationNodeContributionsInput,
+    ) -> Result<()> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn list_node_contributions(
+        &self,
+        workspace_id: Uuid,
+    ) -> Result<Vec<domain::NodeContributionRegistryEntry>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .node_contributions_by_workspace
+            .get(&workspace_id)
+            .cloned()
+            .unwrap_or_default())
     }
 }
 
@@ -1692,6 +1969,59 @@ impl ProviderRuntimePort for InMemoryProviderRuntime {
                 ),
                 ..plugin_framework::provider_contract::ProviderInvocationResult::default()
             },
+        })
+    }
+}
+
+#[cfg(test)]
+#[async_trait]
+impl CapabilityPluginRuntimePort for InMemoryProviderRuntime {
+    async fn validate_config(&self, input: ValidateCapabilityConfigInput) -> Result<Value> {
+        Ok(json!({
+            "installation_id": input.installation.id,
+            "plugin_id": input.installation.plugin_id,
+            "contribution_code": input.contribution_code,
+            "config_payload": input.config_payload,
+        }))
+    }
+
+    async fn resolve_dynamic_options(&self, input: ResolveCapabilityOptionsInput) -> Result<Value> {
+        Ok(json!({
+            "installation_id": input.installation.id,
+            "plugin_id": input.installation.plugin_id,
+            "contribution_code": input.contribution_code,
+            "config_payload": input.config_payload,
+        }))
+    }
+
+    async fn resolve_output_schema(
+        &self,
+        input: ResolveCapabilityOutputSchemaInput,
+    ) -> Result<Value> {
+        Ok(json!({
+            "installation_id": input.installation.id,
+            "plugin_id": input.installation.plugin_id,
+            "contribution_code": input.contribution_code,
+            "config_payload": input.config_payload,
+        }))
+    }
+
+    async fn execute_node(
+        &self,
+        input: ExecuteCapabilityNodeInput,
+    ) -> Result<CapabilityExecutionOutput> {
+        let answer = input
+            .input_payload
+            .get("query")
+            .cloned()
+            .unwrap_or(Value::Null);
+        Ok(CapabilityExecutionOutput {
+            output_payload: json!({
+                "answer": answer,
+                "plugin_id": input.installation.plugin_id,
+                "installation_id": input.installation.id,
+                "contribution_code": input.contribution_code,
+            }),
         })
     }
 }
@@ -2251,6 +2581,110 @@ provider_metadata:
 }
 
 #[cfg(test)]
+fn write_test_capability_package() -> String {
+    use std::fs;
+
+    let root =
+        std::env::temp_dir().join(format!("1flowbase-capability-fixture-{}", Uuid::now_v7()));
+    fs::create_dir_all(root.join("bin")).expect("create fixture runtime dir");
+    fs::create_dir_all(root.join("i18n")).expect("create fixture i18n dir");
+    fs::write(
+        root.join("manifest.yaml"),
+        r#"manifest_version: 1
+plugin_id: fixture_capability@0.1.0
+version: 0.1.0
+vendor: 1flowbase tests
+display_name: Fixture Capability
+description: Fixture Capability
+icon: icon.svg
+source_kind: uploaded
+trust_level: unverified
+consumption_kind: capability_plugin
+execution_mode: process_per_call
+slot_codes:
+  - node_contribution
+binding_targets:
+  - workspace
+selection_mode: manual_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/fixture_capability
+  limits:
+    memory_bytes: 134217728
+    timeout_ms: 5000
+node_contributions:
+  - contribution_code: fixture_action
+    node_shell: action
+    category: automation
+    title: Fixture Action
+    description: Fixture capability node
+    icon: puzzle
+    schema_ui: {}
+    schema_version: 1flowbase.node-contribution/v1
+    output_schema: {}
+    required_auth:
+      - provider_instance
+    visibility: public
+    experimental: false
+    dependency:
+      installation_kind: optional
+      plugin_version_range: ">=0.1.0"
+"#,
+    )
+    .expect("write manifest");
+    fs::write(
+        root.join("bin/fixture_capability"),
+        r#"#!/usr/bin/env bash
+set -euo pipefail
+
+payload="$(cat)"
+case "${payload}" in
+  *'"method":"execute"'*)
+    printf '%s' '{"ok":true,"result":{"answer":"world"}}'
+    ;;
+  *'"method":"validate_config"'*)
+    printf '%s' '{"ok":true,"result":{"ok":true}}'
+    ;;
+  *'"method":"resolve_dynamic_options"'*)
+    printf '%s' '{"ok":true,"result":{"fields":[]}}'
+    ;;
+  *'"method":"resolve_output_schema"'*)
+    printf '%s' '{"ok":true,"result":{"schema_version":"1flowbase.capability.output/v1"}}'
+    ;;
+  *)
+    printf '%s' '{"ok":false,"error":{"message":"unknown method"}}'
+    exit 1
+    ;;
+esac
+"#,
+    )
+    .expect("write runtime");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut permissions = fs::metadata(root.join("bin/fixture_capability"))
+            .expect("read runtime permissions")
+            .permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(root.join("bin/fixture_capability"), permissions)
+            .expect("mark runtime executable");
+    }
+    fs::write(root.join("i18n/en_US.json"), "{}").expect("write i18n");
+
+    root.to_string_lossy().to_string()
+}
+
+#[cfg(test)]
 pub struct SeededPreviewApplication {
     pub actor_user_id: Uuid,
     pub application_id: Uuid,
@@ -2377,6 +2811,14 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
             application_id: seeded.application_id,
             callback_task_id: detail.callback_tasks.first().expect("callback task").id,
         }
+    }
+
+    pub async fn seed_application_with_plugin_node_flow(
+        &self,
+        name: &str,
+    ) -> SeededPreviewApplication {
+        self.seed_application_with_document(name, build_plugin_capability_flow_document)
+            .await
     }
 
     pub async fn force_flow_run_status(&self, flow_run_id: Uuid, status: domain::FlowRunStatus) {
@@ -2613,6 +3055,53 @@ fn build_callback_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> V
             "edges": [
                 { "id": "edge-start-tool", "source": "node-start", "target": "node-tool", "sourceHandle": null, "targetHandle": null, "containerId": null, "points": [] },
                 { "id": "edge-tool-answer", "source": "node-tool", "target": "node-answer", "sourceHandle": null, "targetHandle": null, "containerId": null, "points": [] }
+            ]
+        },
+        "editor": { "viewport": { "x": 0, "y": 0, "zoom": 1 }, "annotations": [], "activeContainerPath": [] }
+    })
+}
+
+#[cfg(test)]
+fn build_plugin_capability_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> Value {
+    json!({
+        "schemaVersion": "1flowbase.flow/v1",
+        "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
+        "graph": {
+            "nodes": [
+                {
+                    "id": "node-start",
+                    "type": "start",
+                    "alias": "Start",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 0, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {},
+                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                },
+                {
+                    "id": "node-plugin",
+                    "type": "plugin_node",
+                    "alias": "Plugin Node",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 240, "y": 0 },
+                    "configVersion": 1,
+                    "plugin_id": "fixture_capability@0.1.0",
+                    "plugin_version": "0.1.0",
+                    "contribution_code": "fixture_action",
+                    "node_shell": "action",
+                    "schema_version": "1flowbase.node-contribution/v1",
+                    "config": { "prompt": "Hello {{ node-start.query }}" },
+                    "bindings": {
+                        "query": { "kind": "selector", "value": ["node-start", "query"] }
+                    },
+                    "outputs": [{ "key": "answer", "title": "回答", "valueType": "string" }]
+                }
+            ],
+            "edges": [
+                { "id": "edge-start-plugin", "source": "node-start", "target": "node-plugin", "sourceHandle": null, "targetHandle": null, "containerId": null, "points": [] }
             ]
         },
         "editor": { "viewport": { "x": 0, "y": 0, "zoom": 1 }, "annotations": [], "activeContainerPath": [] }

@@ -57,7 +57,7 @@ fn model_provider_instance_rejects_disabled_validation() {
 #[test]
 fn plugin_task_rejects_restarting_terminal_status() {
     let error = ensure_plugin_task_transition(
-        PluginTaskStatus::Success,
+        PluginTaskStatus::Succeeded,
         PluginTaskStatus::Running,
         "plugin_task_progress",
     )
@@ -66,7 +66,7 @@ fn plugin_task_rejects_restarting_terminal_status() {
     assert!(matches!(
         error,
         ControlPlaneError::InvalidStateTransition { resource, from, to, .. }
-            if resource == "plugin_task" && from == "success" && to == "running"
+            if resource == "plugin_task" && from == "succeeded" && to == "running"
     ));
 }
 

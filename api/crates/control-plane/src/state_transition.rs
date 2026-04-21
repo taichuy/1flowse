@@ -60,11 +60,11 @@ pub fn ensure_plugin_task_transition(
     let allowed = matches!(
         (from, to),
         (
-            domain::PluginTaskStatus::Pending,
+            domain::PluginTaskStatus::Queued,
             domain::PluginTaskStatus::Running
         ) | (
             domain::PluginTaskStatus::Running,
-            domain::PluginTaskStatus::Success
+            domain::PluginTaskStatus::Succeeded
         ) | (
             domain::PluginTaskStatus::Running,
             domain::PluginTaskStatus::Failed

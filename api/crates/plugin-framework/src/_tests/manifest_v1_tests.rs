@@ -1,7 +1,5 @@
 use plugin_framework::{
-    manifest_v1::PluginExecutionMode,
-    parse_plugin_manifest,
-    PluginConsumptionKind,
+    manifest_v1::PluginExecutionMode, parse_plugin_manifest, PluginConsumptionKind,
 };
 
 #[test]
@@ -49,7 +47,10 @@ node_contributions: []
     assert_eq!(manifest.version, "0.4.0");
     assert_eq!(manifest.vendor, "1flowbase");
     assert_eq!(manifest.display_name, "OpenAI Compatible");
-    assert_eq!(manifest.consumption_kind, PluginConsumptionKind::RuntimeExtension);
+    assert_eq!(
+        manifest.consumption_kind,
+        PluginConsumptionKind::RuntimeExtension
+    );
     assert_eq!(manifest.execution_mode, PluginExecutionMode::ProcessPerCall);
     assert_eq!(manifest.consumption_kind.as_str(), "runtime_extension");
     assert_eq!(manifest.execution_mode.as_str(), "process_per_call");
@@ -177,9 +178,7 @@ node_contributions: []
     )
     .unwrap_err();
 
-    assert!(error
-        .to_string()
-        .contains("manifest_version must be 1"));
+    assert!(error.to_string().contains("manifest_version must be 1"));
 }
 
 #[test]
@@ -468,7 +467,7 @@ node_contributions:
     )
     .unwrap_err();
 
-    assert!(error.to_string().contains(
-        "contract_version must be 1flowbase.capability/v1 for capability_plugin"
-    ));
+    assert!(error
+        .to_string()
+        .contains("contract_version must be 1flowbase.capability/v1 for capability_plugin"));
 }

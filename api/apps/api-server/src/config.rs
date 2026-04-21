@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use axum::http::HeaderValue;
 use serde::Deserialize;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApiEnvironment {
@@ -35,6 +35,9 @@ pub struct ApiConfig {
     pub cors_allowed_origins: Option<Vec<HeaderValue>>,
     pub provider_install_root: String,
     pub provider_secret_master_key: String,
+    pub host_extension_dropin_root: String,
+    pub allow_unverified_filesystem_dropins: bool,
+    pub allow_uploaded_host_extensions: bool,
     pub official_plugin_repository: String,
     pub official_plugin_default_registry_url: String,
     pub official_plugin_mirror_registry_url: Option<String>,
@@ -98,6 +101,22 @@ impl ApiConfig {
             .get("API_PROVIDER_SECRET_MASTER_KEY")
             .cloned()
             .unwrap_or_else(|| "dev-provider-secret-master-key-unsafe".to_string());
+        let host_extension_dropin_root = map
+            .get("API_HOST_EXTENSION_DROPIN_ROOT")
+            .cloned()
+            .unwrap_or_else(|| {
+                PathBuf::from(&provider_install_root)
+                    .join("host-extension")
+                    .join("dropins")
+                    .display()
+                    .to_string()
+            });
+        let allow_unverified_filesystem_dropins = parse_bool_flag(
+            map.get("API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS"),
+            true,
+        )?;
+        let allow_uploaded_host_extensions =
+            parse_bool_flag(map.get("API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS"), false)?;
         let official_plugin_repository = map
             .get("API_OFFICIAL_PLUGIN_REPOSITORY")
             .cloned()
@@ -151,6 +170,9 @@ impl ApiConfig {
             cors_allowed_origins,
             provider_install_root,
             provider_secret_master_key,
+            host_extension_dropin_root,
+            allow_unverified_filesystem_dropins,
+            allow_uploaded_host_extensions,
             official_plugin_repository,
             official_plugin_default_registry_url,
             official_plugin_mirror_registry_url,
@@ -228,4 +250,16 @@ fn parse_cors_allowed_origins(value: Option<&String>) -> Result<Option<Vec<Heade
     }
 
     Ok(Some(origins))
+}
+
+fn parse_bool_flag(value: Option<&String>, default: bool) -> Result<bool> {
+    let Some(value) = value else {
+        return Ok(default);
+    };
+
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Ok(true),
+        "0" | "false" | "no" | "off" => Ok(false),
+        _ => Err(anyhow!("invalid boolean flag `{value}`")),
+    }
 }

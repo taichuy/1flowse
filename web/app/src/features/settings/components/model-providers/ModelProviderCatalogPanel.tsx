@@ -2,6 +2,7 @@ import { Button, Empty, Space, Table, Tag, Typography } from 'antd';
 
 import type { SettingsPluginFamilyEntry } from '../../api/plugins';
 import type { SettingsModelProviderCatalogEntry } from '../../api/model-providers';
+import { formatPluginAvailabilityStatus } from './plugin-installation-status';
 
 function getCatalogSummary(
   _family: SettingsPluginFamilyEntry,
@@ -85,14 +86,13 @@ export function ModelProviderCatalogPanel({
             render: (_, entry) => {
               const currentCatalogEntry =
                 currentCatalogEntries[entry.provider_code];
+              const status = formatPluginAvailabilityStatus(
+                currentCatalogEntry?.availability_status ?? 'disabled'
+              );
 
               return (
                 <Space wrap size={6}>
-                  <Tag
-                    color={currentCatalogEntry?.enabled ? 'green' : 'default'}
-                  >
-                    {currentCatalogEntry?.enabled ? '已启用' : '待同步'}
-                  </Tag>
+                  <Tag color={status.color}>{status.label}</Tag>
                   <Tag>{entry.model_discovery_mode}</Tag>
                   {entry.has_update ? <Tag color="gold">有可用更新</Tag> : null}
                 </Space>

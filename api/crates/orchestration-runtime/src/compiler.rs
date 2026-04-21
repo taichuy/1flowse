@@ -5,12 +5,13 @@ use serde_json::Value;
 
 use crate::compiled_plan::{
     CompileIssue, CompileIssueCode, CompiledBinding, CompiledLlmRuntime, CompiledNode,
-    CompiledOutput, CompiledPlan,
+    CompiledOutput, CompiledPlan, CompiledPluginRuntime,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FlowCompileContext {
     pub provider_instances: BTreeMap<String, FlowCompileProviderInstance>,
+    pub node_contributions: BTreeMap<String, FlowCompileNodeContribution>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,6 +22,17 @@ pub struct FlowCompileProviderInstance {
     pub is_ready: bool,
     pub available_models: BTreeSet<String>,
     pub allow_custom_models: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlowCompileNodeContribution {
+    pub installation_id: uuid::Uuid,
+    pub plugin_id: String,
+    pub plugin_version: String,
+    pub contribution_code: String,
+    pub node_shell: String,
+    pub schema_version: String,
+    pub dependency_status: String,
 }
 
 type NodeTopologyBuild = (
@@ -220,6 +232,9 @@ fn compile_node(
     let llm_runtime = (node_type == "llm")
         .then(|| compile_llm_runtime(&node_id, &config, context, compile_issues))
         .flatten();
+    let plugin_runtime = (node_type == "plugin_node")
+        .then(|| compile_plugin_runtime(&node_id, node, context, compile_issues))
+        .flatten();
 
     Ok(CompiledNode {
         node_id,
@@ -231,6 +246,7 @@ fn compile_node(
         bindings,
         outputs,
         config,
+        plugin_runtime,
         llm_runtime,
     })
 }
@@ -327,6 +343,122 @@ fn compile_llm_runtime(
         protocol: provider_instance.protocol.clone(),
         model,
     })
+}
+
+fn compile_plugin_runtime(
+    node_id: &str,
+    node: &Value,
+    context: &FlowCompileContext,
+    compile_issues: &mut Vec<CompileIssue>,
+) -> Option<CompiledPluginRuntime> {
+    let plugin_id = required_plugin_string(
+        node_id,
+        node,
+        "plugin_id",
+        CompileIssueCode::MissingPluginId,
+        compile_issues,
+    )?;
+    let plugin_version = required_plugin_string(
+        node_id,
+        node,
+        "plugin_version",
+        CompileIssueCode::MissingPluginVersion,
+        compile_issues,
+    )?;
+    let contribution_code = required_plugin_string(
+        node_id,
+        node,
+        "contribution_code",
+        CompileIssueCode::MissingContributionCode,
+        compile_issues,
+    )?;
+    let node_shell = required_plugin_string(
+        node_id,
+        node,
+        "node_shell",
+        CompileIssueCode::MissingNodeShell,
+        compile_issues,
+    )?;
+    let schema_version = required_plugin_string(
+        node_id,
+        node,
+        "schema_version",
+        CompileIssueCode::MissingSchemaVersion,
+        compile_issues,
+    )?;
+
+    let lookup_key = node_contribution_lookup_key(
+        &plugin_id,
+        &plugin_version,
+        &contribution_code,
+        &node_shell,
+        &schema_version,
+    );
+    let Some(contribution) = context.node_contributions.get(&lookup_key) else {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::MissingPluginContribution,
+            message: format!(
+                "node {node_id} missing workspace contribution for {plugin_id}:{plugin_version}:{contribution_code}"
+            ),
+        });
+        return None;
+    };
+
+    if contribution.dependency_status != "ready" {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::PluginContributionDependencyNotReady,
+            message: format!(
+                "node {node_id} contribution {contribution_code} is not ready: {}",
+                contribution.dependency_status
+            ),
+        });
+    }
+
+    Some(CompiledPluginRuntime {
+        installation_id: contribution.installation_id,
+        plugin_id: contribution.plugin_id.clone(),
+        plugin_version: contribution.plugin_version.clone(),
+        contribution_code: contribution.contribution_code.clone(),
+        node_shell: contribution.node_shell.clone(),
+        schema_version: contribution.schema_version.clone(),
+    })
+}
+
+fn required_plugin_string(
+    node_id: &str,
+    node: &Value,
+    field: &str,
+    code: CompileIssueCode,
+    compile_issues: &mut Vec<CompileIssue>,
+) -> Option<String> {
+    let value = node
+        .get(field)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    if value.is_none() {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code,
+            message: format!("node {node_id} missing {field}"),
+        });
+    }
+
+    value
+}
+
+fn node_contribution_lookup_key(
+    plugin_id: &str,
+    plugin_version: &str,
+    contribution_code: &str,
+    node_shell: &str,
+    schema_version: &str,
+) -> String {
+    format!("{plugin_id}::{plugin_version}::{contribution_code}::{node_shell}::{schema_version}")
 }
 
 fn compile_bindings(

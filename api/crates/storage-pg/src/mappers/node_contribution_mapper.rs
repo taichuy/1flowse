@@ -29,7 +29,9 @@ pub struct StoredNodeContributionRegistryRow {
 pub struct PgNodeContributionMapper;
 
 impl PgNodeContributionMapper {
-    pub fn to_registry_entry(row: StoredNodeContributionRegistryRow) -> Result<NodeContributionRegistryEntry> {
+    pub fn to_registry_entry(
+        row: StoredNodeContributionRegistryRow,
+    ) -> Result<NodeContributionRegistryEntry> {
         Ok(NodeContributionRegistryEntry {
             installation_id: row.installation_id,
             provider_code: row.provider_code,
@@ -74,6 +76,8 @@ pub fn parse_dependency_status(value: &str) -> Result<NodeContributionDependency
         "missing_plugin" => Ok(NodeContributionDependencyStatus::MissingPlugin),
         "version_mismatch" => Ok(NodeContributionDependencyStatus::VersionMismatch),
         "disabled_plugin" => Ok(NodeContributionDependencyStatus::DisabledPlugin),
-        _ => Err(anyhow!("unknown node contribution dependency_status: {value}")),
+        _ => Err(anyhow!(
+            "unknown node contribution dependency_status: {value}"
+        )),
     }
 }
