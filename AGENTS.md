@@ -1,4 +1,5 @@
 @.memory/AGENTS.md
+@user-memory.md
 # 本项目相关skill在
 .agents/skills
 如果没有注册，请自行更新到对应约定目录
