@@ -16,11 +16,24 @@ function getAvailableParallelism() {
 }
 
 function isCiEnvironment(env = process.env) {
-  return env.CI === 'true' || env.GITHUB_ACTIONS === 'true';
+  return isTruthyEnvironmentValue(env.CI) || isTruthyEnvironmentValue(env.GITHUB_ACTIONS);
 }
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isTruthyEnvironmentValue(value) {
+  if (value === true || value === 1) {
+    return true;
+  }
+
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on';
 }
 
 function assertPlainObject(name, value) {
@@ -115,6 +128,10 @@ function loadVerifyRuntimeConfig({
   env = process.env,
   availableParallelism = getAvailableParallelism(),
 } = {}) {
+  if (typeof repoRoot !== 'string' || repoRoot.trim() === '') {
+    throw new Error('repoRoot must be a non-empty string');
+  }
+
   const config = readLocalVerifyConfig(repoRoot, env);
   if (config === undefined) {
     return resolveRuntimeConfig({}, availableParallelism);

@@ -6,6 +6,7 @@ const path = require('node:path');
 
 const {
   LOCAL_VERIFY_CONFIG_FILE,
+  isCiEnvironment,
   loadVerifyRuntimeConfig,
 } = require('../verify-runtime.js');
 
@@ -107,6 +108,24 @@ test('loadVerifyRuntimeConfig ignores local config in CI environments', () => {
   });
 });
 
+test('isCiEnvironment accepts common truthy CI variants', () => {
+  const cases = [
+    [{ CI: 'true' }, true],
+    [{ CI: 'TRUE' }, true],
+    [{ CI: '1' }, true],
+    [{ GITHUB_ACTIONS: 'true' }, true],
+    [{ GITHUB_ACTIONS: 'TRUE' }, true],
+    [{ GITHUB_ACTIONS: '1' }, true],
+    [{ CI: 'false', GITHUB_ACTIONS: 'true' }, true],
+    [{ CI: '0', GITHUB_ACTIONS: '0' }, false],
+    [{}, false],
+  ];
+
+  for (const [env, expected] of cases) {
+    assert.equal(isCiEnvironment(env), expected);
+  }
+});
+
 test('loadVerifyRuntimeConfig rejects invalid values', () => {
   const repoRoot = createRepoRoot();
 
@@ -131,6 +150,27 @@ test('loadVerifyRuntimeConfig rejects invalid values', () => {
       availableParallelism: 4,
     }),
     /must be a positive integer/i
+  );
+});
+
+test('loadVerifyRuntimeConfig rejects missing repoRoot', () => {
+  assert.throws(
+    () => loadVerifyRuntimeConfig({
+      env: {},
+      availableParallelism: 4,
+    }),
+    /repoRoot must be a non-empty string/
+  );
+});
+
+test('loadVerifyRuntimeConfig rejects empty repoRoot', () => {
+  assert.throws(
+    () => loadVerifyRuntimeConfig({
+      repoRoot: '',
+      env: {},
+      availableParallelism: 4,
+    }),
+    /repoRoot must be a non-empty string/
   );
 });
 
