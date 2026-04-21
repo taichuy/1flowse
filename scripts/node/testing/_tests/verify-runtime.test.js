@@ -72,6 +72,40 @@ test('loadVerifyRuntimeConfig applies local overrides when config file exists', 
   });
 });
 
+test('loadVerifyRuntimeConfig merges backend and lock overrides field by field', () => {
+  const repoRoot = createRepoRoot();
+
+  fs.writeFileSync(
+    path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
+    JSON.stringify({
+      backend: {
+        cargoJobs: 3,
+      },
+      locks: {
+        waitTimeoutMinutes: 12,
+      },
+    }, null, 2)
+  );
+
+  const config = loadVerifyRuntimeConfig({
+    repoRoot,
+    env: {},
+    availableParallelism: 8,
+  });
+
+  assert.deepEqual(config, {
+    backend: {
+      cargoJobs: 3,
+      cargoTestThreads: 4,
+    },
+    locks: {
+      waitTimeoutMinutes: 12,
+      waitTimeoutMs: 12 * 60 * 1000,
+      pollIntervalMs: 5000,
+    },
+  });
+});
+
 test('loadVerifyRuntimeConfig ignores local config in CI environments', () => {
   const repoRoot = createRepoRoot();
 
@@ -126,7 +160,7 @@ test('isCiEnvironment accepts common truthy CI variants', () => {
   }
 });
 
-test('loadVerifyRuntimeConfig rejects invalid values', () => {
+test('loadVerifyRuntimeConfig rejects invalid backend cargoJobs', () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
@@ -134,11 +168,6 @@ test('loadVerifyRuntimeConfig rejects invalid values', () => {
     JSON.stringify({
       backend: {
         cargoJobs: 0,
-        cargoTestThreads: 10,
-      },
-      locks: {
-        waitTimeoutMinutes: -1,
-        pollIntervalMs: 0,
       },
     }, null, 2)
   );
@@ -150,6 +179,94 @@ test('loadVerifyRuntimeConfig rejects invalid values', () => {
       availableParallelism: 4,
     }),
     /must be a positive integer/i
+  );
+});
+
+test('loadVerifyRuntimeConfig rejects invalid backend cargoTestThreads', () => {
+  const repoRoot = createRepoRoot();
+
+  fs.writeFileSync(
+    path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
+    JSON.stringify({
+      backend: {
+        cargoTestThreads: 0,
+      },
+    }, null, 2)
+  );
+
+  assert.throws(
+    () => loadVerifyRuntimeConfig({
+      repoRoot,
+      env: {},
+      availableParallelism: 4,
+    }),
+    /backend\.cargoTestThreads must be a positive integer/
+  );
+});
+
+test('loadVerifyRuntimeConfig rejects invalid locks waitTimeoutMinutes', () => {
+  const repoRoot = createRepoRoot();
+
+  fs.writeFileSync(
+    path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
+    JSON.stringify({
+      locks: {
+        waitTimeoutMinutes: 0,
+      },
+    }, null, 2)
+  );
+
+  assert.throws(
+    () => loadVerifyRuntimeConfig({
+      repoRoot,
+      env: {},
+      availableParallelism: 4,
+    }),
+    /locks\.waitTimeoutMinutes must be a positive integer/
+  );
+});
+
+test('loadVerifyRuntimeConfig rejects invalid locks pollIntervalMs', () => {
+  const repoRoot = createRepoRoot();
+
+  fs.writeFileSync(
+    path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
+    JSON.stringify({
+      locks: {
+        pollIntervalMs: 0,
+      },
+    }, null, 2)
+  );
+
+  assert.throws(
+    () => loadVerifyRuntimeConfig({
+      repoRoot,
+      env: {},
+      availableParallelism: 4,
+    }),
+    /locks\.pollIntervalMs must be a positive integer/
+  );
+});
+
+test('loadVerifyRuntimeConfig rejects backend cargoTestThreads above available parallelism', () => {
+  const repoRoot = createRepoRoot();
+
+  fs.writeFileSync(
+    path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
+    JSON.stringify({
+      backend: {
+        cargoTestThreads: 5,
+      },
+    }, null, 2)
+  );
+
+  assert.throws(
+    () => loadVerifyRuntimeConfig({
+      repoRoot,
+      env: {},
+      availableParallelism: 4,
+    }),
+    /backend\.cargoTestThreads must not exceed availableParallelism/
   );
 });
 
@@ -247,29 +364,6 @@ test('loadVerifyRuntimeConfig rejects non-object locks config values', () => {
       availableParallelism: 4,
     }),
     /locks must be a plain object/
-  );
-});
-
-test('loadVerifyRuntimeConfig rejects backend values that exceed available parallelism', () => {
-  const repoRoot = createRepoRoot();
-
-  fs.writeFileSync(
-    path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      backend: {
-        cargoJobs: 5,
-        cargoTestThreads: 5,
-      },
-    }, null, 2)
-  );
-
-  assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 4,
-    }),
-    /must not exceed availableParallelism/
   );
 });
 
