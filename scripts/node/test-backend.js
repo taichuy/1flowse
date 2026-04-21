@@ -2,32 +2,40 @@
 
 const {
   buildCargoCommandEnv,
-  getCargoParallelism,
-  runCommandSequence,
   getRepoRoot,
+  runManagedCommandSequence,
 } = require('./testing/warning-capture.js');
+const { loadVerifyRuntimeConfig } = require('./testing/verify-runtime.js');
 
-function buildCommands({ cargoParallelism }) {
+function buildCommands({ cargoJobs, cargoTestThreads }) {
   return [
     {
       label: 'cargo-test',
       command: 'cargo',
-      args: ['test', '--workspace', '--jobs', String(cargoParallelism), '--', `--test-threads=${cargoParallelism}`],
+      args: ['test', '--workspace', '--jobs', String(cargoJobs), '--', `--test-threads=${cargoTestThreads}`],
       cwd: 'api',
-      env: buildCargoCommandEnv({ cargoParallelism, disableIncremental: true }),
+      env: buildCargoCommandEnv({ cargoParallelism: cargoJobs, disableIncremental: true }),
     },
   ];
 }
 
-function main(_argv = [], deps = {}) {
+async function main(_argv = [], deps = {}) {
   const repoRoot = deps.repoRoot || getRepoRoot();
-  const cargoParallelism = deps.cargoParallelism || getCargoParallelism();
+  const env = deps.env || process.env;
+  const runtimeConfig = deps.runtimeConfig || loadVerifyRuntimeConfig({ repoRoot, env });
+  const managedRunner = deps.managedRunnerImpl || runManagedCommandSequence;
 
-  return runCommandSequence({
+  return managedRunner({
     repoRoot,
-    env: deps.env || process.env,
+    env,
     scope: 'test-backend',
-    commands: buildCommands({ cargoParallelism }),
+    lockMode: 'heavy',
+    commandDisplay: 'node scripts/node/test-backend.js',
+    runtimeConfig,
+    commands: buildCommands({
+      cargoJobs: runtimeConfig.backend.cargoJobs,
+      cargoTestThreads: runtimeConfig.backend.cargoTestThreads,
+    }),
     spawnSyncImpl: deps.spawnSyncImpl,
     writeStdout: deps.writeStdout,
     writeStderr: deps.writeStderr,
@@ -35,12 +43,15 @@ function main(_argv = [], deps = {}) {
 }
 
 if (require.main === module) {
-  try {
-    process.exitCode = main(process.argv.slice(2));
-  } catch (error) {
-    process.stderr.write(`[1flowbase-test-backend] ${error.message}\n`);
-    process.exitCode = 1;
-  }
+  Promise.resolve()
+    .then(() => main(process.argv.slice(2)))
+    .then((status) => {
+      process.exitCode = status;
+    })
+    .catch((error) => {
+      process.stderr.write(`[1flowbase-test-backend] ${error.message}\n`);
+      process.exitCode = 1;
+    });
 }
 
 module.exports = {

@@ -2,6 +2,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const {
+  loadVerifyRuntimeConfig,
+  withHeavyVerifyLock,
+} = require('./verify-runtime.js');
 
 function getRepoRoot() {
   return path.resolve(__dirname, '..', '..', '..');
@@ -132,6 +136,50 @@ function runCommandSequence({
   return 0;
 }
 
+async function runManagedCommandSequence({
+  repoRoot = getRepoRoot(),
+  env = process.env,
+  scope,
+  commandDisplay = scope,
+  commands,
+  lockMode = 'none',
+  runtimeConfig,
+  spawnSyncImpl = spawnSync,
+  writeStdout = (text) => process.stdout.write(text),
+  writeStderr = (text) => process.stderr.write(text),
+  withHeavyVerifyLockImpl = withHeavyVerifyLock,
+  runCommandSequenceImpl = runCommandSequence,
+} = {}) {
+  const execute = (sequenceEnv) => runCommandSequenceImpl({
+    repoRoot,
+    env: sequenceEnv,
+    scope,
+    commands,
+    spawnSyncImpl,
+    writeStdout,
+    writeStderr,
+  });
+
+  if (lockMode !== 'heavy') {
+    return execute(env);
+  }
+
+  const resolvedRuntimeConfig = runtimeConfig
+    ?? loadVerifyRuntimeConfig({ repoRoot, env });
+
+  return withHeavyVerifyLockImpl(
+    {
+      repoRoot,
+      env,
+      scope,
+      command: commandDisplay,
+      runtimeConfig: resolvedRuntimeConfig,
+      writeStdout,
+    },
+    execute
+  );
+}
+
 module.exports = {
   buildCargoCommandEnv,
   getRepoRoot,
@@ -140,4 +188,5 @@ module.exports = {
   resolveOutputDir,
   writeWarningCapture,
   runCommandSequence,
+  runManagedCommandSequence,
 };

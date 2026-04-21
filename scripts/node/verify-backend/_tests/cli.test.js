@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { buildCommands } = require('../../verify-backend.js');
+const { buildCommands, main } = require('../../verify-backend.js');
 
 function getExpectedParallelism() {
   const available = typeof os.availableParallelism === 'function'
@@ -14,8 +14,8 @@ function getExpectedParallelism() {
   return Math.max(1, Math.floor(available / 2));
 }
 
-test('buildCommands disables incremental compilation for compiled backend verification steps', () => {
-  assert.deepEqual(buildCommands({ cargoParallelism: 4 }), [
+test('buildCommands uses independent cargo jobs and cargo test threads', () => {
+  assert.deepEqual(buildCommands({ cargoJobs: 4, cargoTestThreads: 2 }), [
     {
       label: 'cargo-fmt',
       command: 'cargo',
@@ -38,7 +38,7 @@ test('buildCommands disables incremental compilation for compiled backend verifi
     {
       label: 'cargo-test',
       command: 'cargo',
-      args: ['test', '--workspace', '--jobs', '4', '--', '--test-threads=4'],
+      args: ['test', '--workspace', '--jobs', '4', '--', '--test-threads=2'],
       cwd: 'api',
       env: {
         CARGO_BUILD_JOBS: '4',
@@ -58,7 +58,39 @@ test('buildCommands disables incremental compilation for compiled backend verifi
   ]);
 });
 
-test('verify-backend limits cargo concurrency to half of available CPU', () => {
+test('main routes backend verification through the heavy managed gate', async () => {
+  let capturedOptions = null;
+
+  const status = await main([], {
+    repoRoot: '/repo-root',
+    env: {},
+    runtimeConfig: {
+      backend: {
+        cargoJobs: 3,
+        cargoTestThreads: 1,
+      },
+      locks: {
+        waitTimeoutMinutes: 30,
+        waitTimeoutMs: 30 * 60 * 1000,
+        pollIntervalMs: 5000,
+      },
+    },
+    writeStdout() {},
+    writeStderr() {},
+    managedRunnerImpl(options) {
+      capturedOptions = options;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.equal(capturedOptions.lockMode, 'heavy');
+  assert.equal(capturedOptions.scope, 'verify-backend');
+  assert.equal(capturedOptions.commandDisplay, 'node scripts/node/verify-backend.js');
+  assert.deepEqual(capturedOptions.commands, buildCommands({ cargoJobs: 3, cargoTestThreads: 1 }));
+});
+
+test('verify-backend limits cargo concurrency to half of available CPU', async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-verify-backend-'));
   const fakeBinDir = path.join(tempDir, 'bin');
   const logPath = path.join(tempDir, 'cargo.log');
@@ -84,6 +116,7 @@ test('verify-backend limits cargo concurrency to half of available CPU', () => {
     cwd: repoRoot,
     env: {
       ...process.env,
+      CI: 'true',
       PATH: `${fakeBinDir}:${process.env.PATH ?? ''}`,
       VERIFY_BACKEND_LOG: logPath,
       ONEFLOWBASE_WARNING_OUTPUT_DIR: warningOutputDir,

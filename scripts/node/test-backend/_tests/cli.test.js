@@ -6,12 +6,12 @@ const path = require('node:path');
 
 const { buildCommands, main } = require('../../test-backend.js');
 
-test('buildCommands runs pure backend cargo test with bounded parallelism', () => {
-  assert.deepEqual(buildCommands({ cargoParallelism: 4 }), [
+test('buildCommands uses independent cargo jobs and cargo test threads', () => {
+  assert.deepEqual(buildCommands({ cargoJobs: 4, cargoTestThreads: 2 }), [
     {
       label: 'cargo-test',
       command: 'cargo',
-      args: ['test', '--workspace', '--jobs', '4', '--', '--test-threads=4'],
+      args: ['test', '--workspace', '--jobs', '4', '--', '--test-threads=2'],
       cwd: 'api',
       env: {
         CARGO_BUILD_JOBS: '4',
@@ -21,14 +21,56 @@ test('buildCommands runs pure backend cargo test with bounded parallelism', () =
   ]);
 });
 
-test('main writes advisory warning output under tmp/test-governance', () => {
+test('main routes backend test execution through the heavy managed gate', async () => {
+  let capturedOptions = null;
+
+  const status = await main([], {
+    repoRoot: '/repo-root',
+    env: {},
+    runtimeConfig: {
+      backend: {
+        cargoJobs: 5,
+        cargoTestThreads: 2,
+      },
+      locks: {
+        waitTimeoutMinutes: 30,
+        waitTimeoutMs: 30 * 60 * 1000,
+        pollIntervalMs: 5000,
+      },
+    },
+    writeStdout() {},
+    writeStderr() {},
+    managedRunnerImpl(options) {
+      capturedOptions = options;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.equal(capturedOptions.lockMode, 'heavy');
+  assert.equal(capturedOptions.scope, 'test-backend');
+  assert.equal(capturedOptions.commandDisplay, 'node scripts/node/test-backend.js');
+  assert.deepEqual(capturedOptions.commands, buildCommands({ cargoJobs: 5, cargoTestThreads: 2 }));
+});
+
+test('main writes advisory warning output under tmp/test-governance', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-test-backend-'));
   const calls = [];
 
-  const status = main([], {
+  const status = await main([], {
     repoRoot,
-    cargoParallelism: 1,
     env: {},
+    runtimeConfig: {
+      backend: {
+        cargoJobs: 1,
+        cargoTestThreads: 1,
+      },
+      locks: {
+        waitTimeoutMinutes: 30,
+        waitTimeoutMs: 30 * 60 * 1000,
+        pollIntervalMs: 5000,
+      },
+    },
     writeStdout() {},
     writeStderr() {},
     spawnSyncImpl(command, args, options) {
