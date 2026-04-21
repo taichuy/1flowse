@@ -92,6 +92,11 @@ function getHeavyVerifyLockOwnerPath(repoRoot) {
   return path.join(getHeavyVerifyLockDir(repoRoot), 'owner.json');
 }
 
+function getHeavyVerifyLockStagingDir(repoRoot, processId) {
+  const parentDir = path.dirname(getHeavyVerifyLockDir(repoRoot));
+  return path.join(parentDir, `heavy-verify-${processId}-${crypto.randomUUID()}.tmp`);
+}
+
 function isValidHeavyVerifyLockOwner(owner) {
   return isPlainObject(owner)
     && typeof owner.token === 'string'
@@ -142,7 +147,7 @@ function getVerifyLockToken(env = process.env) {
 }
 
 function writeHeavyVerifyLockOwner({
-  repoRoot,
+  lockDir,
   token,
   scope,
   command,
@@ -151,7 +156,7 @@ function writeHeavyVerifyLockOwner({
   pid,
   hostname,
 }) {
-  const ownerPath = getHeavyVerifyLockOwnerPath(repoRoot);
+  const ownerPath = path.join(lockDir, 'owner.json');
 
   fs.writeFileSync(
     ownerPath,
@@ -189,6 +194,35 @@ function removeHeavyVerifyLock({ repoRoot, token }) {
   return true;
 }
 
+function isHeavyVerifyLockPublishCollision(error) {
+  return error && (
+    error.code === 'EEXIST'
+    || error.code === 'ENOTEMPTY'
+    || error.code === 'EPERM'
+  );
+}
+
+function defaultForwardFatalCleanupEvent(eventName, payload) {
+  if (eventName === 'SIGINT' || eventName === 'SIGTERM') {
+    setImmediate(() => {
+      process.kill(process.pid, eventName);
+    });
+    return;
+  }
+
+  setImmediate(() => {
+    if (payload instanceof Error) {
+      throw payload;
+    }
+
+    throw new Error(
+      eventName === 'unhandledRejection'
+        ? `unhandledRejection: ${String(payload)}`
+        : String(payload)
+    );
+  });
+}
+
 async function acquireHeavyVerifyLock({
   repoRoot,
   env = process.env,
@@ -212,7 +246,7 @@ async function acquireHeavyVerifyLock({
   now = () => new Date(),
   hostname = os.hostname(),
   processId = process.pid,
-  beforeOwnerWriteImpl = async () => {},
+  beforeOwnerPublishImpl = async () => {},
 } = {}) {
   if (typeof repoRoot !== 'string' || repoRoot.trim() === '') {
     throw new Error('repoRoot must be a non-empty string');
@@ -237,6 +271,7 @@ async function acquireHeavyVerifyLock({
   const startedAtDate = now();
   const startedAt = startedAtDate.toISOString();
   const timeoutAt = startedAtDate.getTime() + runtimeConfig.locks.waitTimeoutMs;
+  const stagingDir = getHeavyVerifyLockStagingDir(repoRoot, processId);
   const ownerRecord = {
     token,
     pid: processId,
@@ -273,28 +308,83 @@ async function acquireHeavyVerifyLock({
   };
 
   while (true) {
+    let published = false;
+    fs.mkdirSync(stagingDir);
+
     try {
-      fs.mkdirSync(lockDir);
-      await beforeOwnerWriteImpl({
+      writeHeavyVerifyLockOwner({
+        lockDir: stagingDir,
+        ...ownerRecord,
+      });
+
+      await beforeOwnerPublishImpl({
         repoRoot,
         scope,
         command,
         token,
         pid: processId,
+        stagingDir,
       });
-      try {
-        writeHeavyVerifyLockOwner({ repoRoot, ...ownerRecord });
-      } catch (error) {
-        fs.rmSync(lockDir, { recursive: true, force: true });
-        throw error;
+
+      const lockDirExists = fs.existsSync(lockDir);
+      const visibleOwner = lockDirExists ? readHeavyVerifyLockOwner({ repoRoot }) : null;
+
+      if (lockDirExists) {
+        if (visibleOwner === null) {
+          writeStdout('[1flowbase-verify-lock] stale lock detected, cleaning...\n');
+          fs.rmSync(lockDir, { recursive: true, force: true });
+          continue;
+        }
+
+        if (visibleOwner.token === token) {
+          writeStdout(
+            `[1flowbase-verify-lock] reentrant: scope=${scope} pid=${processId} token=${token}\n`
+          );
+          return {
+            token,
+            reentrant: true,
+            release() {
+              return false;
+            },
+          };
+        }
+
+        if (!isProcessAliveImpl(visibleOwner.pid)) {
+          writeStdout('[1flowbase-verify-lock] stale lock detected, cleaning...\n');
+          fs.rmSync(lockDir, { recursive: true, force: true });
+          continue;
+        }
+
+        writeStdout(
+          `[1flowbase-verify-lock] busy: scope=${visibleOwner.scope} pid=${visibleOwner.pid} startedAt=${visibleOwner.startedAt}\n`
+        );
+
+        if (now().getTime() >= timeoutAt) {
+          writeStdout(
+            `[1flowbase-verify-lock] timeout waiting for heavy-verify lock: scope=${visibleOwner.scope} pid=${visibleOwner.pid} token=${visibleOwner.token}\n`
+          );
+          throw new Error('timeout waiting for heavy-verify lock');
+        }
+
+        writeStdout('[1flowbase-verify-lock] waiting...\n');
+        await sleepImpl(runtimeConfig.locks.pollIntervalMs);
+        continue;
       }
+
+      fs.renameSync(stagingDir, lockDir);
+      published = true;
       writeStdout(
         `[1flowbase-verify-lock] acquired: scope=${scope} pid=${processId} token=${token}\n`
       );
       return lock;
     } catch (error) {
-      if (error.code !== 'EEXIST') {
+      if (!isHeavyVerifyLockPublishCollision(error)) {
+        fs.rmSync(stagingDir, { recursive: true, force: true });
         throw error;
+      }
+    } finally {
+      if (!published) {
+        fs.rmSync(stagingDir, { recursive: true, force: true });
       }
     }
 
@@ -349,10 +439,13 @@ async function withHeavyVerifyLock(options = {}, run) {
     [VERIFY_LOCK_TOKEN_ENV]: lock.token,
   };
   const processEmitter = options.processEmitter ?? process;
+  const forwardFatalCleanupEvent = options.forwardFatalCleanupEvent
+    ?? (processEmitter === process ? defaultForwardFatalCleanupEvent : () => {});
   const cleanupEvents = ['SIGINT', 'SIGTERM', 'uncaughtException', 'unhandledRejection'];
   const cleanupHandlers = cleanupEvents.map((eventName) => {
-    const handler = () => {
+    const handler = (payload) => {
       lock.release();
+      forwardFatalCleanupEvent(eventName, payload);
     };
 
     if (typeof processEmitter.once === 'function') {

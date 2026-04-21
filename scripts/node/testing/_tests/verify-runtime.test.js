@@ -557,6 +557,73 @@ test('acquireHeavyVerifyLock cleans a missing owner.json before retrying', async
   lock.release();
 });
 
+test('acquireHeavyVerifyLock publishes the lock atomically before exposing lockDir', async () => {
+  const repoRoot = createRepoRoot();
+  const output = [];
+  const publishEntered = createDeferred();
+  const releasePublish = createDeferred();
+  const lockDir = path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR);
+  const nowValues = [
+    new Date('2026-04-21T12:00:00.000Z'),
+    new Date('2026-04-21T12:00:01.000Z'),
+    new Date('2026-04-21T12:00:02.000Z'),
+  ];
+
+  const acquirePromise = acquireHeavyVerifyLock({
+    repoRoot,
+    env: {},
+    scope: 'verify-backend',
+    command: 'node scripts/node/verify-backend.js',
+    runtimeConfig: {
+      backend: {
+        cargoJobs: 1,
+        cargoTestThreads: 1,
+      },
+      locks: {
+        waitTimeoutMinutes: 1,
+        waitTimeoutMs: 1000,
+        pollIntervalMs: 1,
+      },
+    },
+    writeStdout: (text) => output.push(text),
+    beforeOwnerPublishImpl: async ({ stagingDir }) => {
+      assert.equal(fs.existsSync(lockDir), false);
+      assert.equal(fs.existsSync(path.join(stagingDir, 'owner.json')), true);
+      publishEntered.resolve();
+      await releasePublish.promise;
+    },
+    now: () => nowValues.shift() ?? new Date('2026-04-21T12:00:02.000Z'),
+    sleepImpl: async () => {},
+    isProcessAliveImpl: () => true,
+    processId: 901,
+  });
+
+  await publishEntered.promise;
+  assert.equal(fs.existsSync(lockDir), false);
+
+  fs.mkdirSync(lockDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(lockDir, 'owner.json'),
+    JSON.stringify({
+      token: 'competing-token',
+      pid: 999,
+      scope: 'verify-repo',
+      command: 'node scripts/node/verify-repo.js',
+      cwd: repoRoot,
+      startedAt: '2026-04-21T11:59:59.000Z',
+      hostname: 'devbox',
+    }, null, 2)
+  );
+
+  releasePublish.resolve();
+
+  await assert.rejects(acquirePromise, /timeout waiting for heavy-verify lock/u);
+
+  assert.match(output.join(''), /\[1flowbase-verify-lock\] busy: scope=verify-repo pid=999/u);
+  assert.match(output.join(''), /\[1flowbase-verify-lock\] timeout waiting for heavy-verify lock:/u);
+  assert.equal(readHeavyVerifyLockOwner({ repoRoot }).pid, 999);
+});
+
 test('acquireHeavyVerifyLock treats matching token as a reentrant owner', async () => {
   const repoRoot = createRepoRoot();
   const token = '11111111-2222-4333-8444-555555555555';
@@ -642,3 +709,63 @@ test('withHeavyVerifyLock releases the lock when cleanup events fire', async () 
     );
   }
 });
+
+test('withHeavyVerifyLock forwards fatal cleanup events after releasing the lock', async () => {
+  const repoRoot = createRepoRoot();
+  const listeners = new Map();
+  const forwarded = [];
+  const error = new Error('boom');
+
+  await withHeavyVerifyLock(
+    {
+      repoRoot,
+      env: {},
+      scope: 'verify-backend',
+      command: 'node scripts/node/verify-backend.js',
+      runtimeConfig: {
+        backend: {
+          cargoJobs: 1,
+          cargoTestThreads: 1,
+        },
+        locks: {
+          waitTimeoutMinutes: 1,
+          waitTimeoutMs: 60_000,
+          pollIntervalMs: 1000,
+        },
+      },
+      processEmitter: {
+        once(name, handler) {
+          listeners.set(name, handler);
+        },
+        removeListener(name, handler) {
+          if (listeners.get(name) === handler) {
+            listeners.delete(name);
+          }
+        },
+      },
+      forwardFatalCleanupEvent(eventName, payload) {
+        forwarded.push({ eventName, payload });
+      },
+      sleepImpl: async () => {},
+      isProcessAliveImpl: () => true,
+      processId: 889,
+    },
+    async () => {
+      listeners.get('uncaughtException')(error);
+      assert.equal(fs.existsSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR)), false);
+      assert.deepEqual(forwarded, [{ eventName: 'uncaughtException', payload: error }]);
+      return 0;
+    }
+  );
+});
+
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return { promise, resolve, reject };
+}
