@@ -690,7 +690,7 @@ git commit -m "feat: add heavy verify lock runtime"
 - Modify: `scripts/node/verify-backend/_tests/cli.test.js`
 - Modify: `scripts/node/test-backend/_tests/cli.test.js`
 
-- [ ] **Step 1: Write the failing managed-runner and backend CLI tests**
+- [x] **Step 1: Write the failing managed-runner and backend CLI tests**
 
 Create `scripts/node/testing/_tests/warning-capture.test.js` and extend backend CLI tests:
 
@@ -801,7 +801,7 @@ test('buildCommands uses configured backend jobs and test threads', () => {
 });
 ```
 
-- [ ] **Step 2: Run the managed-runner and backend CLI tests**
+- [x] **Step 2: Run the managed-runner and backend CLI tests**
 
 Run:
 
@@ -814,7 +814,7 @@ node --test \
 
 Expected: FAIL because `runManagedCommandSequence` does not exist and the backend `buildCommands()` signatures still assume one `cargoParallelism` value.
 
-- [ ] **Step 3: Implement `runManagedCommandSequence` and update backend scripts**
+- [x] **Step 3: Implement `runManagedCommandSequence` and update backend scripts**
 
 Modify `scripts/node/testing/warning-capture.js` to wrap `runCommandSequence()`:
 
@@ -930,7 +930,7 @@ async function main(argv = [], deps = {}) {
 
 Apply the same pattern to `scripts/node/test-backend.js`, using `scope: 'test-backend'`.
 
-- [ ] **Step 4: Run the backend and managed-runner tests again**
+- [x] **Step 4: Run the backend and managed-runner tests again**
 
 Run:
 
@@ -943,7 +943,7 @@ node --test \
 
 Expected: PASS. `runManagedCommandSequence()` only acquires the heavy lock when requested, and backend scripts now honor separate `cargoJobs` and `cargoTestThreads`.
 
-- [ ] **Step 5: Commit the managed runner and backend integration**
+- [x] **Step 5: Commit the managed runner and backend integration**
 
 Run:
 
