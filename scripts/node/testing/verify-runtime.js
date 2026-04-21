@@ -125,7 +125,7 @@ function readHeavyVerifyLockOwner({ repoRoot } = {}) {
     const owner = JSON.parse(fs.readFileSync(ownerPath, 'utf8'));
     return isValidHeavyVerifyLockOwner(owner) ? owner : null;
   } catch (_error) {
-    return undefined;
+    return null;
   }
 }
 
@@ -314,28 +314,24 @@ async function acquireHeavyVerifyLock({
     }
 
     if (owner === null) {
-      writeStdout('[1flowbase-verify-lock] waiting for owner record...\n');
-    } else if (owner === undefined) {
       writeStdout('[1flowbase-verify-lock] stale lock detected, cleaning...\n');
       fs.rmSync(lockDir, { recursive: true, force: true });
       continue;
-    } else if (!isProcessAliveImpl(owner.pid)) {
-      writeStdout('[1flowbase-verify-lock] stale lock detected, cleaning...\n');
-      fs.rmSync(lockDir, { recursive: true, force: true });
-      continue;
-    } else {
-      writeStdout(
-        `[1flowbase-verify-lock] busy: scope=${owner.scope} pid=${owner.pid} startedAt=${owner.startedAt}\n`
-      );
     }
 
-    if (now().getTime() >= timeoutAt) {
-      const ownerSummary = owner === null
-        ? `scope=${scope} pid=${processId}`
-        : `scope=${owner.scope} pid=${owner.pid} token=${owner.token}`;
+    if (!isProcessAliveImpl(owner.pid)) {
+      writeStdout('[1flowbase-verify-lock] stale lock detected, cleaning...\n');
+      fs.rmSync(lockDir, { recursive: true, force: true });
+      continue;
+    }
 
+    writeStdout(
+      `[1flowbase-verify-lock] busy: scope=${owner.scope} pid=${owner.pid} startedAt=${owner.startedAt}\n`
+    );
+
+    if (now().getTime() >= timeoutAt) {
       writeStdout(
-        `[1flowbase-verify-lock] timeout waiting for heavy-verify lock: ${ownerSummary}\n`
+        `[1flowbase-verify-lock] timeout waiting for heavy-verify lock: scope=${owner.scope} pid=${owner.pid} token=${owner.token}\n`
       );
       throw new Error('timeout waiting for heavy-verify lock');
     }

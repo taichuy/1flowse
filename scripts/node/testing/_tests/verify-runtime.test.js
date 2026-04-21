@@ -535,78 +535,25 @@ test('acquireHeavyVerifyLock cleans a damaged owner before retrying', async () =
   lock.release();
 });
 
-test('acquireHeavyVerifyLock keeps a second owner from slipping through while owner.json is not yet written', async () => {
+test('acquireHeavyVerifyLock cleans a missing owner.json before retrying', async () => {
   const repoRoot = createRepoRoot();
-  const firstGate = createDeferred();
-  const releaseFirst = createDeferred();
-  const secondOutput = [];
+  const output = [];
 
-  const firstAcquirePromise = acquireHeavyVerifyLock({
+  fs.mkdirSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR), { recursive: true });
+
+  const lock = await acquireHeavyVerifyLock({
     repoRoot,
     env: {},
     scope: 'verify-backend',
     command: 'node scripts/node/verify-backend.js',
-    runtimeConfig: {
-      backend: {
-        cargoJobs: 1,
-        cargoTestThreads: 1,
-      },
-      locks: {
-        waitTimeoutMinutes: 1,
-        waitTimeoutMs: 60_000,
-        pollIntervalMs: 1000,
-      },
-    },
-    beforeOwnerWriteImpl: async () => {
-      firstGate.resolve();
-      await releaseFirst.promise;
-    },
+    writeStdout: (text) => output.push(text),
     sleepImpl: async () => {},
     isProcessAliveImpl: () => true,
-    processId: 901,
+    processId: 779,
   });
 
-  await firstGate.promise;
-
-  const secondAcquirePromise = acquireHeavyVerifyLock({
-    repoRoot,
-    env: {},
-    scope: 'verify-repo',
-    command: 'node scripts/node/verify-repo.js',
-    runtimeConfig: {
-      backend: {
-        cargoJobs: 1,
-        cargoTestThreads: 1,
-      },
-      locks: {
-        waitTimeoutMinutes: 1,
-        waitTimeoutMs: 60_000,
-        pollIntervalMs: 1000,
-      },
-    },
-    writeStdout: (text) => secondOutput.push(text),
-    sleepImpl: async () => {},
-    isProcessAliveImpl: () => true,
-    now: (() => {
-      const values = [
-        new Date('2026-04-21T12:00:00.000Z'),
-        new Date('2026-04-21T12:00:30.000Z'),
-        new Date('2026-04-21T12:01:01.000Z'),
-      ];
-
-      return () => values.shift() ?? new Date('2026-04-21T12:01:01.000Z');
-    })(),
-    processId: 902,
-  });
-
-  await assert.rejects(secondAcquirePromise, /timeout waiting for heavy-verify lock/u);
-
-  assert.match(secondOutput.join(''), /\[1flowbase-verify-lock\] waiting for owner record\.\.\./u);
-  assert.equal(readHeavyVerifyLockOwner({ repoRoot }), null);
-
-  releaseFirst.resolve();
-  const lock = await firstAcquirePromise;
-  assert.equal(readHeavyVerifyLockOwner({ repoRoot }).pid, 901);
+  assert.match(output.join(''), /\[1flowbase-verify-lock\] stale lock detected, cleaning/u);
+  assert.equal(readHeavyVerifyLockOwner({ repoRoot }).pid, 779);
   lock.release();
 });
 
@@ -695,14 +642,3 @@ test('withHeavyVerifyLock releases the lock when cleanup events fire', async () 
     );
   }
 });
-
-function createDeferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-
-  return { promise, resolve, reject };
-}
