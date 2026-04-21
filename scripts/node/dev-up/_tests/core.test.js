@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('path');
 
 const {
+  DEFAULT_STARTUP_TIMEOUT_MS,
   parseCliArgs,
   shouldManageDocker,
   selectServiceKeys,
@@ -14,6 +15,7 @@ const {
   getServicePrestartCommands,
   runServicePrestartCommands,
   ensureRustfsVolumePermissions,
+  waitForServicePort,
 } = require('../core.js');
 
 test('parseCliArgs defaults to full start', () => {
@@ -64,6 +66,40 @@ test('getServiceDefinitions uses repo default ports and explicit backend binarie
   assert.deepEqual(services.web.args, ['--filter', '@1flowbase/web', 'dev']);
   assert.deepEqual(services['api-server'].args, ['run', '-p', 'api-server', '--bin', 'api-server']);
   assert.deepEqual(services['plugin-runner'].args, ['run', '-p', 'plugin-runner', '--bin', 'plugin-runner']);
+});
+
+test('getServiceDefinitions gives plugin-runner extra startup time for cold cargo builds', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const services = getServiceDefinitions(repoRoot);
+
+  assert.equal(services.web.startupTimeoutMs, DEFAULT_STARTUP_TIMEOUT_MS);
+  assert.equal(services['api-server'].startupTimeoutMs, DEFAULT_STARTUP_TIMEOUT_MS);
+  assert.equal(services['plugin-runner'].startupTimeoutMs, 60_000);
+});
+
+test('waitForServicePort honors per-service startup timeout overrides', async () => {
+  const calls = [];
+
+  const ready = await waitForServicePort(
+    {
+      probeHost: '127.0.0.1',
+      port: 7801,
+      startupTimeoutMs: 60_000,
+    },
+    async (host, port, timeoutMs) => {
+      calls.push({ host, port, timeoutMs });
+      return true;
+    }
+  );
+
+  assert.equal(ready, true);
+  assert.deepEqual(calls, [
+    {
+      host: '127.0.0.1',
+      port: 7801,
+      timeoutMs: 60_000,
+    },
+  ]);
 });
 
 test('api-server example env files use workspace bootstrap naming', () => {

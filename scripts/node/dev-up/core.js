@@ -5,6 +5,8 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const ACTIONS = new Set(['start', 'ensure', 'stop', 'status', 'restart']);
 const SCOPES = new Set(['all', 'frontend', 'backend']);
+const DEFAULT_STARTUP_TIMEOUT_MS = 15_000;
+const CARGO_COLD_STARTUP_TIMEOUT_MS = 60_000;
 const LOOPBACK_NO_PROXY_ENTRIES = ['localhost', '127.0.0.1', '127.0.0.0/8', '::1'];
 const LOCAL_POSTGRES_HOSTS = new Set(['127.0.0.1', 'localhost']);
 const LEGACY_API_SERVER_ENV_RENAMES = {
@@ -164,6 +166,7 @@ function getServiceDefinitions(repoRoot) {
       bindHost: '0.0.0.0',
       probeHost: '127.0.0.1',
       port: 3100,
+      startupTimeoutMs: DEFAULT_STARTUP_TIMEOUT_MS,
       logFile: path.join(paths.logDir, 'web.log'),
       pidFile: path.join(paths.pidDir, 'web.json'),
     },
@@ -177,6 +180,7 @@ function getServiceDefinitions(repoRoot) {
       bindHost: '0.0.0.0',
       probeHost: '127.0.0.1',
       port: 7800,
+      startupTimeoutMs: DEFAULT_STARTUP_TIMEOUT_MS,
       envFile: path.join(apiServerEnvDir, '.env'),
       envExampleFile: path.join(apiServerEnvDir, '.env.example'),
       logFile: path.join(paths.logDir, 'api-server.log'),
@@ -192,6 +196,7 @@ function getServiceDefinitions(repoRoot) {
       bindHost: '0.0.0.0',
       probeHost: '127.0.0.1',
       port: 7801,
+      startupTimeoutMs: CARGO_COLD_STARTUP_TIMEOUT_MS,
       logFile: path.join(paths.logDir, 'plugin-runner.log'),
       pidFile: path.join(paths.pidDir, 'plugin-runner.json'),
     },
@@ -706,6 +711,14 @@ function getBindHost(service) {
   return service.bindHost || service.host;
 }
 
+function getStartupTimeoutMs(service) {
+  if (!service || !Number.isFinite(service.startupTimeoutMs) || service.startupTimeoutMs <= 0) {
+    return DEFAULT_STARTUP_TIMEOUT_MS;
+  }
+
+  return service.startupTimeoutMs;
+}
+
 function writePidRecord(service, pid) {
   fs.writeFileSync(
     service.pidFile,
@@ -785,6 +798,10 @@ async function waitForPort(host, port, timeoutMs = 15000) {
   return false;
 }
 
+function waitForServicePort(service, waitForPortImpl = waitForPort) {
+  return waitForPortImpl(getProbeHost(service), service.port, getStartupTimeoutMs(service));
+}
+
 function signalProcess(pid, signal) {
   try {
     if (process.platform !== 'win32') {
@@ -855,7 +872,7 @@ async function startService(service) {
   child.unref();
   writePidRecord(service, child.pid);
 
-  const ready = await waitForPort(getProbeHost(service), service.port);
+  const ready = await waitForServicePort(service);
   if (!ready) {
     await stopService(service);
     throw new Error(`${service.label} 启动超时，请查看日志：${service.logFile}`);
@@ -989,6 +1006,7 @@ async function main(argv = process.argv.slice(2)) {
 }
 
 module.exports = {
+  DEFAULT_STARTUP_TIMEOUT_MS,
   getRepoRoot,
   getRuntimePaths,
   parseCliArgs,
@@ -1000,5 +1018,6 @@ module.exports = {
   getServicePrestartCommands,
   runServicePrestartCommands,
   ensureRustfsVolumePermissions,
+  waitForServicePort,
   main,
 };
