@@ -7,6 +7,8 @@ const {
   withHeavyVerifyLock,
 } = require('./verify-runtime.js');
 
+const RUN_COMMAND_SEQUENCE_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
+
 function getRepoRoot() {
   return path.resolve(__dirname, '..', '..', '..');
 }
@@ -104,6 +106,7 @@ function runCommandSequence({
         ...(command.env ?? {}),
       },
       encoding: 'utf8',
+      maxBuffer: RUN_COMMAND_SEQUENCE_MAX_BUFFER_BYTES,
       stdio: ['inherit', 'pipe', 'pipe'],
     });
 
