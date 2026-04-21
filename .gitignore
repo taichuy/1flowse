@@ -17,6 +17,7 @@ docker/.env.local
 
 # Local runtime outputs
 tmp/*
+.1flowbase.verify.local.json
 
 # Local backend env
 api/apps/api-server/.env

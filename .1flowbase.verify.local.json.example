@@ -1,0 +1,10 @@
+{
+  "backend": {
+    "cargoJobs": 4,
+    "cargoTestThreads": 2
+  },
+  "locks": {
+    "waitTimeoutMinutes": 30,
+    "pollIntervalMs": 5000
+  }
+}
