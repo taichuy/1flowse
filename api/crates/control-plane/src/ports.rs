@@ -749,6 +749,7 @@ pub trait PluginRepository: Send + Sync {
         installation_id: Uuid,
     ) -> anyhow::Result<Option<domain::PluginInstallationRecord>>;
     async fn list_installations(&self) -> anyhow::Result<Vec<domain::PluginInstallationRecord>>;
+    async fn delete_installation(&self, installation_id: Uuid) -> anyhow::Result<()>;
     async fn list_pending_restart_host_extensions(
         &self,
     ) -> anyhow::Result<Vec<domain::PluginInstallationRecord>>;
@@ -897,6 +898,10 @@ pub trait ModelProviderRepository: Send + Sync {
     async fn list_instances(
         &self,
         workspace_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::ModelProviderInstanceRecord>>;
+    async fn list_instances_by_provider_code(
+        &self,
+        provider_code: &str,
     ) -> anyhow::Result<Vec<domain::ModelProviderInstanceRecord>>;
     async fn reassign_instances_to_installation(
         &self,

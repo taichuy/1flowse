@@ -78,6 +78,12 @@ struct RuntimeProviderInvoker<R, H> {
     provider_secret_master_key: String,
 }
 
+#[derive(Debug, Clone)]
+struct ProviderInstanceSelectionCandidate {
+    instance: domain::ModelProviderInstanceRecord,
+    available_models: BTreeSet<String>,
+}
+
 pub struct OrchestrationRuntimeService<R, H> {
     repository: R,
     runtime: H,
@@ -121,8 +127,10 @@ where
             .repository
             .list_node_contributions(workspace_id)
             .await?;
-        let mut provider_instances = BTreeMap::new();
+        let mut provider_families = BTreeMap::new();
         let mut node_contributions = BTreeMap::new();
+        let mut provider_candidates =
+            BTreeMap::<String, Vec<ProviderInstanceSelectionCandidate>>::new();
 
         for instance in instances {
             let available_models = self
@@ -140,15 +148,29 @@ where
                 })
                 .collect::<BTreeSet<_>>();
 
-            provider_instances.insert(
-                instance.id.to_string(),
-                orchestration_runtime::compiler::FlowCompileProviderInstance {
-                    provider_instance_id: instance.id.to_string(),
-                    provider_code: instance.provider_code,
-                    protocol: instance.protocol,
-                    is_ready: instance.status == domain::ModelProviderInstanceStatus::Ready,
+            provider_candidates
+                .entry(instance.provider_code.clone())
+                .or_default()
+                .push(ProviderInstanceSelectionCandidate {
+                    instance,
                     available_models,
-                    allow_custom_models: allow_custom_models(&instance.config_json),
+                });
+        }
+
+        for (provider_code, candidates) in provider_candidates {
+            let Some(candidate) = select_effective_provider_candidate(&candidates) else {
+                continue;
+            };
+            provider_families.insert(
+                provider_code.clone(),
+                orchestration_runtime::compiler::FlowCompileProviderFamily {
+                    effective_instance_id: candidate.instance.id.to_string(),
+                    provider_code,
+                    protocol: candidate.instance.protocol.clone(),
+                    is_ready: candidate.instance.status
+                        == domain::ModelProviderInstanceStatus::Ready,
+                    available_models: candidate.available_models.clone(),
+                    allow_custom_models: allow_custom_models(&candidate.instance.config_json),
                 },
             );
         }
@@ -176,7 +198,7 @@ where
         }
 
         Ok(orchestration_runtime::compiler::FlowCompileContext {
-            provider_instances,
+            provider_families,
             node_contributions,
         })
     }
@@ -719,16 +741,7 @@ where
         runtime: &orchestration_runtime::compiled_plan::CompiledLlmRuntime,
         mut input: ProviderInvocationInput,
     ) -> Result<orchestration_runtime::execution_engine::ProviderInvocationOutput> {
-        let provider_instance_id = Uuid::parse_str(&runtime.provider_instance_id)
-            .map_err(|_| ControlPlaneError::InvalidInput("provider_instance_id"))?;
-        let instance = self
-            .repository
-            .get_instance(self.workspace_id, provider_instance_id)
-            .await?
-            .ok_or(ControlPlaneError::NotFound("model_provider_instance"))?;
-        if instance.status != domain::ModelProviderInstanceStatus::Ready {
-            return Err(ControlPlaneError::InvalidInput("provider_instance_id").into());
-        }
+        let instance = self.resolve_llm_instance(runtime).await?;
         let installation =
             reconcile_installation_snapshot(&self.repository, instance.installation_id).await?;
         let assigned = self
@@ -743,7 +756,7 @@ where
                 domain::PluginDesiredState::Disabled
             )
         {
-            return Err(ControlPlaneError::InvalidInput("provider_instance_id").into());
+            return Err(ControlPlaneError::InvalidInput("provider_code").into());
         }
         if installation.availability_status != domain::PluginAvailabilityStatus::Available {
             return Err(ControlPlaneError::Conflict("plugin_installation_unavailable").into());
@@ -767,6 +780,45 @@ where
                     result: output.result,
                 },
             )
+    }
+}
+
+impl<R, H> RuntimeProviderInvoker<R, H>
+where
+    R: ModelProviderRepository + PluginRepository + Clone + Send + Sync,
+    H: ProviderRuntimePort + Clone + Send + Sync,
+{
+    async fn resolve_llm_instance(
+        &self,
+        runtime: &orchestration_runtime::compiled_plan::CompiledLlmRuntime,
+    ) -> Result<domain::ModelProviderInstanceRecord> {
+        if let Ok(provider_instance_id) = Uuid::parse_str(&runtime.provider_instance_id) {
+            if let Some(instance) = self
+                .repository
+                .get_instance(self.workspace_id, provider_instance_id)
+                .await?
+            {
+                if instance.status == domain::ModelProviderInstanceStatus::Ready
+                    && instance.provider_code == runtime.provider_code
+                {
+                    return Ok(instance);
+                }
+            }
+        }
+
+        let instances = self.repository.list_instances(self.workspace_id).await?;
+        let matching_instances = instances
+            .into_iter()
+            .filter(|instance| instance.provider_code == runtime.provider_code)
+            .collect::<Vec<_>>();
+        let Some(instance) = select_effective_provider_instance(&matching_instances) else {
+            return Err(ControlPlaneError::InvalidInput("provider_code").into());
+        };
+        if instance.status != domain::ModelProviderInstanceStatus::Ready {
+            return Err(ControlPlaneError::InvalidInput("provider_code").into());
+        }
+
+        Ok(instance.clone())
     }
 }
 
@@ -930,7 +982,7 @@ fn ensure_compiled_plan_runnable(
             orchestration_runtime::compiled_plan::CompileIssueCode::MissingProviderInstance
             | orchestration_runtime::compiled_plan::CompileIssueCode::ProviderInstanceNotFound
             | orchestration_runtime::compiled_plan::CompileIssueCode::ProviderInstanceNotReady => {
-                "provider_instance_id"
+                "provider_code"
             }
             orchestration_runtime::compiled_plan::CompileIssueCode::MissingModel
             | orchestration_runtime::compiled_plan::CompileIssueCode::ModelNotAvailable => "model",
@@ -1162,6 +1214,32 @@ fn allow_custom_models(config_json: &Value) -> bool {
         .and_then(Value::as_bool)
         .map(|value| !value)
         .unwrap_or(false)
+}
+
+fn select_effective_provider_candidate<'a>(
+    candidates: &'a [ProviderInstanceSelectionCandidate],
+) -> Option<&'a ProviderInstanceSelectionCandidate> {
+    candidates.iter().max_by_key(|candidate| {
+        (
+            candidate.instance.status == domain::ModelProviderInstanceStatus::Ready,
+            candidate.instance.last_validated_at,
+            candidate.instance.updated_at,
+            candidate.instance.id,
+        )
+    })
+}
+
+fn select_effective_provider_instance<'a>(
+    instances: &'a [domain::ModelProviderInstanceRecord],
+) -> Option<&'a domain::ModelProviderInstanceRecord> {
+    instances.iter().max_by_key(|instance| {
+        (
+            instance.status == domain::ModelProviderInstanceStatus::Ready,
+            instance.last_validated_at,
+            instance.updated_at,
+            instance.id,
+        )
+    })
 }
 
 fn validate_required_fields(
@@ -1657,6 +1735,15 @@ impl PluginRepository for InMemoryOrchestrationRuntimeRepository {
         Ok(inner.installations_by_id.values().cloned().collect())
     }
 
+    async fn delete_installation(&self, installation_id: Uuid) -> Result<()> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        if inner.installations_by_id.remove(&installation_id).is_some() {
+            Ok(())
+        } else {
+            Err(ControlPlaneError::NotFound("plugin_installation").into())
+        }
+    }
+
     async fn list_pending_restart_host_extensions(
         &self,
     ) -> Result<Vec<domain::PluginInstallationRecord>> {
@@ -1825,6 +1912,19 @@ impl ModelProviderRepository for InMemoryOrchestrationRuntimeRepository {
             .instances_by_id
             .values()
             .filter(|record| record.workspace_id == workspace_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn list_instances_by_provider_code(
+        &self,
+        provider_code: &str,
+    ) -> Result<Vec<domain::ModelProviderInstanceRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .instances_by_id
+            .values()
+            .filter(|record| record.provider_code == provider_code)
             .cloned()
             .collect())
     }
@@ -2868,7 +2968,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
 }
 
 #[cfg(test)]
-fn build_ready_provider_flow_document(flow_id: Uuid, provider_instance_id: Uuid) -> Value {
+fn build_ready_provider_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> Value {
     json!({
         "schemaVersion": "1flowbase.flow/v1",
         "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
@@ -2895,8 +2995,10 @@ fn build_ready_provider_flow_document(flow_id: Uuid, provider_instance_id: Uuid)
                     "position": { "x": 240, "y": 0 },
                     "configVersion": 1,
                     "config": {
-                        "provider_instance_id": provider_instance_id.to_string(),
-                        "model": "gpt-5.4-mini",
+                        "model_provider": {
+                            "provider_code": "fixture_provider",
+                            "model_id": "gpt-5.4-mini"
+                        },
                         "temperature": 0.2
                     },
                     "bindings": {
@@ -2929,7 +3031,7 @@ fn build_ready_provider_flow_document(flow_id: Uuid, provider_instance_id: Uuid)
 }
 
 #[cfg(test)]
-fn build_human_input_flow_document(flow_id: Uuid, provider_instance_id: Uuid) -> Value {
+fn build_human_input_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> Value {
     json!({
         "schemaVersion": "1flowbase.flow/v1",
         "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
@@ -2956,8 +3058,10 @@ fn build_human_input_flow_document(flow_id: Uuid, provider_instance_id: Uuid) ->
                     "position": { "x": 240, "y": 0 },
                     "configVersion": 1,
                     "config": {
-                        "provider_instance_id": provider_instance_id.to_string(),
-                        "model": "gpt-5.4-mini",
+                        "model_provider": {
+                            "provider_code": "fixture_provider",
+                            "model_id": "gpt-5.4-mini"
+                        },
                         "temperature": 0.2
                     },
                     "bindings": {

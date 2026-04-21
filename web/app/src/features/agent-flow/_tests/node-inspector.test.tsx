@@ -156,7 +156,7 @@ function renderWithProviders(ui: ReactNode) {
 
 describe('NodeInspector', () => {
   modelProviderOptionsApi.fetchModelProviderOptions.mockResolvedValue({
-    instances: []
+    providers: []
   });
 
   test('reads config sections through the node schema registry and adapter bridge', () => {

@@ -36,6 +36,7 @@ function shouldRenderSectionTitle(title: string) {
 function resolveFocusableFieldKey(fieldKey: string) {
   if (
     fieldKey === 'config.model' ||
+    fieldKey === 'config.provider_code' ||
     fieldKey === 'config.provider_instance_id'
   ) {
     return 'config.model_provider';

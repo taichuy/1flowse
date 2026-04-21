@@ -293,6 +293,20 @@ impl PluginRepository for MemoryModelProviderRepository {
         Ok(self.installations.read().await.values().cloned().collect())
     }
 
+    async fn delete_installation(&self, installation_id: Uuid) -> Result<()> {
+        if self
+            .installations
+            .write()
+            .await
+            .remove(&installation_id)
+            .is_some()
+        {
+            Ok(())
+        } else {
+            Err(ControlPlaneError::NotFound("plugin_installation").into())
+        }
+    }
+
     async fn list_pending_restart_host_extensions(&self) -> Result<Vec<PluginInstallationRecord>> {
         Ok(self
             .installations
@@ -505,6 +519,20 @@ impl ModelProviderRepository for MemoryModelProviderRepository {
             .await
             .values()
             .filter(|instance| instance.workspace_id == workspace_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn list_instances_by_provider_code(
+        &self,
+        provider_code: &str,
+    ) -> Result<Vec<ModelProviderInstanceRecord>> {
+        Ok(self
+            .instances
+            .read()
+            .await
+            .values()
+            .filter(|instance| instance.provider_code == provider_code)
             .cloned()
             .collect())
     }
@@ -790,15 +818,15 @@ async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
         )
         .await
         .unwrap();
-    assert_eq!(options.instances.len(), 1);
+    assert_eq!(options.providers.len(), 1);
     assert!(options.i18n_catalog["plugin.fixture_provider"].contains_key("zh_Hans"));
-    assert_eq!(options.instances[0].models.len(), 1);
+    assert_eq!(options.providers[0].models.len(), 1);
     assert_eq!(
-        options.instances[0].models[0].descriptor.model_id,
+        options.providers[0].models[0].descriptor.model_id,
         "fixture_chat"
     );
     assert_eq!(
-        options.instances[0].models[0]
+        options.providers[0].models[0]
             .descriptor
             .parameter_form
             .as_ref()
@@ -808,7 +836,7 @@ async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
         "temperature"
     );
     assert_eq!(
-        options.instances[0].models[0]
+        options.providers[0].models[0]
             .descriptor
             .parameter_form
             .as_ref()

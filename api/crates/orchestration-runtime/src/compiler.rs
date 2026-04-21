@@ -10,13 +10,13 @@ use crate::compiled_plan::{
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FlowCompileContext {
-    pub provider_instances: BTreeMap<String, FlowCompileProviderInstance>,
+    pub provider_families: BTreeMap<String, FlowCompileProviderFamily>,
     pub node_contributions: BTreeMap<String, FlowCompileNodeContribution>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FlowCompileProviderInstance {
-    pub provider_instance_id: String,
+pub struct FlowCompileProviderFamily {
+    pub effective_instance_id: String,
     pub provider_code: String,
     pub protocol: String,
     pub is_ready: bool,
@@ -257,56 +257,59 @@ fn compile_llm_runtime(
     context: &FlowCompileContext,
     compile_issues: &mut Vec<CompileIssue>,
 ) -> Option<CompiledLlmRuntime> {
-    let provider_instance_id = config
-        .get("provider_instance_id")
+    let provider_config = config.get("model_provider");
+    let provider_code = provider_config
+        .and_then(|value| value.get("provider_code"))
+        .or_else(|| config.get("provider_code"))
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string);
-    let model = config
-        .get("model")
+    let model = provider_config
+        .and_then(|value| value.get("model_id"))
+        .or_else(|| config.get("model"))
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string);
 
-    let Some(provider_instance_id) = provider_instance_id else {
+    let Some(provider_code) = provider_code else {
         compile_issues.push(CompileIssue {
             node_id: node_id.to_string(),
             code: CompileIssueCode::MissingProviderInstance,
-            message: format!("node {node_id} is missing config.provider_instance_id"),
+            message: format!("node {node_id} is missing config.model_provider.provider_code"),
         });
         if model.is_none() {
             compile_issues.push(CompileIssue {
                 node_id: node_id.to_string(),
                 code: CompileIssueCode::MissingModel,
-                message: format!("node {node_id} is missing config.model"),
+                message: format!("node {node_id} is missing config.model_provider.model_id"),
             });
         }
         return None;
     };
 
-    let Some(provider_instance) = context.provider_instances.get(&provider_instance_id) else {
+    let Some(provider_family) = context.provider_families.get(&provider_code) else {
         compile_issues.push(CompileIssue {
             node_id: node_id.to_string(),
             code: CompileIssueCode::ProviderInstanceNotFound,
-            message: format!("provider instance not found: {provider_instance_id}"),
+            message: format!("provider not found: {provider_code}"),
         });
         if model.is_none() {
             compile_issues.push(CompileIssue {
                 node_id: node_id.to_string(),
                 code: CompileIssueCode::MissingModel,
-                message: format!("node {node_id} is missing config.model"),
+                message: format!("node {node_id} is missing config.model_provider.model_id"),
             });
         }
         return None;
     };
 
-    if !provider_instance.is_ready {
+    if !provider_family.is_ready {
         compile_issues.push(CompileIssue {
             node_id: node_id.to_string(),
             code: CompileIssueCode::ProviderInstanceNotReady,
-            message: format!("provider instance {provider_instance_id} is not ready"),
+            message: format!("provider {provider_code} has no ready effective instance"),
         });
     }
 
@@ -314,33 +317,31 @@ fn compile_llm_runtime(
         compile_issues.push(CompileIssue {
             node_id: node_id.to_string(),
             code: CompileIssueCode::MissingModel,
-            message: format!("node {node_id} is missing config.model"),
+            message: format!("node {node_id} is missing config.model_provider.model_id"),
         });
         return Some(CompiledLlmRuntime {
-            provider_instance_id,
-            provider_code: provider_instance.provider_code.clone(),
-            protocol: provider_instance.protocol.clone(),
+            provider_instance_id: provider_family.effective_instance_id.clone(),
+            provider_code: provider_family.provider_code.clone(),
+            protocol: provider_family.protocol.clone(),
             model: String::new(),
         });
     };
 
-    if !provider_instance.allow_custom_models
-        && !provider_instance.available_models.is_empty()
-        && !provider_instance.available_models.contains(&model)
+    if !provider_family.allow_custom_models
+        && !provider_family.available_models.is_empty()
+        && !provider_family.available_models.contains(&model)
     {
         compile_issues.push(CompileIssue {
             node_id: node_id.to_string(),
             code: CompileIssueCode::ModelNotAvailable,
-            message: format!(
-                "model {model} is not available for provider instance {provider_instance_id}"
-            ),
+            message: format!("model {model} is not available for provider {provider_code}"),
         });
     }
 
     Some(CompiledLlmRuntime {
-        provider_instance_id,
-        provider_code: provider_instance.provider_code.clone(),
-        protocol: provider_instance.protocol.clone(),
+        provider_instance_id: provider_family.effective_instance_id.clone(),
+        provider_code: provider_family.provider_code.clone(),
+        protocol: provider_family.protocol.clone(),
         model,
     })
 }

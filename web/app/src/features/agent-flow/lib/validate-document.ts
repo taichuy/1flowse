@@ -32,7 +32,7 @@ function isMissingRequiredField(
     if (fieldKey === 'config.model_provider') {
       const modelProvider = getLlmModelProvider(node.config);
       return (
-        modelProvider.provider_instance_id.trim().length === 0 ||
+        modelProvider.provider_code.trim().length === 0 ||
         modelProvider.model_id.trim().length === 0
       );
     }
@@ -132,11 +132,8 @@ export function validateDocument(
   const nodeIds = new Set(document.graph.nodes.map((node) => node.id));
   const startNodes = document.graph.nodes.filter((node) => node.type === 'start');
   const answerNodes = document.graph.nodes.filter((node) => node.type === 'answer');
-  const providerInstanceMap = new Map(
-    (providerOptions?.instances ?? []).map((instance) => [
-      instance.provider_instance_id,
-      instance
-    ])
+  const providerMap = new Map(
+    (providerOptions?.providers ?? []).map((provider) => [provider.provider_code, provider])
   );
 
   if (startNodes.length !== 1) {
@@ -193,14 +190,14 @@ export function validateDocument(
           if (field.required && isMissingRequiredField(node, field.key)) {
             if (node.type === 'llm' && field.key === 'config.model_provider') {
               const modelProvider = getLlmModelProvider(node.config);
-              const providerMissing = modelProvider.provider_instance_id.trim().length === 0;
+              const providerMissing = modelProvider.provider_code.trim().length === 0;
 
               pushFieldIssue(
                 issues,
                 node,
                 field.key,
-                providerMissing ? 'LLM 缺少模型供应商实例' : 'LLM 缺少模型',
-                providerMissing ? '请先选择模型供应商实例。' : '请先选择模型。'
+                providerMissing ? 'LLM 缺少模型供应商' : 'LLM 缺少模型',
+                providerMissing ? '请先选择模型供应商。' : '请先选择模型。'
               );
               continue;
             }
@@ -219,31 +216,31 @@ export function validateDocument(
 
     if (node.type === 'llm') {
       const modelProvider = getLlmModelProvider(node.config);
-      const providerInstanceId = modelProvider.provider_instance_id.trim();
+      const providerCode = modelProvider.provider_code.trim();
       const model = modelProvider.model_id.trim();
 
-      if (providerOptions && providerInstanceId.length > 0) {
-        const providerInstance = providerInstanceMap.get(providerInstanceId);
+      if (providerOptions && providerCode.length > 0) {
+        const provider = providerMap.get(providerCode);
 
-        if (!providerInstance) {
+        if (!provider) {
           pushFieldIssue(
             issues,
             node,
             'config.model_provider',
-            'LLM 模型供应商实例不可用',
-            '当前模型供应商实例不存在、未就绪或你无权访问。',
+            'LLM 模型供应商不可用',
+            '当前模型供应商不存在、未就绪或你无权访问。',
             'inputs'
           );
         } else if (
           model.length > 0 &&
-          !providerInstance.models.some((entry) => entry.model_id === model)
+          !provider.models.some((entry) => entry.model_id === model)
         ) {
           pushFieldIssue(
             issues,
             node,
             'config.model_provider',
             'LLM 模型不可用',
-            '当前模型不属于所选模型供应商实例。'
+            '当前模型不属于所选模型供应商。'
           );
         }
       }

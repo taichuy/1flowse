@@ -25,9 +25,11 @@ export function ModelProviderCatalogPanel({
   instanceCounts,
   loading,
   canManage,
+  deletingProviderCode,
   onCreate,
   onViewInstances,
-  onManageVersion
+  onManageVersion,
+  onDelete
 }: {
   entries: SettingsPluginFamilyEntry[];
   currentCatalogEntries: Record<
@@ -37,9 +39,11 @@ export function ModelProviderCatalogPanel({
   instanceCounts: Record<string, number>;
   loading?: boolean;
   canManage: boolean;
+  deletingProviderCode?: string | null;
   onCreate: (entry: SettingsPluginFamilyEntry) => void;
   onViewInstances: (entry: SettingsPluginFamilyEntry) => void;
   onManageVersion: (entry: SettingsPluginFamilyEntry) => void;
+  onDelete: (entry: SettingsPluginFamilyEntry) => void;
 }) {
   return (
     <section className="model-provider-panel__catalog">
@@ -141,7 +145,7 @@ export function ModelProviderCatalogPanel({
                 {
                   title: '操作',
                   key: 'actions',
-                  width: 260,
+                  width: 320,
                   render: (_: unknown, entry: SettingsPluginFamilyEntry) => (
                     <Space size={4} wrap>
                       <Button
@@ -158,6 +162,14 @@ export function ModelProviderCatalogPanel({
                       </Button>
                       <Button type="link" onClick={() => onCreate(entry)}>
                         添加
+                      </Button>
+                      <Button
+                        danger
+                        type="link"
+                        loading={deletingProviderCode === entry.provider_code}
+                        onClick={() => onDelete(entry)}
+                      >
+                        删除
                       </Button>
                     </Space>
                   )

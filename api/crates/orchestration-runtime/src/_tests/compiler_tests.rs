@@ -2,17 +2,17 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use orchestration_runtime::compiled_plan::CompileIssueCode;
 use orchestration_runtime::compiler::{
-    FlowCompileContext, FlowCompileNodeContribution, FlowCompileProviderInstance, FlowCompiler,
+    FlowCompileContext, FlowCompileNodeContribution, FlowCompileProviderFamily, FlowCompiler,
 };
 use serde_json::json;
 use uuid::Uuid;
 
 fn compile_context() -> FlowCompileContext {
     FlowCompileContext {
-        provider_instances: BTreeMap::from([(
-            "provider-ready".to_string(),
-            FlowCompileProviderInstance {
-                provider_instance_id: "provider-ready".to_string(),
+        provider_families: BTreeMap::from([(
+            "fixture_provider".to_string(),
+            FlowCompileProviderFamily {
+                effective_instance_id: "provider-ready".to_string(),
                 provider_code: "fixture_provider".to_string(),
                 protocol: "openai_compatible".to_string(),
                 is_ready: true,
@@ -69,8 +69,10 @@ fn sample_document(flow_id: Uuid) -> serde_json::Value {
                     "position": { "x": 240, "y": 0 },
                     "configVersion": 1,
                     "config": {
-                        "provider_instance_id": "provider-ready",
-                        "model": "gpt-5.4-mini",
+                        "model_provider": {
+                            "provider_code": "fixture_provider",
+                            "model_id": "gpt-5.4-mini"
+                        },
                         "temperature": 0.2
                     },
                     "bindings": {
@@ -201,8 +203,10 @@ fn compile_collects_provider_compile_issues() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
     document["graph"]["nodes"][1]["config"] = json!({
-        "provider_instance_id": "provider-ready",
-        "model": "unknown-model"
+        "model_provider": {
+            "provider_code": "fixture_provider",
+            "model_id": "unknown-model"
+        }
     });
 
     let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();

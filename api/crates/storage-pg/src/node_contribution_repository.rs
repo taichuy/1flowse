@@ -139,7 +139,7 @@ impl NodeContributionRepository for PgControlPlaneStore {
                 reg.dependency_plugin_version_range,
                 assigned.id as assigned_installation_id,
                 assigned.plugin_version as assigned_plugin_version,
-                assigned.enabled as assigned_enabled
+                assigned.desired_state as assigned_desired_state
             from node_contribution_registry reg
             left join plugin_assignments pa
                 on pa.workspace_id = $1
@@ -156,11 +156,11 @@ impl NodeContributionRepository for PgControlPlaneStore {
         rows.into_iter()
             .map(|row| {
                 let assigned_installation_id: Option<Uuid> = row.get("assigned_installation_id");
-                let assigned_enabled: Option<bool> = row.get("assigned_enabled");
+                let assigned_desired_state: Option<String> = row.get("assigned_desired_state");
                 let assigned_plugin_version: Option<String> = row.get("assigned_plugin_version");
                 let dependency_status = if assigned_installation_id.is_none() {
                     NodeContributionDependencyStatus::MissingPlugin
-                } else if assigned_enabled == Some(false) {
+                } else if assigned_desired_state.as_deref() == Some("disabled") {
                     NodeContributionDependencyStatus::DisabledPlugin
                 } else if !version_matches_range(
                     assigned_plugin_version.as_deref().unwrap_or_default(),

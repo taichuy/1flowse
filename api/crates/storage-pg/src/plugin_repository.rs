@@ -283,6 +283,25 @@ impl PluginRepository for PgControlPlaneStore {
         rows.into_iter().map(map_installation).collect()
     }
 
+    async fn delete_installation(&self, installation_id: Uuid) -> Result<()> {
+        let deleted = sqlx::query_scalar::<_, Uuid>(
+            r#"
+            delete from plugin_installations
+            where id = $1
+            returning id
+            "#,
+        )
+        .bind(installation_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        if deleted.is_some() {
+            Ok(())
+        } else {
+            bail!(ControlPlaneError::NotFound("plugin_installation"));
+        }
+    }
+
     async fn list_pending_restart_host_extensions(
         &self,
     ) -> Result<Vec<domain::PluginInstallationRecord>> {

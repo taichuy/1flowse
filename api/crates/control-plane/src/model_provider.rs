@@ -105,7 +105,6 @@ pub struct ModelProviderModelCatalog {
 
 #[derive(Debug, Clone)]
 pub struct ModelProviderOptionEntry {
-    pub provider_instance_id: Uuid,
     pub provider_code: String,
     pub plugin_type: String,
     pub namespace: String,
@@ -113,12 +112,14 @@ pub struct ModelProviderOptionEntry {
     pub description_key: Option<String>,
     pub protocol: String,
     pub display_name: String,
+    pub effective_instance_id: Uuid,
+    pub effective_instance_display_name: String,
     pub models: Vec<LocalizedProviderModelDescriptor>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ModelProviderOptionsView {
-    pub instances: Vec<ModelProviderOptionEntry>,
+    pub providers: Vec<ModelProviderOptionEntry>,
     pub i18n_catalog: I18nCatalog,
 }
 
@@ -792,9 +793,20 @@ where
             installation_map.insert(installation.id, installation);
         }
 
+        let mut instances_by_provider = BTreeMap::<String, Vec<domain::ModelProviderInstanceRecord>>::new();
+        for instance in instances {
+            instances_by_provider
+                .entry(instance.provider_code.clone())
+                .or_default()
+                .push(instance);
+        }
+
         let mut options = Vec::new();
         let mut i18n_catalog = BTreeMap::new();
-        for instance in instances {
+        for (provider_code, provider_instances) in instances_by_provider {
+            let Some(instance) = select_effective_model_provider_instance(&provider_instances) else {
+                continue;
+            };
             if instance.status != domain::ModelProviderInstanceStatus::Ready {
                 continue;
             }
@@ -805,7 +817,7 @@ where
                 continue;
             }
             let package = load_provider_package(&installation.installed_path)?;
-            let namespace = plugin_namespace(&instance.provider_code);
+            let namespace = plugin_namespace(&provider_code);
             merge_i18n_catalog(
                 &mut i18n_catalog,
                 trim_provider_bundles(&namespace, &package.i18n, &locales),
@@ -815,14 +827,15 @@ where
                 None => package.predefined_models.clone(),
             };
             options.push(ModelProviderOptionEntry {
-                provider_instance_id: instance.id,
-                provider_code: instance.provider_code,
+                provider_code,
                 plugin_type: "model_provider".to_string(),
                 namespace: namespace.clone(),
                 label_key: "provider.label".to_string(),
                 description_key: Some("provider.description".to_string()),
-                protocol: instance.protocol,
-                display_name: instance.display_name,
+                protocol: instance.protocol.clone(),
+                display_name: package.provider.display_name.clone(),
+                effective_instance_id: instance.id,
+                effective_instance_display_name: instance.display_name.clone(),
                 models: models
                     .into_iter()
                     .map(|model| localized_model_descriptor(&namespace, model))
@@ -830,7 +843,7 @@ where
             });
         }
         Ok(ModelProviderOptionsView {
-            instances: options,
+            providers: options,
             i18n_catalog,
         })
     }
@@ -1151,6 +1164,19 @@ fn model_i18n_key(model_id: &str) -> String {
 
 fn model_discovery_mode_string(mode: ModelDiscoveryMode) -> String {
     format!("{mode:?}").to_ascii_lowercase()
+}
+
+fn select_effective_model_provider_instance<'a>(
+    instances: &'a [domain::ModelProviderInstanceRecord],
+) -> Option<&'a domain::ModelProviderInstanceRecord> {
+    instances.iter().max_by_key(|instance| {
+        (
+            instance.status == domain::ModelProviderInstanceStatus::Ready,
+            instance.last_validated_at,
+            instance.updated_at,
+            instance.id,
+        )
+    })
 }
 
 fn map_model_discovery_mode(mode: ModelDiscoveryMode) -> domain::ModelProviderDiscoveryMode {

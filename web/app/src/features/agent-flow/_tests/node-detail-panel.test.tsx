@@ -104,7 +104,7 @@ function renderWithProviders(ui: ReactNode) {
 
 describe('NodeDetailPanel', () => {
   modelProviderOptionsApi.fetchModelProviderOptions.mockResolvedValue({
-    instances: []
+    providers: []
   });
 
   test('builds node detail from the schema registry and node schema adapter', () => {

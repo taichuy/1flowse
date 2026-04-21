@@ -346,7 +346,7 @@ async fn model_provider_routes_mask_secret_until_reveal_and_keep_ready_options()
     let options_payload: Value =
         serde_json::from_slice(&to_bytes(options.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(
-        options_payload["data"]["instances"]
+        options_payload["data"]["providers"]
             .as_array()
             .unwrap()
             .len(),
@@ -360,22 +360,30 @@ async fn model_provider_routes_mask_secret_until_reveal_and_keep_ready_options()
         options_payload["data"]["i18n_catalog"]["plugin.fixture_provider"]["zh_Hans"].is_object()
     );
     assert_eq!(
-        options_payload["data"]["instances"][0]["models"][0]["model_id"].as_str(),
+        options_payload["data"]["providers"][0]["models"][0]["model_id"].as_str(),
         Some("fixture_chat")
     );
-    assert!(options_payload["data"]["instances"][0]["models"][0]["namespace"].is_null());
-    assert!(options_payload["data"]["instances"][0]["models"][0]["label_key"].is_null());
     assert_eq!(
-        options_payload["data"]["instances"][0]["models"][0]["display_name_fallback"].as_str(),
+        options_payload["data"]["providers"][0]["effective_instance_id"].as_str(),
+        Some(instance_id.as_str())
+    );
+    assert_eq!(
+        options_payload["data"]["providers"][0]["effective_instance_display_name"].as_str(),
+        Some("Fixture Prod")
+    );
+    assert!(options_payload["data"]["providers"][0]["models"][0]["namespace"].is_null());
+    assert!(options_payload["data"]["providers"][0]["models"][0]["label_key"].is_null());
+    assert_eq!(
+        options_payload["data"]["providers"][0]["models"][0]["display_name_fallback"].as_str(),
         Some("Fixture Chat")
     );
     assert_eq!(
-        options_payload["data"]["instances"][0]["models"][0]["parameter_form"]["schema_version"]
+        options_payload["data"]["providers"][0]["models"][0]["parameter_form"]["schema_version"]
             .as_str(),
         Some("1.0.0")
     );
     assert_eq!(
-        options_payload["data"]["instances"][0]["models"][0]["parameter_form"]["fields"][0]["key"]
+        options_payload["data"]["providers"][0]["models"][0]["parameter_form"]["fields"][0]["key"]
             .as_str(),
         Some("temperature")
     );

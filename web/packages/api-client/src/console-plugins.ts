@@ -199,7 +199,10 @@ export function listConsoleOfficialPluginCatalog(
   baseUrl?: string
 ) {
   return apiFetch<ConsoleOfficialPluginCatalogResponse>({
-    path: buildPluginCatalogPath('/api/console/plugins/official-catalog', filter),
+    path: buildPluginCatalogPath(
+      '/api/console/plugins/official-catalog',
+      filter
+    ),
     baseUrl
   });
 }
@@ -299,6 +302,19 @@ export function switchConsolePluginFamilyVersion(
     path: `/api/console/plugins/families/${providerCode}/switch-version`,
     method: 'POST',
     body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function deleteConsolePluginFamily(
+  providerCode: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsolePluginTask>({
+    path: `/api/console/plugins/families/${providerCode}`,
+    method: 'DELETE',
     csrfToken,
     baseUrl
   });

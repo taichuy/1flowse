@@ -24,9 +24,10 @@ use crate::{
     errors::ControlPlaneError,
     i18n::RequestedLocales,
     plugin_management::{
-        AssignPluginCommand, EnablePluginCommand, InstallOfficialPluginCommand,
-        InstallPluginCommand, InstallUploadedPluginCommand, PluginCatalogFilter,
-        PluginManagementService, SwitchPluginVersionCommand, UpgradeLatestPluginFamilyCommand,
+        AssignPluginCommand, DeletePluginFamilyCommand, EnablePluginCommand,
+        InstallOfficialPluginCommand, InstallPluginCommand, InstallUploadedPluginCommand,
+        PluginCatalogFilter, PluginManagementService, SwitchPluginVersionCommand,
+        UpgradeLatestPluginFamilyCommand,
     },
     ports::{
         AuthRepository, CreateModelProviderInstanceInput, CreatePluginAssignmentInput,
@@ -300,6 +301,27 @@ impl PluginRepository for MemoryPluginManagementRepository {
 
     async fn list_installations(&self) -> Result<Vec<PluginInstallationRecord>> {
         Ok(self.installations.read().await.values().cloned().collect())
+    }
+
+    async fn delete_installation(&self, installation_id: Uuid) -> Result<()> {
+        let removed = self.installations.write().await.remove(&installation_id);
+        let Some(_) = removed else {
+            return Err(ControlPlaneError::NotFound("plugin_installation").into());
+        };
+
+        self.plugin_ids
+            .write()
+            .await
+            .retain(|_, id| *id != installation_id);
+        self.assignments
+            .write()
+            .await
+            .retain(|assignment| assignment.installation_id != installation_id);
+        self.node_contributions
+            .write()
+            .await
+            .retain(|entry| entry.installation_id != installation_id);
+        Ok(())
     }
 
     async fn list_pending_restart_host_extensions(&self) -> Result<Vec<PluginInstallationRecord>> {
@@ -601,6 +623,20 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
             .collect())
     }
 
+    async fn list_instances_by_provider_code(
+        &self,
+        provider_code: &str,
+    ) -> Result<Vec<ModelProviderInstanceRecord>> {
+        Ok(self
+            .instances
+            .read()
+            .await
+            .values()
+            .filter(|instance| instance.provider_code == provider_code)
+            .cloned()
+            .collect())
+    }
+
     async fn reassign_instances_to_installation(
         &self,
         input: &ReassignModelProviderInstancesInput,
@@ -671,8 +707,18 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
         Ok(None)
     }
 
-    async fn delete_instance(&self, _workspace_id: Uuid, _instance_id: Uuid) -> Result<()> {
-        unimplemented!("not needed in plugin management tests")
+    async fn delete_instance(&self, workspace_id: Uuid, instance_id: Uuid) -> Result<()> {
+        let mut instances = self.instances.write().await;
+        let Some(instance) = instances.get(&instance_id).cloned() else {
+            return Err(ControlPlaneError::NotFound("model_provider_instance").into());
+        };
+        if instance.workspace_id != workspace_id {
+            return Err(ControlPlaneError::NotFound("model_provider_instance").into());
+        }
+
+        instances.remove(&instance_id);
+        self.caches.write().await.remove(&instance_id);
+        Ok(())
     }
 
     async fn count_instance_references(
@@ -1919,6 +1965,112 @@ async fn plugin_management_service_upgrades_to_latest_without_redownloading_when
     assert_eq!(task.task_kind, PluginTaskKind::SwitchVersion);
     assert_eq!(task.status, PluginTaskStatus::Succeeded);
     assert_eq!(download_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn plugin_management_service_deletes_provider_family_with_instances_and_artifacts() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let install_root =
+        std::env::temp_dir().join(format!("plugin-delete-family-{}", Uuid::now_v7()));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &install_root,
+    );
+
+    let current_installation = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.1.0",
+        PluginDesiredState::ActiveRequested,
+    )
+    .await;
+    let old_installation = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.0.9",
+        PluginDesiredState::Disabled,
+    )
+    .await;
+    repository
+        .create_assignment(&CreatePluginAssignmentInput {
+            installation_id: current_installation,
+            workspace_id,
+            provider_code: "fixture_provider".into(),
+            actor_user_id: repository.actor.user_id,
+        })
+        .await
+        .unwrap();
+    repository
+        .seed_instance_with_ready_cache(
+            current_installation,
+            "fixture_provider",
+            "Fixture Provider Prod",
+        )
+        .await;
+    repository
+        .seed_instance_with_ready_cache(
+            old_installation,
+            "fixture_provider",
+            "Fixture Provider Staging",
+        )
+        .await;
+
+    let current_path = PathBuf::from(
+        &repository
+            .get_installation(current_installation)
+            .await
+            .unwrap()
+            .unwrap()
+            .installed_path,
+    );
+    let old_path = PathBuf::from(
+        &repository
+            .get_installation(old_installation)
+            .await
+            .unwrap()
+            .unwrap()
+            .installed_path,
+    );
+
+    let task = service
+        .delete_family(DeletePluginFamilyCommand {
+            actor_user_id: repository.actor.user_id,
+            provider_code: "fixture_provider".into(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(task.task_kind, PluginTaskKind::Uninstall);
+    assert_eq!(task.status, PluginTaskStatus::Succeeded);
+    assert_eq!(task.detail_json["deleted_instance_count"], 2);
+    assert_eq!(task.detail_json["deleted_installation_count"], 2);
+    assert_eq!(repository.list_installations().await.unwrap().len(), 0);
+    assert_eq!(
+        repository
+            .list_assignments(workspace_id)
+            .await
+            .unwrap()
+            .len(),
+        0
+    );
+    assert_eq!(
+        repository.list_instances(workspace_id).await.unwrap().len(),
+        0
+    );
+    assert!(!current_path.exists());
+    assert!(!old_path.exists());
+    assert_eq!(
+        repository.audit_events().await,
+        vec!["plugin.family_deleted"]
+    );
 }
 
 #[tokio::test]

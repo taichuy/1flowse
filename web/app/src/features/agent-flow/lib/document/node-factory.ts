@@ -66,7 +66,7 @@ function defaultConfig(nodeType: BuiltinFlowNodeType): Record<string, unknown> {
     case 'llm':
       return {
         model_provider: {
-          provider_instance_id: '',
+          provider_code: '',
           model_id: ''
         },
         llm_parameters: {

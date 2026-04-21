@@ -1,6 +1,6 @@
 import type { AgentFlowModelProviderOptions } from '../api/model-provider-options';
 
-export interface LlmProviderInstanceOption {
+export interface LlmProviderOption {
   value: string;
   label: string;
   providerCode: string;
@@ -11,12 +11,11 @@ export interface LlmProviderInstanceOption {
 export interface LlmModelOption {
   value: string;
   label: string;
-  providerInstanceId: string;
   providerLabel: string;
   providerCode: string;
   protocol: string;
   parameterForm: NonNullable<
-    AgentFlowModelProviderOptions['instances'][number]['models'][number]['parameter_form']
+    AgentFlowModelProviderOptions['providers'][number]['models'][number]['parameter_form']
   > | null;
   tag?: string;
 }
@@ -29,54 +28,50 @@ function toTag(source: string) {
   return source.replace(/_/g, ' ').toUpperCase();
 }
 
-export function listLlmProviderInstanceOptions(
+export function listLlmProviderOptions(
   options: AgentFlowModelProviderOptions | null | undefined
-): LlmProviderInstanceOption[] {
-  return (options?.instances ?? []).map((instance) => ({
-    value: instance.provider_instance_id,
-    label: instance.display_name,
-    providerCode: instance.provider_code,
-    protocol: instance.protocol,
-    models: instance.models.map((model) => ({
+): LlmProviderOption[] {
+  return (options?.providers ?? []).map((provider) => ({
+    value: provider.provider_code,
+    label: provider.display_name,
+    providerCode: provider.provider_code,
+    protocol: provider.protocol,
+    models: provider.models.map((model) => ({
       value: model.model_id,
       label: model.display_name || model.model_id,
-      providerInstanceId: instance.provider_instance_id,
-      providerLabel: instance.display_name,
-      providerCode: instance.provider_code,
-      protocol: instance.protocol,
+      providerLabel: provider.display_name,
+      providerCode: provider.provider_code,
+      protocol: provider.protocol,
       parameterForm: model.parameter_form,
       tag: toTag(model.source)
     }))
   }));
 }
 
-export function findLlmProviderInstanceOption(
+export function findLlmProviderOption(
   options: AgentFlowModelProviderOptions | null | undefined,
-  providerInstanceId: string | null | undefined
+  providerCode: string | null | undefined
 ) {
-  if (!providerInstanceId) {
+  if (!providerCode) {
     return null;
   }
 
   return (
-    listLlmProviderInstanceOptions(options).find(
-      (instance) => instance.value === providerInstanceId
-    ) ?? null
+    listLlmProviderOptions(options).find((provider) => provider.value === providerCode) ?? null
   );
 }
 
 export function findLlmModelOption(
   options: AgentFlowModelProviderOptions | null | undefined,
-  providerInstanceId: string | null | undefined,
+  providerCode: string | null | undefined,
   modelId: string | null | undefined
 ) {
-  if (!providerInstanceId || !modelId) {
+  if (!providerCode || !modelId) {
     return null;
   }
 
   return (
-    findLlmProviderInstanceOption(options, providerInstanceId)?.models.find(
-      (option) => option.value === modelId
-    ) ?? null
+    findLlmProviderOption(options, providerCode)?.models.find((option) => option.value === modelId) ??
+    null
   );
 }

@@ -105,6 +105,7 @@ const pluginsApi = vi.hoisted(() => ({
   uploadSettingsPluginPackage: vi.fn(),
   upgradeSettingsPluginFamilyLatest: vi.fn(),
   switchSettingsPluginFamilyVersion: vi.fn(),
+  deleteSettingsPluginFamily: vi.fn(),
   fetchSettingsPluginTask: vi.fn()
 }));
 
@@ -373,6 +374,22 @@ describe('ModelProvidersPage', () => {
       updated_at: '2026-04-19T10:05:00Z',
       finished_at: '2026-04-19T10:05:00Z'
     });
+    pluginsApi.deleteSettingsPluginFamily.mockResolvedValue({
+      id: 'task-delete',
+      installation_id: 'installation-1',
+      workspace_id: 'workspace-1',
+      provider_code: 'openai_compatible',
+      task_kind: 'uninstall',
+      status: 'success',
+      status_message: 'deleted',
+      detail_json: {
+        deleted_instance_count: 2,
+        deleted_installation_count: 1
+      },
+      created_at: '2026-04-19T10:10:00Z',
+      updated_at: '2026-04-19T10:10:00Z',
+      finished_at: '2026-04-19T10:10:00Z'
+    });
     pluginsApi.fetchSettingsPluginTask.mockResolvedValue({
       id: 'task-1',
       installation_id: 'installation-1',
@@ -388,123 +405,151 @@ describe('ModelProvidersPage', () => {
     });
   });
 
-  test(
-    'renders provider family rows and upgrades to the latest version from version management',
-    async () => {
-      authenticateWithPermissions([
-        'route_page.view.all',
-        'state_model.view.all',
-        'state_model.manage.all'
-      ]);
+  test('renders provider family rows and upgrades to the latest version from version management', async () => {
+    authenticateWithPermissions([
+      'route_page.view.all',
+      'state_model.view.all',
+      'state_model.manage.all'
+    ]);
 
-      renderApp('/settings/model-providers');
+    renderApp('/settings/model-providers');
 
-      await waitFor(() => {
-        expect(pluginsApi.fetchSettingsPluginFamilies).toHaveBeenCalled();
-      });
+    await waitFor(() => {
+      expect(pluginsApi.fetchSettingsPluginFamilies).toHaveBeenCalled();
+    });
+    expect(
+      await screen.findByText('当前使用 0.1.0，最新版本 0.2.0')
+    ).toBeInTheDocument();
+
+    const catalogRow = await screen.findByRole('row', {
+      name: /OpenAI Compatible/
+    });
+    fireEvent.click(
+      within(catalogRow).getByRole('button', { name: '版本管理' })
+    );
+
+    expect(await screen.findByText('升级到最新版本')).toBeInTheDocument();
+    expect(screen.getAllByText('0.2.0')).toHaveLength(1);
+    expect(screen.getByText('其他本地版本')).toBeInTheDocument();
+    expect(screen.queryByText('最新')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '升级到最新版本' }));
+
+    await waitFor(() => {
+      expect(pluginsApi.upgradeSettingsPluginFamilyLatest).toHaveBeenCalledWith(
+        'openai_compatible',
+        'csrf-123'
+      );
+    });
+  }, 20000);
+
+  test('switches provider family version and shows a follow-up warning in the instances modal', async () => {
+    authenticateWithPermissions([
+      'route_page.view.all',
+      'state_model.view.all',
+      'state_model.manage.all'
+    ]);
+    pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([
+      {
+        provider_code: 'openai_compatible',
+        display_name: 'OpenAI Compatible',
+        protocol: 'openai_compatible',
+        help_url: 'https://platform.openai.com/docs/api-reference',
+        default_base_url: 'https://api.openai.com/v1',
+        model_discovery_mode: 'hybrid',
+        current_installation_id: 'installation-2',
+        current_version: '0.2.0',
+        latest_version: '0.2.0',
+        has_update: false,
+        installed_versions: [
+          {
+            installation_id: 'installation-2',
+            plugin_version: '0.2.0',
+            source_kind: 'official_registry',
+            trust_level: 'verified_official',
+            created_at: '2026-04-19T09:00:00Z',
+            is_current: true
+          },
+          {
+            installation_id: 'installation-1',
+            plugin_version: '0.1.0',
+            source_kind: 'official_registry',
+            trust_level: 'verified_official',
+            created_at: '2026-04-18T09:00:00Z',
+            is_current: false
+          }
+        ]
+      }
+    ]);
+
+    renderApp('/settings/model-providers');
+
+    await waitFor(() => {
+      expect(pluginsApi.fetchSettingsPluginFamilies).toHaveBeenCalled();
+    });
+
+    const catalogRow = await screen.findByRole('row', {
+      name: /OpenAI Compatible/
+    });
+    fireEvent.click(
+      within(catalogRow).getByRole('button', { name: '版本管理' })
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: '回退到该版本' })
+    );
+
+    await waitFor(() => {
+      expect(pluginsApi.switchSettingsPluginFamilyVersion).toHaveBeenCalledWith(
+        'openai_compatible',
+        'installation-1',
+        'csrf-123'
+      );
+    });
+
+    fireEvent.click(
+      within(catalogRow).getByRole('button', { name: '查看实例' })
+    );
+    expect(
+      await screen.findByText(
+        '该供应商刚完成版本切换，建议刷新模型并验证关键实例。'
+      )
+    ).toBeInTheDocument();
+  }, 20000);
+
+  test('deletes a provider family after confirmation', async () => {
+    authenticateWithPermissions([
+      'route_page.view.all',
+      'state_model.view.all',
+      'state_model.manage.all'
+    ]);
+
+    renderApp('/settings/model-providers');
+
+    const catalogRow = await screen.findByRole('row', {
+      name: /OpenAI Compatible/
+    });
+    fireEvent.click(within(catalogRow).getByRole('button', { name: '删除' }));
+
+      expect((await screen.findAllByText('删除供应商')).length).toBeGreaterThan(
+        0
+      );
       expect(
-        await screen.findByText('当前使用 0.1.0，最新版本 0.2.0')
-      ).toBeInTheDocument();
-
-      const catalogRow = await screen.findByRole('row', {
-        name: /OpenAI Compatible/
-      });
-      fireEvent.click(
-        within(catalogRow).getByRole('button', { name: '版本管理' })
-      );
-
-      expect(await screen.findByText('升级到最新版本')).toBeInTheDocument();
-      expect(screen.getAllByText('0.2.0')).toHaveLength(1);
-      expect(screen.getByText('其他本地版本')).toBeInTheDocument();
-      expect(screen.queryByText('最新')).not.toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: '升级到最新版本' }));
-
-      await waitFor(() => {
-        expect(pluginsApi.upgradeSettingsPluginFamilyLatest).toHaveBeenCalledWith(
-          'openai_compatible',
-          'csrf-123'
-        );
-      });
-    },
-    20000
-  );
-
-  test(
-    'switches provider family version and shows a follow-up warning in the instances modal',
-    async () => {
-      authenticateWithPermissions([
-        'route_page.view.all',
-        'state_model.view.all',
-        'state_model.manage.all'
-      ]);
-      pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([
-        {
-          provider_code: 'openai_compatible',
-          display_name: 'OpenAI Compatible',
-          protocol: 'openai_compatible',
-          help_url: 'https://platform.openai.com/docs/api-reference',
-          default_base_url: 'https://api.openai.com/v1',
-          model_discovery_mode: 'hybrid',
-          current_installation_id: 'installation-2',
-          current_version: '0.2.0',
-          latest_version: '0.2.0',
-          has_update: false,
-          installed_versions: [
-            {
-              installation_id: 'installation-2',
-              plugin_version: '0.2.0',
-              source_kind: 'official_registry',
-              trust_level: 'verified_official',
-              created_at: '2026-04-19T09:00:00Z',
-              is_current: true
-            },
-            {
-              installation_id: 'installation-1',
-              plugin_version: '0.1.0',
-              source_kind: 'official_registry',
-              trust_level: 'verified_official',
-              created_at: '2026-04-18T09:00:00Z',
-              is_current: false
-            }
-          ]
-        }
-      ]);
-
-      renderApp('/settings/model-providers');
-
-      await waitFor(() => {
-        expect(pluginsApi.fetchSettingsPluginFamilies).toHaveBeenCalled();
-      });
-
-      const catalogRow = await screen.findByRole('row', {
-        name: /OpenAI Compatible/
-      });
-      fireEvent.click(
-        within(catalogRow).getByRole('button', { name: '版本管理' })
-      );
-      fireEvent.click(
-        await screen.findByRole('button', { name: '回退到该版本' })
-      );
-
-      await waitFor(() => {
-        expect(pluginsApi.switchSettingsPluginFamilyVersion).toHaveBeenCalledWith(
-          'openai_compatible',
-          'installation-1',
-          'csrf-123'
-        );
-      });
-
-      fireEvent.click(
-        within(catalogRow).getByRole('button', { name: '查看实例' })
-      );
-      expect(
-        await screen.findByText(
-          '该供应商刚完成版本切换，建议刷新模型并验证关键实例。'
+        screen.getByText(
+          '删除后会一并清理该供应商的全部实例、安装记录和本地插件文件。'
         )
       ).toBeInTheDocument();
-    },
-    20000
-  );
+
+      const confirmDialog = await screen.findByRole('dialog');
+      fireEvent.click(
+        within(confirmDialog).getByRole('button', { name: /删\s*除/ })
+      );
+
+    await waitFor(() => {
+      expect(pluginsApi.deleteSettingsPluginFamily).toHaveBeenCalledWith(
+        'openai_compatible',
+        'csrf-123'
+      );
+    });
+  }, 20000);
 
   test('renders catalog and instance metadata for view-only users without manage actions', async () => {
     authenticateWithPermissions([
@@ -546,39 +591,35 @@ describe('ModelProvidersPage', () => {
     expect(screen.queryByText('OpenAI Production')).not.toBeInTheDocument();
   }, 10000);
 
-  test(
-    'shows create and row-level manage actions when state_model.manage.all is present',
-    async () => {
-      authenticateWithPermissions([
-        'route_page.view.all',
-        'state_model.view.all',
-        'state_model.manage.all'
-      ]);
+  test('shows create and row-level manage actions when state_model.manage.all is present', async () => {
+    authenticateWithPermissions([
+      'route_page.view.all',
+      'state_model.view.all',
+      'state_model.manage.all'
+    ]);
 
-      renderApp('/settings/model-providers');
+    renderApp('/settings/model-providers');
 
-      expect(
-        await screen.findByRole('button', { name: '查看实例' })
-      ).toBeInTheDocument();
-      expect(
-        screen.queryByRole('heading', { name: '当前实例' })
-      ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: '查看实例' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: '当前实例' })
+    ).not.toBeInTheDocument();
 
-      const catalogRow = await screen.findByRole('row', {
-        name: /OpenAI Compatible/
-      });
-      expect(
-        within(catalogRow).getByRole('button', { name: '查看实例' })
-      ).toBeInTheDocument();
-      expect(
-        within(catalogRow).getByRole('button', { name: '添加' })
-      ).toBeInTheDocument();
-      expect(
-        within(catalogRow).queryByRole('link', { name: '文档' })
-      ).not.toBeInTheDocument();
-    },
-    20000
-  );
+    const catalogRow = await screen.findByRole('row', {
+      name: /OpenAI Compatible/
+    });
+    expect(
+      within(catalogRow).getByRole('button', { name: '查看实例' })
+    ).toBeInTheDocument();
+    expect(
+      within(catalogRow).getByRole('button', { name: '添加' })
+    ).toBeInTheDocument();
+    expect(
+      within(catalogRow).queryByRole('link', { name: '文档' })
+    ).not.toBeInTheDocument();
+  }, 20000);
 
   test(
     'opens provider instances modal from installed provider row and defaults to the ready instance',
@@ -783,12 +824,20 @@ describe('ModelProvidersPage', () => {
       )
     ).toBeInTheDocument();
     expect(
-      screen.getByText('面向 OpenAI 兼容 Chat Completions API 的 provider 插件。')
+      screen.getByText(
+        '面向 OpenAI 兼容 Chat Completions API 的 provider 插件。'
+      )
     ).toBeInTheDocument();
-    expect(screen.queryByText('协议：openai_compatible')).not.toBeInTheDocument();
-    expect(screen.queryByText('预置模型与运行时发现合并显示')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('协议：openai_compatible')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('预置模型与运行时发现合并显示')
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('来源：官方源')).not.toBeInTheDocument();
-    expect(screen.queryByText('1flowbase.openai_compatible')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('1flowbase.openai_compatible')
+    ).not.toBeInTheDocument();
   });
 
   test('deduplicates official install cards for the same provider and keeps only one latest entry', async () => {
@@ -1021,12 +1070,16 @@ describe('ModelProvidersPage', () => {
 
     renderApp('/settings/model-providers');
 
-    expect(await screen.findByRole('button', { name: '上传插件' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: '上传插件' })
+    ).toBeInTheDocument();
 
     const catalogRow = await screen.findByRole('row', {
       name: /OpenAI Compatible/
     });
-    fireEvent.click(within(catalogRow).getByRole('button', { name: '版本管理' }));
+    fireEvent.click(
+      within(catalogRow).getByRole('button', { name: '版本管理' })
+    );
 
     expect(await screen.findByText('官方签发')).toBeInTheDocument();
     expect(await screen.findByText('手工上传')).toBeInTheDocument();

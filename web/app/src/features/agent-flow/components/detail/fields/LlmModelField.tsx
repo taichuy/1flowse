@@ -14,8 +14,8 @@ import {
 } from '../../../lib/llm-node-config';
 import {
   findLlmModelOption,
-  findLlmProviderInstanceOption,
-  listLlmProviderInstanceOptions,
+  findLlmProviderOption,
+  listLlmProviderOptions,
   type LlmModelOption
 } from '../../../lib/model-options';
 
@@ -77,21 +77,14 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
   });
   const config = getNodeConfig(adapter);
   const modelProvider = getLlmModelProvider(config);
-  const providerInstanceId = modelProvider.provider_instance_id.trim();
+  const providerCode = modelProvider.provider_code.trim();
   const modelValue = modelProvider.model_id.trim();
   const providerOptions = useMemo(
-    () => listLlmProviderInstanceOptions(providerOptionsQuery.data),
+    () => listLlmProviderOptions(providerOptionsQuery.data),
     [providerOptionsQuery.data]
   );
-  const selectedProvider = findLlmProviderInstanceOption(
-    providerOptionsQuery.data,
-    providerInstanceId
-  );
-  const selectedModel = findLlmModelOption(
-    providerOptionsQuery.data,
-    providerInstanceId,
-    modelValue
-  );
+  const selectedProvider = findLlmProviderOption(providerOptionsQuery.data, providerCode);
+  const selectedModel = findLlmModelOption(providerOptionsQuery.data, providerCode, modelValue);
 
   const filteredProviderOptions = useMemo(
     () => filterByQuery(providerOptions, providerSearchValue),
@@ -102,15 +95,10 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
     [modelSearchValue, selectedProvider?.models]
   );
   const providerUnavailable = Boolean(
-    providerInstanceId &&
-      providerOptionsQuery.isSuccess &&
-      selectedProvider === null
+    providerCode && providerOptionsQuery.isSuccess && selectedProvider === null
   );
   const modelUnavailable = Boolean(
-    providerInstanceId &&
-      modelValue &&
-      providerOptionsQuery.isSuccess &&
-      selectedModel === null
+    providerCode && modelValue && providerOptionsQuery.isSuccess && selectedModel === null
   );
   const hasProviderOptions = providerOptions.length > 0;
 
@@ -120,16 +108,15 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
     setModelSearchValue('');
   }
 
-  function selectProvider(nextProviderInstanceId: string) {
-    const nextProvider = providerOptions.find((option) => option.value === nextProviderInstanceId);
+  function selectProvider(nextProviderCode: string) {
+    const nextProvider = providerOptions.find((option) => option.value === nextProviderCode);
     const nextModelStillValid = Boolean(
       nextProvider && nextProvider.models.some((option) => option.value === modelValue)
     );
 
     adapter.setValue('config.model_provider', {
-      provider_instance_id: nextProviderInstanceId,
+      provider_code: nextProviderCode,
       model_id: nextModelStillValid ? modelValue : '',
-      provider_code: nextProvider?.providerCode,
       protocol: nextProvider?.protocol,
       provider_label: nextProvider?.label,
       model_label: nextModelStillValid ? selectedModel?.label ?? modelProvider.model_label : undefined
@@ -144,9 +131,8 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
 
   function selectModel(nextModel: LlmModelOption) {
     adapter.setValue('config.model_provider', {
-      provider_instance_id: nextModel.providerInstanceId,
-      model_id: nextModel.value,
       provider_code: nextModel.providerCode,
+      model_id: nextModel.value,
       protocol: nextModel.protocol,
       provider_label: nextModel.providerLabel,
       model_label: nextModel.label,
@@ -168,7 +154,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
             providerLabel={
               selectedProvider?.label ||
               modelProvider.provider_label ||
-              (providerInstanceId ? providerInstanceId : null)
+              (providerCode ? providerCode : null)
             }
             modelLabel={
               selectedModel?.label ||
@@ -212,7 +198,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
             className="agent-flow-model-settings__notice"
             type="error"
             showIcon
-            message="当前节点引用的模型供应商实例不可用。"
+            message="当前节点引用的模型供应商不可用。"
           />
         ) : null}
         {modelUnavailable ? (
@@ -220,22 +206,22 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
             className="agent-flow-model-settings__notice"
             type="error"
             showIcon
-            message="当前节点引用的模型不属于所选模型供应商实例。"
+            message="当前节点引用的模型不属于所选模型供应商。"
           />
         ) : null}
         <div className="agent-flow-model-settings__selector-shell">
           <div className="agent-flow-model-settings__section">
             <Typography.Title level={5} className="agent-flow-model-settings__section-title">
-              模型供应商实例
+              模型供应商
             </Typography.Title>
             <Typography.Text className="agent-flow-model-settings__section-subtitle">
-              先选择一个已就绪的供应商实例，再选择该实例下可用的模型。
+              先选择一个已就绪的模型供应商，再选择该供应商下可用的模型。
             </Typography.Text>
             <Input
               allowClear
               prefix={<SearchOutlined />}
-              aria-label="搜索模型供应商实例"
-              placeholder="搜索模型供应商实例"
+              aria-label="搜索模型供应商"
+              placeholder="搜索模型供应商"
               value={providerSearchValue}
               onChange={(event) => setProviderSearchValue(event.target.value)}
             />
@@ -243,16 +229,16 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
               <div className="agent-flow-model-settings__options">
                 {providerOptionsQuery.isPending ? (
                   <div className="agent-flow-model-settings__empty">
-                    <Typography.Text>正在加载模型供应商实例…</Typography.Text>
+                    <Typography.Text>正在加载模型供应商…</Typography.Text>
                   </div>
                 ) : filteredProviderOptions.length > 0 ? (
                   filteredProviderOptions.map((option) => (
                     <button
                       key={option.value}
                       type="button"
-                      aria-label={`选择模型供应商实例 ${option.label}`}
+                      aria-label={`选择模型供应商 ${option.label}`}
                       className={`agent-flow-model-settings__option${
-                        option.value === providerInstanceId
+                        option.value === providerCode
                           ? ' agent-flow-model-settings__option--active'
                           : ''
                       }`}
@@ -269,7 +255,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                   <Empty
                     className="agent-flow-model-settings__empty"
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={hasProviderOptions ? '没有匹配的模型供应商实例' : '暂无可用模型供应商实例'}
+                    description={hasProviderOptions ? '没有匹配的模型供应商' : '暂无可用模型供应商'}
                   />
                 )}
               </div>
@@ -311,19 +297,19 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                       </button>
                     ))
                   ) : (
-                    <Empty
-                      className="agent-flow-model-settings__empty"
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description="当前实例下没有匹配模型"
-                    />
-                  )
-                ) : (
                   <Empty
                     className="agent-flow-model-settings__empty"
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="请先选择模型供应商实例"
+                    description="当前供应商下没有匹配模型"
                   />
-                )}
+                )
+              ) : (
+                <Empty
+                  className="agent-flow-model-settings__empty"
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="请先选择模型供应商"
+                />
+              )}
               </div>
             </div>
           </div>

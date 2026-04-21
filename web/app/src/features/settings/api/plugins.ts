@@ -1,4 +1,5 @@
 import {
+  deleteConsolePluginFamily,
   getConsolePluginTask,
   installConsoleOfficialPlugin,
   listConsolePluginFamilies,
@@ -19,10 +20,11 @@ export type SettingsPluginFamilyEntry = ConsolePluginFamilyEntry & {
   display_name: string;
   description: string | null;
 };
-export type SettingsOfficialPluginCatalogEntry = ConsoleOfficialPluginCatalogEntry & {
-  display_name: string;
-  description: string | null;
-};
+export type SettingsOfficialPluginCatalogEntry =
+  ConsoleOfficialPluginCatalogEntry & {
+    display_name: string;
+    description: string | null;
+  };
 export type SettingsOfficialPluginCatalogResponse = Omit<
   ConsoleOfficialPluginCatalogResponse,
   'entries'
@@ -253,6 +255,13 @@ export function switchSettingsPluginFamilyVersion(
     { installation_id },
     csrfToken
   );
+}
+
+export function deleteSettingsPluginFamily(
+  providerCode: string,
+  csrfToken: string
+) {
+  return deleteConsolePluginFamily(providerCode, csrfToken);
 }
 
 export function fetchSettingsPluginTask(taskId: string) {

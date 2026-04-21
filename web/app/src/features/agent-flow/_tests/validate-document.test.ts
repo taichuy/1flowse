@@ -98,13 +98,13 @@ describe('validateDocument', () => {
         expect.objectContaining({
           nodeId: 'node-llm',
           fieldKey: 'config.model_provider',
-          title: 'LLM 缺少模型供应商实例'
+          title: 'LLM 缺少模型供应商'
         })
       ])
     );
   });
 
-  test('flags unavailable provider instance and missing model in provider catalog', () => {
+  test('flags unavailable provider code and missing model in provider catalog', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
 
@@ -113,23 +113,24 @@ describe('validateDocument', () => {
     }
 
     llmNode.config.model_provider = {
-      provider_instance_id: 'provider-stale',
+      provider_code: 'provider-stale',
       model_id: 'gpt-4.1'
     };
 
     const issues = validateDocument(document, {
       locale_meta: {},
       i18n_catalog: {},
-      instances: [
+      providers: [
         {
-          provider_instance_id: 'provider-ready',
           provider_code: 'openai_compatible',
-          plugin_type: 'provider',
+          plugin_type: 'model_provider',
           namespace: 'plugin.openai_compatible',
           label_key: 'provider.label',
           description_key: 'provider.description',
           protocol: 'openai_responses',
-          display_name: 'OpenAI Prod',
+          display_name: 'OpenAI Compatible',
+          effective_instance_id: 'provider-ready',
+          effective_instance_display_name: 'OpenAI Prod',
           models: [
             {
               model_id: 'gpt-4o-mini',
@@ -153,7 +154,7 @@ describe('validateDocument', () => {
         expect.objectContaining({
           nodeId: 'node-llm',
           fieldKey: 'config.model_provider',
-          title: 'LLM 模型供应商实例不可用'
+          title: 'LLM 模型供应商不可用'
         })
       ])
     );

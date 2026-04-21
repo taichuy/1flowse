@@ -3,15 +3,15 @@ use std::sync::Arc;
 use axum::{
     extract::{Multipart, Path, Query, State},
     http::{header::ACCEPT_LANGUAGE, HeaderMap, StatusCode},
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
 use control_plane::plugin_management::{
-    AssignPluginCommand, EnablePluginCommand, InstallOfficialPluginCommand, InstallPluginCommand,
-    InstallPluginResult, InstallUploadedPluginCommand, OfficialPluginCatalogEntry,
-    OfficialPluginCatalogView, PluginCatalogEntry, PluginCatalogFilter, PluginFamilyView,
-    PluginInstalledVersionView, PluginManagementService, SwitchPluginVersionCommand,
-    UpgradeLatestPluginFamilyCommand,
+    AssignPluginCommand, DeletePluginFamilyCommand, EnablePluginCommand,
+    InstallOfficialPluginCommand, InstallPluginCommand, InstallPluginResult,
+    InstallUploadedPluginCommand, OfficialPluginCatalogEntry, OfficialPluginCatalogView,
+    PluginCatalogEntry, PluginCatalogFilter, PluginFamilyView, PluginInstalledVersionView,
+    PluginManagementService, SwitchPluginVersionCommand, UpgradeLatestPluginFamilyCommand,
 };
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
@@ -228,6 +228,7 @@ pub fn router() -> Router<Arc<ApiState>> {
             "/plugins/families/:provider_code/switch-version",
             post(switch_version),
         )
+        .route("/plugins/families/:provider_code", delete(delete_family))
         .route("/plugins/official-catalog", get(list_official_catalog))
         .route("/plugins/install-upload", post(install_uploaded_plugin))
         .route("/plugins/install", post(install_plugin))
@@ -716,6 +717,28 @@ pub async fn switch_version(
             actor_user_id: context.user.id,
             provider_code,
             target_installation_id: parse_uuid(&body.installation_id, "installation_id")?,
+        })
+        .await?;
+    Ok(Json(ApiSuccess::new(to_task_response(task))))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/console/plugins/families/{provider_code}",
+    operation_id = "plugin_delete_family",
+    responses((status = 200, body = PluginTaskResponse), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn delete_family(
+    State(state): State<Arc<ApiState>>,
+    Path(provider_code): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<PluginTaskResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let task = service(&state)
+        .delete_family(DeletePluginFamilyCommand {
+            actor_user_id: context.user.id,
+            provider_code,
         })
         .await?;
     Ok(Json(ApiSuccess::new(to_task_response(task))))

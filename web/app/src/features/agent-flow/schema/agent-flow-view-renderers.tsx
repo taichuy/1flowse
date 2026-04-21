@@ -88,7 +88,7 @@ function renderCardModelView({ adapter }: SchemaViewRendererProps) {
   }
 
   const modelProvider = getLlmModelProvider(node.config);
-  const providerInstanceId = modelProvider.provider_instance_id.trim();
+  const providerCode = modelProvider.provider_code.trim();
   const model = modelProvider.model_id.trim();
 
   return (
@@ -98,7 +98,7 @@ function renderCardModelView({ adapter }: SchemaViewRendererProps) {
       </span>
       <span className="agent-flow-node-card__model-content">
         <span className="agent-flow-node-card__model-provider-label">
-          {modelProvider.provider_label || providerInstanceId || '模型供应商未选择'}
+          {modelProvider.provider_label || providerCode || '模型供应商未选择'}
         </span>
         <span className="agent-flow-node-card__model-label">
           {modelProvider.model_label || model || '选择模型'}

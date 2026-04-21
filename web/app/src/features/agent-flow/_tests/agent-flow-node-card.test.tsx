@@ -51,7 +51,7 @@ describe('AgentFlowNodeCard', () => {
             description: '',
             config: {
               model_provider: {
-                provider_instance_id: 'provider-openai-prod',
+                provider_code: 'openai_compatible',
                 model_id: 'gpt-4',
                 provider_label: 'OpenAI Prod',
                 model_label: 'GPT-4'

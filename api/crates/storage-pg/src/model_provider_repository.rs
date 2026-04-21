@@ -245,6 +245,40 @@ impl ModelProviderRepository for PgControlPlaneStore {
         rows.into_iter().map(map_instance).collect()
     }
 
+    async fn list_instances_by_provider_code(
+        &self,
+        provider_code: &str,
+    ) -> Result<Vec<domain::ModelProviderInstanceRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                workspace_id,
+                installation_id,
+                provider_code,
+                protocol,
+                display_name,
+                status,
+                config_json,
+                last_validated_at,
+                last_validation_status,
+                last_validation_message,
+                created_by,
+                updated_by,
+                created_at,
+                updated_at
+            from model_provider_instances
+            where provider_code = $1
+            order by updated_at desc, id desc
+            "#,
+        )
+        .bind(provider_code)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_instance).collect()
+    }
+
     async fn reassign_instances_to_installation(
         &self,
         input: &ReassignModelProviderInstancesInput,

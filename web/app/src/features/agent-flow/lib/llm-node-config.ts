@@ -1,9 +1,8 @@
 import type { ConsolePluginFormFieldSchema, ConsolePluginFormSchema } from '@1flowbase/api-client';
 
 export interface LlmNodeModelProvider {
-  provider_instance_id: string;
+  provider_code: string;
   model_id: string;
-  provider_code?: string;
   protocol?: string;
   provider_label?: string;
   model_label?: string;
@@ -93,9 +92,8 @@ export function getLlmModelProvider(config: Record<string, unknown>): LlmNodeMod
 
   if (isRecord(provider)) {
     return {
-      provider_instance_id: asString(provider.provider_instance_id),
+      provider_code: asString(provider.provider_code),
       model_id: asString(provider.model_id),
-      provider_code: asString(provider.provider_code) || undefined,
       protocol: asString(provider.protocol) || undefined,
       provider_label: asString(provider.provider_label) || undefined,
       model_label: asString(provider.model_label) || undefined,
@@ -104,9 +102,8 @@ export function getLlmModelProvider(config: Record<string, unknown>): LlmNodeMod
   }
 
   return {
-    provider_instance_id: asString(config.provider_instance_id),
+    provider_code: asString(config.provider_code),
     model_id: asString(config.model),
-    provider_code: asString(config.provider_code) || undefined,
     protocol: asString(config.protocol) || undefined,
     provider_label: asString(config.provider_label) || undefined,
     model_label: asString(config.model_label) || undefined

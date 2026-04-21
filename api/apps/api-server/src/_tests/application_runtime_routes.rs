@@ -163,7 +163,7 @@ async fn create_ready_provider_instance(app: &axum::Router, cookie: &str, csrf: 
     instance_id
 }
 
-fn build_ready_provider_document(flow_id: &str, provider_instance_id: &str) -> Value {
+fn build_ready_provider_document(flow_id: &str, _provider_instance_id: &str) -> Value {
     json!({
         "schemaVersion": "1flowbase.flow/v1",
         "meta": { "flowId": flow_id, "name": "Support Agent", "description": "", "tags": [] },
@@ -190,8 +190,10 @@ fn build_ready_provider_document(flow_id: &str, provider_instance_id: &str) -> V
                     "position": { "x": 240, "y": 0 },
                     "configVersion": 1,
                     "config": {
-                        "provider_instance_id": provider_instance_id,
-                        "model": "fixture_chat",
+                        "model_provider": {
+                            "provider_code": "fixture_provider",
+                            "model_id": "fixture_chat"
+                        },
                         "temperature": 0.2
                     },
                     "bindings": {
@@ -307,7 +309,7 @@ async fn seed_agent_flow_application(
     application_id
 }
 
-fn build_human_input_document(flow_id: &str, provider_instance_id: &str) -> Value {
+fn build_human_input_document(flow_id: &str, _provider_instance_id: &str) -> Value {
     json!({
         "schemaVersion": "1flowbase.flow/v1",
         "meta": { "flowId": flow_id, "name": "Support Agent", "description": "", "tags": [] },
@@ -334,8 +336,10 @@ fn build_human_input_document(flow_id: &str, provider_instance_id: &str) -> Valu
                     "position": { "x": 240, "y": 0 },
                     "configVersion": 1,
                     "config": {
-                        "provider_instance_id": provider_instance_id,
-                        "model": "fixture_chat",
+                        "model_provider": {
+                            "provider_code": "fixture_provider",
+                            "model_id": "fixture_chat"
+                        },
                         "temperature": 0.2
                     },
                     "bindings": {
@@ -470,8 +474,14 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
         .await
         .unwrap();
 
-    assert_eq!(preview.status(), StatusCode::CREATED);
+    let preview_status = preview.status();
     let preview_body = to_bytes(preview.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        preview_status,
+        StatusCode::CREATED,
+        "{}",
+        String::from_utf8_lossy(&preview_body)
+    );
     let preview_payload: Value = serde_json::from_slice(&preview_body).unwrap();
     let flow_run_id = preview_payload["data"]["flow_run"]["id"]
         .as_str()
@@ -609,9 +619,15 @@ async fn application_runtime_routes_start_debug_run_and_resume_waiting_human() {
         .await
         .unwrap();
 
-    assert_eq!(start.status(), StatusCode::CREATED);
-    let payload: Value =
-        serde_json::from_slice(&to_bytes(start.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let start_status = start.status();
+    let start_body = to_bytes(start.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        start_status,
+        StatusCode::CREATED,
+        "{}",
+        String::from_utf8_lossy(&start_body)
+    );
+    let payload: Value = serde_json::from_slice(&start_body).unwrap();
     let run_id = payload["data"]["flow_run"]["id"].as_str().unwrap();
     let checkpoint_id = payload["data"]["checkpoints"][0]["id"].as_str().unwrap();
 

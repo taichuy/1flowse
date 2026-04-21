@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useEffect, type ReactNode } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
-  modelProviderOptionInstances,
+  modelProviderOptionsProviders,
   modelProviderOptionsContract
 } from '../../../test/model-provider-contract-fixtures';
 
@@ -64,7 +64,7 @@ describe('LlmModelField', () => {
     );
   });
 
-  test('writes selected provider instance and model back to the llm node config', async () => {
+  test('writes selected provider code and model back to the llm node config', async () => {
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
     renderWithProviders(
@@ -80,9 +80,11 @@ describe('LlmModelField', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '模型' }));
 
-    expect(await screen.findByText('模型供应商实例')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: '模型供应商' })
+    ).toBeInTheDocument();
     const providerButton = await screen.findByRole('button', {
-      name: `选择模型供应商实例 ${modelProviderOptionInstances[0].display_name}`
+      name: `选择模型供应商 ${modelProviderOptionsProviders[0].display_name}`
     });
 
     fireEvent.click(providerButton);
@@ -93,7 +95,7 @@ describe('LlmModelField', () => {
             id: 'node-llm',
             config: expect.objectContaining({
               model_provider: expect.objectContaining({
-                provider_instance_id: 'provider-openai-prod',
+                provider_code: 'openai_compatible',
                 model_id: ''
               })
             })
@@ -103,7 +105,7 @@ describe('LlmModelField', () => {
     });
     fireEvent.click(
       await screen.findByRole('button', {
-        name: `选择模型 ${modelProviderOptionInstances[0].models[0].display_name}`
+        name: `选择模型 ${modelProviderOptionsProviders[0].models[0].display_name}`
       })
     );
 
@@ -114,10 +116,10 @@ describe('LlmModelField', () => {
             id: 'node-llm',
             config: expect.objectContaining({
               model_provider: expect.objectContaining({
-                provider_instance_id: 'provider-openai-prod',
+                provider_code: 'openai_compatible',
                 model_id: 'gpt-4o-mini',
-                provider_label: modelProviderOptionInstances[0].display_name,
-                model_label: modelProviderOptionInstances[0].models[0].display_name
+                provider_label: modelProviderOptionsProviders[0].display_name,
+                model_label: modelProviderOptionsProviders[0].models[0].display_name
               }),
               llm_parameters: {
                 schema_version: '1.0.0',
@@ -135,7 +137,7 @@ describe('LlmModelField', () => {
     });
   }, 10_000);
 
-  test('shows a formal error state and settings link when the current provider instance is unavailable', async () => {
+  test('shows a formal error state and settings link when the current provider is unavailable', async () => {
     const state = createInitialState();
     const llmNode = state.draft.document.graph.nodes.find((node) => node.id === 'node-llm');
 
@@ -144,7 +146,7 @@ describe('LlmModelField', () => {
     }
 
     llmNode.config.model_provider = {
-      provider_instance_id: 'provider-stale',
+      provider_code: 'provider_stale',
       model_id: 'gpt-4o-mini'
     };
 
@@ -157,7 +159,7 @@ describe('LlmModelField', () => {
     fireEvent.click(screen.getByRole('button', { name: '模型' }));
 
     expect(
-      await screen.findByText('当前节点引用的模型供应商实例不可用。')
+      await screen.findByText('当前节点引用的模型供应商不可用。')
     ).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: '模型供应商设置' })

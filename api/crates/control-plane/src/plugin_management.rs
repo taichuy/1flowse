@@ -77,6 +77,11 @@ pub struct SwitchPluginVersionCommand {
     pub target_installation_id: Uuid,
 }
 
+pub struct DeletePluginFamilyCommand {
+    pub actor_user_id: Uuid,
+    pub provider_code: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct PluginCatalogEntry {
     pub installation: domain::PluginInstallationRecord,
@@ -255,6 +260,21 @@ fn compare_plugin_versions(left: &str, right: &str) -> Ordering {
             },
         }
     }
+}
+
+fn remove_path_if_exists(path: &Path) -> Result<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let metadata = fs::metadata(path)?;
+    if metadata.is_dir() {
+        fs::remove_dir_all(path)?;
+    } else {
+        fs::remove_file(path)?;
+    }
+
+    Ok(())
 }
 
 fn pick_latest_official_entry(
@@ -1295,6 +1315,152 @@ where
             command.actor_user_id,
         )
         .await
+    }
+
+    pub async fn delete_family(
+        &self,
+        command: DeletePluginFamilyCommand,
+    ) -> Result<domain::PluginTaskRecord> {
+        let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
+        ensure_permission(&actor, "plugin_config.configure.all")
+            .map_err(ControlPlaneError::PermissionDenied)?;
+
+        let installations = self
+            .repository
+            .list_installations()
+            .await?
+            .into_iter()
+            .filter(|installation| installation.provider_code == command.provider_code)
+            .collect::<Vec<_>>();
+        if installations.is_empty() {
+            return Err(ControlPlaneError::NotFound("plugin_family").into());
+        }
+
+        let current_installation_id = self
+            .repository
+            .list_assignments(actor.current_workspace_id)
+            .await?
+            .into_iter()
+            .find(|assignment| assignment.provider_code == command.provider_code)
+            .map(|assignment| assignment.installation_id)
+            .or_else(|| installations.first().map(|installation| installation.id));
+
+        let task_id = Uuid::now_v7();
+        let task = self
+            .repository
+            .create_task(&CreatePluginTaskInput {
+                task_id,
+                installation_id: current_installation_id,
+                workspace_id: Some(actor.current_workspace_id),
+                provider_code: command.provider_code.clone(),
+                task_kind: domain::PluginTaskKind::Uninstall,
+                status: domain::PluginTaskStatus::Queued,
+                status_message: Some("pending".into()),
+                detail_json: json!({}),
+                actor_user_id: Some(command.actor_user_id),
+            })
+            .await?;
+        let running_task = self
+            .transition_task(
+                &task,
+                domain::PluginTaskStatus::Running,
+                Some("running".into()),
+                json!({
+                    "provider_code": command.provider_code,
+                    "installation_ids": installations
+                        .iter()
+                        .map(|installation| installation.id)
+                        .collect::<Vec<_>>(),
+                }),
+            )
+            .await?;
+
+        let delete_result = async {
+            let instances = self
+                .repository
+                .list_instances_by_provider_code(&command.provider_code)
+                .await?;
+            let mut referenced_flow_count = 0_u64;
+            for instance in &instances {
+                referenced_flow_count += self
+                    .repository
+                    .count_instance_references(instance.workspace_id, instance.id)
+                    .await?;
+            }
+
+            for instance in &instances {
+                self.repository
+                    .delete_instance(instance.workspace_id, instance.id)
+                    .await?;
+            }
+
+            let mut removed_paths = HashSet::<PathBuf>::new();
+            for installation in &installations {
+                self.repository.delete_installation(installation.id).await?;
+
+                removed_paths.insert(PathBuf::from(&installation.installed_path));
+                if let Some(package_path) = &installation.package_path {
+                    removed_paths.insert(PathBuf::from(package_path));
+                }
+            }
+
+            for path in &removed_paths {
+                remove_path_if_exists(path)?;
+            }
+
+            self.repository
+                .append_audit_log(&audit_log(
+                    Some(actor.current_workspace_id),
+                    Some(command.actor_user_id),
+                    "plugin_family",
+                    None,
+                    "plugin.family_deleted",
+                    json!({
+                        "provider_code": command.provider_code,
+                        "deleted_instance_count": instances.len(),
+                        "deleted_installation_count": installations.len(),
+                        "referenced_flow_count": referenced_flow_count,
+                    }),
+                ))
+                .await?;
+
+            Ok::<(usize, usize, u64), anyhow::Error>((
+                instances.len(),
+                installations.len(),
+                referenced_flow_count,
+            ))
+        }
+        .await;
+
+        match delete_result {
+            Ok((deleted_instance_count, deleted_installation_count, referenced_flow_count)) => {
+                self.transition_task(
+                    &running_task,
+                    domain::PluginTaskStatus::Succeeded,
+                    Some("deleted".into()),
+                    json!({
+                        "provider_code": command.provider_code,
+                        "deleted_instance_count": deleted_instance_count,
+                        "deleted_installation_count": deleted_installation_count,
+                        "referenced_flow_count": referenced_flow_count,
+                    }),
+                )
+                .await
+            }
+            Err(error) => {
+                let _ = self
+                    .transition_task(
+                        &running_task,
+                        domain::PluginTaskStatus::Failed,
+                        Some(error.to_string()),
+                        json!({
+                            "provider_code": command.provider_code,
+                        }),
+                    )
+                    .await;
+                Err(error)
+            }
+        }
     }
 
     pub async fn list_tasks(&self, actor_user_id: Uuid) -> Result<Vec<domain::PluginTaskRecord>> {

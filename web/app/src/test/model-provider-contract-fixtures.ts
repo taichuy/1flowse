@@ -11,5 +11,5 @@ export const modelProviderOptionsContract =
   modelProviderOptionsContractJson as ConsoleModelProviderOptions;
 
 export const modelProviderCatalogEntries = modelProviderCatalogContract.entries;
-export const modelProviderOptionInstances = modelProviderOptionsContract.instances;
-export const primaryContractProviderModels = modelProviderOptionsContract.instances[0].models;
+export const modelProviderOptionsProviders = modelProviderOptionsContract.providers;
+export const primaryContractProviderModels = modelProviderOptionsContract.providers[0].models;

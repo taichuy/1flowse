@@ -62,6 +62,7 @@ use utoipa::OpenApi;
         crate::routes::plugins::install_official_plugin,
         crate::routes::plugins::upgrade_latest,
         crate::routes::plugins::switch_version,
+        crate::routes::plugins::delete_family,
         crate::routes::plugins::enable_plugin,
         crate::routes::plugins::assign_plugin,
         crate::routes::plugins::list_tasks,

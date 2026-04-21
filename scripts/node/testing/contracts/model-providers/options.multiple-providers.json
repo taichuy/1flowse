@@ -29,16 +29,17 @@
       }
     }
   },
-  "instances": [
+  "providers": [
     {
-      "provider_instance_id": "provider-openai-prod",
       "provider_code": "openai_compatible",
-      "plugin_type": "provider",
+      "plugin_type": "model_provider",
       "namespace": "plugin.openai_compatible",
       "label_key": "provider.label",
       "description_key": "provider.description",
       "protocol": "openai_responses",
-      "display_name": "OpenAI Production",
+      "display_name": "OpenAI Compatible",
+      "effective_instance_id": "provider-openai-prod",
+      "effective_instance_display_name": "OpenAI Production",
       "models": [
         {
           "model_id": "gpt-4o-mini",
@@ -70,14 +71,15 @@
       ]
     },
     {
-      "provider_instance_id": "provider-anthropic-prod",
       "provider_code": "anthropic_compatible",
-      "plugin_type": "provider",
+      "plugin_type": "model_provider",
       "namespace": "plugin.anthropic_compatible",
       "label_key": "provider.label",
       "description_key": "provider.description",
       "protocol": "anthropic_messages",
-      "display_name": "Anthropic Production",
+      "display_name": "Anthropic Compatible",
+      "effective_instance_id": "provider-anthropic-prod",
+      "effective_instance_display_name": "Anthropic Production",
       "models": [
         {
           "model_id": "claude-3-5-sonnet",

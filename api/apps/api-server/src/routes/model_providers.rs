@@ -213,7 +213,6 @@ pub struct RevealModelProviderSecretResponse {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ModelProviderOptionResponse {
-    pub provider_instance_id: String,
     pub provider_code: String,
     pub plugin_type: String,
     pub namespace: String,
@@ -221,6 +220,8 @@ pub struct ModelProviderOptionResponse {
     pub description_key: Option<String>,
     pub protocol: String,
     pub display_name: String,
+    pub effective_instance_id: String,
+    pub effective_instance_display_name: String,
     pub models: Vec<ProviderModelDescriptorResponse>,
 }
 
@@ -229,7 +230,7 @@ pub struct ModelProviderOptionsResponse {
     pub locale_meta: LocaleMetaResponse,
     #[schema(value_type = Object)]
     pub i18n_catalog: serde_json::Value,
-    pub instances: Vec<ModelProviderOptionResponse>,
+    pub providers: Vec<ModelProviderOptionResponse>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -518,7 +519,6 @@ fn to_model_catalog_response(
 
 fn to_option_response(option: ModelProviderOptionEntry) -> ModelProviderOptionResponse {
     ModelProviderOptionResponse {
-        provider_instance_id: option.provider_instance_id.to_string(),
         provider_code: option.provider_code,
         plugin_type: option.plugin_type,
         namespace: option.namespace,
@@ -526,6 +526,8 @@ fn to_option_response(option: ModelProviderOptionEntry) -> ModelProviderOptionRe
         description_key: option.description_key,
         protocol: option.protocol,
         display_name: option.display_name,
+        effective_instance_id: option.effective_instance_id.to_string(),
+        effective_instance_display_name: option.effective_instance_display_name,
         models: option
             .models
             .into_iter()
@@ -541,8 +543,8 @@ fn to_options_view_response(
     ModelProviderOptionsResponse {
         locale_meta,
         i18n_catalog: serde_json::to_value(options.i18n_catalog).unwrap(),
-        instances: options
-            .instances
+        providers: options
+            .providers
             .into_iter()
             .map(to_option_response)
             .collect(),

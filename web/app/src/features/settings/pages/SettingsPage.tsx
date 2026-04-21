@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate } from '@tanstack/react-router';
-import { Alert, Result, Typography } from 'antd';
+import { Alert, Modal, Result, Typography } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 
 import { useAuthStore } from '../../../state/auth-store';
@@ -40,6 +40,7 @@ import {
   validateSettingsModelProviderInstance
 } from '../api/model-providers';
 import {
+  deleteSettingsPluginFamily,
   fetchSettingsOfficialPluginCatalog,
   fetchSettingsPluginFamilies,
   fetchSettingsPluginTask,
@@ -122,6 +123,7 @@ function formatTrustLabel(trustLevel: string) {
 function ModelProvidersSection({ canManage }: { canManage: boolean }) {
   const queryClient = useQueryClient();
   const csrfToken = useAuthStore((state) => state.csrfToken);
+  const [modal, modalContextHolder] = Modal.useModal();
   const [drawerState, setDrawerState] = useState<
     | { mode: 'create'; providerCode: string }
     | { mode: 'edit'; instanceId: string }
@@ -455,6 +457,21 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     },
     onSuccess: invalidateModelProviderQueries
   });
+  const familyDeleteMutation = useMutation({
+    mutationFn: async (providerCode: string) => {
+      if (!csrfToken) {
+        throw new Error('missing csrf token');
+      }
+
+      return deleteSettingsPluginFamily(providerCode, csrfToken);
+    },
+    onSuccess: async () => {
+      setDrawerState(null);
+      setInstanceModalState(null);
+      setVersionModalProviderCode(null);
+      await invalidateModelProviderQueries();
+    }
+  });
   const officialInstallMutation = useMutation({
     mutationFn: async (pluginId: string) => {
       if (!csrfToken) {
@@ -472,7 +489,9 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     },
     onSuccess: async (result, pluginId) => {
       if (result.task.finished_at || isTaskTerminal(result.task.status)) {
-        const status = isTaskSucceeded(result.task.status) ? 'success' : 'failed';
+        const status = isTaskSucceeded(result.task.status)
+          ? 'success'
+          : 'failed';
         setOfficialInstallState({
           pluginId,
           taskId: null,
@@ -633,6 +652,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     getErrorMessage(validateMutation.error) ??
     getErrorMessage(refreshMutation.error) ??
     getErrorMessage(deleteMutation.error) ??
+    getErrorMessage(familyDeleteMutation.error) ??
     getErrorMessage(officialInstallMutation.error) ??
     getErrorMessage(versionMutation.error) ??
     getErrorMessage(pluginTaskQuery.error);
@@ -656,6 +676,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="model-provider-panel">
+      {modalContextHolder}
       <div className="model-provider-panel__header">
         <Typography.Title level={4}>模型供应商</Typography.Title>
         <Typography.Paragraph type="secondary">
@@ -693,6 +714,11 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
             instanceCounts={instanceCounts}
             loading={catalogQuery.isLoading || familiesQuery.isLoading}
             canManage={canManage}
+            deletingProviderCode={
+              familyDeleteMutation.isPending
+                ? (familyDeleteMutation.variables ?? null)
+                : null
+            }
             onViewInstances={(entry) => {
               const providerInstances =
                 instancesByProviderCode[entry.provider_code] ?? [];
@@ -709,6 +735,40 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
             }}
             onManageVersion={(entry) => {
               setVersionModalProviderCode(entry.provider_code);
+            }}
+            onDelete={(entry) => {
+              void modal.confirm({
+                title: '删除供应商',
+                icon: null,
+                centered: true,
+                okText: '删除',
+                okType: 'danger',
+                cancelText: '取消',
+                okButtonProps: {
+                  loading:
+                    familyDeleteMutation.isPending &&
+                    familyDeleteMutation.variables === entry.provider_code
+                },
+                content: (
+                  <div className="model-provider-panel__install-confirm">
+                    <div className="model-provider-panel__install-confirm-card">
+                      <Typography.Title level={5}>
+                        {entry.display_name}
+                      </Typography.Title>
+                      <Typography.Paragraph type="secondary">
+                        删除后会一并清理该供应商的全部实例、安装记录和本地插件文件。
+                      </Typography.Paragraph>
+                      <Typography.Paragraph type="secondary">
+                        如果现有流程节点仍引用这个供应商，后续报错属于正常现象；重新安装同一
+                        provider 并恢复对应 model 后，节点可继续恢复使用。
+                      </Typography.Paragraph>
+                    </div>
+                  </div>
+                ),
+                onOk: async () => {
+                  await familyDeleteMutation.mutateAsync(entry.provider_code);
+                }
+              });
             }}
           />
         </div>
