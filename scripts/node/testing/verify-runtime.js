@@ -54,6 +54,16 @@ function assertPositiveInteger(name, value) {
   return value;
 }
 
+function assertKnownKeys(name, value, allowedKeys) {
+  const unknownKeys = Object.keys(value)
+    .filter((key) => !allowedKeys.has(key))
+    .sort();
+
+  if (unknownKeys.length > 0) {
+    throw new Error(`Unknown ${name} key${unknownKeys.length === 1 ? '' : 's'}: ${unknownKeys.join(', ')}`);
+  }
+}
+
 function resolveCargoDefaults(availableParallelism) {
   const parallelism = assertPositiveInteger('availableParallelism', availableParallelism);
   const cargoJobs = Math.max(1, Math.floor(parallelism / 2));
@@ -480,6 +490,7 @@ async function withHeavyVerifyLock(options = {}, run) {
 
 function resolveRuntimeConfig(config, availableParallelism) {
   assertPlainObject('verify runtime config root', config);
+  assertKnownKeys('verify runtime config', config, new Set(['backend', 'locks']));
   const defaults = resolveCargoDefaults(availableParallelism);
   const backendConfig = config.backend === undefined
     ? {}
@@ -487,6 +498,9 @@ function resolveRuntimeConfig(config, availableParallelism) {
   const locksConfig = config.locks === undefined
     ? {}
     : assertPlainObject('locks', config.locks);
+
+  assertKnownKeys('backend', backendConfig, new Set(['cargoJobs', 'cargoTestThreads']));
+  assertKnownKeys('locks', locksConfig, new Set(['waitTimeoutMinutes', 'pollIntervalMs']));
 
   const cargoJobs = backendConfig.cargoJobs ?? defaults.cargoJobs;
   const cargoTestThreads = backendConfig.cargoTestThreads ?? defaults.cargoTestThreads;

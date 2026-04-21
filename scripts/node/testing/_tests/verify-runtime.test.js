@@ -76,6 +76,82 @@ test('loadVerifyRuntimeConfig applies local overrides when config file exists', 
   });
 });
 
+test('loadVerifyRuntimeConfig rejects unknown top-level keys', () => {
+  const repoRoot = createRepoRoot();
+
+  fs.writeFileSync(
+    path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
+    JSON.stringify({
+      backend: {
+        cargoJobs: 3,
+        cargoTestThreads: 2,
+      },
+      locks: {
+        waitTimeoutMinutes: 12,
+        pollIntervalMs: 1500,
+      },
+      extra: true,
+    }, null, 2)
+  );
+
+  assert.throws(
+    () => loadVerifyRuntimeConfig({
+      repoRoot,
+      env: {},
+      availableParallelism: 8,
+    }),
+    /Unknown verify runtime config key: extra/
+  );
+});
+
+test('loadVerifyRuntimeConfig rejects unknown backend keys', () => {
+  const repoRoot = createRepoRoot();
+
+  fs.writeFileSync(
+    path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
+    JSON.stringify({
+      backend: {
+        cargoJobs: 3,
+        cargoTestThreads: 2,
+        unexpected: true,
+      },
+    }, null, 2)
+  );
+
+  assert.throws(
+    () => loadVerifyRuntimeConfig({
+      repoRoot,
+      env: {},
+      availableParallelism: 8,
+    }),
+    /Unknown backend key: unexpected/
+  );
+});
+
+test('loadVerifyRuntimeConfig rejects unknown locks keys', () => {
+  const repoRoot = createRepoRoot();
+
+  fs.writeFileSync(
+    path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
+    JSON.stringify({
+      locks: {
+        waitTimeoutMinutes: 12,
+        pollIntervalMs: 1500,
+        unexpected: true,
+      },
+    }, null, 2)
+  );
+
+  assert.throws(
+    () => loadVerifyRuntimeConfig({
+      repoRoot,
+      env: {},
+      availableParallelism: 8,
+    }),
+    /Unknown locks key: unexpected/
+  );
+});
+
 test('loadVerifyRuntimeConfig merges backend and lock overrides field by field', () => {
   const repoRoot = createRepoRoot();
 

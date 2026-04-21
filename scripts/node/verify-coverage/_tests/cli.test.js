@@ -64,7 +64,7 @@ test('collectFrontendCoverageFailures only checks configured high-risk prefixes'
 test('buildBackendCommands emits one cargo llvm-cov command per protected package', () => {
   const repoRoot = '/repo-root';
 
-  assert.deepEqual(buildBackendCommands({ repoRoot, cargoParallelism: 4 }), [
+  assert.deepEqual(buildBackendCommands({ repoRoot, cargoParallelism: 4, cargoTestThreads: 2 }), [
     {
       label: 'backend-coverage-control-plane',
       command: 'cargo',
@@ -76,6 +76,8 @@ test('buildBackendCommands emits one cargo llvm-cov command per protected packag
         '--summary-only',
         '--output-path',
         '/repo-root/tmp/test-governance/coverage/backend/control-plane.json',
+        '--',
+        '--test-threads=2',
       ],
       cwd: 'api',
       env: { CARGO_BUILD_JOBS: '4', CARGO_INCREMENTAL: '0' },
@@ -91,6 +93,8 @@ test('buildBackendCommands emits one cargo llvm-cov command per protected packag
         '--summary-only',
         '--output-path',
         '/repo-root/tmp/test-governance/coverage/backend/storage-pg.json',
+        '--',
+        '--test-threads=2',
       ],
       cwd: 'api',
       env: { CARGO_BUILD_JOBS: '4', CARGO_INCREMENTAL: '0' },
@@ -106,6 +110,8 @@ test('buildBackendCommands emits one cargo llvm-cov command per protected packag
         '--summary-only',
         '--output-path',
         '/repo-root/tmp/test-governance/coverage/backend/api-server.json',
+        '--',
+        '--test-threads=2',
       ],
       cwd: 'api',
       env: { CARGO_BUILD_JOBS: '4', CARGO_INCREMENTAL: '0' },
@@ -168,9 +174,9 @@ test('main cleans llvm-cov artifacts before and after backend coverage runs', as
     calls.map((call) => call.args),
     [
       ['llvm-cov', 'clean', '--workspace'],
-      ['llvm-cov', '--package', 'control-plane', '--json', '--summary-only', '--output-path', `${repoRoot}/tmp/test-governance/coverage/backend/control-plane.json`],
-      ['llvm-cov', '--package', 'storage-pg', '--json', '--summary-only', '--output-path', `${repoRoot}/tmp/test-governance/coverage/backend/storage-pg.json`],
-      ['llvm-cov', '--package', 'api-server', '--json', '--summary-only', '--output-path', `${repoRoot}/tmp/test-governance/coverage/backend/api-server.json`],
+      ['llvm-cov', '--package', 'control-plane', '--json', '--summary-only', '--output-path', `${repoRoot}/tmp/test-governance/coverage/backend/control-plane.json`, '--', '--test-threads=4'],
+      ['llvm-cov', '--package', 'storage-pg', '--json', '--summary-only', '--output-path', `${repoRoot}/tmp/test-governance/coverage/backend/storage-pg.json`, '--', '--test-threads=4'],
+      ['llvm-cov', '--package', 'api-server', '--json', '--summary-only', '--output-path', `${repoRoot}/tmp/test-governance/coverage/backend/api-server.json`, '--', '--test-threads=4'],
       ['llvm-cov', 'clean', '--workspace'],
     ]
   );
@@ -212,4 +218,5 @@ test('main routes backend coverage through the heavy lock and uses configured ba
   assert.deepEqual(capturedOptions.commands[0].args, ['llvm-cov', 'clean', '--workspace']);
   assert.match(capturedOptions.commands[1].args.join(' '), /--package control-plane/u);
   assert.equal(capturedOptions.commands[1].env.CARGO_BUILD_JOBS, '3');
+  assert.equal(capturedOptions.commands[1].args.at(-1), '--test-threads=1');
 });

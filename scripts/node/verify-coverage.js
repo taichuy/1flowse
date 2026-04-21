@@ -44,7 +44,7 @@ function buildFrontendCommand({ repoRoot }) {
   };
 }
 
-function buildBackendCommands({ repoRoot, cargoParallelism }) {
+function buildBackendCommands({ repoRoot, cargoParallelism, cargoTestThreads }) {
   return backendThresholds.map((entry) => ({
     label: `backend-coverage-${entry.key}`,
     command: 'cargo',
@@ -56,6 +56,8 @@ function buildBackendCommands({ repoRoot, cargoParallelism }) {
       '--summary-only',
       '--output-path',
       path.join(repoRoot, COVERAGE_ROOT, 'backend', `${entry.key}.json`),
+      '--',
+      `--test-threads=${cargoTestThreads}`,
     ],
     cwd: 'api',
     env: buildCargoCommandEnv({ cargoParallelism, disableIncremental: true }),
@@ -314,6 +316,7 @@ async function main(argv = [], deps = {}) {
     coverageCommands.push(...buildBackendCommands({
       repoRoot,
       cargoParallelism: runtimeConfig.backend.cargoJobs,
+      cargoTestThreads: runtimeConfig.backend.cargoTestThreads,
     }));
   }
 
