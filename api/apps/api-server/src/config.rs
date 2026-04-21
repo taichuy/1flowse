@@ -254,6 +254,7 @@ fn default_provider_install_root() -> String {
     let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     find_workspace_root(&current_dir)
         .unwrap_or(current_dir)
+        .join("api")
         .join("plugins")
         .display()
         .to_string()

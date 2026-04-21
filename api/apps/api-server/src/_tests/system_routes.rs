@@ -2,6 +2,7 @@ use crate::_tests::support::{
     get_json, sample_api_profile, sample_runner_profile, test_app_with_runtime_profile_error,
     test_app_with_runtime_profiles,
 };
+use std::path::PathBuf;
 
 #[tokio::test]
 async fn runtime_profile_merges_same_host_services() {
@@ -24,7 +25,16 @@ async fn runtime_profile_merges_same_host_services() {
     let host_extension_dropin_root = payload["data"]["host_extension_dropin_root"]
         .as_str()
         .unwrap();
-    assert!(provider_install_root.ends_with("/plugins"));
+    let expected_root = std::env::current_dir()
+        .unwrap()
+        .ancestors()
+        .find(|path| {
+            path.join(".git").exists() && path.join("api").is_dir() && path.join("web").is_dir()
+        })
+        .unwrap()
+        .join("api")
+        .join("plugins");
+    assert_eq!(PathBuf::from(provider_install_root), expected_root);
     assert_eq!(
         host_extension_dropin_root,
         format!("{provider_install_root}/host-extension/dropins")

@@ -51,7 +51,7 @@ fn api_config_defaults_to_development_and_unrestricted_cors() {
 }
 
 #[test]
-fn api_config_defaults_provider_install_root_to_workspace_plugins_directory() {
+fn api_config_defaults_provider_install_root_to_api_workspace_plugins_directory() {
     let config = ApiConfig::from_env_map(&[
         (
             "API_DATABASE_URL",
@@ -65,7 +65,7 @@ fn api_config_defaults_provider_install_root_to_workspace_plugins_directory() {
     ])
     .unwrap();
 
-    let expected_root = current_workspace_root().join("plugins");
+    let expected_root = current_workspace_root().join("api").join("plugins");
     assert_eq!(PathBuf::from(&config.provider_install_root), expected_root);
     assert_eq!(
         PathBuf::from(&config.host_extension_dropin_root),

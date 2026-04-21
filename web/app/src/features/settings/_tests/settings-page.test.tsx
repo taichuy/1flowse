@@ -248,9 +248,9 @@ describe('SettingsPage', () => {
       finished_at: '2026-04-18T21:00:00Z'
     });
     systemRuntimeApi.fetchSettingsSystemRuntimeProfile.mockResolvedValue({
-      provider_install_root: '/home/taichu/git/1flowbase/plugins',
+      provider_install_root: '/home/taichu/git/1flowbase/api/plugins',
       host_extension_dropin_root:
-        '/home/taichu/git/1flowbase/plugins/host-extension/dropins',
+        '/home/taichu/git/1flowbase/api/plugins/host-extension/dropins',
       locale_meta: {
         requested_locale: null,
         resolved_locale: 'zh_Hans',
@@ -475,12 +475,17 @@ describe('SettingsPage', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('插件安装根目录')).toBeInTheDocument();
     expect(
-      screen.getByText('/home/taichu/git/1flowbase/plugins')
+      screen.getByText('/home/taichu/git/1flowbase/api/plugins')
     ).toBeInTheDocument();
     expect(screen.getByText('Host Extension Dropin 目录')).toBeInTheDocument();
     expect(
-      screen.getByText(
+      screen.queryByText(
         '/home/taichu/git/1flowbase/plugins/host-extension/dropins'
+      )
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '/home/taichu/git/1flowbase/api/plugins/host-extension/dropins'
       )
     ).toBeInTheDocument();
     expect(
