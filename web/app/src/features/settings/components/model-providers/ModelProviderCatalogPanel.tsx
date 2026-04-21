@@ -59,7 +59,7 @@ export function ModelProviderCatalogPanel({
         loading={loading}
         pagination={false}
         dataSource={entries}
-        scroll={{ x: 980 }}
+        scroll={{ x: 780 }}
         locale={{
           emptyText: (
             <Empty
@@ -72,7 +72,7 @@ export function ModelProviderCatalogPanel({
           {
             title: '名称',
             key: 'provider',
-            width: 260,
+            width: 180,
             render: (_, entry) => (
               <div className="model-provider-panel__catalog-name">
                 <Typography.Text strong>{entry.display_name}</Typography.Text>
@@ -82,7 +82,7 @@ export function ModelProviderCatalogPanel({
           {
             title: '状态',
             key: 'status',
-            width: 170,
+            width: 130,
             render: (_, entry) => {
               const currentCatalogEntry =
                 currentCatalogEntries[entry.provider_code];
@@ -106,7 +106,7 @@ export function ModelProviderCatalogPanel({
           {
             title: '说明',
             key: 'summary',
-            width: 420,
+            width: 200,
             render: (_, entry) => {
               const currentCatalogEntry =
                 currentCatalogEntries[entry.provider_code];
@@ -130,7 +130,7 @@ export function ModelProviderCatalogPanel({
           {
             title: '版本',
             key: 'version',
-            width: 120,
+            width: 90,
             render: (_, entry) => (
               <div className="model-provider-panel__catalog-version">
                 <Typography.Text strong>
@@ -144,7 +144,7 @@ export function ModelProviderCatalogPanel({
                 {
                   title: '操作',
                   key: 'actions',
-                  width: 220,
+                  width: 180,
                   render: (_: unknown, entry: SettingsPluginFamilyEntry) => (
                     <Space
                       size={[4, 4]}

@@ -343,7 +343,7 @@
         "propertyAssertions": [
           {
             "property": "display",
-            "expected": "grid"
+            "expected": "flex"
           }
         ]
       },
@@ -376,6 +376,25 @@
             "expected": "grid"
           }
         ]
+      }
+    ],
+    "relationshipAssertions": [
+      {
+        "id": "model-provider-actions-no-overlap-sidebar",
+        "type": "no_overlap",
+        "subjectSelector": ".model-provider-panel__catalog-table .model-provider-panel__catalog-actions",
+        "referenceSelector": ".model-provider-panel__sidebar"
+      },
+      {
+        "id": "model-provider-actions-within-left",
+        "type": "within_container",
+        "subjectSelector": ".model-provider-panel__catalog-table .model-provider-panel__catalog-actions",
+        "containerSelector": ".model-provider-panel__left"
+      },
+      {
+        "id": "model-provider-actions-fully-visible",
+        "type": "fully_visible",
+        "subjectSelector": ".model-provider-panel__catalog-table .model-provider-panel__catalog-actions"
       }
     ]
   },

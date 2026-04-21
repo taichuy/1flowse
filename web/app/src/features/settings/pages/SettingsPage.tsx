@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate } from '@tanstack/react-router';
-import { Alert, Modal, Result, Typography } from 'antd';
+import { Alert, Layout, Modal, Result, Typography } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 
 import { useAuthStore } from '../../../state/auth-store';
@@ -688,8 +688,8 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
         ) : null}
       </div>
 
-      <div className="model-provider-panel__main">
-        <div className="model-provider-panel__left">
+      <Layout className="model-provider-panel__main">
+        <Layout.Content className="model-provider-panel__left">
           <section className="model-provider-panel__summary-bar">
             <div className="model-provider-panel__summary-items">
               {overviewRows.map((row) => (
@@ -771,9 +771,13 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
               });
             }}
           />
-        </div>
+        </Layout.Content>
 
-        <aside className="model-provider-panel__sidebar">
+        <Layout.Sider
+          width={360}
+          theme="light"
+          className="model-provider-panel__sidebar"
+        >
           <OfficialPluginInstallPanel
             sourceMeta={officialSourceMeta}
             entries={officialCatalogEntries}
@@ -803,8 +807,8 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
               });
             }}
           />
-        </aside>
-      </div>
+        </Layout.Sider>
+      </Layout>
 
       <ModelProviderInstanceDrawer
         open={drawerState !== null}

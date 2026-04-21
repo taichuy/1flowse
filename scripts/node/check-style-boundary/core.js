@@ -170,6 +170,172 @@ function collectViolations(results) {
   );
 }
 
+function createRectIntersection(subjectRect, referenceRect) {
+  const left = Math.max(subjectRect.left, referenceRect.left);
+  const right = Math.min(subjectRect.right, referenceRect.right);
+  const top = Math.max(subjectRect.top, referenceRect.top);
+  const bottom = Math.min(subjectRect.bottom, referenceRect.bottom);
+
+  if (right <= left || bottom <= top) {
+    return null;
+  }
+
+  return {
+    left,
+    right,
+    top,
+    bottom,
+    width: right - left,
+    height: bottom - top,
+  };
+}
+
+function getMissingMeasurementViolation(assertion, missingField) {
+  return {
+    assertionId: assertion.id,
+    type: assertion.type,
+    actual: 'missing_element',
+    details: `${missingField}_missing`,
+    subjectSelector: assertion.subjectSelector,
+    referenceSelector: assertion.referenceSelector || null,
+    containerSelector: assertion.containerSelector || null,
+  };
+}
+
+function collectRelationshipViolations(assertions = [], measurements = {}) {
+  return assertions.flatMap((assertion) => {
+    const subject = measurements[assertion.subjectSelector];
+    const subjectRect = subject?.rect;
+
+    if (!subject?.exists || !subjectRect) {
+      return [getMissingMeasurementViolation(assertion, 'subject')];
+    }
+
+    if (assertion.type === 'no_overlap') {
+      const reference = measurements[assertion.referenceSelector];
+      const referenceRect = reference?.rect;
+
+      if (!reference?.exists || !referenceRect) {
+        return [getMissingMeasurementViolation(assertion, 'reference')];
+      }
+
+      const intersection = createRectIntersection(subjectRect, referenceRect);
+
+      if (!intersection) {
+        return [];
+      }
+
+      return [
+        {
+          assertionId: assertion.id,
+          type: assertion.type,
+          actual: 'overlap',
+          details: `intersection=${intersection.width}x${intersection.height}`,
+          subjectSelector: assertion.subjectSelector,
+          referenceSelector: assertion.referenceSelector,
+          containerSelector: null,
+        },
+      ];
+    }
+
+    if (assertion.type === 'within_container') {
+      const container = measurements[assertion.containerSelector];
+      const containerRect = container?.rect;
+
+      if (!container?.exists || !containerRect) {
+        return [getMissingMeasurementViolation(assertion, 'container')];
+      }
+
+      const overflow = {
+        left: Math.max(0, containerRect.left - subjectRect.left),
+        right: Math.max(0, subjectRect.right - containerRect.right),
+        top: Math.max(0, containerRect.top - subjectRect.top),
+        bottom: Math.max(0, subjectRect.bottom - containerRect.bottom),
+      };
+
+      if (overflow.left === 0 && overflow.right === 0 && overflow.top === 0 && overflow.bottom === 0) {
+        return [];
+      }
+
+      return [
+        {
+          assertionId: assertion.id,
+          type: assertion.type,
+          actual: 'outside_container',
+          details: `overflow=left:${overflow.left},right:${overflow.right},top:${overflow.top},bottom:${overflow.bottom}`,
+          subjectSelector: assertion.subjectSelector,
+          referenceSelector: null,
+          containerSelector: assertion.containerSelector,
+        },
+      ];
+    }
+
+    if (assertion.type === 'min_gap') {
+      const reference = measurements[assertion.referenceSelector];
+      const referenceRect = reference?.rect;
+
+      if (!reference?.exists || !referenceRect) {
+        return [getMissingMeasurementViolation(assertion, 'reference')];
+      }
+
+      const axis = assertion.axis || 'horizontal';
+      const gap = axis === 'vertical'
+        ? referenceRect.top - subjectRect.bottom
+        : referenceRect.left - subjectRect.right;
+
+      if (gap >= assertion.minGap) {
+        return [];
+      }
+
+      return [
+        {
+          assertionId: assertion.id,
+          type: assertion.type,
+          actual: 'gap_too_small',
+          details: `axis=${axis} expected>=${assertion.minGap} actual=${gap}`,
+          subjectSelector: assertion.subjectSelector,
+          referenceSelector: assertion.referenceSelector,
+          containerSelector: null,
+        },
+      ];
+    }
+
+    if (assertion.type === 'fully_visible') {
+      if (subject.withinViewport === false) {
+        return [
+          {
+            assertionId: assertion.id,
+            type: assertion.type,
+            actual: 'outside_viewport',
+            details: 'subject_outside_viewport',
+            subjectSelector: assertion.subjectSelector,
+            referenceSelector: null,
+            containerSelector: null,
+          },
+        ];
+      }
+
+      if ((subject.visibleSamples || []).every((sample) => sample === true)) {
+        return [];
+      }
+
+      return [
+        {
+          assertionId: assertion.id,
+          type: assertion.type,
+          actual: 'partially_occluded',
+          details: `visible_samples=${JSON.stringify(subject.visibleSamples || [])}`,
+          subjectSelector: assertion.subjectSelector,
+          referenceSelector: null,
+          containerSelector: null,
+        },
+      ];
+    }
+
+    throw new Error(`Unknown relationship assertion type: ${assertion.type}`);
+  });
+}
+
 function formatBoundaryFailure(sceneId, violations) {
   return `样式边界失败：${sceneId} ${violations
     .map(
@@ -179,6 +345,137 @@ function formatBoundaryFailure(sceneId, violations) {
           .join('|')}`
     )
     .join(', ')}`;
+}
+
+function formatRelationshipFailure(sceneId, violations) {
+  return `布局关系失败：${sceneId} ${violations
+    .map((violation) => {
+      const segments = [
+        `${violation.assertionId}.${violation.type}`,
+        `actual=${violation.actual}`,
+        `subject=${violation.subjectSelector}`,
+      ];
+
+      if (violation.referenceSelector) {
+        segments.push(`reference=${violation.referenceSelector}`);
+      }
+
+      if (violation.containerSelector) {
+        segments.push(`container=${violation.containerSelector}`);
+      }
+
+      if (violation.details) {
+        segments.push(`details=${violation.details}`);
+      }
+
+      return segments.join(' ');
+    })
+    .join(', ')}`;
+}
+
+async function collectRelationshipMeasurements(page, assertions = []) {
+  if (assertions.length === 0) {
+    return {};
+  }
+
+  return page.evaluate((sceneAssertions) => {
+    const selectors = new Set();
+    const fullyVisibleSelectors = new Set();
+
+    for (const assertion of sceneAssertions) {
+      selectors.add(assertion.subjectSelector);
+
+      if (assertion.referenceSelector) {
+        selectors.add(assertion.referenceSelector);
+      }
+
+      if (assertion.containerSelector) {
+        selectors.add(assertion.containerSelector);
+      }
+
+      if (assertion.type === 'fully_visible') {
+        fullyVisibleSelectors.add(assertion.subjectSelector);
+      }
+    }
+
+    const clampSamplePoint = (value, min, max) => {
+      if (max <= min) {
+        return min;
+      }
+
+      return Math.min(max, Math.max(min, value));
+    };
+
+    const createSamplePoints = (rect) => {
+      const insetX = Math.min(4, Math.max(1, rect.width / 4));
+      const insetY = Math.min(4, Math.max(1, rect.height / 4));
+      const minX = rect.left;
+      const maxX = Math.max(rect.left, rect.right - 1);
+      const minY = rect.top;
+      const maxY = Math.max(rect.top, rect.bottom - 1);
+
+      return [
+        { x: clampSamplePoint(rect.left + insetX, minX, maxX), y: clampSamplePoint(rect.top + insetY, minY, maxY) },
+        { x: clampSamplePoint(rect.right - insetX, minX, maxX), y: clampSamplePoint(rect.top + insetY, minY, maxY) },
+        { x: clampSamplePoint(rect.left + insetX, minX, maxX), y: clampSamplePoint(rect.bottom - insetY, minY, maxY) },
+        { x: clampSamplePoint(rect.right - insetX, minX, maxX), y: clampSamplePoint(rect.bottom - insetY, minY, maxY) },
+        { x: clampSamplePoint(rect.left + rect.width / 2, minX, maxX), y: clampSamplePoint(rect.top + rect.height / 2, minY, maxY) },
+      ];
+    };
+
+    for (const selector of fullyVisibleSelectors) {
+      const element = document.querySelector(selector);
+
+      if (element) {
+        element.scrollIntoView({
+          block: 'center',
+          inline: 'center',
+        });
+      }
+    }
+
+    return Object.fromEntries(
+      [...selectors].map((selector) => {
+        const element = document.querySelector(selector);
+
+        if (!element) {
+          return [selector, { exists: false, rect: null, withinViewport: false, visibleSamples: [] }];
+        }
+
+        const bounds = element.getBoundingClientRect();
+        const rect = {
+          left: bounds.left,
+          top: bounds.top,
+          right: bounds.right,
+          bottom: bounds.bottom,
+          width: bounds.width,
+          height: bounds.height,
+        };
+        const withinViewport =
+          rect.left >= 0 &&
+          rect.top >= 0 &&
+          rect.right <= window.innerWidth &&
+          rect.bottom <= window.innerHeight;
+
+        const visibleSamples = fullyVisibleSelectors.has(selector)
+          ? createSamplePoints(rect).map((point) => {
+              const hit = document.elementFromPoint(point.x, point.y);
+              return Boolean(hit && (hit === element || element.contains(hit)));
+            })
+          : [];
+
+        return [
+          selector,
+          {
+            exists: true,
+            rect,
+            withinViewport,
+            visibleSamples,
+          },
+        ];
+      })
+    );
+  }, assertions);
 }
 
 async function runScene(browser, baseUrl, scene) {
@@ -202,11 +499,19 @@ async function runScene(browser, baseUrl, scene) {
   for (const node of scene.boundaryNodes) {
     nodeResults.push(await collectNodeResult(page, cdp, styleSheets, node));
   }
+  const relationshipMeasurements = await collectRelationshipMeasurements(
+    page,
+    scene.relationshipAssertions || []
+  );
 
   return {
     page,
     scene,
-    violations: collectViolations(nodeResults)
+    violations: collectViolations(nodeResults),
+    relationshipViolations: collectRelationshipViolations(
+      scene.relationshipAssertions || [],
+      relationshipMeasurements
+    )
   };
 }
 
@@ -247,10 +552,25 @@ async function main(argv) {
 
       const result = await runScene(browser, 'http://127.0.0.1:3100', scene);
 
-      if (result.violations.length > 0) {
+      if (
+        result.violations.length > 0 ||
+        result.relationshipViolations.length > 0
+      ) {
         const screenshotPath = path.join(uploadsDir, `${scene.id}.png`);
         await result.page.screenshot({ path: screenshotPath, fullPage: true });
-        throw new Error(formatBoundaryFailure(scene.id, result.violations));
+        const failureMessages = [];
+
+        if (result.violations.length > 0) {
+          failureMessages.push(formatBoundaryFailure(scene.id, result.violations));
+        }
+
+        if (result.relationshipViolations.length > 0) {
+          failureMessages.push(
+            formatRelationshipFailure(scene.id, result.relationshipViolations)
+          );
+        }
+
+        throw new Error(failureMessages.join('\n'));
       }
 
       process.stdout.write(`[1flowbase-style-boundary] PASS ${scene.id}\n`);
@@ -262,8 +582,10 @@ async function main(argv) {
 }
 
 module.exports = {
+  collectRelationshipViolations,
   createProbeUrl,
   formatBoundaryFailure,
+  formatRelationshipFailure,
   main,
   parseCliArgs,
   resolveSceneIds

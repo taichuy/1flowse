@@ -13,12 +13,40 @@ export interface StyleBoundaryTargetNode {
   propertyAssertions: StyleBoundaryPropertyAssertion[];
 }
 
+export type StyleBoundaryRelationshipAssertion =
+  | {
+      id: string;
+      type: 'no_overlap';
+      subjectSelector: string;
+      referenceSelector: string;
+    }
+  | {
+      id: string;
+      type: 'within_container';
+      subjectSelector: string;
+      containerSelector: string;
+    }
+  | {
+      id: string;
+      type: 'min_gap';
+      subjectSelector: string;
+      referenceSelector: string;
+      minGap: number;
+      axis?: 'horizontal' | 'vertical';
+    }
+  | {
+      id: string;
+      type: 'fully_visible';
+      subjectSelector: string;
+    };
+
 export interface StyleBoundaryManifestScene {
   id: string;
   kind: StyleBoundarySceneKind;
   title: string;
   impactFiles: string[];
   boundaryNodes: StyleBoundaryTargetNode[];
+  relationshipAssertions?: StyleBoundaryRelationshipAssertion[];
 }
 
 export interface StyleBoundaryRuntimeScene extends StyleBoundaryManifestScene {

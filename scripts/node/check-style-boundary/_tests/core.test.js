@@ -2,8 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  collectRelationshipViolations,
   createProbeUrl,
   formatBoundaryFailure,
+  formatRelationshipFailure,
   parseCliArgs,
   resolveSceneIds
 } = require('../core.js');
@@ -89,5 +91,81 @@ test('formatBoundaryFailure labels style boundary regressions explicitly', () =>
       }
     ]),
     '样式边界失败：page.home shell-header.display expected=flex actual=block source=http://127.0.0.1:3100/src/styles/global.css::.app-shell-header'
+  );
+});
+
+test('collectRelationshipViolations detects no_overlap, within_container, min_gap, and fully_visible regressions', () => {
+  const assertions = [
+    {
+      id: 'left-vs-sidebar',
+      type: 'no_overlap',
+      subjectSelector: '.left',
+      referenceSelector: '.sidebar'
+    },
+    {
+      id: 'actions-within-left',
+      type: 'within_container',
+      subjectSelector: '.actions',
+      containerSelector: '.left'
+    },
+    {
+      id: 'left-gap-sidebar',
+      type: 'min_gap',
+      axis: 'horizontal',
+      minGap: 24,
+      subjectSelector: '.left',
+      referenceSelector: '.sidebar'
+    },
+    {
+      id: 'actions-visible',
+      type: 'fully_visible',
+      subjectSelector: '.actions'
+    }
+  ];
+  const measurements = {
+    '.left': {
+      exists: true,
+      rect: { left: 0, top: 0, right: 300, bottom: 200, width: 300, height: 200 }
+    },
+    '.sidebar': {
+      exists: true,
+      rect: { left: 280, top: 0, right: 520, bottom: 200, width: 240, height: 200 }
+    },
+    '.actions': {
+      exists: true,
+      rect: { left: 260, top: 20, right: 340, bottom: 60, width: 80, height: 40 },
+      withinViewport: true,
+      visibleSamples: [true, false, true, true, true]
+    }
+  };
+
+  assert.deepEqual(
+    collectRelationshipViolations(assertions, measurements).map((violation) => ({
+      id: violation.assertionId,
+      type: violation.type,
+      actual: violation.actual
+    })),
+    [
+      { id: 'left-vs-sidebar', type: 'no_overlap', actual: 'overlap' },
+      { id: 'actions-within-left', type: 'within_container', actual: 'outside_container' },
+      { id: 'left-gap-sidebar', type: 'min_gap', actual: 'gap_too_small' },
+      { id: 'actions-visible', type: 'fully_visible', actual: 'partially_occluded' }
+    ]
+  );
+});
+
+test('formatRelationshipFailure labels layout relationship regressions explicitly', () => {
+  assert.equal(
+    formatRelationshipFailure('page.settings', [
+      {
+        assertionId: 'left-vs-sidebar',
+        type: 'no_overlap',
+        actual: 'overlap',
+        details: 'intersection=20x200',
+        subjectSelector: '.left',
+        referenceSelector: '.sidebar'
+      }
+    ]),
+    '布局关系失败：page.settings left-vs-sidebar.no_overlap actual=overlap subject=.left reference=.sidebar details=intersection=20x200'
   );
 });
