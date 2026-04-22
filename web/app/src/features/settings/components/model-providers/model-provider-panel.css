@@ -247,10 +247,12 @@
 }
 
 .model-provider-panel__version-select {
-  min-width: 132px;
+  width: 60%;
+  min-width: max-content;
 }
 
 .model-provider-panel__version-inline {
+  width: 100%;
   align-items: center;
 }
 
