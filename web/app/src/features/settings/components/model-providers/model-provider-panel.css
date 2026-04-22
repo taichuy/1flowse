@@ -311,6 +311,22 @@
   margin: 12px 0 18px;
 }
 
+.model-provider-panel__advanced-collapse {
+  margin-top: 4px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.model-provider-panel__advanced-collapse > .ant-collapse-item > .ant-collapse-header {
+  padding: 12px 14px !important;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.model-provider-panel__advanced-collapse > .ant-collapse-item > .ant-collapse-content > .ant-collapse-content-box {
+  padding: 14px 14px 2px !important;
+  background: rgba(248, 250, 252, 0.9);
+}
+
 .model-provider-panel__empty {
   padding: 12px 0 4px;
 }

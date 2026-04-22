@@ -758,6 +758,34 @@ describe('ModelProvidersPage', () => {
   );
 
   test(
+    'folds advanced provider fields into a collapsed section in the edit drawer',
+    { timeout: 15000 },
+    async () => {
+      authenticateWithPermissions([
+        'route_page.view.all',
+        'state_model.view.all',
+        'state_model.manage.all'
+      ]);
+
+      renderApp('/settings/model-providers');
+
+      const modal = await openProviderInstancesModal();
+      fireEvent.click(
+        within(modal).getByRole('button', { name: '编辑 API Key' })
+      );
+
+      expect(await screen.findByText('编辑 API 密钥配置')).toBeInTheDocument();
+      expect(screen.getByLabelText('API Endpoint')).toBeInTheDocument();
+      expect(screen.queryByText('organization')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('高级配置（可选）'));
+
+      expect(await screen.findByLabelText('organization')).toBeInTheDocument();
+      expect(screen.getByLabelText('default_headers')).toBeInTheDocument();
+    }
+  );
+
+  test(
     'masks api key by default and reveals it only after explicit action',
     { timeout: 15000 },
     async () => {

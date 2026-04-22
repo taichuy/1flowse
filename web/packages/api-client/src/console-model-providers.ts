@@ -4,6 +4,7 @@ export interface ConsoleModelProviderConfigField {
   key: string;
   field_type: string;
   required: boolean;
+  advanced: boolean;
 }
 
 export interface ConsolePluginFormOption {

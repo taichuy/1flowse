@@ -95,6 +95,10 @@ config_schema:
   - key: api_key
     type: secret
     required: true
+  - key: organization
+    type: string
+    required: false
+    advanced: true
 "#,
     );
     fixture.write(
@@ -182,7 +186,8 @@ fn provider_package_loads_manifest_v1_runtime_entry_and_static_models() {
 
     let catalog_entry = ProviderCatalogEntry::from_package(&package);
     assert_eq!(catalog_entry.plugin_id, "acme_openai_compatible@1.2.3");
-    assert_eq!(catalog_entry.form_schema.len(), 2);
+    assert_eq!(catalog_entry.form_schema.len(), 3);
+    assert!(catalog_entry.form_schema[2].advanced);
     assert_eq!(catalog_entry.predefined_models.len(), 1);
     assert_eq!(catalog_entry.icon.as_deref(), Some("icon.svg"));
 }

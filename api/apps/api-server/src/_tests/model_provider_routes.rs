@@ -33,6 +33,10 @@ config_schema:
   - key: api_key
     type: secret
     required: true
+  - key: organization
+    type: string
+    required: false
+    advanced: true
 "#,
     )
     .unwrap();
@@ -329,6 +333,14 @@ async fn model_provider_routes_mask_secret_until_reveal_and_keep_ready_options()
     assert_eq!(
         catalog_payload["data"]["entries"][0]["predefined_models"][0]["label_key"].as_str(),
         Some("models.fixture_chat.label")
+    );
+    assert_eq!(
+        catalog_payload["data"]["entries"][0]["form_schema"][2]["key"].as_str(),
+        Some("organization")
+    );
+    assert_eq!(
+        catalog_payload["data"]["entries"][0]["form_schema"][2]["advanced"].as_bool(),
+        Some(true)
     );
 
     let options = app

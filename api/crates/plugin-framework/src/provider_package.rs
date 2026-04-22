@@ -86,6 +86,8 @@ pub struct ProviderConfigField {
     pub field_type: String,
     #[serde(default)]
     pub required: bool,
+    #[serde(default)]
+    pub advanced: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

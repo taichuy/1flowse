@@ -54,12 +54,44 @@
         {
           "key": "base_url",
           "field_type": "string",
-          "required": true
+          "required": true,
+          "advanced": false
         },
         {
           "key": "api_key",
           "field_type": "secret",
-          "required": true
+          "required": true,
+          "advanced": false
+        },
+        {
+          "key": "organization",
+          "field_type": "string",
+          "required": false,
+          "advanced": true
+        },
+        {
+          "key": "project",
+          "field_type": "string",
+          "required": false,
+          "advanced": true
+        },
+        {
+          "key": "api_version",
+          "field_type": "string",
+          "required": false,
+          "advanced": true
+        },
+        {
+          "key": "default_headers",
+          "field_type": "string",
+          "required": false,
+          "advanced": true
+        },
+        {
+          "key": "validate_model",
+          "field_type": "boolean",
+          "required": false,
+          "advanced": false
         }
       ],
       "predefined_models": [
@@ -97,7 +129,8 @@
         {
           "key": "api_key",
           "field_type": "secret",
-          "required": true
+          "required": true,
+          "advanced": false
         }
       ],
       "predefined_models": [

@@ -64,6 +64,7 @@ pub struct ModelProviderConfigFieldResponse {
     pub key: String,
     pub field_type: String,
     pub required: bool,
+    pub advanced: bool,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -284,6 +285,7 @@ fn to_config_field_response(field: ProviderConfigField) -> ModelProviderConfigFi
         key: field.key,
         field_type: field.field_type,
         required: field.required,
+        advanced: field.advanced,
     }
 }
 
