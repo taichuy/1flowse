@@ -49,10 +49,8 @@ import { createNodeDocument } from '../lib/document/node-factory';
 import { NodeDetailPanel } from '../components/detail/NodeDetailPanel';
 import { NodeConfigTab } from '../components/detail/tabs/NodeConfigTab';
 import { NodeInspector } from '../components/inspector/NodeInspector';
-import {
-  AgentFlowEditorStoreProvider,
-  useAgentFlowEditorStore
-} from '../store/editor/provider';
+import { AgentFlowEditorStoreProvider } from '../store/editor/AgentFlowEditorStoreProvider';
+import { useAgentFlowEditorStore } from '../store/editor/provider';
 import { selectWorkingDocument } from '../store/editor/selectors';
 
 function createInitialState() {

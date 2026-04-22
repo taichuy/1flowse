@@ -5,7 +5,7 @@ import type {
 } from '@1flowbase/api-client';
 
 import './agent-flow-editor.css';
-import { AgentFlowEditorStoreProvider } from '../../store/editor/provider';
+import { AgentFlowEditorStoreProvider } from '../../store/editor/AgentFlowEditorStoreProvider';
 import { AgentFlowCanvasFrame } from './AgentFlowCanvasFrame';
 
 interface AgentFlowEditorShellProps {

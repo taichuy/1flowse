@@ -4,10 +4,8 @@ import { beforeEach, describe, expect, test } from 'vitest';
 import type { ConsoleNodeContributionEntry } from '@1flowbase/api-client';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
 import { AgentFlowCanvasFrame } from '../components/editor/AgentFlowCanvasFrame';
-import {
-  AgentFlowEditorStoreProvider,
-  useAgentFlowEditorStore
-} from '../store/editor/provider';
+import { AgentFlowEditorStoreProvider } from '../store/editor/AgentFlowEditorStoreProvider';
+import { useAgentFlowEditorStore } from '../store/editor/provider';
 import { selectWorkingDocument } from '../store/editor/selectors';
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 import { renderReactFlowScene } from '../../../test/renderers/render-react-flow-scene';

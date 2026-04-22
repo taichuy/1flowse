@@ -8,6 +8,7 @@ vi.mock('@scalar/api-reference-react', () => ({
 }));
 
 import { AppProviders } from '../../app/AppProviders';
+import { renderReactFlowScene } from '../../test/renderers/render-react-flow-scene';
 import { StyleBoundaryHarness } from '../StyleBoundaryHarness';
 import { getRuntimeScene, getSceneIdsForFiles } from '../registry';
 
@@ -72,11 +73,7 @@ describe('style boundary registry', () => {
   test('application detail scene save mock echoes the latest draft document', async () => {
     const scene = getRuntimeScene('page.application-detail');
 
-    render(
-      <AppProviders>
-        <StyleBoundaryHarness scene={scene} />
-      </AppProviders>
-    );
+    renderReactFlowScene(<StyleBoundaryHarness scene={scene} />);
 
     await screen.findByText(/support agent/i);
 
@@ -113,18 +110,21 @@ describe('style boundary registry', () => {
   test('application detail scene reaches the editor shell instead of the error state', async () => {
     const scene = getRuntimeScene('page.application-detail');
     vi.spyOn(Grid, 'useBreakpoint').mockReturnValue({ lg: true } as never);
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    render(
-      <AppProviders>
-        <StyleBoundaryHarness scene={scene} />
-      </AppProviders>
-    );
+    renderReactFlowScene(<StyleBoundaryHarness scene={scene} />);
 
     expect(
       await screen.findByRole('button', { name: '历史版本' }, { timeout: 15_000 })
     ).toBeInTheDocument();
-    expect(document.querySelector('.agent-flow-editor__shell')).not.toBeNull();
+    expect(screen.getByTestId('agent-flow-editor-body')).toBeInTheDocument();
     expect(screen.queryByText('编排加载失败')).not.toBeInTheDocument();
+    expect(
+      [...consoleErrorSpy.mock.calls, ...consoleWarnSpy.mock.calls]
+        .flat()
+        .join('\n')
+    ).not.toContain('[React Flow]');
   }, 20_000);
 
   test(

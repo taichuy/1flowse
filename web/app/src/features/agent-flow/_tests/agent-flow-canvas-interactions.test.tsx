@@ -8,10 +8,8 @@ import {
   type FlowNodeType
 } from '@1flowbase/flow-schema';
 import { AgentFlowCanvas } from '../components/editor/AgentFlowCanvas';
-import {
-  AgentFlowEditorStoreProvider,
-  useAgentFlowEditorStore
-} from '../store/editor/provider';
+import { AgentFlowEditorStoreProvider } from '../store/editor/AgentFlowEditorStoreProvider';
+import { useAgentFlowEditorStore } from '../store/editor/provider';
 import { selectWorkingDocument } from '../store/editor/selectors';
 
 type MockNodeChange = {
