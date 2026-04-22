@@ -968,6 +968,109 @@ async fn model_provider_service_create_and_update_allow_empty_enabled_model_ids(
 }
 
 #[tokio::test]
+async fn model_provider_service_options_only_expose_enabled_models_and_keep_unknown_ids() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryModelProviderRepository::new(actor_with_permissions(
+        workspace_id,
+        &["state_model.view.all", "state_model.manage.all"],
+    ));
+    let runtime = MemoryProviderRuntime::default();
+    let package_root =
+        std::env::temp_dir().join(format!("provider-options-enabled-models-{}", Uuid::now_v7()));
+    create_provider_fixture(&package_root);
+    let installation_id = repository
+        .seed_installation(
+            &package_root.display().to_string(),
+            PluginDesiredState::ActiveRequested,
+            true,
+        )
+        .await;
+    let service = ModelProviderService::new(repository.clone(), runtime, "test-master-key");
+
+    let created = service
+        .create_instance(CreateModelProviderInstanceCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id,
+            display_name: "Fixture Prod".to_string(),
+            config_json: json!({
+                "base_url": "https://api.example.com",
+                "api_key": "super-secret"
+            }),
+            configured_models: Vec::new(),
+            enabled_model_ids: vec!["fixture_chat".to_string(), "custom-enabled".to_string()],
+            preview_token: None,
+        })
+        .await
+        .unwrap();
+
+    repository
+        .upsert_catalog_cache(&UpsertModelProviderCatalogCacheInput {
+            provider_instance_id: created.instance.id,
+            model_discovery_mode: domain::ModelProviderDiscoveryMode::Hybrid,
+            refresh_status: ModelProviderCatalogRefreshStatus::Ready,
+            source: domain::ModelProviderCatalogSource::Hybrid,
+            models_json: serde_json::to_value(vec![
+                ProviderModelDescriptor {
+                    model_id: "fixture_chat".to_string(),
+                    display_name: "Fixture Chat".to_string(),
+                    source: ProviderModelSource::Dynamic,
+                    supports_streaming: true,
+                    supports_tool_call: false,
+                    supports_multimodal: false,
+                    context_window: Some(128000),
+                    max_output_tokens: Some(4096),
+                    parameter_form: None,
+                    provider_metadata: json!({}),
+                },
+                ProviderModelDescriptor {
+                    model_id: "candidate-only".to_string(),
+                    display_name: "Candidate Only".to_string(),
+                    source: ProviderModelSource::Dynamic,
+                    supports_streaming: true,
+                    supports_tool_call: false,
+                    supports_multimodal: false,
+                    context_window: Some(64000),
+                    max_output_tokens: Some(2048),
+                    parameter_form: None,
+                    provider_metadata: json!({}),
+                },
+            ])
+            .unwrap(),
+            last_error_message: None,
+            refreshed_at: Some(OffsetDateTime::now_utc()),
+        })
+        .await
+        .unwrap();
+
+    let options = service
+        .options(
+            repository.actor.user_id,
+            RequestedLocales::new("zh_Hans", "en_US"),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(options.providers.len(), 1);
+    assert_eq!(
+        options.providers[0]
+            .models
+            .iter()
+            .map(|model| model.descriptor.model_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["fixture_chat", "custom-enabled"]
+    );
+    assert_eq!(
+        options.providers[0].models[0].display_name_fallback.as_deref(),
+        Some("Fixture Chat")
+    );
+    assert_eq!(
+        options.providers[0].models[1].display_name_fallback.as_deref(),
+        Some("custom-enabled")
+    );
+    assert_eq!(options.providers[0].models[1].label_key, None);
+}
+
+#[tokio::test]
 async fn model_provider_service_persists_configured_models_and_derives_enabled_model_ids() {
     let workspace_id = Uuid::now_v7();
     let repository = MemoryModelProviderRepository::new(actor_with_permissions(

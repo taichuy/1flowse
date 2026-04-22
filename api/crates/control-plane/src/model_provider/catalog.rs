@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use anyhow::Result;
+use plugin_framework::provider_contract::{ProviderModelDescriptor, ProviderModelSource};
 use uuid::Uuid;
 
 use crate::{
@@ -154,14 +155,58 @@ where
             display_name: package.provider.display_name.clone(),
             effective_instance_id: instance.id,
             effective_instance_display_name: instance.display_name.clone(),
-            models: models
-                .into_iter()
-                .map(|model| localized_model_descriptor(&namespace, model))
-                .collect(),
+            models: expose_enabled_models(&namespace, models, &instance.enabled_model_ids),
         });
     }
     Ok(ModelProviderOptionsView {
         providers: options,
         i18n_catalog,
     })
+}
+
+fn expose_enabled_models(
+    namespace: &str,
+    models: Vec<ProviderModelDescriptor>,
+    enabled_model_ids: &[String],
+) -> Vec<crate::model_provider::LocalizedProviderModelDescriptor> {
+    let localized_models = models
+        .into_iter()
+        .map(|model| {
+            let model_id = model.model_id.clone();
+            (model_id, localized_model_descriptor(namespace, model))
+        })
+        .collect::<HashMap<_, _>>();
+
+    enabled_model_ids
+        .iter()
+        .map(|model_id| {
+            localized_models
+                .get(model_id)
+                .cloned()
+                .unwrap_or_else(|| fallback_enabled_model_descriptor(model_id))
+        })
+        .collect()
+}
+
+fn fallback_enabled_model_descriptor(
+    model_id: &str,
+) -> crate::model_provider::LocalizedProviderModelDescriptor {
+    crate::model_provider::LocalizedProviderModelDescriptor {
+        descriptor: ProviderModelDescriptor {
+            model_id: model_id.to_string(),
+            display_name: model_id.to_string(),
+            source: ProviderModelSource::Dynamic,
+            supports_streaming: false,
+            supports_tool_call: false,
+            supports_multimodal: false,
+            context_window: None,
+            max_output_tokens: None,
+            parameter_form: None,
+            provider_metadata: serde_json::json!({}),
+        },
+        namespace: None,
+        label_key: None,
+        description_key: None,
+        display_name_fallback: Some(model_id.to_string()),
+    }
 }
