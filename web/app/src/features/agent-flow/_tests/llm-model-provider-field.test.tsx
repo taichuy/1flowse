@@ -54,6 +54,25 @@ function renderWithProviders(ui: ReactNode) {
   return render(<AppProviders>{ui}</AppProviders>);
 }
 
+async function selectProviderOption(label: string) {
+  const providerSelect = await screen.findByRole('combobox', {
+    name: '模型供应商'
+  });
+
+  fireEvent.mouseDown(providerSelect);
+  const [option] = await screen.findAllByText((_, element) => {
+    if (!element) {
+      return false;
+    }
+
+    return (
+      element.matches('.ant-select-item-option-content') &&
+      Boolean(element.textContent?.includes(label))
+    );
+  });
+  fireEvent.click(option);
+}
+
 describe('LlmModelField', () => {
   beforeEach(() => {
     modelProviderOptionsApi.fetchModelProviderOptions.mockReset();
@@ -76,16 +95,7 @@ describe('LlmModelField', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '模型' }));
-
-    expect(
-      await screen.findByRole('heading', { name: '模型供应商' })
-    ).toBeInTheDocument();
-    const providerButton = await screen.findByRole('button', {
-      name: `选择模型供应商 ${modelProviderOptionsProviders[0].display_name}`
-    });
-
-    fireEvent.click(providerButton);
+    await selectProviderOption(modelProviderOptionsProviders[0].display_name);
     await waitFor(() => {
       expect(latestDocument.graph.nodes).toEqual(
         expect.arrayContaining([
@@ -94,13 +104,16 @@ describe('LlmModelField', () => {
             config: expect.objectContaining({
               model_provider: expect.objectContaining({
                 provider_code: 'openai_compatible',
-                model_id: ''
+                model_id: 'gpt-4o-mini'
               })
             })
           })
         ])
       );
     });
+    fireEvent.click(screen.getByRole('button', { name: '模型设置' }));
+
+    expect(await screen.findByRole('heading', { name: '生效模型' })).toBeInTheDocument();
     fireEvent.click(
       await screen.findByRole('button', {
         name: `选择模型 ${modelProviderOptionsProviders[0].models[0].display_name}`
@@ -154,7 +167,7 @@ describe('LlmModelField', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '模型' }));
+    fireEvent.click(screen.getByRole('button', { name: '模型设置' }));
 
     expect(
       await screen.findByText('当前节点引用的模型供应商不可用。')
@@ -162,5 +175,40 @@ describe('LlmModelField', () => {
     expect(
       screen.getByRole('link', { name: '模型供应商设置' })
     ).toHaveAttribute('href', '/settings/model-providers');
+  });
+
+  test('resets to the new provider first enabled model when switching providers', async () => {
+    let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    await selectProviderOption(modelProviderOptionsProviders[1].display_name);
+
+    await waitFor(() => {
+      expect(latestDocument.graph.nodes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'node-llm',
+            config: expect.objectContaining({
+              model_provider: expect.objectContaining({
+                provider_code: modelProviderOptionsProviders[1].provider_code,
+                model_id: modelProviderOptionsProviders[1].models[0].model_id,
+                provider_label: modelProviderOptionsProviders[1].display_name,
+                model_label: modelProviderOptionsProviders[1].models[0].display_name
+              })
+            })
+          })
+        ])
+      );
+    });
   });
 });
