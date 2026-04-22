@@ -30,9 +30,9 @@
 6. [2026-04-22-frontend-settings-split-phase-three.md](./2026-04-22-frontend-settings-split-phase-three.md)
    Completed on `2026-04-22`. Shrunk `SettingsPage.tsx` into a route container, moved section resolution into a hook, and extracted the model-provider section into its own owner.
 7. [2026-04-22-scripts-node-normalization-phase-three.md](./2026-04-22-scripts-node-normalization-phase-three.md)
-   Planned next. Splits `scripts/node/plugin/core.js`, normalizes `scripts/node` topology, and removes command-entry sprawl.
+   Completed on `2026-04-22`. Split `plugin/core.js` into focused owners, introduced grouped `test/verify/tooling` dispatchers, and kept stable top-level wrappers as thin façades.
 8. [2026-04-22-residual-compatibility-cleanup-phase-four.md](./2026-04-22-residual-compatibility-cleanup-phase-four.md)
-   Planned after structural splits. Removes the remaining legacy shims, names, and compatibility wording still leaking through runtime, API, frontend, and scripts.
+   Planned next. Removes the remaining legacy shims, names, and compatibility wording still leaking through runtime, API, frontend, and scripts.
 9. [2026-04-22-warning-and-test-governance-phase-four.md](./2026-04-22-warning-and-test-governance-phase-four.md)
    Planned last. Clears React/antd/React Flow warning noise and makes warning evidence land under `tmp/test-governance/`.
 
@@ -63,21 +63,17 @@
    Target: [2026-04-22-backend-boundary-normalization-phase-three.md](./2026-04-22-backend-boundary-normalization-phase-three.md)
 8. `SettingsPage.tsx` `1037` 行
    Target: [2026-04-22-frontend-settings-split-phase-three.md](./2026-04-22-frontend-settings-split-phase-three.md)
-9. `scripts/node/plugin/core.js` `1414` 行
-   Target: [2026-04-22-scripts-node-normalization-phase-three.md](./2026-04-22-scripts-node-normalization-phase-three.md)
-10. `scripts/node` 顶层文件数 `17`
-    Target: [2026-04-22-scripts-node-normalization-phase-three.md](./2026-04-22-scripts-node-normalization-phase-three.md)
-11. `dev-up` 还保留 `docker-compose` / legacy brand fallback
+9. `dev-up` 还保留 `docker-compose` / legacy brand fallback
     Target: [2026-04-22-residual-compatibility-cleanup-phase-four.md](./2026-04-22-residual-compatibility-cleanup-phase-four.md)
-12. `routes/plugins.rs` OpenAPI 文案仍写 compatibility 口径
+10. `routes/plugins.rs` OpenAPI 文案仍写 compatibility 口径
     Target: [2026-04-22-residual-compatibility-cleanup-phase-four.md](./2026-04-22-residual-compatibility-cleanup-phase-four.md)
-13. `api-server/src/lib.rs` 还保留 `include_legacy_docs` 命名
+11. `api-server/src/lib.rs` 还保留 `include_legacy_docs` 命名
     Target: [2026-04-22-residual-compatibility-cleanup-phase-four.md](./2026-04-22-residual-compatibility-cleanup-phase-four.md)
-14. `llm-node-config.ts` 仍保留 `legacyItems`
+12. `llm-node-config.ts` 仍保留 `legacyItems`
     Target: [2026-04-22-residual-compatibility-cleanup-phase-four.md](./2026-04-22-residual-compatibility-cleanup-phase-four.md)
-15. `AgentFlowNodeCard.tsx` 仍使用废弃 `overlayInnerStyle`
+13. `AgentFlowNodeCard.tsx` 仍使用废弃 `overlayInnerStyle`
     Target: [2026-04-22-warning-and-test-governance-phase-four.md](./2026-04-22-warning-and-test-governance-phase-four.md)
-16. 前端 fast gate 仍有 React Flow / `act(...)` warning 噪音
+14. 前端 fast gate 仍有 React Flow / `act(...)` warning 噪音
     Target: [2026-04-22-warning-and-test-governance-phase-four.md](./2026-04-22-warning-and-test-governance-phase-four.md)
 
 ## Execution Rules

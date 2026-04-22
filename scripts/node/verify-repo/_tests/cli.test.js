@@ -13,25 +13,25 @@ test('buildCommands composes script tests, contract tests, frontend full gate an
     {
       label: 'repo-script-tests',
       command: process.execPath,
-      args: [path.join(repoRoot, 'scripts', 'node', 'test-scripts.js')],
+      args: [path.join(repoRoot, 'scripts', 'node', 'test'), 'scripts'],
       cwd: repoRoot,
     },
     {
       label: 'repo-contract-tests',
       command: process.execPath,
-      args: [path.join(repoRoot, 'scripts', 'node', 'test-contracts.js')],
+      args: [path.join(repoRoot, 'scripts', 'node', 'test'), 'contracts'],
       cwd: repoRoot,
     },
     {
       label: 'repo-frontend-full',
       command: process.execPath,
-      args: [path.join(repoRoot, 'scripts', 'node', 'test-frontend.js'), 'full'],
+      args: [path.join(repoRoot, 'scripts', 'node', 'test'), 'frontend', 'full'],
       cwd: repoRoot,
     },
     {
       label: 'repo-backend-full',
       command: process.execPath,
-      args: [path.join(repoRoot, 'scripts', 'node', 'verify-backend.js')],
+      args: [path.join(repoRoot, 'scripts', 'node', 'verify'), 'backend'],
       cwd: repoRoot,
     },
   ]);
@@ -52,7 +52,7 @@ test('main runs repository full gate in order and captures advisory output', asy
       return {
         status: 0,
         stdout: '',
-        stderr: `warning: ${path.basename(args[0])} advisory\n`,
+        stderr: `warning: ${args.slice(0, 2).join('/')} advisory\n`,
       };
     },
   });
@@ -62,20 +62,20 @@ test('main runs repository full gate in order and captures advisory output', asy
   assert.deepEqual(
     calls.map((call) => call.args),
     [
-      [path.join(repoRoot, 'scripts', 'node', 'test-scripts.js')],
-      [path.join(repoRoot, 'scripts', 'node', 'test-contracts.js')],
-      [path.join(repoRoot, 'scripts', 'node', 'test-frontend.js'), 'full'],
-      [path.join(repoRoot, 'scripts', 'node', 'verify-backend.js')],
+      [path.join(repoRoot, 'scripts', 'node', 'test'), 'scripts'],
+      [path.join(repoRoot, 'scripts', 'node', 'test'), 'contracts'],
+      [path.join(repoRoot, 'scripts', 'node', 'test'), 'frontend', 'full'],
+      [path.join(repoRoot, 'scripts', 'node', 'verify'), 'backend'],
     ]
   );
 
   const warningLogPath = path.join(repoRoot, 'tmp', 'test-governance', 'verify-repo.warnings.log');
   assert.equal(fs.existsSync(warningLogPath), true);
   const warningLog = fs.readFileSync(warningLogPath, 'utf8');
-  assert.match(warningLog, /warning: test-scripts\.js advisory/u);
-  assert.match(warningLog, /warning: test-contracts\.js advisory/u);
-  assert.match(warningLog, /warning: test-frontend\.js advisory/u);
-  assert.match(warningLog, /warning: verify-backend\.js advisory/u);
+  assert.match(warningLog, /warning: .*test\/scripts advisory/u);
+  assert.match(warningLog, /warning: .*test\/contracts advisory/u);
+  assert.match(warningLog, /warning: .*test\/frontend advisory/u);
+  assert.match(warningLog, /warning: .*verify\/backend advisory/u);
 });
 
 test('main passes the inherited lock token through every repository gate command', async () => {

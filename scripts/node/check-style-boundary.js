@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-const { main } = require('./check-style-boundary/core.js');
+const { main: toolingMain } = require('./tooling');
+const main = (argv = []) => toolingMain(['check-style-boundary', ...argv]);
 
 main(process.argv.slice(2)).catch((error) => {
   process.stderr.write(`[1flowbase-style-boundary] ${error.message}\n`);
