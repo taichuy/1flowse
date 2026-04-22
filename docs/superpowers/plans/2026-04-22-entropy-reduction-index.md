@@ -21,8 +21,8 @@
 2. `2026-04-22-compatibility-removal-phase-two.md`
    [2026-04-22-compatibility-removal-phase-two.md](./2026-04-22-compatibility-removal-phase-two.md)
    Completed on `2026-04-22`. Removed legacy invoke fallback acceptance and deleted dead provider manifest compatibility types.
-3. `2026-04-22-structural-split-phase-three.md`
-   Planned next. Splits oversized backend/frontend owners after compatibility scope is reduced.
+3. [2026-04-22-structural-split-phase-three.md](./2026-04-22-structural-split-phase-three.md)
+   Started on `2026-04-22`. First structural slice completed by extracting `orchestration_runtime` test support out of the production owner; further owner splits still remain.
 4. `2026-04-22-test-stabilization-phase-four.md`
    Planned last. Converts remaining flaky/slow tests into stable coverage once the code shape stops moving.
 
