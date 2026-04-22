@@ -131,14 +131,7 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
     .await
     .unwrap();
     assert_eq!(instance.status, ModelProviderInstanceStatus::Draft);
-    let stored_enabled_model_ids: Vec<String> = sqlx::query_scalar(
-        "select enabled_model_ids from model_provider_instances where id = $1",
-    )
-    .bind(instance_id)
-    .fetch_one(store.pool())
-    .await
-    .unwrap();
-    assert_eq!(stored_enabled_model_ids, Vec::<String>::new());
+    assert_eq!(instance.enabled_model_ids, Vec::<String>::new());
 
     let updated = ModelProviderRepository::update_instance(
         &store,
@@ -155,15 +148,8 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
     .await
     .unwrap();
     assert_eq!(updated.status, ModelProviderInstanceStatus::Ready);
-    let stored_enabled_model_ids: Vec<String> = sqlx::query_scalar(
-        "select enabled_model_ids from model_provider_instances where id = $1",
-    )
-    .bind(instance_id)
-    .fetch_one(store.pool())
-    .await
-    .unwrap();
     assert_eq!(
-        stored_enabled_model_ids,
+        updated.enabled_model_ids,
         vec!["qwen-max".to_string(), "qwen-plus".to_string()]
     );
 

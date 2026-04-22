@@ -1209,7 +1209,7 @@ where
 }
 
 fn allow_custom_models(instance: &domain::ModelProviderInstanceRecord) -> bool {
-    instance.validation_model_id.is_none()
+    instance.enabled_model_ids.is_empty()
 }
 
 fn select_effective_provider_candidate<'a>(
@@ -1503,7 +1503,7 @@ impl InMemoryOrchestrationRuntimeRepository {
             config_json: json!({
                 "base_url": "https://api.example.com",
             }),
-            validation_model_id: Some("gpt-5.4-mini".to_string()),
+            enabled_model_ids: vec!["gpt-5.4-mini".to_string()],
             last_validated_at: Some(now),
             last_validation_status: Some(domain::ModelProviderValidationStatus::Succeeded),
             last_validation_message: Some("validated".to_string()),

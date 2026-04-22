@@ -138,7 +138,7 @@ impl MemoryPluginManagementRepository {
                 display_name: display_name.to_string(),
                 status: ModelProviderInstanceStatus::Ready,
                 config_json: json!({ "base_url": "https://api.example.com" }),
-                validation_model_id: None,
+                enabled_model_ids: vec![],
                 last_validated_at: Some(now),
                 last_validation_status: None,
                 last_validation_message: None,
@@ -567,7 +567,7 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
             display_name: input.display_name.clone(),
             status: input.status,
             config_json: input.config_json.clone(),
-            validation_model_id: input.enabled_model_ids.first().cloned(),
+            enabled_model_ids: input.enabled_model_ids.clone(),
             last_validated_at: None,
             last_validation_status: None,
             last_validation_message: None,
@@ -594,7 +594,7 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
         instance.display_name = input.display_name.clone();
         instance.status = input.status;
         instance.config_json = input.config_json.clone();
-        instance.validation_model_id = input.enabled_model_ids.first().cloned();
+        instance.enabled_model_ids = input.enabled_model_ids.clone();
         instance.updated_by = input.updated_by;
         instance.updated_at = OffsetDateTime::now_utc();
         Ok(instance.clone())

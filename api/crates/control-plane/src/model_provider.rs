@@ -657,10 +657,7 @@ where
                     display_name: instance.display_name.clone(),
                     status: domain::ModelProviderInstanceStatus::Ready,
                     config_json: instance.config_json.clone(),
-                    enabled_model_ids:
-                        domain::ModelProviderInstanceRecord::enabled_model_ids_from_validation_model_id(
-                            instance.validation_model_id.clone(),
-                        ),
+                    enabled_model_ids: instance.enabled_model_ids.clone(),
                     updated_by: actor_user_id,
                 })
                 .await?;
@@ -727,10 +724,7 @@ where
                             display_name: instance.display_name.clone(),
                             status: domain::ModelProviderInstanceStatus::Invalid,
                             config_json: instance.config_json.clone(),
-                            enabled_model_ids:
-                                domain::ModelProviderInstanceRecord::enabled_model_ids_from_validation_model_id(
-                                    instance.validation_model_id.clone(),
-                                ),
+                            enabled_model_ids: instance.enabled_model_ids.clone(),
                             updated_by: actor_user_id,
                         })
                         .await;

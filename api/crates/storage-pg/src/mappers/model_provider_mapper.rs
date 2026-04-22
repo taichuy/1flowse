@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use domain::{
     ModelProviderCatalogCacheRecord, ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource,
     ModelProviderDiscoveryMode, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
-    ModelProviderSecretRecord, ModelProviderValidationStatus,
+    ModelProviderSecretRecord,
 };
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -72,7 +72,7 @@ impl PgModelProviderMapper {
             display_name: row.display_name,
             status: parse_instance_status(&row.status)?,
             config_json: row.config_json,
-            validation_model_id: row.enabled_model_ids.first().cloned(),
+            enabled_model_ids: row.enabled_model_ids,
             last_validated_at: None,
             last_validation_status: None,
             last_validation_message: None,
@@ -133,14 +133,6 @@ pub fn parse_instance_status(value: &str) -> Result<ModelProviderInstanceStatus>
         "invalid" => Ok(ModelProviderInstanceStatus::Invalid),
         "disabled" => Ok(ModelProviderInstanceStatus::Disabled),
         _ => Err(anyhow!("unknown model provider instance status: {value}")),
-    }
-}
-
-pub fn parse_validation_status(value: &str) -> Result<ModelProviderValidationStatus> {
-    match value {
-        "succeeded" => Ok(ModelProviderValidationStatus::Succeeded),
-        "failed" => Ok(ModelProviderValidationStatus::Failed),
-        _ => Err(anyhow!("unknown model provider validation status: {value}")),
     }
 }
 

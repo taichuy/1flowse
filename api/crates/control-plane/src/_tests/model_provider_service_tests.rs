@@ -27,7 +27,7 @@ use crate::{
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, ModelProviderCatalogCacheRecord,
     ModelProviderCatalogRefreshStatus, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
-    ModelProviderPreviewSessionRecord, ModelProviderSecretRecord, ModelProviderValidationStatus,
+    ModelProviderPreviewSessionRecord, ModelProviderSecretRecord,
     PermissionDefinition, PluginArtifactStatus, PluginAssignmentRecord,
     PluginAvailabilityStatus, PluginDesiredState, PluginInstallationRecord, PluginRuntimeStatus,
     PluginTaskRecord, PluginVerificationStatus,
@@ -468,7 +468,7 @@ impl ModelProviderRepository for MemoryModelProviderRepository {
             display_name: input.display_name.clone(),
             status: input.status,
             config_json: input.config_json.clone(),
-            validation_model_id: input.enabled_model_ids.first().cloned(),
+            enabled_model_ids: input.enabled_model_ids.clone(),
             last_validated_at: None,
             last_validation_status: None,
             last_validation_message: None,
@@ -495,7 +495,7 @@ impl ModelProviderRepository for MemoryModelProviderRepository {
         instance.display_name = input.display_name.clone();
         instance.status = input.status;
         instance.config_json = input.config_json.clone();
-        instance.validation_model_id = input.enabled_model_ids.first().cloned();
+        instance.enabled_model_ids = input.enabled_model_ids.clone();
         instance.updated_by = input.updated_by;
         instance.updated_at = OffsetDateTime::now_utc();
         Ok(instance.clone())
@@ -854,10 +854,7 @@ async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
         ModelProviderInstanceStatus::Ready
     );
     assert_eq!(validated.instance.config_json["api_key"], "supe****cret");
-    assert_eq!(
-        validated.instance.last_validation_status,
-        Some(ModelProviderValidationStatus::Succeeded)
-    );
+    assert_eq!(validated.instance.enabled_model_ids, Vec::<String>::new());
     assert_eq!(
         validated.cache.refresh_status,
         ModelProviderCatalogRefreshStatus::Ready
@@ -972,10 +969,9 @@ async fn model_provider_service_creates_ready_instance_from_preview_session() {
         .unwrap();
 
     assert_eq!(created.instance.status, ModelProviderInstanceStatus::Ready);
-    assert_eq!(created.instance.validation_model_id.as_deref(), Some("fixture_chat"));
     assert_eq!(
-        created.instance.last_validation_status,
-        Some(ModelProviderValidationStatus::Succeeded)
+        created.instance.enabled_model_ids,
+        vec!["fixture_chat".to_string()]
     );
     assert_eq!(created.cache.as_ref().map(|cache| cache.models_json[0]["model_id"].clone()), Some(json!("fixture_chat")));
 }
@@ -1030,8 +1026,7 @@ async fn model_provider_service_allows_preview_token_without_validation_model_id
         .unwrap();
 
     assert_eq!(created.instance.status, ModelProviderInstanceStatus::Draft);
-    assert_eq!(created.instance.validation_model_id, None);
-    assert_eq!(created.instance.last_validation_status, None);
+    assert_eq!(created.instance.enabled_model_ids, Vec::<String>::new());
 }
 
 #[tokio::test]

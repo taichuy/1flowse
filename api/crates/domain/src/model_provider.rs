@@ -319,7 +319,7 @@ pub struct ModelProviderInstanceRecord {
     pub display_name: String,
     pub status: ModelProviderInstanceStatus,
     pub config_json: serde_json::Value,
-    pub validation_model_id: Option<String>,
+    pub enabled_model_ids: Vec<String>,
     pub last_validated_at: Option<OffsetDateTime>,
     pub last_validation_status: Option<ModelProviderValidationStatus>,
     pub last_validation_message: Option<String>,
