@@ -3,7 +3,7 @@
   overflow: hidden;
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 4px 12px rgba(14, 24, 20, 0.04);
 }
 
 .collapse-shell > .ant-collapse-item {
