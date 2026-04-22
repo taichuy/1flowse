@@ -1292,6 +1292,9 @@ describe('ModelProvidersPage', () => {
       expect(await within(modal).findByText('Base URL')).toBeInTheDocument();
       expect(within(modal).getByText('2026-04-18 10:01:00')).toBeInTheDocument();
       expect(within(modal).getAllByText(/gpt-4o-mini/).length).toBeGreaterThanOrEqual(1);
+      expect(
+        modal.querySelector('.model-provider-panel__instance-content')
+      ).toBeNull();
     }
   );
 

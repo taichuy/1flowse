@@ -434,37 +434,57 @@
   line-height: 1.2;
 }
 
-/* 实例内容区域样式 */
-.model-provider-panel__instance-content {
-  display: grid;
-  gap: 20px;
-  width: 100%;
+.model-provider-panel__instance-descriptions {
+  margin: 0;
 }
 
-.model-provider-panel__instance-descriptions {
-  background: var(--bg-surface);
-  border-radius: 8px;
-  padding: 16px;
-  border: 1px solid var(--border-subtle);
-  box-shadow: 0 1px 2px rgba(13, 23, 18, 0.04);
+.model-provider-panel__instance-descriptions .ant-descriptions-view {
+  background: transparent;
+}
+
+.model-provider-panel__instance-descriptions .ant-descriptions-row:not(:last-child) td {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.model-provider-panel__instance-descriptions .ant-descriptions-item {
+  padding-block: 12px;
+}
+
+.model-provider-panel__instance-descriptions .ant-descriptions-item:first-child {
+  padding-top: 0;
+}
+
+.model-provider-panel__instance-descriptions .ant-descriptions-item:last-child {
+  padding-bottom: 0;
+}
+
+.model-provider-panel__instance-descriptions .ant-descriptions-item-container {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 16px;
 }
 
 .model-provider-panel__instance-descriptions .ant-descriptions-item-label {
   color: var(--text-secondary);
   font-weight: 500;
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .model-provider-panel__instance-descriptions .ant-descriptions-item-content {
   color: var(--text-primary);
   font-size: 14px;
+  min-width: 0;
 }
 
 .model-provider-panel__instance-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 8px 0;
+  padding-top: 16px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .model-provider-panel__instance-action-btn {

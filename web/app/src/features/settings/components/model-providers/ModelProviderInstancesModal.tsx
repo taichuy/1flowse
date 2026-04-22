@@ -303,7 +303,7 @@ export function ModelProviderInstancesModal({
                   </div>
                 ),
                 children: (
-                  <div className="model-provider-panel__instance-content">
+                  <>
                     <Descriptions
                       className="model-provider-panel__instance-descriptions"
                       size="small"
@@ -398,8 +398,7 @@ export function ModelProviderInstancesModal({
                         </button>
                       </div>
                     ) : null}
-
-                  </div>
+                  </>
                 )
               };
             })}
