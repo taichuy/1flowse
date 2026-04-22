@@ -69,10 +69,19 @@ const modelProvidersApi = vi.hoisted(() => ({
     'model-providers',
     'options'
   ],
+  settingsModelProviderModelsQueryKey: vi.fn((instanceId: string) => [
+    'settings',
+    'model-providers',
+    'models',
+    instanceId
+  ]),
   fetchSettingsModelProviderCatalog: vi.fn(),
   fetchSettingsModelProviderInstances: vi.fn(),
+  fetchSettingsModelProviderModels: vi.fn(),
+  previewSettingsModelProviderModels: vi.fn(),
   createSettingsModelProviderInstance: vi.fn(),
   updateSettingsModelProviderInstance: vi.fn(),
+  revealSettingsModelProviderSecret: vi.fn(),
   validateSettingsModelProviderInstance: vi.fn(),
   refreshSettingsModelProviderModels: vi.fn(),
   deleteSettingsModelProviderInstance: vi.fn()

@@ -5,6 +5,7 @@ import {
   listConsoleModelProviderCatalog,
   listConsoleModelProviderInstances,
   listConsoleModelProviderOptions,
+  previewConsoleModelProviderModels,
   revealConsoleModelProviderSecret,
   refreshConsoleModelProviderModels,
   updateConsoleModelProviderInstance,
@@ -16,6 +17,7 @@ import {
   type ConsoleModelProviderModelCatalog,
   type ConsoleValidateModelProviderResult,
   type CreateConsoleModelProviderInput,
+  type PreviewConsoleModelProviderModelsInput,
   type UpdateConsoleModelProviderInput
 } from '@1flowbase/api-client';
 
@@ -26,6 +28,7 @@ export type SettingsModelProviderModelCatalog = ConsoleModelProviderModelCatalog
 export type SettingsRevealModelProviderSecretResult = RevealConsoleModelProviderSecretResult;
 export type SettingsValidateModelProviderResult = ConsoleValidateModelProviderResult;
 export type CreateSettingsModelProviderInput = CreateConsoleModelProviderInput;
+export type PreviewSettingsModelProviderModelsInput = PreviewConsoleModelProviderModelsInput;
 export type UpdateSettingsModelProviderInput = UpdateConsoleModelProviderInput;
 
 export const settingsModelProviderCatalogQueryKey = [
@@ -62,6 +65,15 @@ export function fetchSettingsModelProviderOptions() {
 
 export function fetchSettingsModelProviderModels(instanceId: string) {
   return getConsoleModelProviderModels(instanceId);
+}
+
+export function previewSettingsModelProviderModels(
+  input: PreviewSettingsModelProviderModelsInput,
+  csrfToken: string
+) {
+  return previewConsoleModelProviderModels(input, csrfToken).then(
+    (response) => response.models
+  );
 }
 
 export function createSettingsModelProviderInstance(

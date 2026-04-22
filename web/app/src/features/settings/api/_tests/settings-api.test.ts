@@ -38,6 +38,7 @@ vi.mock('@1flowbase/api-client', () => ({
     provider_instance_id: 'provider-1',
     models: []
   }),
+  previewConsoleModelProviderModels: vi.fn().mockResolvedValue([]),
   createConsoleModelProviderInstance: vi.fn().mockResolvedValue({
     id: 'provider-1'
   }),
@@ -112,6 +113,7 @@ import {
   listConsoleModelProviderInstances,
   listConsoleModelProviderOptions,
   getConsoleModelProviderModels,
+  previewConsoleModelProviderModels,
   createConsoleModelProviderInstance,
   updateConsoleModelProviderInstance,
   validateConsoleModelProviderInstance,
@@ -166,6 +168,7 @@ import {
   fetchSettingsModelProviderInstances,
   fetchSettingsModelProviderOptions,
   fetchSettingsModelProviderModels,
+  previewSettingsModelProviderModels,
   createSettingsModelProviderInstance,
   updateSettingsModelProviderInstance,
   validateSettingsModelProviderInstance,
@@ -312,6 +315,16 @@ describe('settings api wrappers', () => {
       modelProviderOptionsContract
     );
     await fetchSettingsModelProviderModels('provider-1');
+    await previewSettingsModelProviderModels(
+      {
+        installation_id: 'installation-1',
+        config: {
+          base_url: 'https://api.openai.com/v1',
+          api_key: 'super-secret'
+        }
+      } as never,
+      'csrf-123'
+    );
     await createSettingsModelProviderInstance(createInput as never, 'csrf-123');
     await updateSettingsModelProviderInstance('provider-1', updateInput as never, 'csrf-123');
     await validateSettingsModelProviderInstance('provider-1', 'csrf-123');
@@ -323,6 +336,16 @@ describe('settings api wrappers', () => {
     expect(listConsoleModelProviderInstances).toHaveBeenCalledTimes(1);
     expect(listConsoleModelProviderOptions).toHaveBeenCalledTimes(1);
     expect(getConsoleModelProviderModels).toHaveBeenCalledWith('provider-1');
+    expect(previewConsoleModelProviderModels).toHaveBeenCalledWith(
+      {
+        installation_id: 'installation-1',
+        config: {
+          base_url: 'https://api.openai.com/v1',
+          api_key: 'super-secret'
+        }
+      },
+      'csrf-123'
+    );
     expect(createConsoleModelProviderInstance).toHaveBeenCalledWith(
       createInput,
       'csrf-123'
@@ -349,11 +372,10 @@ describe('settings api wrappers', () => {
       'provider-1',
       'csrf-123'
     );
-    expect(modelProviderOptionsContract.instances[0]).toEqual(
+    expect(modelProviderOptionsContract.providers[0]).toEqual(
       expect.objectContaining({
-        provider_instance_id: 'provider-openai-prod',
         provider_code: 'openai_compatible',
-        plugin_type: 'provider',
+        plugin_type: 'model_provider',
         namespace: 'plugin.openai_compatible',
         label_key: 'provider.label',
         description_key: 'provider.description'

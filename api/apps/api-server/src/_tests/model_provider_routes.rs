@@ -400,3 +400,108 @@ async fn model_provider_routes_mask_secret_until_reveal_and_keep_ready_options()
         Some("temperature")
     );
 }
+
+#[tokio::test]
+async fn model_provider_routes_preview_models_from_draft_config_and_existing_secret() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let installation_id = install_enable_assign(&app, &cookie, &csrf).await;
+
+    let preview_create = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/model-providers/preview-models")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "installation_id": installation_id,
+                        "config": {
+                            "base_url": "https://api.example.com",
+                            "api_key": "super-secret"
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(preview_create.status(), StatusCode::OK);
+    let preview_create_payload: Value = serde_json::from_slice(
+        &to_bytes(preview_create.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        preview_create_payload["data"]["models"][0]["model_id"].as_str(),
+        Some("fixture_chat")
+    );
+
+    let create = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/model-providers")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "installation_id": installation_id,
+                        "display_name": "Fixture Prod",
+                        "config": {
+                            "base_url": "https://api.example.com",
+                            "api_key": "super-secret"
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create.status(), StatusCode::CREATED);
+    let create_payload: Value =
+        serde_json::from_slice(&to_bytes(create.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let instance_id = create_payload["data"]["id"].as_str().unwrap().to_string();
+
+    let preview_edit = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/model-providers/preview-models")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "instance_id": instance_id,
+                        "config": {
+                            "base_url": "https://api.example.com"
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(preview_edit.status(), StatusCode::OK);
+    let preview_edit_payload: Value = serde_json::from_slice(
+        &to_bytes(preview_edit.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        preview_edit_payload["data"]["models"][0]["model_id"].as_str(),
+        Some("fixture_chat")
+    );
+}

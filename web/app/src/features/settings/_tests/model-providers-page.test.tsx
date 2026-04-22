@@ -88,6 +88,7 @@ const modelProvidersApi = vi.hoisted(() => ({
   fetchSettingsModelProviderCatalog: vi.fn(),
   fetchSettingsModelProviderInstances: vi.fn(),
   fetchSettingsModelProviderModels: vi.fn(),
+  previewSettingsModelProviderModels: vi.fn(),
   createSettingsModelProviderInstance: vi.fn(),
   updateSettingsModelProviderInstance: vi.fn(),
   revealSettingsModelProviderSecret: vi.fn(),
@@ -122,6 +123,7 @@ vi.mock('@scalar/api-reference-react', () => ({
 import { AppProviders } from '../../../app/AppProviders';
 import { AppRouterProvider } from '../../../app/router';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
+import { ModelProviderInstanceDrawer } from '../components/model-providers/ModelProviderInstanceDrawer';
 
 const useBreakpointSpy = vi.spyOn(Grid, 'useBreakpoint');
 
@@ -248,6 +250,20 @@ describe('ModelProvidersPage', () => {
         catalog_last_error_message: null,
         catalog_refreshed_at: null,
         model_count: 0
+      }
+    ]);
+    modelProvidersApi.previewSettingsModelProviderModels.mockResolvedValue([
+      {
+        model_id: 'gpt-4o-mini',
+        display_name: 'gpt-4o-mini',
+        source: 'dynamic',
+        supports_streaming: true,
+        supports_tool_call: true,
+        supports_multimodal: false,
+        context_window: null,
+        max_output_tokens: null,
+        parameter_form: null,
+        provider_metadata: {}
       }
     ]);
     modelProvidersApi.fetchSettingsModelProviderModels.mockResolvedValue({
@@ -754,6 +770,78 @@ describe('ModelProvidersPage', () => {
           modelProvidersApi.deleteSettingsModelProviderInstance
         ).toHaveBeenCalledWith('provider-1', 'csrf-123');
       });
+    }
+  );
+
+  test(
+    'loads validation model options from the draft drawer and keeps the selector empty before detection',
+    { timeout: 15000 },
+    async () => {
+      const previewModels = vi.fn().mockResolvedValue([
+        {
+          model_id: 'gpt-4o-mini',
+          display_name: 'gpt-4o-mini',
+          source: 'dynamic',
+          supports_streaming: true,
+          supports_tool_call: true,
+          supports_multimodal: false,
+          context_window: null,
+          max_output_tokens: null,
+          parameter_form: null,
+          provider_metadata: {}
+        }
+      ]);
+
+      render(
+        <ModelProviderInstanceDrawer
+          open
+          mode="create"
+          catalogEntry={modelProviderCatalogEntries[0]}
+          instance={null}
+          submitting={false}
+          onClose={() => undefined}
+          onSubmit={async () => undefined}
+          onPreviewModels={previewModels}
+          onRevealSecret={async () => 'super-secret'}
+        />
+      );
+
+      await screen.findByRole('dialog');
+      const validationModelSelect = screen.getByRole('combobox', { name: '校验模型' });
+      expect(screen.getByText('API 密钥授权配置')).toBeInTheDocument();
+      expect(validationModelSelect).toBeInTheDocument();
+      expect(screen.queryByText('gpt-4o-mini')).not.toBeInTheDocument();
+      expect(screen.queryByText('validate_model')).not.toBeInTheDocument();
+
+      expect(screen.getByRole('button', { name: /检\s*测/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /保\s*存/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /取\s*消/ })).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText('API Endpoint'), {
+        target: { value: 'https://api.openai.com/v1' }
+      });
+      fireEvent.change(screen.getByLabelText('API Key'), {
+        target: { value: 'super-secret' }
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /检\s*测/ }));
+
+      await waitFor(() => {
+        expect(previewModels).toHaveBeenCalledWith(
+          {
+            base_url: 'https://api.openai.com/v1',
+            api_key: 'super-secret',
+            organization: '',
+            project: '',
+            api_version: '',
+            default_headers: ''
+          },
+        );
+      });
+
+      fireEvent.mouseDown(validationModelSelect);
+      expect(await screen.findByRole('option', { name: 'gpt-4o-mini' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '保存实例' })).not.toBeInTheDocument();
     }
   );
 

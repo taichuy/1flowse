@@ -115,6 +115,16 @@ export interface CreateConsoleModelProviderInput {
   config: Record<string, unknown>;
 }
 
+export interface PreviewConsoleModelProviderModelsInput {
+  installation_id?: string;
+  instance_id?: string;
+  config: Record<string, unknown>;
+}
+
+export interface PreviewConsoleModelProviderModelsResponse {
+  models: ConsoleProviderModelDescriptor[];
+}
+
 export interface UpdateConsoleModelProviderInput {
   display_name: string;
   config: Record<string, unknown>;
@@ -183,6 +193,20 @@ export function createConsoleModelProviderInstance(
 ) {
   return apiFetch<ConsoleModelProviderInstance>({
     path: '/api/console/model-providers',
+    method: 'POST',
+    body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function previewConsoleModelProviderModels(
+  input: PreviewConsoleModelProviderModelsInput,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<PreviewConsoleModelProviderModelsResponse>({
+    path: '/api/console/model-providers/preview-models',
     method: 'POST',
     body: input,
     csrfToken,

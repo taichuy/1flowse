@@ -8,6 +8,7 @@ import {
   Drawer,
   Form,
   Input,
+  Select,
   Space,
   Switch,
   Tag,
@@ -16,12 +17,14 @@ import {
 
 import type {
   SettingsModelProviderCatalogEntry,
-  SettingsModelProviderInstance
+  SettingsModelProviderInstance,
+  SettingsModelProviderModelCatalog
 } from '../../api/model-providers';
 
 type DrawerMode = 'create' | 'edit';
 type ModelProviderFormValue = string | boolean;
 type ModelProviderConfigField = SettingsModelProviderCatalogEntry['form_schema'][number];
+type PreviewModelDescriptor = SettingsModelProviderModelCatalog['models'][number];
 
 function normalizeConfigFieldValue(value: unknown): ModelProviderFormValue {
   if (typeof value === 'boolean') {
@@ -108,6 +111,10 @@ function isTextAreaField(key: string) {
   return key.includes('headers') || key.includes('json') || key.includes('schema');
 }
 
+function isPreviewOnlyField(field: ModelProviderConfigField) {
+  return field.key === 'validate_model';
+}
+
 export function ModelProviderInstanceDrawer({
   open,
   mode,
@@ -116,6 +123,7 @@ export function ModelProviderInstanceDrawer({
   submitting,
   onClose,
   onSubmit,
+  onPreviewModels,
   onRevealSecret
 }: {
   open: boolean;
@@ -125,6 +133,7 @@ export function ModelProviderInstanceDrawer({
   submitting: boolean;
   onClose: () => void;
   onSubmit: (input: { display_name: string; config: Record<string, unknown> }) => Promise<void>;
+  onPreviewModels: (config: Record<string, unknown>) => Promise<PreviewModelDescriptor[]>;
   onRevealSecret: (fieldKey: string) => Promise<string>;
 }) {
   const [form] = Form.useForm<{
@@ -134,6 +143,9 @@ export function ModelProviderInstanceDrawer({
   const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({});
   const [revealedSecretKeys, setRevealedSecretKeys] = useState<Record<string, boolean>>({});
   const [revealingSecretKey, setRevealingSecretKey] = useState<string | null>(null);
+  const [previewModels, setPreviewModels] = useState<PreviewModelDescriptor[]>([]);
+  const [selectedPreviewModelId, setSelectedPreviewModelId] = useState<string | undefined>();
+  const [previewingModels, setPreviewingModels] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -141,6 +153,9 @@ export function ModelProviderInstanceDrawer({
       setSecretDrafts({});
       setRevealedSecretKeys({});
       setRevealingSecretKey(null);
+      setPreviewModels([]);
+      setSelectedPreviewModelId(undefined);
+      setPreviewingModels(false);
       return;
     }
 
@@ -151,7 +166,15 @@ export function ModelProviderInstanceDrawer({
     setSecretDrafts({});
     setRevealedSecretKeys({});
     setRevealingSecretKey(null);
+    setPreviewModels([]);
+    setSelectedPreviewModelId(undefined);
+    setPreviewingModels(false);
   }, [catalogEntry, form, instance, mode, open]);
+
+  function clearPreviewState() {
+    setPreviewModels([]);
+    setSelectedPreviewModelId(undefined);
+  }
 
   async function handleRevealSecret(fieldKey: string) {
     setRevealingSecretKey(fieldKey);
@@ -162,6 +185,7 @@ export function ModelProviderInstanceDrawer({
         ...current,
         [fieldKey]: value
       }));
+      clearPreviewState();
       setRevealedSecretKeys((current) => ({
         ...current,
         [fieldKey]: true
@@ -172,9 +196,56 @@ export function ModelProviderInstanceDrawer({
   }
 
   const title = mode === 'create' ? 'API 密钥授权配置' : '编辑 API 密钥配置';
-  const formSchema = catalogEntry?.form_schema ?? [];
+  const formSchema = (catalogEntry?.form_schema ?? []).filter(
+    (field) => !isPreviewOnlyField(field)
+  );
   const primaryConfigFields = formSchema.filter((field) => !field.advanced);
   const advancedConfigFields = formSchema.filter((field) => field.advanced);
+
+  function buildDraftConfig(valuesConfig: Record<string, ModelProviderFormValue>) {
+    const config: Record<string, unknown> = {
+      ...(valuesConfig ?? {})
+    };
+
+    if (mode === 'edit' && catalogEntry) {
+      for (const field of catalogEntry.form_schema) {
+        if (field.field_type !== 'secret') {
+          continue;
+        }
+
+        delete config[field.key];
+        const nextSecret = secretDrafts[field.key];
+        if (typeof nextSecret === 'string' && nextSecret.length > 0) {
+          config[field.key] = nextSecret;
+        }
+      }
+    }
+
+    delete config.validate_model;
+    return config;
+  }
+
+  async function handlePreviewModels() {
+    const fieldNames = formSchema
+      .filter((field) => !(mode === 'edit' && field.field_type === 'secret'))
+      .map((field) => ['config', field.key]);
+    const values = await form.validateFields(fieldNames);
+    setPreviewingModels(true);
+
+    try {
+      const models = await onPreviewModels(
+        buildDraftConfig((values.config ?? {}) as Record<string, ModelProviderFormValue>)
+      );
+      setPreviewModels(models);
+      setSelectedPreviewModelId((current) =>
+        current && models.some((model) => model.model_id === current)
+          ? current
+          : undefined
+      );
+    } finally {
+      setPreviewingModels(false);
+    }
+  }
 
   function renderConfigField(field: ModelProviderConfigField) {
     const label = buildFieldLabel(field.key);
@@ -230,10 +301,12 @@ export function ModelProviderInstanceDrawer({
                     ...current,
                     [field.key]: value
                   }));
+                  clearPreviewState();
                 }}
               />
               <Button
                 onClick={() => {
+                  clearPreviewState();
                   setRevealedSecretKeys((current) => ({
                     ...current,
                     [field.key]: false
@@ -307,42 +380,40 @@ export function ModelProviderInstanceDrawer({
       destroyOnClose
       footer={
         <Space>
-          <Button onClick={onClose}>取消</Button>
+          <Button
+            loading={previewingModels}
+            onClick={() => {
+              void handlePreviewModels();
+            }}
+          >
+            检测
+          </Button>
           <Button
             type="primary"
             loading={submitting}
             onClick={async () => {
               const values = await form.validateFields();
-              const config = {
-                ...(values.config ?? {})
-              };
-
-              if (mode === 'edit' && catalogEntry) {
-                for (const field of catalogEntry.form_schema) {
-                  if (field.field_type !== 'secret') {
-                    continue;
-                  }
-
-                  const nextSecret = secretDrafts[field.key];
-                  delete config[field.key];
-                  if (typeof nextSecret === 'string' && nextSecret.length > 0) {
-                    config[field.key] = nextSecret;
-                  }
-                }
-              }
-
               await onSubmit({
                 display_name: values.display_name,
-                config
+                config: buildDraftConfig(values.config ?? {})
               });
             }}
           >
-            保存实例
+            保存
           </Button>
+          <Button onClick={onClose}>取消</Button>
         </Space>
       }
     >
-      <Form form={form} layout="vertical">
+      <Form
+        form={form}
+        layout="vertical"
+        onValuesChange={(changedValues) => {
+          if ('config' in changedValues) {
+            clearPreviewState();
+          }
+        }}
+      >
         {catalogEntry ? (
           <>
             <Descriptions
@@ -401,6 +472,24 @@ export function ModelProviderInstanceDrawer({
                 ]}
               />
             ) : null}
+
+            <Divider orientation="left">模型检测</Divider>
+            <Form.Item label="校验模型" extra="点击“检测”加载模型 ID">
+              <Select
+                aria-label="校验模型"
+                placeholder="点击“检测”加载模型 ID"
+                value={selectedPreviewModelId}
+                options={previewModels.map((model) => ({
+                  label: model.model_id,
+                  value: model.model_id
+                }))}
+                onChange={setSelectedPreviewModelId}
+                notFoundContent={
+                  previewingModels ? '正在检测模型...' : '暂无模型，请先点击“检测”'
+                }
+                allowClear
+              />
+            </Form.Item>
           </>
         ) : (
           <Typography.Text type="secondary">当前没有可用 provider catalog。</Typography.Text>

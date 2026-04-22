@@ -10,8 +10,8 @@ use control_plane::model_provider::{
     CreateModelProviderInstanceCommand, DeleteModelProviderInstanceCommand,
     LocalizedProviderModelDescriptor, ModelProviderCatalogEntry, ModelProviderCatalogView,
     ModelProviderInstanceView, ModelProviderModelCatalog, ModelProviderOptionEntry,
-    ModelProviderOptionsView, ModelProviderService, UpdateModelProviderInstanceCommand,
-    ValidateModelProviderResult,
+    ModelProviderOptionsView, ModelProviderService, PreviewModelProviderModelsCommand,
+    UpdateModelProviderInstanceCommand, ValidateModelProviderResult,
 };
 use plugin_framework::{
     provider_contract::{
@@ -52,6 +52,14 @@ pub struct UpdateModelProviderBody {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RevealModelProviderSecretBody {
     pub key: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct PreviewModelProviderModelsBody {
+    pub installation_id: Option<String>,
+    pub instance_id: Option<String>,
+    #[schema(value_type = Object)]
+    pub config: serde_json::Value,
 }
 
 #[derive(Debug, Deserialize, IntoParams, Clone)]
@@ -207,6 +215,11 @@ pub struct ModelProviderModelCatalogResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+pub struct PreviewModelProviderModelsResponse {
+    pub models: Vec<ProviderModelDescriptorResponse>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct RevealModelProviderSecretResponse {
     pub key: String,
     pub value: String,
@@ -246,6 +259,7 @@ pub fn router() -> Router<Arc<ApiState>> {
             "/model-providers",
             get(list_instances).post(create_instance),
         )
+        .route("/model-providers/preview-models", post(preview_models))
         .route("/model-providers/options", get(list_options))
         .route(
             "/model-providers/:id",
@@ -696,6 +710,44 @@ pub async fn validate_instance(
         .validate_instance(context.user.id, parse_uuid(&id, "id")?)
         .await?;
     Ok(Json(ApiSuccess::new(to_validate_response(result))))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/model-providers/preview-models",
+    operation_id = "model_provider_preview_models",
+    request_body = PreviewModelProviderModelsBody,
+    responses((status = 200, body = PreviewModelProviderModelsResponse), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn preview_models(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Json(body): Json<PreviewModelProviderModelsBody>,
+) -> Result<Json<ApiSuccess<PreviewModelProviderModelsResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let models = service(&state)
+        .preview_models(PreviewModelProviderModelsCommand {
+            actor_user_id: context.user.id,
+            installation_id: body
+                .installation_id
+                .as_deref()
+                .map(|raw| parse_uuid(raw, "installation_id"))
+                .transpose()?,
+            instance_id: body
+                .instance_id
+                .as_deref()
+                .map(|raw| parse_uuid(raw, "instance_id"))
+                .transpose()?,
+            config_json: body.config,
+        })
+        .await?;
+    Ok(Json(ApiSuccess::new(PreviewModelProviderModelsResponse {
+        models: models
+            .into_iter()
+            .map(to_runtime_model_descriptor_response)
+            .collect(),
+    })))
 }
 
 #[utoipa::path(

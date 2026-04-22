@@ -27,6 +27,7 @@ import {
   fetchSettingsModelProviderCatalog,
   fetchSettingsModelProviderInstances,
   fetchSettingsModelProviderModels,
+  previewSettingsModelProviderModels,
   refreshSettingsModelProviderModels,
   revealSettingsModelProviderSecret,
   settingsModelProviderCatalogQueryKey,
@@ -398,6 +399,20 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     }
   });
 
+  const previewModelsMutation = useMutation({
+    mutationFn: async (input: {
+      installation_id?: string;
+      instance_id?: string;
+      config: Record<string, unknown>;
+    }) => {
+      if (!csrfToken) {
+        throw new Error('missing csrf token');
+      }
+
+      return previewSettingsModelProviderModels(input, csrfToken);
+    }
+  });
+
   const validateMutation = useMutation({
     mutationFn: async (instanceId: string) => {
       if (!csrfToken) {
@@ -639,6 +654,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     getErrorMessage(modelsQuery.error) ??
     getErrorMessage(createMutation.error) ??
     getErrorMessage(updateMutation.error) ??
+    getErrorMessage(previewModelsMutation.error) ??
     getErrorMessage(revealSecretMutation.error) ??
     getErrorMessage(validateMutation.error) ??
     getErrorMessage(refreshMutation.error) ??
@@ -862,6 +878,23 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
             installationId: drawerCatalogEntry.installation_id,
             display_name: values.display_name,
             config: values.config
+          });
+        }}
+        onPreviewModels={async (config) => {
+          if (drawerState?.mode === 'edit' && editingInstance) {
+            return previewModelsMutation.mutateAsync({
+              instance_id: editingInstance.id,
+              config
+            });
+          }
+
+          if (!drawerCatalogEntry) {
+            throw new Error('missing provider catalog entry');
+          }
+
+          return previewModelsMutation.mutateAsync({
+            installation_id: drawerCatalogEntry.installation_id,
+            config
           });
         }}
       />
