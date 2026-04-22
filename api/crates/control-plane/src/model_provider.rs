@@ -135,8 +135,6 @@ struct ResolvedPreviewState {
     instance_status: domain::ModelProviderInstanceStatus,
     validation_model_id: Option<String>,
     last_validated_at: Option<OffsetDateTime>,
-    last_validation_status: Option<domain::ModelProviderValidationStatus>,
-    last_validation_message: Option<String>,
     models_json: Option<Value>,
     preview_token: Option<Uuid>,
 }
@@ -345,10 +343,10 @@ where
                 display_name: normalize_required_text(&command.display_name, "display_name")?,
                 status: preview_state.instance_status,
                 config_json: public_config.clone(),
-                validation_model_id: preview_state.validation_model_id.clone(),
-                last_validated_at: preview_state.last_validated_at,
-                last_validation_status: preview_state.last_validation_status,
-                last_validation_message: preview_state.last_validation_message.clone(),
+                enabled_model_ids:
+                    domain::ModelProviderInstanceRecord::enabled_model_ids_from_validation_model_id(
+                        preview_state.validation_model_id.clone(),
+                    ),
                 created_by: command.actor_user_id,
             })
             .await?;
@@ -483,10 +481,10 @@ where
                 display_name: normalize_required_text(&command.display_name, "display_name")?,
                 status: next_status,
                 config_json: merged_public_config,
-                validation_model_id: preview_state.validation_model_id.clone(),
-                last_validated_at: preview_state.last_validated_at,
-                last_validation_status: preview_state.last_validation_status,
-                last_validation_message: preview_state.last_validation_message.clone(),
+                enabled_model_ids:
+                    domain::ModelProviderInstanceRecord::enabled_model_ids_from_validation_model_id(
+                        preview_state.validation_model_id.clone(),
+                    ),
                 updated_by: command.actor_user_id,
             })
             .await?;
@@ -546,8 +544,6 @@ where
                 },
                 validation_model_id: None,
                 last_validated_at: None,
-                last_validation_status: None,
-                last_validation_message: None,
                 models_json: None,
                 preview_token: None,
             });
@@ -591,8 +587,6 @@ where
             },
             validation_model_id: Some(validation_model_id),
             last_validated_at: Some(OffsetDateTime::now_utc()),
-            last_validation_status: Some(domain::ModelProviderValidationStatus::Succeeded),
-            last_validation_message: Some("validated".to_string()),
             models_json: Some(models_json),
             preview_token: Some(preview_token),
         })
@@ -663,10 +657,10 @@ where
                     display_name: instance.display_name.clone(),
                     status: domain::ModelProviderInstanceStatus::Ready,
                     config_json: instance.config_json.clone(),
-                    validation_model_id: instance.validation_model_id.clone(),
-                    last_validated_at: Some(now),
-                    last_validation_status: Some(domain::ModelProviderValidationStatus::Succeeded),
-                    last_validation_message: Some("validated".to_string()),
+                    enabled_model_ids:
+                        domain::ModelProviderInstanceRecord::enabled_model_ids_from_validation_model_id(
+                            instance.validation_model_id.clone(),
+                        ),
                     updated_by: actor_user_id,
                 })
                 .await?;
@@ -701,7 +695,6 @@ where
         match validation_result {
             Ok(result) => Ok(result),
             Err(error) => {
-                let now = OffsetDateTime::now_utc();
                 let existing_cache = self.repository.get_catalog_cache(instance.id).await?;
                 let invalid_transition_allowed = ensure_model_provider_instance_transition(
                     instance.status,
@@ -734,12 +727,10 @@ where
                             display_name: instance.display_name.clone(),
                             status: domain::ModelProviderInstanceStatus::Invalid,
                             config_json: instance.config_json.clone(),
-                            validation_model_id: instance.validation_model_id.clone(),
-                            last_validated_at: Some(now),
-                            last_validation_status: Some(
-                                domain::ModelProviderValidationStatus::Failed,
-                            ),
-                            last_validation_message: Some(error.to_string()),
+                            enabled_model_ids:
+                                domain::ModelProviderInstanceRecord::enabled_model_ids_from_validation_model_id(
+                                    instance.validation_model_id.clone(),
+                                ),
                             updated_by: actor_user_id,
                         })
                         .await;

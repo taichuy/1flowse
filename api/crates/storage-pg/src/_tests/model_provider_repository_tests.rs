@@ -5,8 +5,8 @@ use control_plane::ports::{
 };
 use domain::{
     ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource, ModelProviderDiscoveryMode,
-    ModelProviderInstanceStatus, ModelProviderValidationStatus, PluginArtifactStatus,
-    PluginAvailabilityStatus, PluginDesiredState, PluginRuntimeStatus, PluginVerificationStatus,
+    ModelProviderInstanceStatus, PluginArtifactStatus, PluginAvailabilityStatus,
+    PluginDesiredState, PluginRuntimeStatus, PluginVerificationStatus,
 };
 use serde_json::{json, Value};
 use sqlx::PgPool;
@@ -124,16 +124,21 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
             display_name: "Fixture Provider Prod".into(),
             status: ModelProviderInstanceStatus::Draft,
             config_json: json!({ "base_url": "https://api.example.com" }),
-            validation_model_id: None,
-            last_validated_at: None,
-            last_validation_status: None,
-            last_validation_message: None,
+            enabled_model_ids: vec![],
             created_by: actor.id,
         },
     )
     .await
     .unwrap();
     assert_eq!(instance.status, ModelProviderInstanceStatus::Draft);
+    let stored_enabled_model_ids: Vec<String> = sqlx::query_scalar(
+        "select enabled_model_ids from model_provider_instances where id = $1",
+    )
+    .bind(instance_id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(stored_enabled_model_ids, Vec::<String>::new());
 
     let updated = ModelProviderRepository::update_instance(
         &store,
@@ -143,16 +148,24 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
             display_name: "Fixture Provider Ready".into(),
             status: ModelProviderInstanceStatus::Ready,
             config_json: json!({ "base_url": "https://api.example.com/v1" }),
-            validation_model_id: Some("fixture_chat".into()),
-            last_validated_at: Some(time::OffsetDateTime::now_utc()),
-            last_validation_status: Some(ModelProviderValidationStatus::Succeeded),
-            last_validation_message: Some("ok".into()),
+            enabled_model_ids: vec!["qwen-max".into(), "qwen-plus".into()],
             updated_by: actor.id,
         },
     )
     .await
     .unwrap();
     assert_eq!(updated.status, ModelProviderInstanceStatus::Ready);
+    let stored_enabled_model_ids: Vec<String> = sqlx::query_scalar(
+        "select enabled_model_ids from model_provider_instances where id = $1",
+    )
+    .bind(instance_id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        stored_enabled_model_ids,
+        vec!["qwen-max".to_string(), "qwen-plus".to_string()]
+    );
 
     let cache = ModelProviderRepository::upsert_catalog_cache(
         &store,
@@ -264,10 +277,7 @@ async fn model_provider_repository_reassigns_all_instances_for_a_provider() {
             display_name: "Fixture Provider Prod".into(),
             status: ModelProviderInstanceStatus::Draft,
             config_json: json!({ "base_url": "https://api.example.com" }),
-            validation_model_id: None,
-            last_validated_at: None,
-            last_validation_status: None,
-            last_validation_message: None,
+            enabled_model_ids: vec![],
             created_by: actor.id,
         },
     )

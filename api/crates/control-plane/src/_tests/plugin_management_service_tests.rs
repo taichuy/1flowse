@@ -567,10 +567,10 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
             display_name: input.display_name.clone(),
             status: input.status,
             config_json: input.config_json.clone(),
-            validation_model_id: input.validation_model_id.clone(),
+            validation_model_id: input.enabled_model_ids.first().cloned(),
             last_validated_at: None,
-            last_validation_status: input.last_validation_status,
-            last_validation_message: input.last_validation_message.clone(),
+            last_validation_status: None,
+            last_validation_message: None,
             created_by: input.created_by,
             updated_by: input.created_by,
             created_at: now,
@@ -594,10 +594,7 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
         instance.display_name = input.display_name.clone();
         instance.status = input.status;
         instance.config_json = input.config_json.clone();
-        instance.validation_model_id = input.validation_model_id.clone();
-        instance.last_validated_at = input.last_validated_at;
-        instance.last_validation_status = input.last_validation_status;
-        instance.last_validation_message = input.last_validation_message.clone();
+        instance.validation_model_id = input.enabled_model_ids.first().cloned();
         instance.updated_by = input.updated_by;
         instance.updated_at = OffsetDateTime::now_utc();
         Ok(instance.clone())

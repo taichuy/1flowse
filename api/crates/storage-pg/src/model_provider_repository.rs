@@ -31,10 +31,7 @@ fn map_instance(row: sqlx::postgres::PgRow) -> Result<domain::ModelProviderInsta
         display_name: row.get("display_name"),
         status: row.get("status"),
         config_json: row.get("config_json"),
-        validation_model_id: row.get("validation_model_id"),
-        last_validated_at: row.get("last_validated_at"),
-        last_validation_status: row.get("last_validation_status"),
-        last_validation_message: row.get("last_validation_message"),
+        enabled_model_ids: row.get("enabled_model_ids"),
         created_by: row.get("created_by"),
         updated_by: row.get("updated_by"),
         created_at: row.get("created_at"),
@@ -99,13 +96,10 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name,
                 status,
                 config_json,
-                validation_model_id,
-                last_validated_at,
-                last_validation_status,
-                last_validation_message,
+                enabled_model_ids,
                 created_by,
                 updated_by
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
             returning
                 id,
                 workspace_id,
@@ -115,10 +109,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name,
                 status,
                 config_json,
-                validation_model_id,
-                last_validated_at,
-                last_validation_status,
-                last_validation_message,
+                enabled_model_ids,
                 created_by,
                 updated_by,
                 created_at,
@@ -133,10 +124,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
         .bind(&input.display_name)
         .bind(input.status.as_str())
         .bind(&input.config_json)
-        .bind(input.validation_model_id.as_deref())
-        .bind(input.last_validated_at)
-        .bind(input.last_validation_status.map(|value| value.as_str()))
-        .bind(input.last_validation_message.as_deref())
+        .bind(&input.enabled_model_ids)
         .bind(input.created_by)
         .fetch_one(self.pool())
         .await?;
@@ -155,11 +143,8 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name = $3,
                 status = $4,
                 config_json = $5,
-                validation_model_id = $6,
-                last_validated_at = $7,
-                last_validation_status = $8,
-                last_validation_message = $9,
-                updated_by = $10,
+                enabled_model_ids = $6,
+                updated_by = $7,
                 updated_at = now()
             where workspace_id = $1
               and id = $2
@@ -172,10 +157,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name,
                 status,
                 config_json,
-                validation_model_id,
-                last_validated_at,
-                last_validation_status,
-                last_validation_message,
+                enabled_model_ids,
                 created_by,
                 updated_by,
                 created_at,
@@ -187,10 +169,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
         .bind(&input.display_name)
         .bind(input.status.as_str())
         .bind(&input.config_json)
-        .bind(input.validation_model_id.as_deref())
-        .bind(input.last_validated_at)
-        .bind(input.last_validation_status.map(|value| value.as_str()))
-        .bind(input.last_validation_message.as_deref())
+        .bind(&input.enabled_model_ids)
         .bind(input.updated_by)
         .fetch_optional(self.pool())
         .await?;
@@ -217,10 +196,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name,
                 status,
                 config_json,
-                validation_model_id,
-                last_validated_at,
-                last_validation_status,
-                last_validation_message,
+                enabled_model_ids,
                 created_by,
                 updated_by,
                 created_at,
@@ -253,10 +229,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name,
                 status,
                 config_json,
-                validation_model_id,
-                last_validated_at,
-                last_validation_status,
-                last_validation_message,
+                enabled_model_ids,
                 created_by,
                 updated_by,
                 created_at,
@@ -288,10 +261,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name,
                 status,
                 config_json,
-                validation_model_id,
-                last_validated_at,
-                last_validation_status,
-                last_validation_message,
+                enabled_model_ids,
                 created_by,
                 updated_by,
                 created_at,
@@ -331,10 +301,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name,
                 status,
                 config_json,
-                validation_model_id,
-                last_validated_at,
-                last_validation_status,
-                last_validation_message,
+                enabled_model_ids,
                 created_by,
                 updated_by,
                 created_at,

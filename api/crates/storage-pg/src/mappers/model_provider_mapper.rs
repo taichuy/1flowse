@@ -17,10 +17,7 @@ pub struct StoredModelProviderInstanceRow {
     pub display_name: String,
     pub status: String,
     pub config_json: serde_json::Value,
-    pub validation_model_id: Option<String>,
-    pub last_validated_at: Option<OffsetDateTime>,
-    pub last_validation_status: Option<String>,
-    pub last_validation_message: Option<String>,
+    pub enabled_model_ids: Vec<String>,
     pub created_by: Uuid,
     pub updated_by: Uuid,
     pub created_at: OffsetDateTime,
@@ -75,14 +72,10 @@ impl PgModelProviderMapper {
             display_name: row.display_name,
             status: parse_instance_status(&row.status)?,
             config_json: row.config_json,
-            validation_model_id: row.validation_model_id,
-            last_validated_at: row.last_validated_at,
-            last_validation_status: row
-                .last_validation_status
-                .as_deref()
-                .map(parse_validation_status)
-                .transpose()?,
-            last_validation_message: row.last_validation_message,
+            validation_model_id: row.enabled_model_ids.first().cloned(),
+            last_validated_at: None,
+            last_validation_status: None,
+            last_validation_message: None,
             created_by: row.created_by,
             updated_by: row.updated_by,
             created_at: row.created_at,

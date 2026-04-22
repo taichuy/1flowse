@@ -329,6 +329,14 @@ pub struct ModelProviderInstanceRecord {
     pub updated_at: OffsetDateTime,
 }
 
+impl ModelProviderInstanceRecord {
+    pub fn enabled_model_ids_from_validation_model_id(
+        validation_model_id: Option<String>,
+    ) -> Vec<String> {
+        validation_model_id.into_iter().collect()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelProviderPreviewSessionRecord {
     pub id: Uuid,
