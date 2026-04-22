@@ -22,6 +22,7 @@
 - `api/crates/control-plane/src/ports/mod.rs`
 - `api/crates/control-plane/src/ports/application.rs`
 - `api/crates/control-plane/src/ports/flow.rs`
+- `api/crates/control-plane/src/ports/model_definition.rs`
 - `api/crates/control-plane/src/ports/plugin.rs`
 - `api/crates/control-plane/src/ports/model_provider.rs`
 - `api/crates/control-plane/src/ports/runtime.rs`
@@ -51,7 +52,7 @@
 - Delete: `api/crates/control-plane/src/ports.rs`
 - Create: `api/crates/control-plane/src/ports/*.rs`
 
-- [ ] **Step 1: Create `ports/mod.rs` façade**
+- [x] **Step 1: Create `ports/mod.rs` façade**
 
 Expose the same public names through grouped submodules:
 
@@ -71,7 +72,7 @@ pub use plugin::*;
 pub use runtime::*;
 ```
 
-- [ ] **Step 2: Move traits by domain**
+- [x] **Step 2: Move traits by domain**
 
 Use these buckets:
 
@@ -88,7 +89,7 @@ Use these buckets:
 - Modify: `api/apps/api-server/src/routes/mod.rs`
 - Move route files under grouped subdirectories
 
-- [ ] **Step 1: Group route modules without changing public route paths**
+- [x] **Step 1: Group route modules without changing public route paths**
 
 Use these buckets:
 
@@ -97,7 +98,7 @@ Use these buckets:
 - `routes/settings/`: `members`, `roles`, `permissions`, `workspace`, `workspaces`, `system`, `docs`
 - `routes/plugins_and_models/`: `model_definitions`, `runtime_models`, `model_providers`, `node_contributions`, `plugins`
 
-- [ ] **Step 2: Re-export through `routes/mod.rs`**
+- [x] **Step 2: Re-export through `routes/mod.rs`**
 
 Keep the rest of the crate importing unchanged names by re-exporting the moved modules.
 
@@ -108,7 +109,7 @@ Keep the rest of the crate importing unchanged names by re-exporting the moved m
 - Create: `api/apps/api-server/src/_tests/support/*.rs`
 - Modify: `api/apps/api-server/src/_tests/mod.rs`
 
-- [ ] **Step 1: Create grouped support module**
+- [x] **Step 1: Create grouped support module**
 
 Use:
 
@@ -117,7 +118,7 @@ Use:
 - `plugins.rs`: registry/plugin fixture helpers
 - `packages.rs`: provider package writers / filesystem helpers
 
-- [ ] **Step 2: Update route tests to import from `support::...`**
+- [x] **Step 2: Update route tests to import from `support::...`**
 
 Keep test behavior unchanged; only fix module paths.
 
@@ -126,27 +127,42 @@ Keep test behavior unchanged; only fix module paths.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-22-backend-boundary-normalization-phase-three.md`
 
-- [ ] **Step 1: Run `control-plane` tests**
+- [x] **Step 1: Run `control-plane` tests**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p control-plane -- --nocapture
 ```
 
-- [ ] **Step 2: Run `api-server` tests**
+- [x] **Step 2: Run `api-server` tests**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p api-server -- --nocapture
 ```
 
-- [ ] **Step 3: Run backend aggregate gate**
+- [x] **Step 3: Run backend aggregate gate**
 
 ```bash
 node scripts/node/test-backend.js
 ```
 
-- [ ] **Step 4: Append execution notes and commit**
+- [x] **Step 4: Append execution notes and commit**
 
 ```bash
 git add api/crates/control-plane/src/ports api/apps/api-server/src/routes api/apps/api-server/src/_tests/support api/apps/api-server/src/_tests/mod.rs docs/superpowers/plans/2026-04-22-backend-boundary-normalization-phase-three.md
 git commit -m "refactor: normalize backend boundary modules"
 ```
+
+## Execution Notes
+
+- Completed on `2026-04-22`.
+- Split `api/crates/control-plane/src/ports.rs` into `application`, `auth`, `flow`, `model_definition`, `model_provider`, `plugin`, and `runtime` owners behind a stable `ports/mod.rs` façade.
+- Grouped `api/apps/api-server/src/routes/` into `applications/`, `identity/`, `settings/`, and `plugins_and_models/`, while keeping `crate::routes::*` imports stable through `routes/mod.rs` re-exports.
+- Replaced the `829`-line `api/apps/api-server/src/_tests/support.rs` with grouped `support/auth.rs`, `support/applications.rs`, `support/plugins.rs`, and `support/packages.rs`.
+- `api/apps/api-server/src/routes` top-level file count dropped from `19` to `1`; `api/crates/control-plane/src/ports` no longer concentrates `981` lines into one owner.
+- Residual note: `api/crates/control-plane/src` top-level file count is now `24`, so broader crate-topology compression still remains outside this slice.
+
+## Verification Evidence
+
+- `cargo test --manifest-path api/Cargo.toml -p control-plane -- --nocapture`
+- `cargo test --manifest-path api/Cargo.toml -p api-server -- --nocapture`
+- `node scripts/node/test-backend.js`

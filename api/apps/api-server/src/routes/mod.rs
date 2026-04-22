@@ -1,18 +1,15 @@
-pub mod application_orchestration;
-pub mod application_runtime;
-pub mod applications;
-pub mod auth;
-pub mod docs;
-pub mod me;
-pub mod members;
-pub mod model_definitions;
-pub mod model_providers;
-pub mod node_contributions;
-pub mod permissions;
-pub mod plugins;
-pub mod roles;
-pub mod runtime_models;
-pub mod session;
-pub mod system;
-pub mod workspace;
-pub mod workspaces;
+#[path = "applications/mod.rs"]
+mod applications_group;
+#[path = "identity/mod.rs"]
+mod identity_group;
+#[path = "plugins_and_models/mod.rs"]
+mod plugins_and_models_group;
+#[path = "settings/mod.rs"]
+mod settings_group;
+
+pub use applications_group::{application_orchestration, application_runtime, applications};
+pub use identity_group::{auth, me, session};
+pub use plugins_and_models_group::{
+    model_definitions, model_providers, node_contributions, plugins, runtime_models,
+};
+pub use settings_group::{docs, members, permissions, roles, system, workspace, workspaces};
