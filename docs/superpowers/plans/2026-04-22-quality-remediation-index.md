@@ -102,4 +102,6 @@
 ## Residual Notes
 
 - The current `globals.css` Ant Design overrides remain intentionally out of scope and whitelisted as theme defaults by [2026-04-22-globals-css-theme-whitelist.md](/home/taichu/git/1flowbase-project-maintenance/.memory/feedback-memory/repository/2026-04-22-globals-css-theme-whitelist.md).
-- `api/crates/control-plane/src` still has `24` direct files and `api/crates/control-plane/src/_tests` still has `20` direct files. This remediation reduced owner entropy and stopped adding new flat files, but it did not fully normalize those two directory-level counts.
+- Follow-up directory-pressure normalization completed in [2026-04-22-control-plane-directory-pressure-reduction.md](./2026-04-22-control-plane-directory-pressure-reduction.md):
+  - `api/crates/control-plane/src`: `24 -> 15` direct files
+  - `api/crates/control-plane/src/_tests`: `20 -> 11` direct files
