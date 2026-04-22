@@ -150,6 +150,10 @@ export function ModelProviderInstanceDrawer({
   const [revealedSecretKeys, setRevealedSecretKeys] = useState<Record<string, boolean>>({});
   const [revealingSecretKey, setRevealingSecretKey] = useState<string | null>(null);
   const [previewModels, setPreviewModels] = useState<PreviewModelDescriptor[]>([]);
+  const [selectedCandidateModelId, setSelectedCandidateModelId] = useState<
+    string | undefined
+  >();
+  const [candidateModelInput, setCandidateModelInput] = useState('');
   const [enabledModelIds, setEnabledModelIds] = useState<string[]>([]);
   const [enabledModelInput, setEnabledModelInput] = useState('');
   const [previewToken, setPreviewToken] = useState<string | undefined>();
@@ -162,6 +166,8 @@ export function ModelProviderInstanceDrawer({
       setRevealedSecretKeys({});
       setRevealingSecretKey(null);
       setPreviewModels([]);
+      setSelectedCandidateModelId(undefined);
+      setCandidateModelInput('');
       setEnabledModelIds([]);
       setEnabledModelInput('');
       setPreviewToken(undefined);
@@ -178,6 +184,8 @@ export function ModelProviderInstanceDrawer({
     setRevealedSecretKeys({});
     setRevealingSecretKey(null);
     setPreviewModels([]);
+    setSelectedCandidateModelId(undefined);
+    setCandidateModelInput('');
     setPreviewToken(undefined);
     setPreviewingModels(false);
     setEnabledModelInput('');
@@ -185,6 +193,8 @@ export function ModelProviderInstanceDrawer({
 
   function clearPreviewState() {
     setPreviewModels([]);
+    setSelectedCandidateModelId(undefined);
+    setCandidateModelInput('');
     setPreviewToken(undefined);
   }
 
@@ -202,15 +212,22 @@ export function ModelProviderInstanceDrawer({
     return nextValues;
   }
 
+  function appendEnabledModelId(rawValue: string) {
+    const normalized = rawValue.trim();
+    if (!normalized) {
+      return;
+    }
+
+    setEnabledModelIds((current) => normalizeEnabledModelIds([...current, normalized]));
+  }
+
   function commitEnabledModelInput(rawValue: string) {
     const normalized = rawValue.trim();
     if (!normalized) {
       return;
     }
 
-    setEnabledModelIds((current) =>
-      current.includes(normalized) ? current : [...current, normalized]
-    );
+    appendEnabledModelId(normalized);
     setEnabledModelInput('');
   }
 
@@ -402,7 +419,7 @@ export function ModelProviderInstanceDrawer({
               void handlePreviewModels();
             }}
           >
-            {previewModels.length > 0 ? '刷新候选模型' : '获取候选模型'}
+            检测
           </Button>
           <Button
             type="primary"
@@ -491,27 +508,62 @@ export function ModelProviderInstanceDrawer({
               />
             ) : null}
 
-            <Divider orientation="left">候选模型</Divider>
+            <Divider orientation="left">模型检测</Divider>
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
               <Typography.Text type="secondary">
                 {previewModels.length > 0
-                  ? `已获取 ${previewModels.length} 个候选模型，可从缓存里搜索后加入生效模型。`
-                  : '先获取候选模型，再把需要开放给业务侧的 model id 加入生效模型。'}
+                  ? `已检测到 ${previewModels.length} 个候选模型，可从候选缓存下拉中加入生效模型。`
+                  : '先点击“检测”获取候选模型缓存，再把需要开放给业务侧的 model id 加入生效模型。'}
               </Typography.Text>
               <Form.Item
-                label="生效模型"
-                extra="可从候选缓存中选择，也可以直接输入任意 model id。"
+                label="候选缓存"
+                extra="点击“检测”更新候选缓存；从下拉选择后会自动加入生效模型。"
               >
                 <Select
-                  aria-label="生效模型"
-                  mode="tags"
-                  placeholder="输入或选择 model id"
-                  value={enabledModelIds}
-                  searchValue={enabledModelInput}
+                  aria-label="候选缓存"
+                  placeholder={
+                    previewModels.length > 0
+                      ? '搜索候选模型并加入生效模型'
+                      : '点击“检测”获取候选模型缓存'
+                  }
+                  value={selectedCandidateModelId}
+                  searchValue={candidateModelInput}
                   options={previewModels.map((model) => ({
                     label: model.model_id,
                     value: model.model_id
                   }))}
+                  onChange={(value) => {
+                    setSelectedCandidateModelId(undefined);
+                    setCandidateModelInput('');
+                    appendEnabledModelId(String(value));
+                  }}
+                  onSearch={setCandidateModelInput}
+                  onInputKeyDown={(event) => {
+                    if (event.key !== 'Enter') {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    setSelectedCandidateModelId(undefined);
+                    appendEnabledModelId(candidateModelInput);
+                    setCandidateModelInput('');
+                  }}
+                  notFoundContent={previewingModels ? '正在检测模型...' : '暂无候选模型'}
+                  optionFilterProp="label"
+                  showSearch
+                />
+              </Form.Item>
+              <Form.Item
+                label="生效模型"
+                extra="支持手动输入任意 model id，并通过回车添加多组模型。"
+              >
+                <Select
+                  aria-label="生效模型"
+                  mode="tags"
+                  open={false}
+                  placeholder="输入 model id 后回车添加"
+                  value={enabledModelIds}
+                  searchValue={enabledModelInput}
                   onChange={(values) => {
                     setEnabledModelIds(normalizeEnabledModelIds(values));
                   }}
@@ -524,11 +576,8 @@ export function ModelProviderInstanceDrawer({
                     event.preventDefault();
                     commitEnabledModelInput(enabledModelInput);
                   }}
-                  notFoundContent={
-                    previewingModels ? '正在获取候选模型...' : '暂无候选模型'
-                  }
+                  tokenSeparators={[',']}
                   allowClear
-                  showSearch
                 />
               </Form.Item>
             </Space>

@@ -782,7 +782,7 @@ describe('ModelProvidersPage', () => {
   );
 
   test(
-    'loads candidate models from the draft drawer and keeps enabled models editable',
+    'loads candidate models from the draft drawer with cache dropdown and editable enabled models',
     { timeout: 15000 },
     async () => {
       const previewModels = vi.fn().mockResolvedValue({
@@ -820,15 +820,18 @@ describe('ModelProvidersPage', () => {
       );
 
       await screen.findByRole('dialog');
+      const candidateCacheSelect = screen.getByRole('combobox', {
+        name: '候选缓存'
+      });
       const enabledModelSelect = screen.getByRole('combobox', { name: '生效模型' });
       expect(screen.getByText('API 密钥授权配置')).toBeInTheDocument();
+      expect(candidateCacheSelect).toBeInTheDocument();
       expect(enabledModelSelect).toBeInTheDocument();
       expect(screen.queryByText('校验模型')).not.toBeInTheDocument();
       expect(screen.queryByText('validate_model')).not.toBeInTheDocument();
-
-      expect(
-        screen.getByRole('button', { name: /获\s*取候选模型|刷\s*新候选模型/ })
-      ).toBeInTheDocument();
+      expect(screen.queryByLabelText('organization')).not.toBeInTheDocument();
+      expect(screen.getByText('高级配置（可选）')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /检\s*测/ })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /保\s*存/ })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /取\s*消/ })).toBeInTheDocument();
 
@@ -842,7 +845,7 @@ describe('ModelProvidersPage', () => {
         target: { value: 'OpenAI Production' }
       });
 
-      fireEvent.click(screen.getByRole('button', { name: /获\s*取候选模型|刷\s*新候选模型/ }));
+      fireEvent.click(screen.getByRole('button', { name: /检\s*测/ }));
 
       await waitFor(() => {
         expect(previewModels).toHaveBeenCalledWith(
@@ -857,12 +860,12 @@ describe('ModelProvidersPage', () => {
         );
       });
 
-      fireEvent.mouseDown(enabledModelSelect);
+      fireEvent.mouseDown(candidateCacheSelect);
       expect(await screen.findByRole('option', { name: 'gpt-4o-mini' })).toBeInTheDocument();
-      fireEvent.change(enabledModelSelect, {
+      fireEvent.change(candidateCacheSelect, {
         target: { value: 'gpt-4o-mini' }
       });
-      fireEvent.keyDown(enabledModelSelect, {
+      fireEvent.keyDown(candidateCacheSelect, {
         key: 'Enter',
         code: 'Enter',
         charCode: 13
@@ -895,7 +898,7 @@ describe('ModelProvidersPage', () => {
         expires_at: '2026-04-22T13:00:00Z'
       });
 
-      fireEvent.click(screen.getByRole('button', { name: /获\s*取候选模型|刷\s*新候选模型/ }));
+      fireEvent.click(screen.getByRole('button', { name: /检\s*测/ }));
 
       await waitFor(() => {
         expect(previewModels).toHaveBeenCalledTimes(2);
