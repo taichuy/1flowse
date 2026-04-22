@@ -8,7 +8,7 @@
 
 .collapse-shell > .ant-collapse-item {
   border-bottom: 1px solid var(--border-subtle) !important;
-  background: var(--bg-surface);
+  background: transparent;
   transition:
     background-color 0.2s ease,
     box-shadow 0.2s ease,
@@ -20,15 +20,11 @@
 }
 
 .collapse-shell > .ant-collapse-item:hover {
-  background: color-mix(in srgb, var(--color-primary) 4%, var(--bg-surface));
+  background: transparent;
 }
 
 .collapse-shell > .ant-collapse-item > .ant-collapse-header {
-  background: linear-gradient(
-    180deg,
-    var(--bg-surface) 0%,
-    color-mix(in srgb, var(--color-primary) 3%, var(--bg-elevated)) 100%
-  );
+  background: transparent;
   border-radius: 0 !important;
   transition:
     background 0.2s ease,
@@ -36,14 +32,8 @@
 }
 
 .collapse-shell > .ant-collapse-item-active > .ant-collapse-header {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-primary) 2%, var(--bg-surface)) 0%,
-    color-mix(in srgb, var(--color-primary) 8%, var(--bg-elevated)) 100%
-  );
-  box-shadow:
-    inset 3px 0 0 var(--color-primary),
-    inset 0 1px 0 0 color-mix(in srgb, var(--color-primary) 12%, transparent);
+  background: transparent;
+  box-shadow: none;
 }
 
 .collapse-shell > .ant-collapse-item > .ant-collapse-content {
