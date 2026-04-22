@@ -984,6 +984,60 @@ async fn model_provider_service_creates_ready_instance_from_preview_session() {
 }
 
 #[tokio::test]
+async fn model_provider_service_allows_preview_token_without_validation_model_id() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryModelProviderRepository::new(actor_with_permissions(
+        workspace_id,
+        &["state_model.view.all", "state_model.manage.all"],
+    ));
+    let runtime = MemoryProviderRuntime::default();
+    let package_root =
+        std::env::temp_dir().join(format!("provider-model-preview-{}", Uuid::now_v7()));
+    create_provider_fixture(&package_root);
+    let installation_id = repository
+        .seed_installation(
+            &package_root.display().to_string(),
+            PluginDesiredState::ActiveRequested,
+            true,
+        )
+        .await;
+    let service =
+        ModelProviderService::new(repository.clone(), runtime, "provider-secret-master-key");
+
+    let preview = service
+        .preview_models(PreviewModelProviderModelsCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id: Some(installation_id),
+            instance_id: None,
+            config_json: json!({
+                "base_url": "https://api.example.com",
+                "api_key": "super-secret"
+            }),
+        })
+        .await
+        .unwrap();
+
+    let created = service
+        .create_instance(CreateModelProviderInstanceCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id,
+            display_name: "Fixture Draft".to_string(),
+            config_json: json!({
+                "base_url": "https://api.example.com",
+                "api_key": "super-secret"
+            }),
+            validation_model_id: None,
+            preview_token: Some(preview.preview_token),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(created.instance.status, ModelProviderInstanceStatus::Draft);
+    assert_eq!(created.instance.validation_model_id, None);
+    assert_eq!(created.instance.last_validation_status, None);
+}
+
+#[tokio::test]
 async fn list_catalog_returns_i18n_namespace_and_keys() {
     let workspace_id = Uuid::now_v7();
     let repository = MemoryModelProviderRepository::new(actor_with_permissions(

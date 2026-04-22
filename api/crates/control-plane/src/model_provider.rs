@@ -537,11 +537,7 @@ where
         actor: &domain::ActorContext,
         request: PreviewStateRequest<'_>,
     ) -> Result<ResolvedPreviewState> {
-        if request.preview_token.is_none() && request.validation_model_id.is_some() {
-            return Err(ControlPlaneError::InvalidInput("preview_token").into());
-        }
-
-        let Some(preview_token) = request.preview_token else {
+        if request.validation_model_id.is_none() {
             return Ok(ResolvedPreviewState {
                 instance_status: if request.disabled_instance {
                     domain::ModelProviderInstanceStatus::Disabled
@@ -555,7 +551,11 @@ where
                 models_json: None,
                 preview_token: None,
             });
-        };
+        }
+
+        let preview_token = request
+            .preview_token
+            .ok_or(ControlPlaneError::InvalidInput("preview_token"))?;
 
         let session = self
             .repository

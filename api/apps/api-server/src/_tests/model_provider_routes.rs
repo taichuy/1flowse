@@ -582,3 +582,72 @@ async fn model_provider_routes_create_instance_uses_preview_token_without_revali
     );
     assert_eq!(create_payload["data"]["model_count"].as_u64(), Some(1));
 }
+
+#[tokio::test]
+async fn model_provider_routes_create_instance_allows_preview_token_without_validation_model_id() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let installation_id = install_enable_assign(&app, &cookie, &csrf).await;
+
+    let preview = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/model-providers/preview-models")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "installation_id": installation_id,
+                        "config": {
+                            "base_url": "https://api.example.com",
+                            "api_key": "super-secret"
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(preview.status(), StatusCode::OK);
+    let preview_payload: Value =
+        serde_json::from_slice(&to_bytes(preview.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let preview_token = preview_payload["data"]["preview_token"]
+        .as_str()
+        .expect("preview token should exist");
+
+    let create = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/model-providers")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "installation_id": installation_id,
+                        "display_name": "Fixture Draft",
+                        "validation_model_id": null,
+                        "preview_token": preview_token,
+                        "config": {
+                            "base_url": "https://api.example.com",
+                            "api_key": "super-secret"
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create.status(), StatusCode::CREATED);
+    let create_payload: Value =
+        serde_json::from_slice(&to_bytes(create.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(create_payload["data"]["status"].as_str(), Some("draft"));
+    assert!(create_payload["data"]["validation_model_id"].is_null());
+}
