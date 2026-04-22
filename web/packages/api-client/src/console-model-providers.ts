@@ -104,6 +104,7 @@ export interface ConsoleModelProviderInstance {
   protocol: string;
   display_name: string;
   status: string;
+  is_primary: boolean;
   config_json: Record<string, unknown>;
   configured_models: ConsoleModelProviderConfiguredModel[];
   enabled_model_ids: string[];
@@ -138,6 +139,11 @@ export interface UpdateConsoleModelProviderInput {
   configured_models: ConsoleModelProviderConfiguredModel[];
   preview_token?: string | null;
   config: Record<string, unknown>;
+}
+
+export interface UpdateConsoleModelProviderRoutingInput {
+  routing_mode: 'manual_primary';
+  primary_instance_id: string;
 }
 
 export interface ConsoleValidateModelProviderResult {
@@ -180,6 +186,13 @@ export interface ConsoleModelProviderOptions {
 
 export interface DeleteConsoleModelProviderResult {
   deleted: boolean;
+}
+
+export interface ConsoleModelProviderRouting {
+  provider_code: string;
+  routing_mode: string;
+  primary_instance_id: string;
+  primary_instance_display_name: string;
 }
 
 export function listConsoleModelProviderCatalog(baseUrl?: string) {
@@ -233,6 +246,21 @@ export function updateConsoleModelProviderInstance(
   return apiFetch<ConsoleModelProviderInstance>({
     path: `/api/console/model-providers/${instanceId}`,
     method: 'PATCH',
+    body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function updateConsoleModelProviderRouting(
+  providerCode: string,
+  input: UpdateConsoleModelProviderRoutingInput,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleModelProviderRouting>({
+    path: `/api/console/model-providers/providers/${providerCode}/routing`,
+    method: 'PUT',
     body: input,
     csrfToken,
     baseUrl

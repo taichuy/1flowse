@@ -47,6 +47,12 @@ vi.mock('@1flowbase/api-client', () => ({
     id: 'provider-1'
   }),
   updateConsoleModelProviderInstance: vi.fn().mockResolvedValue(undefined),
+  updateConsoleModelProviderRouting: vi.fn().mockResolvedValue({
+    provider_code: 'openai_compatible',
+    routing_mode: 'manual_primary',
+    primary_instance_id: 'provider-1',
+    primary_instance_display_name: 'OpenAI Production'
+  }),
   validateConsoleModelProviderInstance: vi.fn().mockResolvedValue({
     instance: {
       id: 'provider-1',
@@ -55,6 +61,7 @@ vi.mock('@1flowbase/api-client', () => ({
       protocol: 'openai_compatible',
       display_name: 'OpenAI Production',
       status: 'ready',
+      is_primary: true,
       config_json: {
         base_url: 'https://api.openai.com/v1'
       },
@@ -145,6 +152,7 @@ import {
   previewConsoleModelProviderModels,
   createConsoleModelProviderInstance,
   updateConsoleModelProviderInstance,
+  updateConsoleModelProviderRouting,
   validateConsoleModelProviderInstance,
   refreshConsoleModelProviderModels,
   revealConsoleModelProviderSecret,
@@ -159,6 +167,7 @@ import {
 } from '@1flowbase/api-client';
 import type { ConsoleModelProviderInstance } from '@1flowbase/api-client';
 
+type _IsPrimaryContract = ConsoleModelProviderInstance['is_primary'];
 type _EnabledModelIdsContract = ConsoleModelProviderInstance['enabled_model_ids'];
 // @ts-expect-error validation_model_id should no longer exist on the instance DTO
 type _LegacyValidationModelIdContract = ConsoleModelProviderInstance['validation_model_id'];
@@ -205,6 +214,7 @@ import {
   previewSettingsModelProviderModels,
   createSettingsModelProviderInstance,
   updateSettingsModelProviderInstance,
+  updateSettingsModelProviderRouting,
   validateSettingsModelProviderInstance,
   refreshSettingsModelProviderModels,
   revealSettingsModelProviderSecret,
@@ -213,7 +223,9 @@ import {
 import type {
   CreateSettingsModelProviderInput,
   SettingsModelProviderInstance,
-  UpdateSettingsModelProviderInput
+  SettingsModelProviderRouting,
+  UpdateSettingsModelProviderInput,
+  UpdateSettingsModelProviderRoutingInput
 } from '../model-providers';
 import {
   settingsPluginFamiliesQueryKey,
@@ -358,6 +370,7 @@ describe('settings api wrappers', () => {
       protocol: 'openai_compatible',
       display_name: 'OpenAI Production',
       status: 'ready',
+      is_primary: true,
       config_json: {
         base_url: 'https://api.openai.com/v1'
       },
@@ -377,6 +390,10 @@ describe('settings api wrappers', () => {
       catalog_refreshed_at: '2026-04-18T10:01:00Z',
       model_count: 2
     } satisfies SettingsModelProviderInstance;
+    const routingInput = {
+      routing_mode: 'manual_primary',
+      primary_instance_id: 'provider-1'
+    } satisfies UpdateSettingsModelProviderRoutingInput;
 
     expect(settingsModelProviderCatalogQueryKey).toEqual([
       'settings',
@@ -441,6 +458,11 @@ describe('settings api wrappers', () => {
     );
     await createSettingsModelProviderInstance(createInput as never, 'csrf-123');
     await updateSettingsModelProviderInstance('provider-1', updateInput as never, 'csrf-123');
+    const routingResult = await updateSettingsModelProviderRouting(
+      'openai_compatible',
+      routingInput,
+      'csrf-123'
+    );
     const validatedInstance = await validateSettingsModelProviderInstance(
       'provider-1',
       'csrf-123'
@@ -472,6 +494,11 @@ describe('settings api wrappers', () => {
       updateInput,
       'csrf-123'
     );
+    expect(updateConsoleModelProviderRouting).toHaveBeenCalledWith(
+      'openai_compatible',
+      routingInput,
+      'csrf-123'
+    );
     expect(validateConsoleModelProviderInstance).toHaveBeenCalledWith(
       'provider-1',
       'csrf-123'
@@ -495,10 +522,17 @@ describe('settings api wrappers', () => {
         enabled_model_ids: ['gpt-4o-mini']
       })
     );
+    expect(routingResult).toEqual({
+      provider_code: 'openai_compatible',
+      routing_mode: 'manual_primary',
+      primary_instance_id: 'provider-1',
+      primary_instance_display_name: 'OpenAI Production'
+    } satisfies SettingsModelProviderRouting);
     expect(validatedInstance.instance).not.toHaveProperty('validation_model_id');
     expect(validatedInstance.instance).not.toHaveProperty('last_validated_at');
     expect(validatedInstance.instance).not.toHaveProperty('last_validation_status');
     expect(validatedInstance.instance).not.toHaveProperty('last_validation_message');
+    expect(validatedInstance.instance.is_primary).toBe(true);
     expect(revealConsoleModelProviderSecret).toHaveBeenCalledWith(
       'provider-1',
       'api_key',

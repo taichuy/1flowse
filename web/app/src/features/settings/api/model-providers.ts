@@ -9,17 +9,20 @@ import {
   revealConsoleModelProviderSecret,
   refreshConsoleModelProviderModels,
   updateConsoleModelProviderInstance,
+  updateConsoleModelProviderRouting,
   validateConsoleModelProviderInstance,
   type ConsoleModelProviderCatalogEntry,
   type ConsoleModelProviderInstance,
   type RevealConsoleModelProviderSecretResult,
   type ConsoleModelProviderOptions,
   type ConsoleModelProviderModelCatalog,
+  type ConsoleModelProviderRouting,
   type ConsoleValidateModelProviderResult,
   type CreateConsoleModelProviderInput,
   type PreviewConsoleModelProviderModelsInput,
   type PreviewConsoleModelProviderModelsResponse,
-  type UpdateConsoleModelProviderInput
+  type UpdateConsoleModelProviderInput,
+  type UpdateConsoleModelProviderRoutingInput
 } from '@1flowbase/api-client';
 
 export type SettingsModelProviderCatalogEntry = ConsoleModelProviderCatalogEntry;
@@ -33,6 +36,9 @@ export type PreviewSettingsModelProviderModelsInput = PreviewConsoleModelProvide
 export type PreviewSettingsModelProviderModelsResponse =
   PreviewConsoleModelProviderModelsResponse;
 export type UpdateSettingsModelProviderInput = UpdateConsoleModelProviderInput;
+export type SettingsModelProviderRouting = ConsoleModelProviderRouting;
+export type UpdateSettingsModelProviderRoutingInput =
+  UpdateConsoleModelProviderRoutingInput;
 
 export const settingsModelProviderCatalogQueryKey = [
   'settings',
@@ -90,6 +96,14 @@ export function updateSettingsModelProviderInstance(
   csrfToken: string
 ) {
   return updateConsoleModelProviderInstance(instanceId, input, csrfToken);
+}
+
+export function updateSettingsModelProviderRouting(
+  providerCode: string,
+  input: UpdateSettingsModelProviderRoutingInput,
+  csrfToken: string
+) {
+  return updateConsoleModelProviderRouting(providerCode, input, csrfToken);
 }
 
 export function validateSettingsModelProviderInstance(
