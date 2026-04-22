@@ -32,10 +32,10 @@ pub use flow::{
 pub use model_provider::{
     ModelProviderCatalogCacheRecord, ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource,
     ModelProviderDiscoveryMode, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
-    ModelProviderSecretRecord, ModelProviderValidationStatus, PluginArtifactStatus,
-    PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState, PluginInstallationRecord,
-    PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord, PluginTaskStatus,
-    PluginVerificationStatus,
+    ModelProviderPreviewSessionRecord, ModelProviderSecretRecord, ModelProviderValidationStatus,
+    PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
+    PluginInstallationRecord, PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord,
+    PluginTaskStatus, PluginVerificationStatus,
 };
 pub use modeling::{
     DataModelScopeKind, MetadataAvailabilityStatus, ModelDefinitionRecord, ModelFieldKind,

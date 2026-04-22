@@ -170,7 +170,7 @@ where
                     is_ready: candidate.instance.status
                         == domain::ModelProviderInstanceStatus::Ready,
                     available_models: candidate.available_models.clone(),
-                    allow_custom_models: allow_custom_models(&candidate.instance.config_json),
+                    allow_custom_models: allow_custom_models(&candidate.instance),
                 },
             );
         }
@@ -1208,12 +1208,8 @@ where
     merge_json_object(&instance.config_json, &secret_json)
 }
 
-fn allow_custom_models(config_json: &Value) -> bool {
-    config_json
-        .get("validate_model")
-        .and_then(Value::as_bool)
-        .map(|value| !value)
-        .unwrap_or(false)
+fn allow_custom_models(instance: &domain::ModelProviderInstanceRecord) -> bool {
+    instance.validation_model_id.is_none()
 }
 
 fn select_effective_provider_candidate<'a>(
@@ -1506,8 +1502,8 @@ impl InMemoryOrchestrationRuntimeRepository {
             status: domain::ModelProviderInstanceStatus::Ready,
             config_json: json!({
                 "base_url": "https://api.example.com",
-                "validate_model": true,
             }),
+            validation_model_id: Some("gpt-5.4-mini".to_string()),
             last_validated_at: Some(now),
             last_validation_status: Some(domain::ModelProviderValidationStatus::Succeeded),
             last_validation_message: Some("validated".to_string()),
@@ -1952,6 +1948,35 @@ impl ModelProviderRepository for InMemoryOrchestrationRuntimeRepository {
             .caches_by_instance_id
             .get(&provider_instance_id)
             .cloned())
+    }
+
+    async fn create_preview_session(
+        &self,
+        input: &crate::ports::CreateModelProviderPreviewSessionInput,
+    ) -> Result<domain::ModelProviderPreviewSessionRecord> {
+        Ok(domain::ModelProviderPreviewSessionRecord {
+            id: input.session_id,
+            workspace_id: input.workspace_id,
+            actor_user_id: input.actor_user_id,
+            installation_id: input.installation_id,
+            instance_id: input.instance_id,
+            config_fingerprint: input.config_fingerprint.clone(),
+            models_json: input.models_json.clone(),
+            expires_at: input.expires_at,
+            created_at: OffsetDateTime::now_utc(),
+        })
+    }
+
+    async fn get_preview_session(
+        &self,
+        _workspace_id: Uuid,
+        _session_id: Uuid,
+    ) -> Result<Option<domain::ModelProviderPreviewSessionRecord>> {
+        Ok(None)
+    }
+
+    async fn delete_preview_session(&self, _workspace_id: Uuid, _session_id: Uuid) -> Result<()> {
+        Ok(())
     }
 
     async fn upsert_secret(

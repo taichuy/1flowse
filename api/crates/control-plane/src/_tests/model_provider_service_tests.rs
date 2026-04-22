@@ -11,11 +11,12 @@ use crate::{
     i18n::RequestedLocales,
     model_provider::{
         CreateModelProviderInstanceCommand, DeleteModelProviderInstanceCommand,
-        ModelProviderService,
+        ModelProviderService, PreviewModelProviderModelsCommand,
     },
     ports::{
         AuthRepository, CreateModelProviderInstanceInput, CreatePluginAssignmentInput,
-        CreatePluginTaskInput, ModelProviderRepository, PluginRepository,
+        CreateModelProviderPreviewSessionInput, CreatePluginTaskInput, ModelProviderRepository,
+        PluginRepository,
         ProviderRuntimeInvocationOutput, ProviderRuntimePort, ReassignModelProviderInstancesInput,
         UpdateModelProviderInstanceInput, UpdatePluginArtifactSnapshotInput,
         UpdatePluginDesiredStateInput, UpdatePluginRuntimeSnapshotInput,
@@ -26,9 +27,10 @@ use crate::{
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, ModelProviderCatalogCacheRecord,
     ModelProviderCatalogRefreshStatus, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
-    ModelProviderSecretRecord, ModelProviderValidationStatus, PermissionDefinition,
-    PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
-    PluginInstallationRecord, PluginRuntimeStatus, PluginTaskRecord, PluginVerificationStatus,
+    ModelProviderPreviewSessionRecord, ModelProviderSecretRecord, ModelProviderValidationStatus,
+    PermissionDefinition, PluginArtifactStatus, PluginAssignmentRecord,
+    PluginAvailabilityStatus, PluginDesiredState, PluginInstallationRecord, PluginRuntimeStatus,
+    PluginTaskRecord, PluginVerificationStatus,
     ScopeContext, UserRecord,
 };
 use plugin_framework::provider_contract::{
@@ -46,6 +48,7 @@ struct MemoryModelProviderRepository {
     tasks: Arc<RwLock<HashMap<Uuid, PluginTaskRecord>>>,
     instances: Arc<RwLock<HashMap<Uuid, ModelProviderInstanceRecord>>>,
     caches: Arc<RwLock<HashMap<Uuid, ModelProviderCatalogCacheRecord>>>,
+    preview_sessions: Arc<RwLock<HashMap<Uuid, ModelProviderPreviewSessionRecord>>>,
     secrets: Arc<RwLock<HashMap<Uuid, (ModelProviderSecretRecord, Value)>>>,
     references: Arc<RwLock<HashMap<Uuid, u64>>>,
     audit_events: Arc<RwLock<Vec<String>>>,
@@ -60,6 +63,7 @@ impl MemoryModelProviderRepository {
             tasks: Arc::new(RwLock::new(HashMap::new())),
             instances: Arc::new(RwLock::new(HashMap::new())),
             caches: Arc::new(RwLock::new(HashMap::new())),
+            preview_sessions: Arc::new(RwLock::new(HashMap::new())),
             secrets: Arc::new(RwLock::new(HashMap::new())),
             references: Arc::new(RwLock::new(HashMap::new())),
             audit_events: Arc::new(RwLock::new(Vec::new())),
@@ -464,7 +468,8 @@ impl ModelProviderRepository for MemoryModelProviderRepository {
             display_name: input.display_name.clone(),
             status: input.status,
             config_json: input.config_json.clone(),
-            last_validated_at: None,
+            validation_model_id: input.validation_model_id.clone(),
+            last_validated_at: input.last_validated_at,
             last_validation_status: input.last_validation_status,
             last_validation_message: input.last_validation_message.clone(),
             created_by: input.created_by,
@@ -490,6 +495,7 @@ impl ModelProviderRepository for MemoryModelProviderRepository {
         instance.display_name = input.display_name.clone();
         instance.status = input.status;
         instance.config_json = input.config_json.clone();
+        instance.validation_model_id = input.validation_model_id.clone();
         instance.last_validated_at = input.last_validated_at;
         instance.last_validation_status = input.last_validation_status;
         instance.last_validation_message = input.last_validation_message.clone();
@@ -600,6 +606,54 @@ impl ModelProviderRepository for MemoryModelProviderRepository {
             (record.clone(), input.plaintext_secret_json.clone()),
         );
         Ok(record)
+    }
+
+    async fn create_preview_session(
+        &self,
+        input: &CreateModelProviderPreviewSessionInput,
+    ) -> Result<ModelProviderPreviewSessionRecord> {
+        let record = ModelProviderPreviewSessionRecord {
+            id: input.session_id,
+            workspace_id: input.workspace_id,
+            actor_user_id: input.actor_user_id,
+            installation_id: input.installation_id,
+            instance_id: input.instance_id,
+            config_fingerprint: input.config_fingerprint.clone(),
+            models_json: input.models_json.clone(),
+            expires_at: input.expires_at,
+            created_at: OffsetDateTime::now_utc(),
+        };
+        self.preview_sessions
+            .write()
+            .await
+            .insert(record.id, record.clone());
+        Ok(record)
+    }
+
+    async fn get_preview_session(
+        &self,
+        workspace_id: Uuid,
+        session_id: Uuid,
+    ) -> Result<Option<ModelProviderPreviewSessionRecord>> {
+        Ok(self
+            .preview_sessions
+            .read()
+            .await
+            .get(&session_id)
+            .filter(|record| record.workspace_id == workspace_id)
+            .cloned())
+    }
+
+    async fn delete_preview_session(&self, workspace_id: Uuid, session_id: Uuid) -> Result<()> {
+        let mut sessions = self.preview_sessions.write().await;
+        if sessions
+            .get(&session_id)
+            .map(|record| record.workspace_id == workspace_id)
+            .unwrap_or(false)
+        {
+            sessions.remove(&session_id);
+        }
+        Ok(())
     }
 
     async fn get_secret_json(
@@ -765,6 +819,8 @@ async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
                 "base_url": "https://api.example.com",
                 "api_key": "super-secret"
             }),
+            validation_model_id: None,
+            preview_token: None,
         })
         .await
         .unwrap();
@@ -867,6 +923,64 @@ async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
             "model_provider.models_refreshed"
         ]
     );
+}
+
+#[tokio::test]
+async fn model_provider_service_creates_ready_instance_from_preview_session() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryModelProviderRepository::new(actor_with_permissions(
+        workspace_id,
+        &["state_model.view.all", "state_model.manage.all"],
+    ));
+    let runtime = MemoryProviderRuntime::default();
+    let package_root =
+        std::env::temp_dir().join(format!("provider-model-preview-{}", Uuid::now_v7()));
+    create_provider_fixture(&package_root);
+    let installation_id = repository
+        .seed_installation(
+            &package_root.display().to_string(),
+            PluginDesiredState::ActiveRequested,
+            true,
+        )
+        .await;
+    let service =
+        ModelProviderService::new(repository.clone(), runtime, "provider-secret-master-key");
+
+    let preview = service
+        .preview_models(PreviewModelProviderModelsCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id: Some(installation_id),
+            instance_id: None,
+            config_json: json!({
+                "base_url": "https://api.example.com",
+                "api_key": "super-secret"
+            }),
+        })
+        .await
+        .unwrap();
+
+    let created = service
+        .create_instance(CreateModelProviderInstanceCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id,
+            display_name: "Fixture Prod".to_string(),
+            config_json: json!({
+                "base_url": "https://api.example.com",
+                "api_key": "super-secret"
+            }),
+            validation_model_id: Some("fixture_chat".to_string()),
+            preview_token: Some(preview.preview_token),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(created.instance.status, ModelProviderInstanceStatus::Ready);
+    assert_eq!(created.instance.validation_model_id.as_deref(), Some("fixture_chat"));
+    assert_eq!(
+        created.instance.last_validation_status,
+        Some(ModelProviderValidationStatus::Succeeded)
+    );
+    assert_eq!(created.cache.as_ref().map(|cache| cache.models_json[0]["model_id"].clone()), Some(json!("fixture_chat")));
 }
 
 #[tokio::test]
@@ -979,6 +1093,8 @@ async fn model_provider_service_enforces_permissions_and_audits_delete_conflict(
                 "base_url": "https://api.example.com",
                 "api_key": "super-secret"
             }),
+            validation_model_id: None,
+            preview_token: None,
         })
         .await
         .unwrap();
@@ -1026,6 +1142,8 @@ async fn model_provider_service_enforces_permissions_and_audits_delete_conflict(
             installation_id: Uuid::now_v7(),
             display_name: "Nope".to_string(),
             config_json: json!({}),
+            validation_model_id: None,
+            preview_token: None,
         })
         .await
         .unwrap_err();
@@ -1067,6 +1185,8 @@ async fn model_provider_service_rejects_validating_disabled_instance() {
                 "base_url": "https://api.example.com",
                 "api_key": "super-secret"
             }),
+            validation_model_id: None,
+            preview_token: None,
         })
         .await
         .unwrap();

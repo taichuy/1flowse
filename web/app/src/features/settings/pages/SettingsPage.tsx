@@ -79,25 +79,11 @@ function isTaskSucceeded(status: string | null | undefined) {
 const EMPTY_MODEL_PROVIDER_INSTANCES: SettingsModelProviderInstance[] = [];
 const EMPTY_MODEL_PROVIDER_CATALOG: SettingsModelProviderCatalogEntry[] = [];
 const EMPTY_PLUGIN_FAMILIES: SettingsPluginFamilyEntry[] = [];
-const IDLE_MODEL_PROVIDER_MODELS_QUERY_KEY = [
-  'settings',
-  'model-providers',
-  'models',
-  'idle'
-] as const;
 const MODEL_PROVIDER_MODELS_QUERY_KEY_PREFIX = [
   'settings',
   'model-providers',
   'models'
 ] as const;
-
-function pickPreferredInstanceId(instances: { id: string; status: string }[]) {
-  return (
-    instances.find((instance) => instance.status === 'ready')?.id ??
-    instances[0]?.id ??
-    null
-  );
-}
 
 function parseTaskDetailString(detail: Record<string, unknown>, key: string) {
   const value = detail[key];
@@ -131,7 +117,6 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
   >(null);
   const [instanceModalState, setInstanceModalState] = useState<{
     providerCode: string;
-    selectedInstanceId: string | null;
   } | null>(null);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadFileList, setUploadFileList] = useState<UploadFile[]>([]);
@@ -264,59 +249,21 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
         : EMPTY_MODEL_PROVIDER_INSTANCES,
     [instanceModalState, instancesByProviderCode]
   );
-  const modalSelectedInstanceId =
-    instanceModalState &&
-    modalInstances.some(
-      (instance) => instance.id === instanceModalState.selectedInstanceId
-    )
-      ? instanceModalState.selectedInstanceId
-      : pickPreferredInstanceId(modalInstances);
-  const selectedModalInstance =
-    modalInstances.find(
-      (instance) => instance.id === modalSelectedInstanceId
-    ) ??
-    modalInstances[0] ??
-    null;
   const modalCatalogEntry = instanceModalState
-    ? selectedModalInstance
-      ? (catalogEntriesByInstallationId[
-          selectedModalInstance.installation_id
-        ] ??
-        currentCatalogEntriesByProviderCode[instanceModalState.providerCode] ??
-        null)
-      : (currentCatalogEntriesByProviderCode[instanceModalState.providerCode] ??
-        null)
+    ? (currentCatalogEntriesByProviderCode[instanceModalState.providerCode] ??
+      (modalInstances[0]
+        ? (catalogEntriesByInstallationId[modalInstances[0].installation_id] ?? null)
+        : null))
     : null;
-  const modelsQuery = useQuery({
-    queryKey: modalSelectedInstanceId
-      ? settingsModelProviderModelsQueryKey(modalSelectedInstanceId)
-      : IDLE_MODEL_PROVIDER_MODELS_QUERY_KEY,
-    queryFn: () => fetchSettingsModelProviderModels(modalSelectedInstanceId!),
-    enabled: false
-  });
-
-  useEffect(() => {
-    if (!instanceModalState) {
-      return;
-    }
-
-    const nextSelectedInstanceId = pickPreferredInstanceId(modalInstances);
-
-    if (!modalSelectedInstanceId && !nextSelectedInstanceId) {
-      return;
-    }
-
-    if (modalSelectedInstanceId !== instanceModalState.selectedInstanceId) {
-      setInstanceModalState((current) =>
-        current
-          ? {
-              ...current,
-              selectedInstanceId: modalSelectedInstanceId
-            }
-          : current
+  const fetchModelsMutation = useMutation({
+    mutationFn: async (instanceId: string) => fetchSettingsModelProviderModels(instanceId),
+    onSuccess: (catalog) => {
+      queryClient.setQueryData(
+        settingsModelProviderModelsQueryKey(catalog.provider_instance_id),
+        catalog
       );
     }
-  }, [instanceModalState, modalInstances, modalSelectedInstanceId]);
+  });
 
   async function invalidateModelProviderQueries() {
     await Promise.all([
@@ -353,6 +300,8 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     mutationFn: async (input: {
       installationId: string;
       display_name: string;
+      validation_model_id?: string;
+      preview_token?: string;
       config: Record<string, unknown>;
     }) => {
       if (!csrfToken) {
@@ -363,6 +312,8 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
         {
           installation_id: input.installationId,
           display_name: input.display_name,
+          validation_model_id: input.validation_model_id ?? null,
+          preview_token: input.preview_token ?? null,
           config: input.config
         },
         csrfToken
@@ -378,6 +329,8 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     mutationFn: async (input: {
       instanceId: string;
       display_name: string;
+      validation_model_id?: string;
+      preview_token?: string;
       config: Record<string, unknown>;
     }) => {
       if (!csrfToken) {
@@ -388,6 +341,8 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
         input.instanceId,
         {
           display_name: input.display_name,
+          validation_model_id: input.validation_model_id ?? null,
+          preview_token: input.preview_token ?? null,
           config: input.config
         },
         csrfToken
@@ -651,7 +606,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     getErrorMessage(familiesQuery.error) ??
     getErrorMessage(officialCatalogQuery.error) ??
     getErrorMessage(instancesQuery.error) ??
-    getErrorMessage(modelsQuery.error) ??
+    getErrorMessage(fetchModelsMutation.error) ??
     getErrorMessage(createMutation.error) ??
     getErrorMessage(updateMutation.error) ??
     getErrorMessage(previewModelsMutation.error) ??
@@ -739,11 +694,8 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
                 : null
             }
             onViewInstances={(entry) => {
-              const providerInstances =
-                instancesByProviderCode[entry.provider_code] ?? [];
               setInstanceModalState({
-                providerCode: entry.provider_code,
-                selectedInstanceId: pickPreferredInstanceId(providerInstances)
+                providerCode: entry.provider_code
               });
             }}
             onCreate={(entry) => {
@@ -865,6 +817,8 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
             await updateMutation.mutateAsync({
               instanceId: editingInstance.id,
               display_name: values.display_name,
+              validation_model_id: values.validation_model_id,
+              preview_token: values.preview_token,
               config: values.config
             });
             return;
@@ -877,6 +831,8 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
           await createMutation.mutateAsync({
             installationId: drawerCatalogEntry.installation_id,
             display_name: values.display_name,
+            validation_model_id: values.validation_model_id,
+            preview_token: values.preview_token,
             config: values.config
           });
         }}
@@ -903,9 +859,8 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
         open={instanceModalState !== null}
         catalogEntry={modalCatalogEntry}
         instances={modalInstances}
-        selectedInstanceId={modalSelectedInstanceId}
-        modelCatalog={modelsQuery.data ?? null}
-        modelsLoading={modelsQuery.isFetching}
+        modelCatalog={fetchModelsMutation.data ?? null}
+        modelsLoading={fetchModelsMutation.isPending}
         validating={validateMutation.isPending}
         refreshing={refreshMutation.isPending}
         deleting={deleteMutation.isPending}
@@ -929,18 +884,8 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
               : current
           );
         }}
-        onChangeInstance={(instanceId) => {
-          setInstanceModalState((current) =>
-            current
-              ? {
-                  ...current,
-                  selectedInstanceId: instanceId
-                }
-              : current
-          );
-        }}
-        onFetchModels={() => {
-          void modelsQuery.refetch();
+        onFetchModels={(instance) => {
+          fetchModelsMutation.mutate(instance.id);
         }}
         onEdit={(instance) => {
           setInstanceModalState(null);

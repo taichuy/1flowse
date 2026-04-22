@@ -17,8 +17,9 @@ use crate::{
     },
     plugin_lifecycle::reconcile_installation_snapshot,
     ports::{
-        AuthRepository, CreateModelProviderInstanceInput, ModelProviderRepository,
-        PluginRepository, ProviderRuntimePort, UpdateModelProviderInstanceInput,
+        AuthRepository, CreateModelProviderInstanceInput,
+        CreateModelProviderPreviewSessionInput, ModelProviderRepository, PluginRepository,
+        ProviderRuntimePort, UpdateModelProviderInstanceInput,
         UpsertModelProviderCatalogCacheInput, UpsertModelProviderSecretInput,
     },
     state_transition::ensure_model_provider_instance_transition,
@@ -29,6 +30,8 @@ pub struct CreateModelProviderInstanceCommand {
     pub installation_id: Uuid,
     pub display_name: String,
     pub config_json: Value,
+    pub validation_model_id: Option<String>,
+    pub preview_token: Option<Uuid>,
 }
 
 pub struct UpdateModelProviderInstanceCommand {
@@ -36,6 +39,8 @@ pub struct UpdateModelProviderInstanceCommand {
     pub instance_id: Uuid,
     pub display_name: String,
     pub config_json: Value,
+    pub validation_model_id: Option<String>,
+    pub preview_token: Option<Uuid>,
 }
 
 pub struct DeleteModelProviderInstanceCommand {
@@ -108,6 +113,32 @@ pub struct ModelProviderModelCatalog {
     pub last_error_message: Option<String>,
     pub refreshed_at: Option<OffsetDateTime>,
     pub models: Vec<ProviderModelDescriptor>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PreviewModelProviderModelsResult {
+    pub models: Vec<ProviderModelDescriptor>,
+    pub preview_token: Uuid,
+    pub expires_at: OffsetDateTime,
+}
+
+struct PreviewStateRequest<'a> {
+    installation_id: Option<Uuid>,
+    instance_id: Option<Uuid>,
+    provider_config: &'a Value,
+    validation_model_id: Option<&'a str>,
+    preview_token: Option<Uuid>,
+    disabled_instance: bool,
+}
+
+struct ResolvedPreviewState {
+    instance_status: domain::ModelProviderInstanceStatus,
+    validation_model_id: Option<String>,
+    last_validated_at: Option<OffsetDateTime>,
+    last_validation_status: Option<domain::ModelProviderValidationStatus>,
+    last_validation_message: Option<String>,
+    models_json: Option<Value>,
+    preview_token: Option<Uuid>,
 }
 
 #[derive(Debug, Clone)]
@@ -289,6 +320,20 @@ where
             &public_config,
             &secret_config,
         )?;
+        let provider_config = merge_json_object(&public_config, &secret_config)?;
+        let preview_state = self
+            .resolve_preview_state(
+                &actor,
+                PreviewStateRequest {
+                    installation_id: Some(installation.id),
+                    instance_id: None,
+                    provider_config: &provider_config,
+                    validation_model_id: command.validation_model_id.as_deref(),
+                    preview_token: command.preview_token,
+                    disabled_instance: false,
+                },
+            )
+            .await?;
         let instance = self
             .repository
             .create_instance(&CreateModelProviderInstanceInput {
@@ -298,10 +343,12 @@ where
                 provider_code: installation.provider_code.clone(),
                 protocol: installation.protocol.clone(),
                 display_name: normalize_required_text(&command.display_name, "display_name")?,
-                status: domain::ModelProviderInstanceStatus::Draft,
+                status: preview_state.instance_status,
                 config_json: public_config.clone(),
-                last_validation_status: None,
-                last_validation_message: None,
+                validation_model_id: preview_state.validation_model_id.clone(),
+                last_validated_at: preview_state.last_validated_at,
+                last_validation_status: preview_state.last_validation_status,
+                last_validation_message: preview_state.last_validation_message.clone(),
                 created_by: command.actor_user_id,
             })
             .await?;
@@ -313,6 +360,26 @@ where
                     secret_version: 1,
                     master_key: self.provider_secret_master_key.clone(),
                 })
+                .await?;
+        }
+        if let Some(models_json) = preview_state.models_json.as_ref() {
+            self.repository
+                .upsert_catalog_cache(&UpsertModelProviderCatalogCacheInput {
+                    provider_instance_id: instance.id,
+                    model_discovery_mode: map_model_discovery_mode(
+                        package.provider.model_discovery_mode,
+                    ),
+                    refresh_status: domain::ModelProviderCatalogRefreshStatus::Ready,
+                    source: map_catalog_source(package.provider.model_discovery_mode),
+                    models_json: models_json.clone(),
+                    last_error_message: None,
+                    refreshed_at: preview_state.last_validated_at,
+                })
+                .await?;
+        }
+        if let Some(preview_token) = preview_state.preview_token {
+            self.repository
+                .delete_preview_session(actor.current_workspace_id, preview_token)
                 .await?;
         }
         self.repository
@@ -329,8 +396,12 @@ where
             ))
             .await?;
 
-        self.hydrate_instance_view(instance, None, &package.provider.form_schema)
-            .await
+        self.hydrate_instance_view(
+            instance.clone(),
+            self.repository.get_catalog_cache(instance.id).await?,
+            &package.provider.form_schema,
+        )
+        .await
     }
 
     pub async fn update_instance(
@@ -365,6 +436,7 @@ where
             &merged_public_config,
             &merged_secret_config,
         )?;
+        let provider_config = merge_json_object(&merged_public_config, &merged_secret_config)?;
 
         if !is_empty_object(&patch_secret_config) {
             let version = self
@@ -383,12 +455,24 @@ where
                 .await?;
         }
 
-        let next_status = match existing.status {
-            domain::ModelProviderInstanceStatus::Disabled => {
-                domain::ModelProviderInstanceStatus::Disabled
-            }
-            _ => domain::ModelProviderInstanceStatus::Draft,
-        };
+        let preview_state = self
+            .resolve_preview_state(
+                &actor,
+                PreviewStateRequest {
+                    installation_id: Some(installation.id),
+                    instance_id: Some(existing.id),
+                    provider_config: &provider_config,
+                    validation_model_id: command.validation_model_id.as_deref(),
+                    preview_token: command.preview_token,
+                    disabled_instance: matches!(
+                        existing.status,
+                        domain::ModelProviderInstanceStatus::Disabled
+                    ),
+                },
+            )
+            .await?;
+
+        let next_status = preview_state.instance_status;
         ensure_model_provider_instance_transition(existing.status, next_status, "update_instance")?;
 
         let updated = self
@@ -399,12 +483,33 @@ where
                 display_name: normalize_required_text(&command.display_name, "display_name")?,
                 status: next_status,
                 config_json: merged_public_config,
-                last_validated_at: None,
-                last_validation_status: None,
-                last_validation_message: None,
+                validation_model_id: preview_state.validation_model_id.clone(),
+                last_validated_at: preview_state.last_validated_at,
+                last_validation_status: preview_state.last_validation_status,
+                last_validation_message: preview_state.last_validation_message.clone(),
                 updated_by: command.actor_user_id,
             })
             .await?;
+        if let Some(models_json) = preview_state.models_json.as_ref() {
+            self.repository
+                .upsert_catalog_cache(&UpsertModelProviderCatalogCacheInput {
+                    provider_instance_id: existing.id,
+                    model_discovery_mode: map_model_discovery_mode(
+                        package.provider.model_discovery_mode,
+                    ),
+                    refresh_status: domain::ModelProviderCatalogRefreshStatus::Ready,
+                    source: map_catalog_source(package.provider.model_discovery_mode),
+                    models_json: models_json.clone(),
+                    last_error_message: None,
+                    refreshed_at: preview_state.last_validated_at,
+                })
+                .await?;
+        }
+        if let Some(preview_token) = preview_state.preview_token {
+            self.repository
+                .delete_preview_session(actor.current_workspace_id, preview_token)
+                .await?;
+        }
         self.repository
             .append_audit_log(&audit_log(
                 Some(actor.current_workspace_id),
@@ -425,6 +530,72 @@ where
             &package.provider.form_schema,
         )
         .await
+    }
+
+    async fn resolve_preview_state(
+        &self,
+        actor: &domain::ActorContext,
+        request: PreviewStateRequest<'_>,
+    ) -> Result<ResolvedPreviewState> {
+        if request.preview_token.is_none() && request.validation_model_id.is_some() {
+            return Err(ControlPlaneError::InvalidInput("preview_token").into());
+        }
+
+        let Some(preview_token) = request.preview_token else {
+            return Ok(ResolvedPreviewState {
+                instance_status: if request.disabled_instance {
+                    domain::ModelProviderInstanceStatus::Disabled
+                } else {
+                    domain::ModelProviderInstanceStatus::Draft
+                },
+                validation_model_id: None,
+                last_validated_at: None,
+                last_validation_status: None,
+                last_validation_message: None,
+                models_json: None,
+                preview_token: None,
+            });
+        };
+
+        let session = self
+            .repository
+            .get_preview_session(actor.current_workspace_id, preview_token)
+            .await?
+            .ok_or(ControlPlaneError::InvalidInput("preview_token"))?;
+        if session.actor_user_id != actor.user_id || session.expires_at < OffsetDateTime::now_utc()
+        {
+            return Err(ControlPlaneError::InvalidInput("preview_token").into());
+        }
+        if session.installation_id != request.installation_id || session.instance_id != request.instance_id {
+            return Err(ControlPlaneError::InvalidInput("preview_token").into());
+        }
+        if session.config_fingerprint != fingerprint_provider_config(request.provider_config)? {
+            return Err(ControlPlaneError::InvalidInput("preview_token").into());
+        }
+
+        let validation_model_id = request
+            .validation_model_id
+            .map(ToString::to_string)
+            .ok_or(ControlPlaneError::InvalidInput("validation_model_id"))?;
+        let models_json = session.models_json;
+        let models = deserialize_models_json(&models_json)?;
+        if !models.iter().any(|model| model.model_id == validation_model_id) {
+            return Err(ControlPlaneError::InvalidInput("validation_model_id").into());
+        }
+
+        Ok(ResolvedPreviewState {
+            instance_status: if request.disabled_instance {
+                domain::ModelProviderInstanceStatus::Disabled
+            } else {
+                domain::ModelProviderInstanceStatus::Ready
+            },
+            validation_model_id: Some(validation_model_id),
+            last_validated_at: Some(OffsetDateTime::now_utc()),
+            last_validation_status: Some(domain::ModelProviderValidationStatus::Succeeded),
+            last_validation_message: Some("validated".to_string()),
+            models_json: Some(models_json),
+            preview_token: Some(preview_token),
+        })
     }
 
     pub async fn validate_instance(
@@ -492,6 +663,7 @@ where
                     display_name: instance.display_name.clone(),
                     status: domain::ModelProviderInstanceStatus::Ready,
                     config_json: instance.config_json.clone(),
+                    validation_model_id: instance.validation_model_id.clone(),
                     last_validated_at: Some(now),
                     last_validation_status: Some(domain::ModelProviderValidationStatus::Succeeded),
                     last_validation_message: Some("validated".to_string()),
@@ -562,6 +734,7 @@ where
                             display_name: instance.display_name.clone(),
                             status: domain::ModelProviderInstanceStatus::Invalid,
                             config_json: instance.config_json.clone(),
+                            validation_model_id: instance.validation_model_id.clone(),
                             last_validated_at: Some(now),
                             last_validation_status: Some(
                                 domain::ModelProviderValidationStatus::Failed,
@@ -593,7 +766,7 @@ where
     pub async fn preview_models(
         &self,
         command: PreviewModelProviderModelsCommand,
-    ) -> Result<Vec<ProviderModelDescriptor>> {
+    ) -> Result<PreviewModelProviderModelsResult> {
         let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
         ensure_state_model_permission(&actor, "manage")?;
 
@@ -691,7 +864,21 @@ where
         self.runtime.ensure_loaded(&installation).await?;
         let models = self
             .runtime
-            .list_models(&installation, provider_config)
+            .list_models(&installation, provider_config.clone())
+            .await?;
+        let expires_at = OffsetDateTime::now_utc() + time::Duration::minutes(10);
+        let preview_token = Uuid::now_v7();
+        self.repository
+            .create_preview_session(&CreateModelProviderPreviewSessionInput {
+                session_id: preview_token,
+                workspace_id: actor.current_workspace_id,
+                actor_user_id: command.actor_user_id,
+                installation_id: Some(installation.id),
+                instance_id: audit_resource_id,
+                config_fingerprint: fingerprint_provider_config(&provider_config)?,
+                models_json: serde_json::to_value(&models)?,
+                expires_at,
+            })
             .await?;
         self.repository
             .append_audit_log(&audit_log(
@@ -706,7 +893,11 @@ where
                 }),
             ))
             .await?;
-        Ok(models)
+        Ok(PreviewModelProviderModelsResult {
+            models,
+            preview_token,
+            expires_at,
+        })
     }
 
     pub async fn list_models(
@@ -1243,6 +1434,29 @@ fn is_empty_object(value: &Value) -> bool {
 
 fn is_secret_field(field_type: &str) -> bool {
     field_type.trim().eq_ignore_ascii_case("secret")
+}
+
+fn fingerprint_provider_config(config: &Value) -> Result<String> {
+    Ok(serde_json::to_string(&canonicalize_json(config))?)
+}
+
+fn canonicalize_json(value: &Value) -> Value {
+    match value {
+        Value::Object(object) => Value::Object(
+            object
+                .iter()
+                .map(|(key, entry)| (key.clone(), canonicalize_json(entry)))
+                .collect::<BTreeMap<_, _>>()
+                .into_iter()
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(items.iter().map(canonicalize_json).collect()),
+        _ => value.clone(),
+    }
+}
+
+fn deserialize_models_json(models_json: &Value) -> Result<Vec<ProviderModelDescriptor>> {
+    Ok(serde_json::from_value(models_json.clone())?)
 }
 
 fn load_provider_package(path: &str) -> Result<ProviderPackage> {

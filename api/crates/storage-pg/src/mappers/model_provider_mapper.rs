@@ -17,6 +17,7 @@ pub struct StoredModelProviderInstanceRow {
     pub display_name: String,
     pub status: String,
     pub config_json: serde_json::Value,
+    pub validation_model_id: Option<String>,
     pub last_validated_at: Option<OffsetDateTime>,
     pub last_validation_status: Option<String>,
     pub last_validation_message: Option<String>,
@@ -46,6 +47,19 @@ pub struct StoredModelProviderSecretRow {
     pub updated_at: OffsetDateTime,
 }
 
+#[derive(Debug, Clone)]
+pub struct StoredModelProviderPreviewSessionRow {
+    pub id: Uuid,
+    pub workspace_id: Uuid,
+    pub actor_user_id: Uuid,
+    pub installation_id: Option<Uuid>,
+    pub instance_id: Option<Uuid>,
+    pub config_fingerprint: String,
+    pub models_json: serde_json::Value,
+    pub expires_at: OffsetDateTime,
+    pub created_at: OffsetDateTime,
+}
+
 pub struct PgModelProviderMapper;
 
 impl PgModelProviderMapper {
@@ -61,6 +75,7 @@ impl PgModelProviderMapper {
             display_name: row.display_name,
             status: parse_instance_status(&row.status)?,
             config_json: row.config_json,
+            validation_model_id: row.validation_model_id,
             last_validated_at: row.last_validated_at,
             last_validation_status: row
                 .last_validation_status
@@ -98,6 +113,22 @@ impl PgModelProviderMapper {
             encrypted_secret_json: row.encrypted_secret_json,
             secret_version: row.secret_version,
             updated_at: row.updated_at,
+        })
+    }
+
+    pub fn to_preview_session_record(
+        row: StoredModelProviderPreviewSessionRow,
+    ) -> Result<domain::ModelProviderPreviewSessionRecord> {
+        Ok(domain::ModelProviderPreviewSessionRecord {
+            id: row.id,
+            workspace_id: row.workspace_id,
+            actor_user_id: row.actor_user_id,
+            installation_id: row.installation_id,
+            instance_id: row.instance_id,
+            config_fingerprint: row.config_fingerprint,
+            models_json: row.models_json,
+            expires_at: row.expires_at,
+            created_at: row.created_at,
         })
     }
 }

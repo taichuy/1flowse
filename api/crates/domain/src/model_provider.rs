@@ -319,6 +319,7 @@ pub struct ModelProviderInstanceRecord {
     pub display_name: String,
     pub status: ModelProviderInstanceStatus,
     pub config_json: serde_json::Value,
+    pub validation_model_id: Option<String>,
     pub last_validated_at: Option<OffsetDateTime>,
     pub last_validation_status: Option<ModelProviderValidationStatus>,
     pub last_validation_message: Option<String>,
@@ -326,6 +327,19 @@ pub struct ModelProviderInstanceRecord {
     pub updated_by: Uuid,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelProviderPreviewSessionRecord {
+    pub id: Uuid,
+    pub workspace_id: Uuid,
+    pub actor_user_id: Uuid,
+    pub installation_id: Option<Uuid>,
+    pub instance_id: Option<Uuid>,
+    pub config_fingerprint: String,
+    pub models_json: serde_json::Value,
+    pub expires_at: OffsetDateTime,
+    pub created_at: OffsetDateTime,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

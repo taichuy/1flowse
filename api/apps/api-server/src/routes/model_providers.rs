@@ -38,6 +38,8 @@ use crate::{
 pub struct CreateModelProviderBody {
     pub installation_id: String,
     pub display_name: String,
+    pub validation_model_id: Option<String>,
+    pub preview_token: Option<String>,
     #[schema(value_type = Object)]
     pub config: serde_json::Value,
 }
@@ -45,6 +47,8 @@ pub struct CreateModelProviderBody {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateModelProviderBody {
     pub display_name: String,
+    pub validation_model_id: Option<String>,
+    pub preview_token: Option<String>,
     #[schema(value_type = Object)]
     pub config: serde_json::Value,
 }
@@ -188,6 +192,7 @@ pub struct ModelProviderInstanceResponse {
     pub status: String,
     #[schema(value_type = Object)]
     pub config_json: serde_json::Value,
+    pub validation_model_id: Option<String>,
     pub last_validated_at: Option<String>,
     pub last_validation_status: Option<String>,
     pub last_validation_message: Option<String>,
@@ -217,6 +222,8 @@ pub struct ModelProviderModelCatalogResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct PreviewModelProviderModelsResponse {
     pub models: Vec<ProviderModelDescriptorResponse>,
+    pub preview_token: String,
+    pub expires_at: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -484,6 +491,7 @@ fn to_instance_response(view: ModelProviderInstanceView) -> ModelProviderInstanc
         display_name: view.instance.display_name,
         status: view.instance.status.as_str().to_string(),
         config_json: view.instance.config_json,
+        validation_model_id: view.instance.validation_model_id,
         last_validated_at: format_optional_time(view.instance.last_validated_at),
         last_validation_status: view
             .instance
@@ -659,6 +667,12 @@ pub async fn create_instance(
             installation_id: parse_uuid(&body.installation_id, "installation_id")?,
             display_name: body.display_name,
             config_json: body.config,
+            validation_model_id: body.validation_model_id,
+            preview_token: body
+                .preview_token
+                .as_deref()
+                .map(|raw| parse_uuid(raw, "preview_token"))
+                .transpose()?,
         })
         .await?;
     Ok((
@@ -688,6 +702,12 @@ pub async fn update_instance(
             instance_id: parse_uuid(&id, "id")?,
             display_name: body.display_name,
             config_json: body.config,
+            validation_model_id: body.validation_model_id,
+            preview_token: body
+                .preview_token
+                .as_deref()
+                .map(|raw| parse_uuid(raw, "preview_token"))
+                .transpose()?,
         })
         .await?;
     Ok(Json(ApiSuccess::new(to_instance_response(updated))))
@@ -726,7 +746,7 @@ pub async fn preview_models(
 ) -> Result<Json<ApiSuccess<PreviewModelProviderModelsResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
-    let models = service(&state)
+    let preview = service(&state)
         .preview_models(PreviewModelProviderModelsCommand {
             actor_user_id: context.user.id,
             installation_id: body
@@ -743,10 +763,13 @@ pub async fn preview_models(
         })
         .await?;
     Ok(Json(ApiSuccess::new(PreviewModelProviderModelsResponse {
-        models: models
+        models: preview
+            .models
             .into_iter()
             .map(to_runtime_model_descriptor_response)
             .collect(),
+        preview_token: preview.preview_token.to_string(),
+        expires_at: format_optional_time(Some(preview.expires_at)).unwrap_or_default(),
     })))
 }
 

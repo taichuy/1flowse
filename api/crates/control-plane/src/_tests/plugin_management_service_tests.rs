@@ -30,7 +30,8 @@ use crate::{
         UpgradeLatestPluginFamilyCommand,
     },
     ports::{
-        AuthRepository, CreateModelProviderInstanceInput, CreatePluginAssignmentInput,
+        AuthRepository, CreateModelProviderInstanceInput,
+        CreateModelProviderPreviewSessionInput, CreatePluginAssignmentInput,
         CreatePluginTaskInput, DownloadedOfficialPluginPackage, ModelProviderRepository,
         NodeContributionRepository, OfficialPluginArtifact, OfficialPluginCatalogSnapshot,
         OfficialPluginCatalogSource, OfficialPluginI18nSummary, OfficialPluginSourceEntry,
@@ -46,7 +47,8 @@ use crate::{
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, ModelProviderCatalogCacheRecord,
     ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource, ModelProviderDiscoveryMode,
-    ModelProviderInstanceRecord, ModelProviderInstanceStatus, ModelProviderSecretRecord,
+    ModelProviderInstanceRecord, ModelProviderInstanceStatus, ModelProviderPreviewSessionRecord,
+    ModelProviderSecretRecord,
     NodeContributionDependencyStatus, PermissionDefinition, PluginArtifactStatus,
     PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState, PluginInstallationRecord,
     PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord, PluginTaskStatus, ScopeContext,
@@ -136,6 +138,7 @@ impl MemoryPluginManagementRepository {
                 display_name: display_name.to_string(),
                 status: ModelProviderInstanceStatus::Ready,
                 config_json: json!({ "base_url": "https://api.example.com" }),
+                validation_model_id: None,
                 last_validated_at: Some(now),
                 last_validation_status: None,
                 last_validation_message: None,
@@ -564,6 +567,7 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
             display_name: input.display_name.clone(),
             status: input.status,
             config_json: input.config_json.clone(),
+            validation_model_id: input.validation_model_id.clone(),
             last_validated_at: None,
             last_validation_status: input.last_validation_status,
             last_validation_message: input.last_validation_message.clone(),
@@ -590,6 +594,7 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
         instance.display_name = input.display_name.clone();
         instance.status = input.status;
         instance.config_json = input.config_json.clone();
+        instance.validation_model_id = input.validation_model_id.clone();
         instance.last_validated_at = input.last_validated_at;
         instance.last_validation_status = input.last_validation_status;
         instance.last_validation_message = input.last_validation_message.clone();
@@ -683,6 +688,35 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
         provider_instance_id: Uuid,
     ) -> Result<Option<ModelProviderCatalogCacheRecord>> {
         Ok(self.caches.read().await.get(&provider_instance_id).cloned())
+    }
+
+    async fn create_preview_session(
+        &self,
+        input: &CreateModelProviderPreviewSessionInput,
+    ) -> Result<ModelProviderPreviewSessionRecord> {
+        Ok(ModelProviderPreviewSessionRecord {
+            id: input.session_id,
+            workspace_id: input.workspace_id,
+            actor_user_id: input.actor_user_id,
+            installation_id: input.installation_id,
+            instance_id: input.instance_id,
+            config_fingerprint: input.config_fingerprint.clone(),
+            models_json: input.models_json.clone(),
+            expires_at: input.expires_at,
+            created_at: OffsetDateTime::now_utc(),
+        })
+    }
+
+    async fn get_preview_session(
+        &self,
+        _workspace_id: Uuid,
+        _session_id: Uuid,
+    ) -> Result<Option<ModelProviderPreviewSessionRecord>> {
+        Ok(None)
+    }
+
+    async fn delete_preview_session(&self, _workspace_id: Uuid, _session_id: Uuid) -> Result<()> {
+        Ok(())
     }
 
     async fn upsert_secret(

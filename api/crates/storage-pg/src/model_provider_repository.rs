@@ -3,9 +3,10 @@ use async_trait::async_trait;
 use control_plane::{
     errors::ControlPlaneError,
     ports::{
-        CreateModelProviderInstanceInput, ModelProviderRepository,
-        ReassignModelProviderInstancesInput, UpdateModelProviderInstanceInput,
-        UpsertModelProviderCatalogCacheInput, UpsertModelProviderSecretInput,
+        CreateModelProviderInstanceInput, CreateModelProviderPreviewSessionInput,
+        ModelProviderRepository, ReassignModelProviderInstancesInput,
+        UpdateModelProviderInstanceInput, UpsertModelProviderCatalogCacheInput,
+        UpsertModelProviderSecretInput,
     },
 };
 use serde_json::{json, Value};
@@ -15,7 +16,7 @@ use uuid::Uuid;
 use crate::{
     mappers::model_provider_mapper::{
         PgModelProviderMapper, StoredModelProviderCatalogCacheRow, StoredModelProviderInstanceRow,
-        StoredModelProviderSecretRow,
+        StoredModelProviderPreviewSessionRow, StoredModelProviderSecretRow,
     },
     repositories::PgControlPlaneStore,
 };
@@ -30,6 +31,7 @@ fn map_instance(row: sqlx::postgres::PgRow) -> Result<domain::ModelProviderInsta
         display_name: row.get("display_name"),
         status: row.get("status"),
         config_json: row.get("config_json"),
+        validation_model_id: row.get("validation_model_id"),
         last_validated_at: row.get("last_validated_at"),
         last_validation_status: row.get("last_validation_status"),
         last_validation_message: row.get("last_validation_message"),
@@ -64,6 +66,22 @@ fn map_secret(row: sqlx::postgres::PgRow) -> Result<domain::ModelProviderSecretR
     })
 }
 
+fn map_preview_session(
+    row: sqlx::postgres::PgRow,
+) -> Result<domain::ModelProviderPreviewSessionRecord> {
+    PgModelProviderMapper::to_preview_session_record(StoredModelProviderPreviewSessionRow {
+        id: row.get("id"),
+        workspace_id: row.get("workspace_id"),
+        actor_user_id: row.get("actor_user_id"),
+        installation_id: row.get("installation_id"),
+        instance_id: row.get("instance_id"),
+        config_fingerprint: row.get("config_fingerprint"),
+        models_json: row.get("models_json"),
+        expires_at: row.get("expires_at"),
+        created_at: row.get("created_at"),
+    })
+}
+
 #[async_trait]
 impl ModelProviderRepository for PgControlPlaneStore {
     async fn create_instance(
@@ -81,11 +99,13 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name,
                 status,
                 config_json,
+                validation_model_id,
+                last_validated_at,
                 last_validation_status,
                 last_validation_message,
                 created_by,
                 updated_by
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
             returning
                 id,
                 workspace_id,
@@ -95,6 +115,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name,
                 status,
                 config_json,
+                validation_model_id,
                 last_validated_at,
                 last_validation_status,
                 last_validation_message,
@@ -112,6 +133,8 @@ impl ModelProviderRepository for PgControlPlaneStore {
         .bind(&input.display_name)
         .bind(input.status.as_str())
         .bind(&input.config_json)
+        .bind(input.validation_model_id.as_deref())
+        .bind(input.last_validated_at)
         .bind(input.last_validation_status.map(|value| value.as_str()))
         .bind(input.last_validation_message.as_deref())
         .bind(input.created_by)
@@ -132,10 +155,11 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name = $3,
                 status = $4,
                 config_json = $5,
-                last_validated_at = $6,
-                last_validation_status = $7,
-                last_validation_message = $8,
-                updated_by = $9,
+                validation_model_id = $6,
+                last_validated_at = $7,
+                last_validation_status = $8,
+                last_validation_message = $9,
+                updated_by = $10,
                 updated_at = now()
             where workspace_id = $1
               and id = $2
@@ -148,6 +172,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name,
                 status,
                 config_json,
+                validation_model_id,
                 last_validated_at,
                 last_validation_status,
                 last_validation_message,
@@ -162,6 +187,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
         .bind(&input.display_name)
         .bind(input.status.as_str())
         .bind(&input.config_json)
+        .bind(input.validation_model_id.as_deref())
         .bind(input.last_validated_at)
         .bind(input.last_validation_status.map(|value| value.as_str()))
         .bind(input.last_validation_message.as_deref())
@@ -191,6 +217,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name,
                 status,
                 config_json,
+                validation_model_id,
                 last_validated_at,
                 last_validation_status,
                 last_validation_message,
@@ -226,6 +253,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name,
                 status,
                 config_json,
+                validation_model_id,
                 last_validated_at,
                 last_validation_status,
                 last_validation_message,
@@ -260,6 +288,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name,
                 status,
                 config_json,
+                validation_model_id,
                 last_validated_at,
                 last_validation_status,
                 last_validation_message,
@@ -302,6 +331,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 display_name,
                 status,
                 config_json,
+                validation_model_id,
                 last_validated_at,
                 last_validation_status,
                 last_validation_message,
@@ -424,6 +454,93 @@ impl ModelProviderRepository for PgControlPlaneStore {
         .await?;
 
         map_secret(row)
+    }
+
+    async fn create_preview_session(
+        &self,
+        input: &CreateModelProviderPreviewSessionInput,
+    ) -> Result<domain::ModelProviderPreviewSessionRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into model_provider_preview_sessions (
+                id,
+                workspace_id,
+                actor_user_id,
+                installation_id,
+                instance_id,
+                config_fingerprint,
+                models_json,
+                expires_at
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+            returning
+                id,
+                workspace_id,
+                actor_user_id,
+                installation_id,
+                instance_id,
+                config_fingerprint,
+                models_json,
+                expires_at,
+                created_at
+            "#,
+        )
+        .bind(input.session_id)
+        .bind(input.workspace_id)
+        .bind(input.actor_user_id)
+        .bind(input.installation_id)
+        .bind(input.instance_id)
+        .bind(&input.config_fingerprint)
+        .bind(&input.models_json)
+        .bind(input.expires_at)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_preview_session(row)
+    }
+
+    async fn get_preview_session(
+        &self,
+        workspace_id: Uuid,
+        session_id: Uuid,
+    ) -> Result<Option<domain::ModelProviderPreviewSessionRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                id,
+                workspace_id,
+                actor_user_id,
+                installation_id,
+                instance_id,
+                config_fingerprint,
+                models_json,
+                expires_at,
+                created_at
+            from model_provider_preview_sessions
+            where workspace_id = $1
+              and id = $2
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(session_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_preview_session).transpose()
+    }
+
+    async fn delete_preview_session(&self, workspace_id: Uuid, session_id: Uuid) -> Result<()> {
+        sqlx::query(
+            r#"
+            delete from model_provider_preview_sessions
+            where workspace_id = $1
+              and id = $2
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(session_id)
+        .execute(self.pool())
+        .await?;
+        Ok(())
     }
 
     async fn get_secret_json(

@@ -38,7 +38,11 @@ vi.mock('@1flowbase/api-client', () => ({
     provider_instance_id: 'provider-1',
     models: []
   }),
-  previewConsoleModelProviderModels: vi.fn().mockResolvedValue([]),
+  previewConsoleModelProviderModels: vi.fn().mockResolvedValue({
+    models: [],
+    preview_token: 'preview-1',
+    expires_at: '2026-04-22T12:00:00Z'
+  }),
   createConsoleModelProviderInstance: vi.fn().mockResolvedValue({
     id: 'provider-1'
   }),

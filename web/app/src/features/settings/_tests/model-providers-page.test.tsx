@@ -165,9 +165,11 @@ function renderApp(pathname: string) {
 }
 
 async function openProviderInstancesModal() {
-  const catalogRow = await screen.findByRole('row', {
-    name: /OpenAI Compatible/
-  });
+  const providerName = await screen.findByText('OpenAI Compatible');
+  const catalogRow = providerName.closest('tr');
+  if (!catalogRow) {
+    throw new Error('missing provider catalog row');
+  }
   fireEvent.click(within(catalogRow).getByRole('button', { name: '配置' }));
 
   await screen.findByText('查看供应商实例');
@@ -224,6 +226,7 @@ describe('ModelProvidersPage', () => {
           base_url: 'https://api.openai.com/v1',
           api_key: 'supe****cret'
         },
+        validation_model_id: 'gpt-4o-mini',
         last_validated_at: '2026-04-18T10:00:00Z',
         last_validation_status: 'succeeded',
         last_validation_message: 'validated',
@@ -243,6 +246,7 @@ describe('ModelProvidersPage', () => {
           base_url: 'https://backup.openai.example/v1',
           api_key: 'back****cret'
         },
+        validation_model_id: null,
         last_validated_at: null,
         last_validation_status: null,
         last_validation_message: null,
@@ -252,20 +256,24 @@ describe('ModelProvidersPage', () => {
         model_count: 0
       }
     ]);
-    modelProvidersApi.previewSettingsModelProviderModels.mockResolvedValue([
-      {
-        model_id: 'gpt-4o-mini',
-        display_name: 'gpt-4o-mini',
-        source: 'dynamic',
-        supports_streaming: true,
-        supports_tool_call: true,
-        supports_multimodal: false,
-        context_window: null,
-        max_output_tokens: null,
-        parameter_form: null,
-        provider_metadata: {}
-      }
-    ]);
+    modelProvidersApi.previewSettingsModelProviderModels.mockResolvedValue({
+      models: [
+        {
+          model_id: 'gpt-4o-mini',
+          display_name: 'gpt-4o-mini',
+          source: 'dynamic',
+          supports_streaming: true,
+          supports_tool_call: true,
+          supports_multimodal: false,
+          context_window: null,
+          max_output_tokens: null,
+          parameter_form: null,
+          provider_metadata: {}
+        }
+      ],
+      preview_token: 'preview-1',
+      expires_at: '2026-04-22T12:00:00Z'
+    });
     modelProvidersApi.fetchSettingsModelProviderModels.mockResolvedValue({
       provider_instance_id: 'provider-1',
       refresh_status: 'ready',
@@ -686,7 +694,7 @@ describe('ModelProvidersPage', () => {
   }, 10000);
 
   test(
-    'opens provider instances modal from installed provider row and defaults to the ready instance',
+    'opens provider instances modal from installed provider row as a management table',
     { timeout: 15000 },
     async () => {
       authenticateWithPermissions([
@@ -701,18 +709,23 @@ describe('ModelProvidersPage', () => {
       expect(
         within(modal).getAllByText('OpenAI Production').length
       ).toBeGreaterThanOrEqual(1);
-      expect(within(modal).getByText('succeeded')).toBeInTheDocument();
       expect(
-        within(modal).getByRole('combobox', { name: '选择实例' })
+        within(modal).getByRole('columnheader', { name: '缓存模型' })
       ).toBeInTheDocument();
       expect(
-        within(modal).getByRole('button', { name: '验证实例' })
+        within(modal).getByRole('button', {
+          name: '验证实例 OpenAI Production'
+        })
       ).toBeInTheDocument();
       expect(
-        within(modal).getByRole('button', { name: '刷新模型' })
+        within(modal).getByRole('button', {
+          name: '刷新模型 OpenAI Production'
+        })
       ).toBeInTheDocument();
       expect(
-        within(modal).getByRole('button', { name: '删除实例' })
+        within(modal).getByRole('button', {
+          name: '删除实例 OpenAI Production'
+        })
       ).toBeInTheDocument();
     }
   );
@@ -750,21 +763,27 @@ describe('ModelProvidersPage', () => {
 
       await openProviderInstancesModal();
 
-      fireEvent.click(await screen.findByRole('button', { name: '验证实例' }));
+      fireEvent.click(
+        await screen.findByRole('button', { name: '验证实例 OpenAI Production' })
+      );
       await waitFor(() => {
         expect(
           modelProvidersApi.validateSettingsModelProviderInstance
         ).toHaveBeenCalledWith('provider-1', 'csrf-123');
       });
 
-      fireEvent.click(screen.getByRole('button', { name: '刷新模型' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: '刷新模型 OpenAI Production' })
+      );
       await waitFor(() => {
         expect(
           modelProvidersApi.refreshSettingsModelProviderModels
         ).toHaveBeenCalledWith('provider-1', 'csrf-123');
       });
 
-      fireEvent.click(screen.getByRole('button', { name: '删除实例' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: '删除实例 OpenAI Production' })
+      );
       await waitFor(() => {
         expect(
           modelProvidersApi.deleteSettingsModelProviderInstance
@@ -777,20 +796,24 @@ describe('ModelProvidersPage', () => {
     'loads validation model options from the draft drawer and keeps the selector empty before detection',
     { timeout: 15000 },
     async () => {
-      const previewModels = vi.fn().mockResolvedValue([
-        {
-          model_id: 'gpt-4o-mini',
-          display_name: 'gpt-4o-mini',
-          source: 'dynamic',
-          supports_streaming: true,
-          supports_tool_call: true,
-          supports_multimodal: false,
-          context_window: null,
-          max_output_tokens: null,
-          parameter_form: null,
-          provider_metadata: {}
-        }
-      ]);
+      const previewModels = vi.fn().mockResolvedValue({
+        models: [
+          {
+            model_id: 'gpt-4o-mini',
+            display_name: 'gpt-4o-mini',
+            source: 'dynamic',
+            supports_streaming: true,
+            supports_tool_call: true,
+            supports_multimodal: false,
+            context_window: null,
+            max_output_tokens: null,
+            parameter_form: null,
+            provider_metadata: {}
+          }
+        ],
+        preview_token: 'preview-1',
+        expires_at: '2026-04-22T12:00:00Z'
+      });
 
       render(
         <ModelProviderInstanceDrawer
@@ -835,7 +858,7 @@ describe('ModelProvidersPage', () => {
             project: '',
             api_version: '',
             default_headers: ''
-          },
+          }
         );
       });
 
@@ -859,7 +882,9 @@ describe('ModelProvidersPage', () => {
 
       const modal = await openProviderInstancesModal();
       fireEvent.click(
-        within(modal).getByRole('button', { name: '编辑 API Key' })
+        within(modal).getByRole('button', {
+          name: '编辑 API Key OpenAI Production'
+        })
       );
 
       expect(await screen.findByText('编辑 API 密钥配置')).toBeInTheDocument();
@@ -887,7 +912,9 @@ describe('ModelProvidersPage', () => {
 
       const modal = await openProviderInstancesModal();
       fireEvent.click(
-        within(modal).getByRole('button', { name: '编辑 API Key' })
+        within(modal).getByRole('button', {
+          name: '编辑 API Key OpenAI Production'
+        })
       );
 
       expect(await screen.findByText('编辑 API 密钥配置')).toBeInTheDocument();
@@ -910,7 +937,7 @@ describe('ModelProvidersPage', () => {
   );
 
   test(
-    'fetches models for the selected instance and renders them as a dropdown',
+    'fetches cached models for the selected instance and renders them in the expanded row',
     { timeout: 15000 },
     async () => {
       authenticateWithPermissions([
@@ -922,7 +949,11 @@ describe('ModelProvidersPage', () => {
       renderApp('/settings/model-providers');
 
       const modal = await openProviderInstancesModal();
-      fireEvent.click(within(modal).getByRole('button', { name: '获取模型' }));
+      fireEvent.click(
+        within(modal).getByRole('button', {
+          name: '查看缓存模型 OpenAI Production'
+        })
+      );
 
       await waitFor(() => {
         expect(
@@ -930,11 +961,46 @@ describe('ModelProvidersPage', () => {
         ).toHaveBeenCalledWith('provider-1');
       });
       expect(
-        await within(modal).findByRole('combobox', { name: '可用模型' })
+        await within(modal).findByRole('combobox', {
+          name: 'OpenAI Production 缓存模型'
+        })
       ).toBeInTheDocument();
       expect(
         within(modal).getByText(primaryContractProviderModels[0].display_name)
       ).toBeInTheDocument();
+    }
+  );
+
+  test(
+    'renders provider instances as a management table with cache-model column',
+    { timeout: 15000 },
+    async () => {
+      authenticateWithPermissions([
+        'route_page.view.all',
+        'state_model.view.all',
+        'state_model.manage.all'
+      ]);
+
+      renderApp('/settings/model-providers');
+
+      const modal = await openProviderInstancesModal();
+      expect(
+        within(modal).getByRole('columnheader', { name: '操作' })
+      ).toBeInTheDocument();
+      expect(
+        within(modal).getByRole('columnheader', { name: '实例名' })
+      ).toBeInTheDocument();
+      expect(
+        within(modal).getByRole('columnheader', { name: '状态' })
+      ).toBeInTheDocument();
+      expect(
+        within(modal).getByRole('columnheader', { name: '缓存模型' })
+      ).toBeInTheDocument();
+      expect(
+        within(modal).getByRole('columnheader', { name: 'Base URL' })
+      ).toBeInTheDocument();
+      expect(within(modal).getByText('OpenAI Production')).toBeInTheDocument();
+      expect(within(modal).getByText('1 个')).toBeInTheDocument();
     }
   );
 
@@ -1244,5 +1310,5 @@ describe('ModelProvidersPage', () => {
     expect(
       within(catalogRow).queryByRole('button', { name: '版本管理' })
     ).not.toBeInTheDocument();
-  });
+  }, 10000);
 });

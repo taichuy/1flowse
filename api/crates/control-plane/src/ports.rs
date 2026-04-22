@@ -834,6 +834,8 @@ pub struct CreateModelProviderInstanceInput {
     pub display_name: String,
     pub status: domain::ModelProviderInstanceStatus,
     pub config_json: serde_json::Value,
+    pub validation_model_id: Option<String>,
+    pub last_validated_at: Option<OffsetDateTime>,
     pub last_validation_status: Option<domain::ModelProviderValidationStatus>,
     pub last_validation_message: Option<String>,
     pub created_by: Uuid,
@@ -846,10 +848,23 @@ pub struct UpdateModelProviderInstanceInput {
     pub display_name: String,
     pub status: domain::ModelProviderInstanceStatus,
     pub config_json: serde_json::Value,
+    pub validation_model_id: Option<String>,
     pub last_validated_at: Option<OffsetDateTime>,
     pub last_validation_status: Option<domain::ModelProviderValidationStatus>,
     pub last_validation_message: Option<String>,
     pub updated_by: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateModelProviderPreviewSessionInput {
+    pub session_id: Uuid,
+    pub workspace_id: Uuid,
+    pub actor_user_id: Uuid,
+    pub installation_id: Option<Uuid>,
+    pub instance_id: Option<Uuid>,
+    pub config_fingerprint: String,
+    pub models_json: serde_json::Value,
+    pub expires_at: OffsetDateTime,
 }
 
 #[derive(Debug, Clone)]
@@ -919,6 +934,20 @@ pub trait ModelProviderRepository: Send + Sync {
         &self,
         input: &UpsertModelProviderSecretInput,
     ) -> anyhow::Result<domain::ModelProviderSecretRecord>;
+    async fn create_preview_session(
+        &self,
+        input: &CreateModelProviderPreviewSessionInput,
+    ) -> anyhow::Result<domain::ModelProviderPreviewSessionRecord>;
+    async fn get_preview_session(
+        &self,
+        workspace_id: Uuid,
+        session_id: Uuid,
+    ) -> anyhow::Result<Option<domain::ModelProviderPreviewSessionRecord>>;
+    async fn delete_preview_session(
+        &self,
+        workspace_id: Uuid,
+        session_id: Uuid,
+    ) -> anyhow::Result<()>;
     async fn get_secret_json(
         &self,
         provider_instance_id: Uuid,

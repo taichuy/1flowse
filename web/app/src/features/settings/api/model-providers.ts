@@ -18,6 +18,7 @@ import {
   type ConsoleValidateModelProviderResult,
   type CreateConsoleModelProviderInput,
   type PreviewConsoleModelProviderModelsInput,
+  type PreviewConsoleModelProviderModelsResponse,
   type UpdateConsoleModelProviderInput
 } from '@1flowbase/api-client';
 
@@ -29,6 +30,8 @@ export type SettingsRevealModelProviderSecretResult = RevealConsoleModelProvider
 export type SettingsValidateModelProviderResult = ConsoleValidateModelProviderResult;
 export type CreateSettingsModelProviderInput = CreateConsoleModelProviderInput;
 export type PreviewSettingsModelProviderModelsInput = PreviewConsoleModelProviderModelsInput;
+export type PreviewSettingsModelProviderModelsResponse =
+  PreviewConsoleModelProviderModelsResponse;
 export type UpdateSettingsModelProviderInput = UpdateConsoleModelProviderInput;
 
 export const settingsModelProviderCatalogQueryKey = [
@@ -71,9 +74,7 @@ export function previewSettingsModelProviderModels(
   input: PreviewSettingsModelProviderModelsInput,
   csrfToken: string
 ) {
-  return previewConsoleModelProviderModels(input, csrfToken).then(
-    (response) => response.models
-  );
+  return previewConsoleModelProviderModels(input, csrfToken);
 }
 
 export function createSettingsModelProviderInstance(

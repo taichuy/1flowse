@@ -10,7 +10,6 @@ import {
   Input,
   Select,
   Space,
-  Switch,
   Tag,
   Typography
 } from 'antd';
@@ -18,13 +17,15 @@ import {
 import type {
   SettingsModelProviderCatalogEntry,
   SettingsModelProviderInstance,
-  SettingsModelProviderModelCatalog
+  SettingsModelProviderModelCatalog,
+  PreviewSettingsModelProviderModelsResponse
 } from '../../api/model-providers';
 
 type DrawerMode = 'create' | 'edit';
 type ModelProviderFormValue = string | boolean;
 type ModelProviderConfigField = SettingsModelProviderCatalogEntry['form_schema'][number];
 type PreviewModelDescriptor = SettingsModelProviderModelCatalog['models'][number];
+type PreviewModelsResponse = PreviewSettingsModelProviderModelsResponse;
 
 function normalizeConfigFieldValue(value: unknown): ModelProviderFormValue {
   if (typeof value === 'boolean') {
@@ -132,8 +133,13 @@ export function ModelProviderInstanceDrawer({
   instance: SettingsModelProviderInstance | null;
   submitting: boolean;
   onClose: () => void;
-  onSubmit: (input: { display_name: string; config: Record<string, unknown> }) => Promise<void>;
-  onPreviewModels: (config: Record<string, unknown>) => Promise<PreviewModelDescriptor[]>;
+  onSubmit: (input: {
+    display_name: string;
+    config: Record<string, unknown>;
+    validation_model_id?: string;
+    preview_token?: string;
+  }) => Promise<void>;
+  onPreviewModels: (config: Record<string, unknown>) => Promise<PreviewModelsResponse>;
   onRevealSecret: (fieldKey: string) => Promise<string>;
 }) {
   const [form] = Form.useForm<{
@@ -145,6 +151,7 @@ export function ModelProviderInstanceDrawer({
   const [revealingSecretKey, setRevealingSecretKey] = useState<string | null>(null);
   const [previewModels, setPreviewModels] = useState<PreviewModelDescriptor[]>([]);
   const [selectedPreviewModelId, setSelectedPreviewModelId] = useState<string | undefined>();
+  const [previewToken, setPreviewToken] = useState<string | undefined>();
   const [previewingModels, setPreviewingModels] = useState(false);
 
   useEffect(() => {
@@ -155,6 +162,7 @@ export function ModelProviderInstanceDrawer({
       setRevealingSecretKey(null);
       setPreviewModels([]);
       setSelectedPreviewModelId(undefined);
+      setPreviewToken(undefined);
       setPreviewingModels(false);
       return;
     }
@@ -168,12 +176,14 @@ export function ModelProviderInstanceDrawer({
     setRevealingSecretKey(null);
     setPreviewModels([]);
     setSelectedPreviewModelId(undefined);
+    setPreviewToken(undefined);
     setPreviewingModels(false);
   }, [catalogEntry, form, instance, mode, open]);
 
   function clearPreviewState() {
     setPreviewModels([]);
     setSelectedPreviewModelId(undefined);
+    setPreviewToken(undefined);
   }
 
   async function handleRevealSecret(fieldKey: string) {
@@ -233,12 +243,13 @@ export function ModelProviderInstanceDrawer({
     setPreviewingModels(true);
 
     try {
-      const models = await onPreviewModels(
+      const preview = await onPreviewModels(
         buildDraftConfig((values.config ?? {}) as Record<string, ModelProviderFormValue>)
       );
-      setPreviewModels(models);
+      setPreviewModels(preview.models);
+      setPreviewToken(preview.preview_token);
       setSelectedPreviewModelId((current) =>
-        current && models.some((model) => model.model_id === current)
+        current && preview.models.some((model) => model.model_id === current)
           ? current
           : undefined
       );
@@ -249,24 +260,6 @@ export function ModelProviderInstanceDrawer({
 
   function renderConfigField(field: ModelProviderConfigField) {
     const label = buildFieldLabel(field.key);
-
-    if (field.field_type === 'boolean') {
-      return (
-        <Form.Item
-          key={field.key}
-          label={label}
-          name={['config', field.key]}
-          valuePropName="checked"
-          extra={
-            field.key === 'validate_model'
-              ? '保存后默认执行模型可用性校验。'
-              : undefined
-          }
-        >
-          <Switch />
-        </Form.Item>
-      );
-    }
 
     const isSecret = field.field_type === 'secret';
     const useTextArea = isTextAreaField(field.key);
@@ -395,7 +388,9 @@ export function ModelProviderInstanceDrawer({
               const values = await form.validateFields();
               await onSubmit({
                 display_name: values.display_name,
-                config: buildDraftConfig(values.config ?? {})
+                config: buildDraftConfig(values.config ?? {}),
+                validation_model_id: selectedPreviewModelId,
+                preview_token: previewToken
               });
             }}
           >
