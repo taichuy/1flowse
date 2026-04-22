@@ -320,21 +320,10 @@ pub struct ModelProviderInstanceRecord {
     pub status: ModelProviderInstanceStatus,
     pub config_json: serde_json::Value,
     pub enabled_model_ids: Vec<String>,
-    pub last_validated_at: Option<OffsetDateTime>,
-    pub last_validation_status: Option<ModelProviderValidationStatus>,
-    pub last_validation_message: Option<String>,
     pub created_by: Uuid,
     pub updated_by: Uuid,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
-}
-
-impl ModelProviderInstanceRecord {
-    pub fn enabled_model_ids_from_validation_model_id(
-        validation_model_id: Option<String>,
-    ) -> Vec<String> {
-        validation_model_id.into_iter().collect()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

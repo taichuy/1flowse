@@ -332,6 +332,11 @@ where
                 },
             )
             .await?;
+        let enabled_model_ids = preview_state
+            .validation_model_id
+            .clone()
+            .into_iter()
+            .collect();
         let instance = self
             .repository
             .create_instance(&CreateModelProviderInstanceInput {
@@ -343,10 +348,7 @@ where
                 display_name: normalize_required_text(&command.display_name, "display_name")?,
                 status: preview_state.instance_status,
                 config_json: public_config.clone(),
-                enabled_model_ids:
-                    domain::ModelProviderInstanceRecord::enabled_model_ids_from_validation_model_id(
-                        preview_state.validation_model_id.clone(),
-                    ),
+                enabled_model_ids,
                 created_by: command.actor_user_id,
             })
             .await?;
@@ -469,6 +471,11 @@ where
                 },
             )
             .await?;
+        let enabled_model_ids = preview_state
+            .validation_model_id
+            .clone()
+            .into_iter()
+            .collect();
 
         let next_status = preview_state.instance_status;
         ensure_model_provider_instance_transition(existing.status, next_status, "update_instance")?;
@@ -481,10 +488,7 @@ where
                 display_name: normalize_required_text(&command.display_name, "display_name")?,
                 status: next_status,
                 config_json: merged_public_config,
-                enabled_model_ids:
-                    domain::ModelProviderInstanceRecord::enabled_model_ids_from_validation_model_id(
-                        preview_state.validation_model_id.clone(),
-                    ),
+                enabled_model_ids,
                 updated_by: command.actor_user_id,
             })
             .await?;
@@ -1497,7 +1501,6 @@ fn select_effective_model_provider_instance<'a>(
     instances.iter().max_by_key(|instance| {
         (
             instance.status == domain::ModelProviderInstanceStatus::Ready,
-            instance.last_validated_at,
             instance.updated_at,
             instance.id,
         )

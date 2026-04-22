@@ -1218,7 +1218,6 @@ fn select_effective_provider_candidate<'a>(
     candidates.iter().max_by_key(|candidate| {
         (
             candidate.instance.status == domain::ModelProviderInstanceStatus::Ready,
-            candidate.instance.last_validated_at,
             candidate.instance.updated_at,
             candidate.instance.id,
         )
@@ -1231,7 +1230,6 @@ fn select_effective_provider_instance<'a>(
     instances.iter().max_by_key(|instance| {
         (
             instance.status == domain::ModelProviderInstanceStatus::Ready,
-            instance.last_validated_at,
             instance.updated_at,
             instance.id,
         )
@@ -1504,9 +1502,6 @@ impl InMemoryOrchestrationRuntimeRepository {
                 "base_url": "https://api.example.com",
             }),
             enabled_model_ids: vec!["gpt-5.4-mini".to_string()],
-            last_validated_at: Some(now),
-            last_validation_status: Some(domain::ModelProviderValidationStatus::Succeeded),
-            last_validation_message: Some("validated".to_string()),
             created_by: Uuid::nil(),
             updated_by: Uuid::nil(),
             created_at: now,
