@@ -111,12 +111,11 @@ async fn seed_store() -> (
 #[tokio::test]
 async fn model_provider_repository_persists_instances_catalog_cache_and_encrypted_secrets() {
     let (store, workspace, actor, installation_id) = seed_store().await;
-    let instance_id = Uuid::now_v7();
-
-    let instance = ModelProviderRepository::create_instance(
+    let empty_instance_id = Uuid::now_v7();
+    let empty_instance = ModelProviderRepository::create_instance(
         &store,
         &CreateModelProviderInstanceInput {
-            instance_id,
+            instance_id: empty_instance_id,
             workspace_id: workspace.id,
             installation_id,
             provider_code: "fixture_provider".into(),
@@ -130,13 +129,50 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
     )
     .await
     .unwrap();
-    assert_eq!(instance.status, ModelProviderInstanceStatus::Draft);
-    assert_eq!(instance.enabled_model_ids, Vec::<String>::new());
+    assert_eq!(empty_instance.status, ModelProviderInstanceStatus::Draft);
+    assert_eq!(empty_instance.enabled_model_ids, Vec::<String>::new());
 
-    let updated = ModelProviderRepository::update_instance(
+    let empty_updated = ModelProviderRepository::update_instance(
         &store,
         &UpdateModelProviderInstanceInput {
-            instance_id,
+            instance_id: empty_instance_id,
+            workspace_id: workspace.id,
+            display_name: "Fixture Provider Draft".into(),
+            status: ModelProviderInstanceStatus::Draft,
+            config_json: json!({ "base_url": "https://api.example.com/v1" }),
+            enabled_model_ids: vec![],
+            updated_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(empty_updated.status, ModelProviderInstanceStatus::Draft);
+    assert_eq!(empty_updated.enabled_model_ids, Vec::<String>::new());
+
+    let pair_instance_id = Uuid::now_v7();
+    let pair_instance = ModelProviderRepository::create_instance(
+        &store,
+        &CreateModelProviderInstanceInput {
+            instance_id: pair_instance_id,
+            workspace_id: workspace.id,
+            installation_id,
+            provider_code: "fixture_provider".into(),
+            protocol: "openai_compatible".into(),
+            display_name: "Fixture Provider Ready".into(),
+            status: ModelProviderInstanceStatus::Draft,
+            config_json: json!({ "base_url": "https://api.example.com" }),
+            enabled_model_ids: vec!["qwen-max".into(), "qwen-plus".into()],
+            created_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(pair_instance.enabled_model_ids, vec!["qwen-max".to_string(), "qwen-plus".to_string()]);
+
+    let pair_updated = ModelProviderRepository::update_instance(
+        &store,
+        &UpdateModelProviderInstanceInput {
+            instance_id: pair_instance_id,
             workspace_id: workspace.id,
             display_name: "Fixture Provider Ready".into(),
             status: ModelProviderInstanceStatus::Ready,
@@ -147,16 +183,16 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
     )
     .await
     .unwrap();
-    assert_eq!(updated.status, ModelProviderInstanceStatus::Ready);
+    assert_eq!(pair_updated.status, ModelProviderInstanceStatus::Ready);
     assert_eq!(
-        updated.enabled_model_ids,
+        pair_updated.enabled_model_ids,
         vec!["qwen-max".to_string(), "qwen-plus".to_string()]
     );
 
     let cache = ModelProviderRepository::upsert_catalog_cache(
         &store,
         &UpsertModelProviderCatalogCacheInput {
-            provider_instance_id: instance_id,
+            provider_instance_id: pair_instance_id,
             model_discovery_mode: ModelProviderDiscoveryMode::Hybrid,
             refresh_status: ModelProviderCatalogRefreshStatus::Ready,
             source: ModelProviderCatalogSource::Hybrid,
@@ -180,7 +216,7 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
     let secret = ModelProviderRepository::upsert_secret(
         &store,
         &UpsertModelProviderSecretInput {
-            provider_instance_id: instance_id,
+            provider_instance_id: pair_instance_id,
             plaintext_secret_json: json!({ "api_key": "super-secret" }),
             secret_version: 1,
             master_key: "provider-secret-master-key".into(),
@@ -193,14 +229,14 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
     let stored_secret: Value = sqlx::query_scalar(
         "select encrypted_secret_json from model_provider_instance_secrets where provider_instance_id = $1",
     )
-    .bind(instance_id)
+    .bind(pair_instance_id)
     .fetch_one(store.pool())
     .await
     .unwrap();
     assert!(!stored_secret.to_string().contains("super-secret"));
 
     let decrypted =
-        ModelProviderRepository::get_secret_json(&store, instance_id, "provider-secret-master-key")
+        ModelProviderRepository::get_secret_json(&store, pair_instance_id, "provider-secret-master-key")
             .await
             .unwrap()
             .unwrap();
@@ -209,8 +245,8 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
     let instances = ModelProviderRepository::list_instances(&store, workspace.id)
         .await
         .unwrap();
-    assert_eq!(instances.len(), 1);
-    let cache_record = ModelProviderRepository::get_catalog_cache(&store, instance_id)
+    assert_eq!(instances.len(), 2);
+    let cache_record = ModelProviderRepository::get_catalog_cache(&store, pair_instance_id)
         .await
         .unwrap()
         .unwrap();

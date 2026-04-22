@@ -483,6 +483,7 @@ fn to_instance_response(view: ModelProviderInstanceView) -> ModelProviderInstanc
         .as_ref()
         .and_then(|cache| cache.models_json.as_array().map(|items| items.len()))
         .unwrap_or(0);
+    let validation_model_id = view.instance.enabled_model_ids.first().cloned();
     ModelProviderInstanceResponse {
         id: view.instance.id.to_string(),
         installation_id: view.instance.installation_id.to_string(),
@@ -491,13 +492,10 @@ fn to_instance_response(view: ModelProviderInstanceView) -> ModelProviderInstanc
         display_name: view.instance.display_name,
         status: view.instance.status.as_str().to_string(),
         config_json: view.instance.config_json,
-        validation_model_id: view.instance.validation_model_id,
-        last_validated_at: format_optional_time(view.instance.last_validated_at),
-        last_validation_status: view
-            .instance
-            .last_validation_status
-            .map(|status| status.as_str().to_string()),
-        last_validation_message: view.instance.last_validation_message,
+        validation_model_id,
+        last_validated_at: None,
+        last_validation_status: None,
+        last_validation_message: None,
         catalog_refresh_status: view
             .cache
             .as_ref()
