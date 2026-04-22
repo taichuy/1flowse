@@ -84,7 +84,7 @@
 - Modify: `api/crates/storage-pg/src/model_provider_repository.rs`
 - Test: `api/crates/storage-pg/src/_tests/model_provider_repository_tests.rs`
 
-- [ ] **Step 1: Write the failing storage test for manual-primary routing CRUD**
+- [x] **Step 1: Write the failing storage test for manual-primary routing CRUD**
 
 ```rust
 #[tokio::test]
@@ -176,7 +176,7 @@ async fn model_provider_repository_persists_manual_primary_routing_and_clears_it
 }
 ```
 
-- [ ] **Step 2: Run the targeted storage test and verify it fails before implementation**
+- [x] **Step 2: Run the targeted storage test and verify it fails before implementation**
 
 Run:
 
@@ -189,7 +189,7 @@ Expected:
 - FAIL because `UpsertModelProviderRoutingInput`, `ModelProviderRoutingMode`, and routing repository methods do not exist.
 - FAIL because the routing table migration is missing.
 
-- [ ] **Step 3: Implement domain types, repository inputs, migration, and SQLx queries**
+- [x] **Step 3: Implement domain types, repository inputs, migration, and SQLx queries**
 
 ```rust
 // api/crates/domain/src/model_provider.rs
@@ -360,7 +360,7 @@ async fn delete_routing(&self, workspace_id: Uuid, provider_code: &str) -> Resul
 }
 ```
 
-- [ ] **Step 4: Re-run the storage repository test and the full model-provider repository suite**
+- [x] **Step 4: Re-run the storage repository test and the full model-provider repository suite**
 
 Run:
 
@@ -374,7 +374,7 @@ Expected:
 - PASS for the new routing CRUD coverage.
 - PASS for the existing instance / cache / secret repository coverage.
 
-- [ ] **Step 5: Commit the persistence layer**
+- [x] **Step 5: Commit the persistence layer**
 
 ```bash
 git add api/crates/domain/src/model_provider.rs \

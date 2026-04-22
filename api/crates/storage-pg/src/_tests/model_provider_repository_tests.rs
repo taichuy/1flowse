@@ -1,12 +1,12 @@
 use control_plane::ports::{
     CreateModelProviderInstanceInput, ModelProviderRepository, ReassignModelProviderInstancesInput,
     UpdateModelProviderInstanceInput, UpsertModelProviderCatalogCacheInput,
-    UpsertModelProviderSecretInput, UpsertPluginInstallationInput,
+    UpsertModelProviderRoutingInput, UpsertModelProviderSecretInput, UpsertPluginInstallationInput,
 };
 use domain::{
     ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource, ModelProviderDiscoveryMode,
-    ModelProviderInstanceStatus, PluginArtifactStatus, PluginAvailabilityStatus,
-    PluginDesiredState, PluginRuntimeStatus, PluginVerificationStatus,
+    ModelProviderInstanceStatus, ModelProviderRoutingMode, PluginArtifactStatus,
+    PluginAvailabilityStatus, PluginDesiredState, PluginRuntimeStatus, PluginVerificationStatus,
 };
 use serde_json::{json, Value};
 use sqlx::PgPool;
@@ -179,7 +179,10 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
     )
     .await
     .unwrap();
-    assert_eq!(pair_instance.enabled_model_ids, vec!["qwen-max".to_string(), "qwen-plus".to_string()]);
+    assert_eq!(
+        pair_instance.enabled_model_ids,
+        vec!["qwen-max".to_string(), "qwen-plus".to_string()]
+    );
     assert_eq!(
         pair_instance.configured_models,
         vec![
@@ -283,11 +286,14 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
     .unwrap();
     assert!(!stored_secret.to_string().contains("super-secret"));
 
-    let decrypted =
-        ModelProviderRepository::get_secret_json(&store, pair_instance_id, "provider-secret-master-key")
-            .await
-            .unwrap()
-            .unwrap();
+    let decrypted = ModelProviderRepository::get_secret_json(
+        &store,
+        pair_instance_id,
+        "provider-secret-master-key",
+    )
+    .await
+    .unwrap()
+    .unwrap();
     assert_eq!(decrypted["api_key"], "super-secret");
 
     let instances = ModelProviderRepository::list_instances(&store, workspace.id)
@@ -299,6 +305,262 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
         .unwrap()
         .unwrap();
     assert_eq!(cache_record.models_json[0]["model_id"], "fixture_chat");
+}
+
+#[tokio::test]
+async fn model_provider_repository_persists_manual_primary_routing_and_clears_it_on_delete() {
+    let (store, workspace, actor, installation_id) = seed_store().await;
+
+    let primary = ModelProviderRepository::create_instance(
+        &store,
+        &CreateModelProviderInstanceInput {
+            instance_id: Uuid::now_v7(),
+            workspace_id: workspace.id,
+            installation_id,
+            provider_code: "fixture_provider".into(),
+            protocol: "openai_compatible".into(),
+            display_name: "Primary".into(),
+            status: ModelProviderInstanceStatus::Ready,
+            config_json: json!({ "base_url": "https://primary.example.com/v1" }),
+            configured_models: vec![],
+            enabled_model_ids: vec!["gpt-4o-mini".into()],
+            created_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    let backup = ModelProviderRepository::create_instance(
+        &store,
+        &CreateModelProviderInstanceInput {
+            instance_id: Uuid::now_v7(),
+            workspace_id: workspace.id,
+            installation_id,
+            provider_code: "fixture_provider".into(),
+            protocol: "openai_compatible".into(),
+            display_name: "Backup".into(),
+            status: ModelProviderInstanceStatus::Ready,
+            config_json: json!({ "base_url": "https://backup.example.com/v1" }),
+            configured_models: vec![],
+            enabled_model_ids: vec!["gpt-4.1-mini".into()],
+            created_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    let routing = ModelProviderRepository::upsert_routing(
+        &store,
+        &UpsertModelProviderRoutingInput {
+            workspace_id: workspace.id,
+            provider_code: "fixture_provider".into(),
+            routing_mode: ModelProviderRoutingMode::ManualPrimary,
+            primary_instance_id: primary.id,
+            updated_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(routing.primary_instance_id, primary.id);
+    assert_eq!(
+        ModelProviderRepository::get_routing(&store, workspace.id, "fixture_provider")
+            .await
+            .unwrap()
+            .unwrap()
+            .primary_instance_id,
+        primary.id
+    );
+    assert_eq!(
+        ModelProviderRepository::list_routings(&store, workspace.id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+
+    ModelProviderRepository::delete_routing(&store, workspace.id, "fixture_provider")
+        .await
+        .unwrap();
+    assert!(
+        ModelProviderRepository::get_routing(&store, workspace.id, "fixture_provider")
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    let recreated = ModelProviderRepository::upsert_routing(
+        &store,
+        &UpsertModelProviderRoutingInput {
+            workspace_id: workspace.id,
+            provider_code: "fixture_provider".into(),
+            routing_mode: ModelProviderRoutingMode::ManualPrimary,
+            primary_instance_id: primary.id,
+            updated_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(recreated.primary_instance_id, primary.id);
+
+    let updated = ModelProviderRepository::upsert_routing(
+        &store,
+        &UpsertModelProviderRoutingInput {
+            workspace_id: workspace.id,
+            provider_code: "fixture_provider".into(),
+            routing_mode: ModelProviderRoutingMode::ManualPrimary,
+            primary_instance_id: backup.id,
+            updated_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated.primary_instance_id, backup.id);
+    assert_eq!(updated.created_by, recreated.created_by);
+    assert_eq!(updated.created_at, recreated.created_at);
+
+    let restored = ModelProviderRepository::upsert_routing(
+        &store,
+        &UpsertModelProviderRoutingInput {
+            workspace_id: workspace.id,
+            provider_code: "fixture_provider".into(),
+            routing_mode: ModelProviderRoutingMode::ManualPrimary,
+            primary_instance_id: primary.id,
+            updated_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(restored.primary_instance_id, primary.id);
+    assert_eq!(restored.created_by, recreated.created_by);
+    assert_eq!(restored.created_at, recreated.created_at);
+
+    ModelProviderRepository::delete_instance(&store, workspace.id, backup.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        ModelProviderRepository::get_routing(&store, workspace.id, "fixture_provider")
+            .await
+            .unwrap()
+            .unwrap()
+            .primary_instance_id,
+        primary.id
+    );
+
+    ModelProviderRepository::delete_instance(&store, workspace.id, primary.id)
+        .await
+        .unwrap();
+    assert!(
+        ModelProviderRepository::get_routing(&store, workspace.id, "fixture_provider")
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn model_provider_repository_rejects_routing_instances_from_another_scope() {
+    let (store, workspace, actor, installation_id) = seed_store().await;
+    let other_workspace = store
+        .upsert_workspace(workspace.tenant_id, "other-workspace")
+        .await
+        .unwrap();
+
+    let other_provider_installation = control_plane::ports::PluginRepository::upsert_installation(
+        &store,
+        &UpsertPluginInstallationInput {
+            installation_id: Uuid::now_v7(),
+            provider_code: "other_provider".into(),
+            plugin_id: "other_provider@0.1.0".into(),
+            plugin_version: "0.1.0".into(),
+            contract_version: "1flowbase.provider/v1".into(),
+            protocol: "openai_compatible".into(),
+            display_name: "Other Provider".into(),
+            source_kind: "uploaded".into(),
+            trust_level: "unverified".into(),
+            verification_status: PluginVerificationStatus::Valid,
+            desired_state: PluginDesiredState::ActiveRequested,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: PluginRuntimeStatus::Inactive,
+            availability_status: PluginAvailabilityStatus::InstallIncomplete,
+            package_path: None,
+            installed_path: "/tmp/plugin-installed/other_provider/0.1.0".into(),
+            checksum: Some("other123".into()),
+            manifest_fingerprint: None,
+            signature_status: Some("unsigned".into()),
+            signature_algorithm: None,
+            signing_key_id: None,
+            last_load_error: None,
+            metadata_json: json!({}),
+            actor_user_id: actor.id,
+        },
+    )
+    .await
+    .unwrap()
+    .id;
+
+    let other_provider_instance = ModelProviderRepository::create_instance(
+        &store,
+        &CreateModelProviderInstanceInput {
+            instance_id: Uuid::now_v7(),
+            workspace_id: workspace.id,
+            installation_id: other_provider_installation,
+            provider_code: "other_provider".into(),
+            protocol: "openai_compatible".into(),
+            display_name: "Other Provider".into(),
+            status: ModelProviderInstanceStatus::Ready,
+            config_json: json!({ "base_url": "https://other-provider.example.com/v1" }),
+            configured_models: vec![],
+            enabled_model_ids: vec!["other-model".into()],
+            created_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    let other_workspace_instance = ModelProviderRepository::create_instance(
+        &store,
+        &CreateModelProviderInstanceInput {
+            instance_id: Uuid::now_v7(),
+            workspace_id: other_workspace.id,
+            installation_id,
+            provider_code: "fixture_provider".into(),
+            protocol: "openai_compatible".into(),
+            display_name: "Other Workspace".into(),
+            status: ModelProviderInstanceStatus::Ready,
+            config_json: json!({ "base_url": "https://other-workspace.example.com/v1" }),
+            configured_models: vec![],
+            enabled_model_ids: vec!["gpt-4o-mini".into()],
+            created_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert!(ModelProviderRepository::upsert_routing(
+        &store,
+        &UpsertModelProviderRoutingInput {
+            workspace_id: workspace.id,
+            provider_code: "fixture_provider".into(),
+            routing_mode: ModelProviderRoutingMode::ManualPrimary,
+            primary_instance_id: other_provider_instance.id,
+            updated_by: actor.id,
+        },
+    )
+    .await
+    .is_err());
+    assert!(ModelProviderRepository::upsert_routing(
+        &store,
+        &UpsertModelProviderRoutingInput {
+            workspace_id: workspace.id,
+            provider_code: "fixture_provider".into(),
+            routing_mode: ModelProviderRoutingMode::ManualPrimary,
+            primary_instance_id: other_workspace_instance.id,
+            updated_by: actor.id,
+        },
+    )
+    .await
+    .is_err());
 }
 
 #[tokio::test]

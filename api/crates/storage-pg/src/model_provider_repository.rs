@@ -6,7 +6,7 @@ use control_plane::{
         CreateModelProviderInstanceInput, CreateModelProviderPreviewSessionInput,
         ModelProviderRepository, ReassignModelProviderInstancesInput,
         UpdateModelProviderInstanceInput, UpsertModelProviderCatalogCacheInput,
-        UpsertModelProviderSecretInput,
+        UpsertModelProviderRoutingInput, UpsertModelProviderSecretInput,
     },
 };
 use serde_json::{json, Value};
@@ -16,7 +16,8 @@ use uuid::Uuid;
 use crate::{
     mappers::model_provider_mapper::{
         PgModelProviderMapper, StoredModelProviderCatalogCacheRow, StoredModelProviderInstanceRow,
-        StoredModelProviderPreviewSessionRow, StoredModelProviderSecretRow,
+        StoredModelProviderPreviewSessionRow, StoredModelProviderRoutingRow,
+        StoredModelProviderSecretRow,
     },
     repositories::PgControlPlaneStore,
 };
@@ -77,6 +78,19 @@ fn map_preview_session(
         models_json: row.get("models_json"),
         expires_at: row.get("expires_at"),
         created_at: row.get("created_at"),
+    })
+}
+
+fn map_routing(row: sqlx::postgres::PgRow) -> Result<domain::ModelProviderRoutingRecord> {
+    PgModelProviderMapper::to_routing_record(StoredModelProviderRoutingRow {
+        workspace_id: row.get("workspace_id"),
+        provider_code: row.get("provider_code"),
+        routing_mode: row.get("routing_mode"),
+        primary_instance_id: row.get("primary_instance_id"),
+        created_by: row.get("created_by"),
+        updated_by: row.get("updated_by"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
     })
 }
 
@@ -432,6 +446,120 @@ impl ModelProviderRepository for PgControlPlaneStore {
         .await?;
 
         map_secret(row)
+    }
+
+    async fn upsert_routing(
+        &self,
+        input: &UpsertModelProviderRoutingInput,
+    ) -> Result<domain::ModelProviderRoutingRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into model_provider_routings (
+                workspace_id,
+                provider_code,
+                routing_mode,
+                primary_instance_id,
+                created_by,
+                updated_by
+            ) values ($1, $2, $3, $4, $5, $5)
+            on conflict (workspace_id, provider_code) do update
+            set
+                routing_mode = excluded.routing_mode,
+                primary_instance_id = excluded.primary_instance_id,
+                updated_by = excluded.updated_by,
+                updated_at = now()
+            returning
+                workspace_id,
+                provider_code,
+                routing_mode,
+                primary_instance_id,
+                created_by,
+                updated_by,
+                created_at,
+                updated_at
+            "#,
+        )
+        .bind(input.workspace_id)
+        .bind(&input.provider_code)
+        .bind(input.routing_mode.as_str())
+        .bind(input.primary_instance_id)
+        .bind(input.updated_by)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_routing(row)
+    }
+
+    async fn get_routing(
+        &self,
+        workspace_id: Uuid,
+        provider_code: &str,
+    ) -> Result<Option<domain::ModelProviderRoutingRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                workspace_id,
+                provider_code,
+                routing_mode,
+                primary_instance_id,
+                created_by,
+                updated_by,
+                created_at,
+                updated_at
+            from model_provider_routings
+            where workspace_id = $1
+              and provider_code = $2
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(provider_code)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_routing).transpose()
+    }
+
+    async fn list_routings(
+        &self,
+        workspace_id: Uuid,
+    ) -> Result<Vec<domain::ModelProviderRoutingRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                workspace_id,
+                provider_code,
+                routing_mode,
+                primary_instance_id,
+                created_by,
+                updated_by,
+                created_at,
+                updated_at
+            from model_provider_routings
+            where workspace_id = $1
+            order by provider_code asc
+            "#,
+        )
+        .bind(workspace_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_routing).collect()
+    }
+
+    async fn delete_routing(&self, workspace_id: Uuid, provider_code: &str) -> Result<()> {
+        sqlx::query(
+            r#"
+            delete from model_provider_routings
+            where workspace_id = $1
+              and provider_code = $2
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(provider_code)
+        .execute(self.pool())
+        .await?;
+
+        Ok(())
     }
 
     async fn create_preview_session(

@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use domain::{
     ModelProviderCatalogCacheRecord, ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource,
     ModelProviderDiscoveryMode, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
-    ModelProviderSecretRecord,
+    ModelProviderRoutingMode, ModelProviderRoutingRecord, ModelProviderSecretRecord,
 };
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -56,6 +56,18 @@ pub struct StoredModelProviderPreviewSessionRow {
     pub models_json: serde_json::Value,
     pub expires_at: OffsetDateTime,
     pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredModelProviderRoutingRow {
+    pub workspace_id: Uuid,
+    pub provider_code: String,
+    pub routing_mode: String,
+    pub primary_instance_id: Uuid,
+    pub created_by: Uuid,
+    pub updated_by: Uuid,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
 }
 
 pub struct PgModelProviderMapper;
@@ -123,6 +135,21 @@ impl PgModelProviderMapper {
             created_at: row.created_at,
         })
     }
+
+    pub fn to_routing_record(
+        row: StoredModelProviderRoutingRow,
+    ) -> Result<ModelProviderRoutingRecord> {
+        Ok(ModelProviderRoutingRecord {
+            workspace_id: row.workspace_id,
+            provider_code: row.provider_code,
+            routing_mode: parse_routing_mode(&row.routing_mode)?,
+            primary_instance_id: row.primary_instance_id,
+            created_by: row.created_by,
+            updated_by: row.updated_by,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+    }
 }
 
 pub fn parse_instance_status(value: &str) -> Result<ModelProviderInstanceStatus> {
@@ -160,5 +187,12 @@ pub fn parse_catalog_source(value: &str) -> Result<ModelProviderCatalogSource> {
         "dynamic" => Ok(ModelProviderCatalogSource::Dynamic),
         "hybrid" => Ok(ModelProviderCatalogSource::Hybrid),
         _ => Err(anyhow!("unknown model provider catalog source: {value}")),
+    }
+}
+
+pub fn parse_routing_mode(value: &str) -> Result<ModelProviderRoutingMode> {
+    match value {
+        "manual_primary" => Ok(ModelProviderRoutingMode::ManualPrimary),
+        _ => Err(anyhow!("unknown model provider routing mode: {value}")),
     }
 }

@@ -67,6 +67,15 @@ pub struct UpsertModelProviderSecretInput {
     pub master_key: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct UpsertModelProviderRoutingInput {
+    pub workspace_id: Uuid,
+    pub provider_code: String,
+    pub routing_mode: domain::ModelProviderRoutingMode,
+    pub primary_instance_id: Uuid,
+    pub updated_by: Uuid,
+}
+
 #[async_trait]
 pub trait ModelProviderRepository: Send + Sync {
     async fn create_instance(
@@ -106,6 +115,20 @@ pub trait ModelProviderRepository: Send + Sync {
         &self,
         input: &UpsertModelProviderSecretInput,
     ) -> anyhow::Result<domain::ModelProviderSecretRecord>;
+    async fn upsert_routing(
+        &self,
+        input: &UpsertModelProviderRoutingInput,
+    ) -> anyhow::Result<domain::ModelProviderRoutingRecord>;
+    async fn get_routing(
+        &self,
+        workspace_id: Uuid,
+        provider_code: &str,
+    ) -> anyhow::Result<Option<domain::ModelProviderRoutingRecord>>;
+    async fn list_routings(
+        &self,
+        workspace_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::ModelProviderRoutingRecord>>;
+    async fn delete_routing(&self, workspace_id: Uuid, provider_code: &str) -> anyhow::Result<()>;
     async fn create_preview_session(
         &self,
         input: &CreateModelProviderPreviewSessionInput,
