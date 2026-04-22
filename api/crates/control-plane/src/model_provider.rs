@@ -30,7 +30,7 @@ pub struct CreateModelProviderInstanceCommand {
     pub installation_id: Uuid,
     pub display_name: String,
     pub config_json: Value,
-    pub validation_model_id: Option<String>,
+    pub enabled_model_ids: Vec<String>,
     pub preview_token: Option<Uuid>,
 }
 
@@ -39,7 +39,7 @@ pub struct UpdateModelProviderInstanceCommand {
     pub instance_id: Uuid,
     pub display_name: String,
     pub config_json: Value,
-    pub validation_model_id: Option<String>,
+    pub enabled_model_ids: Vec<String>,
     pub preview_token: Option<Uuid>,
 }
 
@@ -126,16 +126,12 @@ struct PreviewStateRequest<'a> {
     installation_id: Option<Uuid>,
     instance_id: Option<Uuid>,
     provider_config: &'a Value,
-    validation_model_id: Option<&'a str>,
     preview_token: Option<Uuid>,
-    disabled_instance: bool,
 }
 
 struct ResolvedPreviewState {
-    instance_status: domain::ModelProviderInstanceStatus,
-    validation_model_id: Option<String>,
-    last_validated_at: Option<OffsetDateTime>,
     models_json: Option<Value>,
+    refreshed_at: Option<OffsetDateTime>,
     preview_token: Option<Uuid>,
 }
 
@@ -319,6 +315,7 @@ where
             &secret_config,
         )?;
         let provider_config = merge_json_object(&public_config, &secret_config)?;
+        let enabled_model_ids = normalize_enabled_model_ids(command.enabled_model_ids);
         let preview_state = self
             .resolve_preview_state(
                 &actor,
@@ -326,17 +323,10 @@ where
                     installation_id: Some(installation.id),
                     instance_id: None,
                     provider_config: &provider_config,
-                    validation_model_id: command.validation_model_id.as_deref(),
                     preview_token: command.preview_token,
-                    disabled_instance: false,
                 },
             )
             .await?;
-        let enabled_model_ids = preview_state
-            .validation_model_id
-            .clone()
-            .into_iter()
-            .collect();
         let instance = self
             .repository
             .create_instance(&CreateModelProviderInstanceInput {
@@ -346,7 +336,7 @@ where
                 provider_code: installation.provider_code.clone(),
                 protocol: installation.protocol.clone(),
                 display_name: normalize_required_text(&command.display_name, "display_name")?,
-                status: preview_state.instance_status,
+                status: derive_instance_status(false, &enabled_model_ids),
                 config_json: public_config.clone(),
                 enabled_model_ids,
                 created_by: command.actor_user_id,
@@ -373,7 +363,7 @@ where
                     source: map_catalog_source(package.provider.model_discovery_mode),
                     models_json: models_json.clone(),
                     last_error_message: None,
-                    refreshed_at: preview_state.last_validated_at,
+                    refreshed_at: preview_state.refreshed_at,
                 })
                 .await?;
         }
@@ -437,6 +427,7 @@ where
             &merged_secret_config,
         )?;
         let provider_config = merge_json_object(&merged_public_config, &merged_secret_config)?;
+        let enabled_model_ids = normalize_enabled_model_ids(command.enabled_model_ids);
 
         if !is_empty_object(&patch_secret_config) {
             let version = self
@@ -462,22 +453,14 @@ where
                     installation_id: Some(installation.id),
                     instance_id: Some(existing.id),
                     provider_config: &provider_config,
-                    validation_model_id: command.validation_model_id.as_deref(),
                     preview_token: command.preview_token,
-                    disabled_instance: matches!(
-                        existing.status,
-                        domain::ModelProviderInstanceStatus::Disabled
-                    ),
                 },
             )
             .await?;
-        let enabled_model_ids = preview_state
-            .validation_model_id
-            .clone()
-            .into_iter()
-            .collect();
-
-        let next_status = preview_state.instance_status;
+        let next_status = derive_instance_status(
+            matches!(existing.status, domain::ModelProviderInstanceStatus::Disabled),
+            &enabled_model_ids,
+        );
         ensure_model_provider_instance_transition(existing.status, next_status, "update_instance")?;
 
         let updated = self
@@ -503,7 +486,7 @@ where
                     source: map_catalog_source(package.provider.model_discovery_mode),
                     models_json: models_json.clone(),
                     last_error_message: None,
-                    refreshed_at: preview_state.last_validated_at,
+                    refreshed_at: preview_state.refreshed_at,
                 })
                 .await?;
         }
@@ -539,23 +522,13 @@ where
         actor: &domain::ActorContext,
         request: PreviewStateRequest<'_>,
     ) -> Result<ResolvedPreviewState> {
-        if request.validation_model_id.is_none() {
+        let Some(preview_token) = request.preview_token else {
             return Ok(ResolvedPreviewState {
-                instance_status: if request.disabled_instance {
-                    domain::ModelProviderInstanceStatus::Disabled
-                } else {
-                    domain::ModelProviderInstanceStatus::Draft
-                },
-                validation_model_id: None,
-                last_validated_at: None,
                 models_json: None,
+                refreshed_at: None,
                 preview_token: None,
             });
-        }
-
-        let preview_token = request
-            .preview_token
-            .ok_or(ControlPlaneError::InvalidInput("preview_token"))?;
+        };
 
         let session = self
             .repository
@@ -573,25 +546,12 @@ where
             return Err(ControlPlaneError::InvalidInput("preview_token").into());
         }
 
-        let validation_model_id = request
-            .validation_model_id
-            .map(ToString::to_string)
-            .ok_or(ControlPlaneError::InvalidInput("validation_model_id"))?;
         let models_json = session.models_json;
-        let models = deserialize_models_json(&models_json)?;
-        if !models.iter().any(|model| model.model_id == validation_model_id) {
-            return Err(ControlPlaneError::InvalidInput("validation_model_id").into());
-        }
+        deserialize_models_json(&models_json)?;
 
         Ok(ResolvedPreviewState {
-            instance_status: if request.disabled_instance {
-                domain::ModelProviderInstanceStatus::Disabled
-            } else {
-                domain::ModelProviderInstanceStatus::Ready
-            },
-            validation_model_id: Some(validation_model_id),
-            last_validated_at: Some(OffsetDateTime::now_utc()),
             models_json: Some(models_json),
+            refreshed_at: Some(OffsetDateTime::now_utc()),
             preview_token: Some(preview_token),
         })
     }
@@ -1289,6 +1249,32 @@ fn normalize_required_text(value: &str, field: &'static str) -> Result<String, a
         Err(ControlPlaneError::InvalidInput(field).into())
     } else {
         Ok(trimmed.to_string())
+    }
+}
+
+fn normalize_enabled_model_ids(enabled_model_ids: Vec<String>) -> Vec<String> {
+    let mut normalized = Vec::new();
+    let mut seen = HashSet::new();
+    for model_id in enabled_model_ids {
+        let trimmed = model_id.trim();
+        if trimmed.is_empty() || !seen.insert(trimmed.to_string()) {
+            continue;
+        }
+        normalized.push(trimmed.to_string());
+    }
+    normalized
+}
+
+fn derive_instance_status(
+    disabled_instance: bool,
+    enabled_model_ids: &[String],
+) -> domain::ModelProviderInstanceStatus {
+    if disabled_instance {
+        domain::ModelProviderInstanceStatus::Disabled
+    } else if enabled_model_ids.is_empty() {
+        domain::ModelProviderInstanceStatus::Draft
+    } else {
+        domain::ModelProviderInstanceStatus::Ready
     }
 }
 

@@ -38,7 +38,7 @@ use crate::{
 pub struct CreateModelProviderBody {
     pub installation_id: String,
     pub display_name: String,
-    pub validation_model_id: Option<String>,
+    pub enabled_model_ids: Vec<String>,
     pub preview_token: Option<String>,
     #[schema(value_type = Object)]
     pub config: serde_json::Value,
@@ -47,7 +47,7 @@ pub struct CreateModelProviderBody {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateModelProviderBody {
     pub display_name: String,
-    pub validation_model_id: Option<String>,
+    pub enabled_model_ids: Vec<String>,
     pub preview_token: Option<String>,
     #[schema(value_type = Object)]
     pub config: serde_json::Value,
@@ -192,10 +192,7 @@ pub struct ModelProviderInstanceResponse {
     pub status: String,
     #[schema(value_type = Object)]
     pub config_json: serde_json::Value,
-    pub validation_model_id: Option<String>,
-    pub last_validated_at: Option<String>,
-    pub last_validation_status: Option<String>,
-    pub last_validation_message: Option<String>,
+    pub enabled_model_ids: Vec<String>,
     pub catalog_refresh_status: Option<String>,
     pub catalog_last_error_message: Option<String>,
     pub catalog_refreshed_at: Option<String>,
@@ -483,7 +480,6 @@ fn to_instance_response(view: ModelProviderInstanceView) -> ModelProviderInstanc
         .as_ref()
         .and_then(|cache| cache.models_json.as_array().map(|items| items.len()))
         .unwrap_or(0);
-    let validation_model_id = view.instance.enabled_model_ids.first().cloned();
     ModelProviderInstanceResponse {
         id: view.instance.id.to_string(),
         installation_id: view.instance.installation_id.to_string(),
@@ -492,10 +488,7 @@ fn to_instance_response(view: ModelProviderInstanceView) -> ModelProviderInstanc
         display_name: view.instance.display_name,
         status: view.instance.status.as_str().to_string(),
         config_json: view.instance.config_json,
-        validation_model_id,
-        last_validated_at: None,
-        last_validation_status: None,
-        last_validation_message: None,
+        enabled_model_ids: view.instance.enabled_model_ids,
         catalog_refresh_status: view
             .cache
             .as_ref()
@@ -665,7 +658,7 @@ pub async fn create_instance(
             installation_id: parse_uuid(&body.installation_id, "installation_id")?,
             display_name: body.display_name,
             config_json: body.config,
-            validation_model_id: body.validation_model_id,
+            enabled_model_ids: body.enabled_model_ids,
             preview_token: body
                 .preview_token
                 .as_deref()
@@ -700,7 +693,7 @@ pub async fn update_instance(
             instance_id: parse_uuid(&id, "id")?,
             display_name: body.display_name,
             config_json: body.config,
-            validation_model_id: body.validation_model_id,
+            enabled_model_ids: body.enabled_model_ids,
             preview_token: body
                 .preview_token
                 .as_deref()
