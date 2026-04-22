@@ -130,6 +130,7 @@ export function SettingsModelProvidersSection({
   const {
     createMutation,
     updateMutation,
+    previewMutation,
     validateMutation,
     refreshMutation,
     revealSecretMutation,
@@ -157,6 +158,7 @@ export function SettingsModelProvidersSection({
     getErrorMessage(modelsQuery.error) ??
     getErrorMessage(createMutation.error) ??
     getErrorMessage(updateMutation.error) ??
+    getErrorMessage(previewMutation.error) ??
     getErrorMessage(revealSecretMutation.error) ??
     getErrorMessage(validateMutation.error) ??
     getErrorMessage(refreshMutation.error) ??
@@ -335,6 +337,8 @@ export function SettingsModelProvidersSection({
             await updateMutation.mutateAsync({
               instanceId: editingInstance.id,
               display_name: values.display_name,
+              configured_models: values.configured_models,
+              preview_token: values.preview_token,
               config: values.config
             });
             return;
@@ -347,7 +351,26 @@ export function SettingsModelProvidersSection({
           await createMutation.mutateAsync({
             installationId: drawerCatalogEntry.installation_id,
             display_name: values.display_name,
+            configured_models: values.configured_models,
+            preview_token: values.preview_token,
             config: values.config
+          });
+        }}
+        onPreviewModels={async (config) => {
+          if (drawerState?.mode === 'edit' && editingInstance) {
+            return previewMutation.mutateAsync({
+              instanceId: editingInstance.id,
+              config
+            });
+          }
+
+          if (!drawerCatalogEntry) {
+            throw new Error('missing provider catalog entry');
+          }
+
+          return previewMutation.mutateAsync({
+            installationId: drawerCatalogEntry.installation_id,
+            config
           });
         }}
       />

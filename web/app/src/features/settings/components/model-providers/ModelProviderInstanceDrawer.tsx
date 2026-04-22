@@ -349,6 +349,16 @@ export function ModelProviderInstanceDrawer({
     }
   }
 
+  async function handleSubmit() {
+    const values = await form.validateFields([['display_name'], ...configFieldNames]);
+    await onSubmit({
+      display_name: values.display_name,
+      config: buildDraftConfig((values.config ?? {}) as Record<string, ModelProviderFormValue>),
+      configured_models: normalizeConfiguredModels(configuredModels),
+      preview_token: previewToken
+    });
+  }
+
   function renderConfigField(field: ModelProviderConfigField) {
     const label = buildFieldLabel(field.key);
 
@@ -467,7 +477,7 @@ export function ModelProviderInstanceDrawer({
           <Button
             loading={previewingModels}
             onClick={() => {
-              void handlePreviewModels();
+              void handlePreviewModels().catch(() => undefined);
             }}
           >
             检测
@@ -475,16 +485,8 @@ export function ModelProviderInstanceDrawer({
           <Button
             type="primary"
             loading={submitting}
-            onClick={async () => {
-              const values = await form.validateFields([['display_name'], ...configFieldNames]);
-              await onSubmit({
-                display_name: values.display_name,
-                config: buildDraftConfig(
-                  (values.config ?? {}) as Record<string, ModelProviderFormValue>
-                ),
-                configured_models: normalizeConfiguredModels(configuredModels),
-                preview_token: previewToken
-              });
+            onClick={() => {
+              void handleSubmit().catch(() => undefined);
             }}
           >
             保存

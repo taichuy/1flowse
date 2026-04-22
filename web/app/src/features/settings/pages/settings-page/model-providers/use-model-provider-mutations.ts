@@ -4,6 +4,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import {
   createSettingsModelProviderInstance,
   deleteSettingsModelProviderInstance,
+  previewSettingsModelProviderModels,
   refreshSettingsModelProviderModels,
   revealSettingsModelProviderSecret,
   settingsModelProviderCatalogQueryKey,
@@ -81,6 +82,8 @@ export function useModelProviderMutations({
     mutationFn: async (input: {
       installationId: string;
       display_name: string;
+      configured_models: Array<{ model_id: string; enabled: boolean }>;
+      preview_token?: string;
       config: Record<string, unknown>;
     }) => {
       if (!csrfToken) {
@@ -91,6 +94,8 @@ export function useModelProviderMutations({
         {
           installation_id: input.installationId,
           display_name: input.display_name,
+          configured_models: input.configured_models,
+          preview_token: input.preview_token,
           config: input.config
         },
         csrfToken
@@ -106,6 +111,8 @@ export function useModelProviderMutations({
     mutationFn: async (input: {
       instanceId: string;
       display_name: string;
+      configured_models: Array<{ model_id: string; enabled: boolean }>;
+      preview_token?: string;
       config: Record<string, unknown>;
     }) => {
       if (!csrfToken) {
@@ -116,6 +123,8 @@ export function useModelProviderMutations({
         input.instanceId,
         {
           display_name: input.display_name,
+          configured_models: input.configured_models,
+          preview_token: input.preview_token,
           config: input.config
         },
         csrfToken
@@ -124,6 +133,27 @@ export function useModelProviderMutations({
     onSuccess: async () => {
       setDrawerState(null);
       await invalidateModelProviderQueries();
+    }
+  });
+
+  const previewMutation = useMutation({
+    mutationFn: async (input: {
+      installationId?: string;
+      instanceId?: string;
+      config: Record<string, unknown>;
+    }) => {
+      if (!csrfToken) {
+        throw new Error('missing csrf token');
+      }
+
+      return previewSettingsModelProviderModels(
+        {
+          installation_id: input.installationId,
+          instance_id: input.instanceId,
+          config: input.config
+        },
+        csrfToken
+      );
     }
   });
 
@@ -313,6 +343,7 @@ export function useModelProviderMutations({
   return {
     createMutation,
     updateMutation,
+    previewMutation,
     validateMutation,
     refreshMutation,
     revealSecretMutation,

@@ -124,6 +124,7 @@ import { AppProviders } from '../../../app/AppProviders';
 import { AppRouterProvider } from '../../../app/router';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
 import { ModelProviderInstanceDrawer } from '../components/model-providers/ModelProviderInstanceDrawer';
+import { SettingsModelProvidersSection } from '../pages/settings-page/SettingsModelProvidersSection';
 
 const useBreakpointSpy = vi.spyOn(Grid, 'useBreakpoint');
 
@@ -649,6 +650,108 @@ describe('ModelProvidersPage', () => {
       within(catalogRow).queryByRole('link', { name: '文档' })
     ).not.toBeInTheDocument();
   }, 20000);
+
+  test(
+    'wires preview and create submission from the model provider drawer into the settings api',
+    { timeout: 20000 },
+    async () => {
+      authenticateWithPermissions([
+        'route_page.view.all',
+        'state_model.view.all',
+        'state_model.manage.all'
+      ]);
+      modelProvidersApi.createSettingsModelProviderInstance.mockResolvedValue({
+        id: 'provider-3',
+        installation_id: modelProviderCatalogEntries[0].installation_id,
+        provider_code: modelProviderCatalogEntries[0].provider_code,
+        protocol: modelProviderCatalogEntries[0].protocol,
+        display_name: 'OpenAI Draft',
+        status: 'ready',
+        config_json: {
+          base_url: 'https://api.openai.com/v1',
+          api_key: 'supe****cret'
+        },
+        configured_models: [
+          {
+            model_id: 'gpt-4o-mini',
+            enabled: true
+          }
+        ],
+        enabled_model_ids: ['gpt-4o-mini'],
+        catalog_refresh_status: 'ready',
+        catalog_last_error_message: null,
+        catalog_refreshed_at: '2026-04-18T10:05:00Z',
+        model_count: 1
+      });
+
+      render(
+        <AppProviders>
+          <SettingsModelProvidersSection canManage />
+        </AppProviders>
+      );
+
+      fireEvent.click(await screen.findByRole('button', { name: '添加' }));
+
+      expect(await screen.findByText('API 密钥授权配置')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText('API Endpoint'), {
+        target: { value: 'https://api.openai.com/v1' }
+      });
+      fireEvent.change(screen.getByLabelText('API Key'), {
+        target: { value: 'super-secret' }
+      });
+      fireEvent.change(screen.getByLabelText('凭据名称'), {
+        target: { value: 'OpenAI Draft' }
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /检\s*测/ }));
+
+      await waitFor(() => {
+        expect(
+          modelProvidersApi.previewSettingsModelProviderModels
+        ).toHaveBeenCalledWith(
+          {
+            installation_id: modelProviderCatalogEntries[0].installation_id,
+            config: {
+              base_url: 'https://api.openai.com/v1',
+              api_key: 'super-secret'
+            }
+          },
+          'csrf-123'
+        );
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: '添加模型' }));
+      fireEvent.change(screen.getByLabelText('模型 ID 1'), {
+        target: { value: 'gpt-4o-mini' }
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
+
+      await waitFor(() => {
+        expect(
+          modelProvidersApi.createSettingsModelProviderInstance
+        ).toHaveBeenCalledWith(
+          {
+            installation_id: modelProviderCatalogEntries[0].installation_id,
+            display_name: 'OpenAI Draft',
+            config: {
+              base_url: 'https://api.openai.com/v1',
+              api_key: 'super-secret'
+            },
+            configured_models: [
+              {
+                model_id: 'gpt-4o-mini',
+                enabled: true
+              }
+            ],
+            preview_token: 'preview-1'
+          },
+          'csrf-123'
+        );
+      });
+    }
+  );
 
   test('switches provider version from the catalog version column', async () => {
     authenticateWithPermissions([
