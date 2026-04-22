@@ -2,7 +2,11 @@ import { describe, expect, test } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 
+import {
+  modelProviderOptionsContract
+} from '../../../test/model-provider-contract-fixtures';
 import { createNodeDocument } from '../lib/document/node-factory';
+import { listLlmProviderOptions } from '../lib/model-options';
 import { validateDocument } from '../lib/validate-document';
 
 function createCodeDocumentWithOutputs(
@@ -34,6 +38,41 @@ function createCodeDocumentWithOutputs(
 }
 
 describe('validateDocument', () => {
+  test('keeps all backend-provided models selectable, including manual entries', () => {
+    const options = {
+      ...modelProviderOptionsContract,
+      providers: [
+        {
+          ...modelProviderOptionsContract.providers[0],
+          models: [
+            {
+              ...modelProviderOptionsContract.providers[0].models[0],
+              model_id: 'gpt-4o-mini',
+              display_name: 'GPT-4o Mini'
+            },
+            {
+              ...modelProviderOptionsContract.providers[0].models[0],
+              model_id: 'gpt-4o',
+              display_name: 'GPT-4o'
+            },
+            {
+              ...modelProviderOptionsContract.providers[0].models[0],
+              model_id: 'manual-enabled-model',
+              display_name: '手动启用模型',
+              source: 'manual'
+            }
+          ]
+        }
+      ]
+    };
+
+    expect(
+      listLlmProviderOptions(options as typeof modelProviderOptionsContract)[0]?.models.map(
+        (model) => model.value
+      )
+    ).toEqual(['gpt-4o-mini', 'gpt-4o', 'manual-enabled-model']);
+  });
+
   test('returns field, node, and global issues', () => {
     const broken = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     broken.graph.nodes = broken.graph.nodes.filter((node) => node.id !== 'node-answer');
@@ -155,6 +194,74 @@ describe('validateDocument', () => {
           nodeId: 'node-llm',
           fieldKey: 'config.model_provider',
           title: 'LLM 模型供应商不可用'
+        })
+      ])
+    );
+  });
+
+  test('flags a model that is not in the backend-provided model list', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+
+    if (!llmNode) {
+      throw new Error('expected default LLM node');
+    }
+
+    llmNode.config.model_provider = {
+      provider_code: 'openai_compatible',
+      model_id: 'gpt-4o'
+    };
+
+    const issues = validateDocument(document, {
+      locale_meta: {},
+      i18n_catalog: {},
+      providers: [
+        {
+          provider_code: 'openai_compatible',
+          plugin_type: 'model_provider',
+          namespace: 'plugin.openai_compatible',
+          label_key: 'provider.label',
+          description_key: 'provider.description',
+          protocol: 'openai_responses',
+          display_name: 'OpenAI Compatible',
+          effective_instance_id: 'provider-ready',
+          effective_instance_display_name: 'OpenAI Prod',
+          models: [
+            {
+              model_id: 'gpt-4o-mini',
+              display_name: 'GPT-4o Mini',
+              source: 'catalog',
+              supports_streaming: true,
+              supports_tool_call: true,
+              supports_multimodal: false,
+              context_window: 128000,
+              max_output_tokens: 16384,
+              parameter_form: null,
+              provider_metadata: {}
+            },
+            {
+              model_id: 'manual-enabled-model',
+              display_name: '手动启用模型',
+              source: 'manual',
+              supports_streaming: true,
+              supports_tool_call: true,
+              supports_multimodal: false,
+              context_window: 128000,
+              max_output_tokens: 16384,
+              parameter_form: null,
+              provider_metadata: {}
+            }
+          ]
+        }
+      ]
+    });
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-llm',
+          fieldKey: 'config.model_provider',
+          title: 'LLM 模型不可用'
         })
       ])
     );

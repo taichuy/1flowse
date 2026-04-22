@@ -141,4 +141,41 @@ describe('style boundary registry', () => {
     },
     15000
   );
+
+  test(
+    'seeds model provider instances with enabled model ids instead of validation history',
+    async () => {
+      const scene = getRuntimeScene('page.settings');
+
+      render(
+        <AppProviders>
+          <StyleBoundaryHarness scene={scene} />
+        </AppProviders>
+      );
+
+      expect(
+        await screen.findByRole(
+          'heading',
+          { name: '模型供应商', level: 4 },
+          { timeout: 5000 }
+        )
+      ).toBeInTheDocument();
+
+      const response = await fetch('http://127.0.0.1:7800/api/console/model-providers');
+      const payload = await response.json();
+      const instance = payload.data[0] as Record<string, unknown>;
+
+      expect(instance).toEqual(
+        expect.objectContaining({
+          enabled_model_ids: expect.arrayContaining(['gpt-4o-mini']),
+          model_count: expect.any(Number)
+        })
+      );
+      expect(instance).not.toHaveProperty('validation_model_id');
+      expect(instance).not.toHaveProperty('last_validated_at');
+      expect(instance).not.toHaveProperty('last_validation_status');
+      expect(instance).not.toHaveProperty('last_validation_message');
+    },
+    15000
+  );
 });

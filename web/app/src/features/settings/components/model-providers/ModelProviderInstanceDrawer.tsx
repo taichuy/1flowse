@@ -136,7 +136,7 @@ export function ModelProviderInstanceDrawer({
   onSubmit: (input: {
     display_name: string;
     config: Record<string, unknown>;
-    validation_model_id?: string;
+    enabled_model_ids: string[];
     preview_token?: string;
   }) => Promise<void>;
   onPreviewModels: (config: Record<string, unknown>) => Promise<PreviewModelsResponse>;
@@ -150,7 +150,8 @@ export function ModelProviderInstanceDrawer({
   const [revealedSecretKeys, setRevealedSecretKeys] = useState<Record<string, boolean>>({});
   const [revealingSecretKey, setRevealingSecretKey] = useState<string | null>(null);
   const [previewModels, setPreviewModels] = useState<PreviewModelDescriptor[]>([]);
-  const [selectedPreviewModelId, setSelectedPreviewModelId] = useState<string | undefined>();
+  const [enabledModelIds, setEnabledModelIds] = useState<string[]>([]);
+  const [enabledModelInput, setEnabledModelInput] = useState('');
   const [previewToken, setPreviewToken] = useState<string | undefined>();
   const [previewingModels, setPreviewingModels] = useState(false);
 
@@ -161,7 +162,8 @@ export function ModelProviderInstanceDrawer({
       setRevealedSecretKeys({});
       setRevealingSecretKey(null);
       setPreviewModels([]);
-      setSelectedPreviewModelId(undefined);
+      setEnabledModelIds([]);
+      setEnabledModelInput('');
       setPreviewToken(undefined);
       setPreviewingModels(false);
       return;
@@ -171,19 +173,45 @@ export function ModelProviderInstanceDrawer({
       display_name: instance?.display_name ?? catalogEntry?.display_name ?? '',
       config: buildInitialConfig(mode, catalogEntry, instance)
     });
+    setEnabledModelIds(instance?.enabled_model_ids ?? []);
     setSecretDrafts({});
     setRevealedSecretKeys({});
     setRevealingSecretKey(null);
     setPreviewModels([]);
-    setSelectedPreviewModelId(undefined);
     setPreviewToken(undefined);
     setPreviewingModels(false);
+    setEnabledModelInput('');
   }, [catalogEntry, form, instance, mode, open]);
 
   function clearPreviewState() {
     setPreviewModels([]);
-    setSelectedPreviewModelId(undefined);
     setPreviewToken(undefined);
+  }
+
+  function normalizeEnabledModelIds(values: string[]) {
+    const nextValues: string[] = [];
+
+    for (const value of values) {
+      const normalized = value.trim();
+      if (!normalized || nextValues.includes(normalized)) {
+        continue;
+      }
+      nextValues.push(normalized);
+    }
+
+    return nextValues;
+  }
+
+  function commitEnabledModelInput(rawValue: string) {
+    const normalized = rawValue.trim();
+    if (!normalized) {
+      return;
+    }
+
+    setEnabledModelIds((current) =>
+      current.includes(normalized) ? current : [...current, normalized]
+    );
+    setEnabledModelInput('');
   }
 
   async function handleRevealSecret(fieldKey: string) {
@@ -248,11 +276,6 @@ export function ModelProviderInstanceDrawer({
       );
       setPreviewModels(preview.models);
       setPreviewToken(preview.preview_token);
-      setSelectedPreviewModelId((current) =>
-        current && preview.models.some((model) => model.model_id === current)
-          ? current
-          : undefined
-      );
     } finally {
       setPreviewingModels(false);
     }
@@ -379,7 +402,7 @@ export function ModelProviderInstanceDrawer({
               void handlePreviewModels();
             }}
           >
-            检测
+            {previewModels.length > 0 ? '刷新候选模型' : '获取候选模型'}
           </Button>
           <Button
             type="primary"
@@ -389,7 +412,7 @@ export function ModelProviderInstanceDrawer({
               await onSubmit({
                 display_name: values.display_name,
                 config: buildDraftConfig(values.config ?? {}),
-                validation_model_id: selectedPreviewModelId,
+                enabled_model_ids: enabledModelIds,
                 preview_token: previewToken
               });
             }}
@@ -468,23 +491,47 @@ export function ModelProviderInstanceDrawer({
               />
             ) : null}
 
-            <Divider orientation="left">模型检测</Divider>
-            <Form.Item label="校验模型" extra="点击“检测”加载模型 ID">
-              <Select
-                aria-label="校验模型"
-                placeholder="点击“检测”加载模型 ID"
-                value={selectedPreviewModelId}
-                options={previewModels.map((model) => ({
-                  label: model.model_id,
-                  value: model.model_id
-                }))}
-                onChange={setSelectedPreviewModelId}
-                notFoundContent={
-                  previewingModels ? '正在检测模型...' : '暂无模型，请先点击“检测”'
-                }
-                allowClear
-              />
-            </Form.Item>
+            <Divider orientation="left">候选模型</Divider>
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <Typography.Text type="secondary">
+                {previewModels.length > 0
+                  ? `已获取 ${previewModels.length} 个候选模型，可从缓存里搜索后加入生效模型。`
+                  : '先获取候选模型，再把需要开放给业务侧的 model id 加入生效模型。'}
+              </Typography.Text>
+              <Form.Item
+                label="生效模型"
+                extra="可从候选缓存中选择，也可以直接输入任意 model id。"
+              >
+                <Select
+                  aria-label="生效模型"
+                  mode="tags"
+                  placeholder="输入或选择 model id"
+                  value={enabledModelIds}
+                  searchValue={enabledModelInput}
+                  options={previewModels.map((model) => ({
+                    label: model.model_id,
+                    value: model.model_id
+                  }))}
+                  onChange={(values) => {
+                    setEnabledModelIds(normalizeEnabledModelIds(values));
+                  }}
+                  onSearch={setEnabledModelInput}
+                  onInputKeyDown={(event) => {
+                    if (event.key !== 'Enter') {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    commitEnabledModelInput(enabledModelInput);
+                  }}
+                  notFoundContent={
+                    previewingModels ? '正在获取候选模型...' : '暂无候选模型'
+                  }
+                  allowClear
+                  showSearch
+                />
+              </Form.Item>
+            </Space>
           </>
         ) : (
           <Typography.Text type="secondary">当前没有可用 provider catalog。</Typography.Text>

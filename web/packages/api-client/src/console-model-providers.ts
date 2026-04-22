@@ -100,10 +100,7 @@ export interface ConsoleModelProviderInstance {
   display_name: string;
   status: string;
   config_json: Record<string, unknown>;
-  validation_model_id: string | null;
-  last_validated_at: string | null;
-  last_validation_status: string | null;
-  last_validation_message: string | null;
+  enabled_model_ids: string[];
   catalog_refresh_status: string | null;
   catalog_last_error_message: string | null;
   catalog_refreshed_at: string | null;
@@ -113,7 +110,7 @@ export interface ConsoleModelProviderInstance {
 export interface CreateConsoleModelProviderInput {
   installation_id: string;
   display_name: string;
-  validation_model_id?: string | null;
+  enabled_model_ids: string[];
   preview_token?: string | null;
   config: Record<string, unknown>;
 }
@@ -132,7 +129,7 @@ export interface PreviewConsoleModelProviderModelsResponse {
 
 export interface UpdateConsoleModelProviderInput {
   display_name: string;
-  validation_model_id?: string | null;
+  enabled_model_ids: string[];
   preview_token?: string | null;
   config: Record<string, unknown>;
 }

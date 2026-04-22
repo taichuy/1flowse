@@ -215,3 +215,14 @@ git add web/packages/api-client/src/console-model-providers.ts \
   docs/superpowers/plans/2026-04-22-model-provider-enabled-models-settings-ui.md
 git commit -m "feat(model-providers): edit enabled model ids in settings"
 ```
+
+## Verification Results
+
+- `pnpm --dir web/app test -- src/features/settings/api/_tests/settings-api.test.ts`
+  - PASS, `4 passed; 0 failed`
+- `pnpm --dir web/app test -- src/features/settings/_tests/model-providers-page.test.tsx`
+  - PASS, `18 passed; 0 failed`
+- `pnpm --dir web/app test -- src/features/settings/api/_tests/settings-api.test.ts src/features/settings/_tests/model-providers-page.test.tsx`
+  - PASS, `22 passed; 0 failed`
+- `pnpm --dir web/app build`
+  - PASS, `tsc -p tsconfig.json --noEmit && vite build`

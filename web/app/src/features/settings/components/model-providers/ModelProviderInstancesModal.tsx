@@ -37,7 +37,7 @@ export function ModelProviderInstancesModal({
   instances,
   modelCatalog,
   modelsLoading,
-  validating,
+  refreshingCandidates,
   refreshing,
   deleting,
   canManage,
@@ -45,7 +45,7 @@ export function ModelProviderInstancesModal({
   onClose,
   onEdit,
   onFetchModels,
-  onValidate,
+  onRefreshCandidates,
   onRefreshModels,
   onDelete
 }: {
@@ -54,7 +54,7 @@ export function ModelProviderInstancesModal({
   instances: SettingsModelProviderInstance[];
   modelCatalog: SettingsModelProviderModelCatalog | null;
   modelsLoading: boolean;
-  validating: boolean;
+  refreshingCandidates: boolean;
   refreshing: boolean;
   deleting: boolean;
   canManage: boolean;
@@ -65,14 +65,11 @@ export function ModelProviderInstancesModal({
   onClose: () => void;
   onEdit: (instance: SettingsModelProviderInstance) => void;
   onFetchModels: (instance: SettingsModelProviderInstance) => void;
-  onValidate: (instance: SettingsModelProviderInstance) => void;
+  onRefreshCandidates: (instance: SettingsModelProviderInstance) => void;
   onRefreshModels: (instance: SettingsModelProviderInstance) => void;
   onDelete: (instance: SettingsModelProviderInstance) => void;
 }) {
   const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([]);
-  const [selectedModelIds, setSelectedModelIds] = useState<Record<string, string | undefined>>(
-    {}
-  );
   const loadedModelsByInstanceId = useMemo(() => {
     if (!modelCatalog) {
       return {};
@@ -82,6 +79,15 @@ export function ModelProviderInstancesModal({
       [modelCatalog.provider_instance_id]: modelCatalog.models
     } as Record<string, SettingsModelProviderModelCatalog['models']>;
   }, [modelCatalog]);
+
+  function formatModelPreview(modelIds: string[]) {
+    if (modelIds.length === 0) {
+      return '未设置';
+    }
+
+    const preview = modelIds.slice(0, 3).join(' · ');
+    return modelIds.length > 3 ? `${preview} · …` : preview;
+  }
 
   return (
     <Modal
@@ -110,7 +116,7 @@ export function ModelProviderInstancesModal({
           <div>
             <Typography.Text strong>查看供应商实例</Typography.Text>
             <Typography.Paragraph type="secondary">
-              使用表格统一管理同一供应商下的全部实例，展开后可查看当前缓存的模型。
+              使用表格统一管理同一供应商下的全部实例，展开后可查看当前候选模型缓存。
             </Typography.Paragraph>
           </div>
         </div>
@@ -138,44 +144,34 @@ export function ModelProviderInstancesModal({
             },
             expandedRowRender: (instance) => {
               const models = loadedModelsByInstanceId[instance.id] ?? [];
-              const selectedModelId =
-                selectedModelIds[instance.id] ??
-                instance.validation_model_id ??
-                models[0]?.model_id;
+              const selectedModelId = instance.enabled_model_ids[0] ?? models[0]?.model_id;
 
               return (
                 <div className="model-provider-panel__instances-modal-expanded">
                   <Space direction="vertical" size={8} style={{ width: '100%' }}>
                     <Typography.Text type="secondary">
-                      最近校验：
-                      {instance.last_validation_status ?? '未校验'} · 校验模型：
-                      {instance.validation_model_id ?? '未设置'}
+                      候选缓存：{instance.model_count} 个 · 最近刷新：
+                      {instance.catalog_refreshed_at ?? '未刷新'}
                     </Typography.Text>
                     <Typography.Text type="secondary">
-                      校验说明：{instance.last_validation_message ?? '尚无校验结果'}
+                      生效模型：{formatModelPreview(instance.enabled_model_ids)}
                     </Typography.Text>
                     <Select
-                      aria-label={`${instance.display_name} 缓存模型`}
+                      aria-label={`${instance.display_name} 候选模型`}
                       placeholder={
                         instance.model_count > 0
-                          ? '展开后查看当前缓存模型'
-                          : '当前还没有缓存模型'
+                          ? '展开后查看候选模型缓存'
+                          : '当前还没有候选模型'
                       }
                       value={selectedModelId}
                       options={models.map((model) => ({
                         label: model.display_name,
                         value: model.model_id
                       }))}
-                      onChange={(value) => {
-                        setSelectedModelIds((current) => ({
-                          ...current,
-                          [instance.id]: value
-                        }));
-                      }}
                       notFoundContent={
                         modelsLoading && modelCatalog?.provider_instance_id === instance.id
-                          ? '正在加载模型...'
-                          : '暂无缓存模型'
+                          ? '正在加载候选模型...'
+                          : '暂无候选模型'
                       }
                     />
                   </Space>
@@ -202,11 +198,11 @@ export function ModelProviderInstancesModal({
                   {canManage ? (
                     <Button
                       type="link"
-                      loading={validating}
-                      aria-label={`验证实例 ${instance.display_name}`}
-                      onClick={() => onValidate(instance)}
+                      loading={refreshingCandidates}
+                      aria-label={`刷新候选模型 ${instance.display_name}`}
+                      onClick={() => onRefreshCandidates(instance)}
                     >
-                      验证实例
+                      刷新候选模型
                     </Button>
                   ) : null}
                   {canManage ? (
@@ -250,6 +246,19 @@ export function ModelProviderInstancesModal({
               dataIndex: 'status',
               width: 120,
               render: (status: string) => renderStatusTag(status)
+            },
+            {
+              title: '生效模型',
+              key: 'enabled_models',
+              width: 180,
+              render: (_, instance) => (
+                <div className="model-provider-panel__instance-cell">
+                  <Typography.Text>{instance.enabled_model_ids.length} 个</Typography.Text>
+                  <Typography.Text type="secondary">
+                    {formatModelPreview(instance.enabled_model_ids)}
+                  </Typography.Text>
+                </div>
+              )
             },
             {
               title: '缓存模型',

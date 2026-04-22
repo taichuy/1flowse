@@ -48,7 +48,22 @@ vi.mock('@1flowbase/api-client', () => ({
   }),
   updateConsoleModelProviderInstance: vi.fn().mockResolvedValue(undefined),
   validateConsoleModelProviderInstance: vi.fn().mockResolvedValue({
-    instance: { id: 'provider-1' },
+    instance: {
+      id: 'provider-1',
+      installation_id: 'installation-1',
+      provider_code: 'openai_compatible',
+      protocol: 'openai_compatible',
+      display_name: 'OpenAI Production',
+      status: 'ready',
+      config_json: {
+        base_url: 'https://api.openai.com/v1'
+      },
+      enabled_model_ids: ['gpt-4o-mini'],
+      catalog_refresh_status: 'ready',
+      catalog_last_error_message: null,
+      catalog_refreshed_at: '2026-04-18T10:01:00Z',
+      model_count: 2
+    },
     output: {}
   }),
   refreshConsoleModelProviderModels: vi.fn().mockResolvedValue({
@@ -132,6 +147,11 @@ import {
   switchConsolePluginFamilyVersion,
   getConsolePluginTask
 } from '@1flowbase/api-client';
+import type { ConsoleModelProviderInstance } from '@1flowbase/api-client';
+
+type _EnabledModelIdsContract = ConsoleModelProviderInstance['enabled_model_ids'];
+// @ts-expect-error validation_model_id should no longer exist on the instance DTO
+type _LegacyValidationModelIdContract = ConsoleModelProviderInstance['validation_model_id'];
 
 import {
   settingsApiDocsCatalogQueryKey,
@@ -179,6 +199,11 @@ import {
   refreshSettingsModelProviderModels,
   revealSettingsModelProviderSecret,
   deleteSettingsModelProviderInstance
+} from '../model-providers';
+import type {
+  CreateSettingsModelProviderInput,
+  SettingsModelProviderInstance,
+  UpdateSettingsModelProviderInput
 } from '../model-providers';
 import {
   settingsPluginFamiliesQueryKey,
@@ -282,12 +307,38 @@ describe('settings api wrappers', () => {
 
   test('forwards model provider query keys and request helpers', async () => {
     const createInput = {
-      provider_code: 'openai_compatible',
-      display_name: 'OpenAI Production'
-    };
+      installation_id: 'installation-1',
+      display_name: 'OpenAI Production',
+      enabled_model_ids: ['gpt-4o-mini'],
+      preview_token: 'preview-1',
+      config: {
+        base_url: 'https://api.openai.com/v1'
+      }
+    } satisfies CreateSettingsModelProviderInput;
     const updateInput = {
-      display_name: 'OpenAI Backup'
-    };
+      display_name: 'OpenAI Backup',
+      enabled_model_ids: ['gpt-4o', 'gpt-4o-mini'],
+      preview_token: 'preview-2',
+      config: {
+        base_url: 'https://backup.openai.example/v1'
+      }
+    } satisfies UpdateSettingsModelProviderInput;
+    const instance = {
+      id: 'provider-1',
+      installation_id: 'installation-1',
+      provider_code: 'openai_compatible',
+      protocol: 'openai_compatible',
+      display_name: 'OpenAI Production',
+      status: 'ready',
+      config_json: {
+        base_url: 'https://api.openai.com/v1'
+      },
+      enabled_model_ids: ['gpt-4o-mini'],
+      catalog_refresh_status: 'ready',
+      catalog_last_error_message: null,
+      catalog_refreshed_at: '2026-04-18T10:01:00Z',
+      model_count: 2
+    } satisfies SettingsModelProviderInstance;
 
     expect(settingsModelProviderCatalogQueryKey).toEqual([
       'settings',
@@ -314,7 +365,18 @@ describe('settings api wrappers', () => {
     await expect(fetchSettingsModelProviderCatalog()).resolves.toEqual(
       modelProviderCatalogEntries
     );
-    await fetchSettingsModelProviderInstances();
+    vi.mocked(listConsoleModelProviderInstances).mockResolvedValueOnce([instance]);
+    const fetchedInstances = await fetchSettingsModelProviderInstances();
+    expect(fetchedInstances).toHaveLength(1);
+    expect(fetchedInstances[0]).toEqual(
+      expect.objectContaining({
+        enabled_model_ids: ['gpt-4o-mini']
+      })
+    );
+    expect(fetchedInstances[0]).not.toHaveProperty('validation_model_id');
+    expect(fetchedInstances[0]).not.toHaveProperty('last_validated_at');
+    expect(fetchedInstances[0]).not.toHaveProperty('last_validation_status');
+    expect(fetchedInstances[0]).not.toHaveProperty('last_validation_message');
     await expect(fetchSettingsModelProviderOptions()).resolves.toEqual(
       modelProviderOptionsContract
     );
@@ -331,7 +393,10 @@ describe('settings api wrappers', () => {
     );
     await createSettingsModelProviderInstance(createInput as never, 'csrf-123');
     await updateSettingsModelProviderInstance('provider-1', updateInput as never, 'csrf-123');
-    await validateSettingsModelProviderInstance('provider-1', 'csrf-123');
+    const validatedInstance = await validateSettingsModelProviderInstance(
+      'provider-1',
+      'csrf-123'
+    );
     await refreshSettingsModelProviderModels('provider-1', 'csrf-123');
     await revealSettingsModelProviderSecret('provider-1', 'api_key', 'csrf-123');
     await deleteSettingsModelProviderInstance('provider-1', 'csrf-123');
@@ -367,6 +432,15 @@ describe('settings api wrappers', () => {
       'provider-1',
       'csrf-123'
     );
+    expect(validatedInstance.instance).toEqual(
+      expect.objectContaining({
+        enabled_model_ids: ['gpt-4o-mini']
+      })
+    );
+    expect(validatedInstance.instance).not.toHaveProperty('validation_model_id');
+    expect(validatedInstance.instance).not.toHaveProperty('last_validated_at');
+    expect(validatedInstance.instance).not.toHaveProperty('last_validation_status');
+    expect(validatedInstance.instance).not.toHaveProperty('last_validation_message');
     expect(revealConsoleModelProviderSecret).toHaveBeenCalledWith(
       'provider-1',
       'api_key',

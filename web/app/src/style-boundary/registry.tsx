@@ -12,15 +12,13 @@ import { useAuthStore } from '../state/auth-store';
 import {
   modelProviderCatalogContract,
   modelProviderOptionsContract,
-  primaryContractProviderModels
+  primaryContractProviderEnabledModelIds
 } from '../test/model-provider-contract-fixtures';
 import manifest from './scenario-manifest.json';
 import type {
   StyleBoundaryManifestScene,
   StyleBoundaryRuntimeScene
 } from './types';
-
-const styleBoundaryProviderModels = primaryContractProviderModels;
 
 const styleBoundaryProviderInstances = [
   {
@@ -32,16 +30,13 @@ const styleBoundaryProviderInstances = [
     status: 'ready',
     config_json: {
       base_url: 'https://api.openai.com/v1',
-      organization: 'workspace-prod',
-      validate_model: true
+      organization: 'workspace-prod'
     },
-    last_validated_at: '2026-04-18T16:00:00Z',
-    last_validation_status: 'succeeded',
-    last_validation_message: '连接成功，模型目录已同步',
+    enabled_model_ids: primaryContractProviderEnabledModelIds,
     catalog_refresh_status: 'succeeded',
     catalog_last_error_message: null,
     catalog_refreshed_at: '2026-04-18T16:01:00Z',
-    model_count: styleBoundaryProviderModels.length
+    model_count: primaryContractProviderEnabledModelIds.length
   }
 ];
 

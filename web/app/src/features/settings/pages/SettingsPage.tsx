@@ -300,7 +300,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     mutationFn: async (input: {
       installationId: string;
       display_name: string;
-      validation_model_id?: string;
+      enabled_model_ids: string[];
       preview_token?: string;
       config: Record<string, unknown>;
     }) => {
@@ -312,7 +312,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
         {
           installation_id: input.installationId,
           display_name: input.display_name,
-          validation_model_id: input.validation_model_id ?? null,
+          enabled_model_ids: input.enabled_model_ids,
           preview_token: input.preview_token ?? null,
           config: input.config
         },
@@ -329,7 +329,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     mutationFn: async (input: {
       instanceId: string;
       display_name: string;
-      validation_model_id?: string;
+      enabled_model_ids: string[];
       preview_token?: string;
       config: Record<string, unknown>;
     }) => {
@@ -341,7 +341,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
         input.instanceId,
         {
           display_name: input.display_name,
-          validation_model_id: input.validation_model_id ?? null,
+          enabled_model_ids: input.enabled_model_ids,
           preview_token: input.preview_token ?? null,
           config: input.config
         },
@@ -368,7 +368,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     }
   });
 
-  const validateMutation = useMutation({
+  const refreshCandidatesMutation = useMutation({
     mutationFn: async (instanceId: string) => {
       if (!csrfToken) {
         throw new Error('missing csrf token');
@@ -611,7 +611,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     getErrorMessage(updateMutation.error) ??
     getErrorMessage(previewModelsMutation.error) ??
     getErrorMessage(revealSecretMutation.error) ??
-    getErrorMessage(validateMutation.error) ??
+    getErrorMessage(refreshCandidatesMutation.error) ??
     getErrorMessage(refreshMutation.error) ??
     getErrorMessage(deleteMutation.error) ??
     getErrorMessage(familyDeleteMutation.error) ??
@@ -817,7 +817,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
             await updateMutation.mutateAsync({
               instanceId: editingInstance.id,
               display_name: values.display_name,
-              validation_model_id: values.validation_model_id,
+              enabled_model_ids: values.enabled_model_ids,
               preview_token: values.preview_token,
               config: values.config
             });
@@ -831,7 +831,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
           await createMutation.mutateAsync({
             installationId: drawerCatalogEntry.installation_id,
             display_name: values.display_name,
-            validation_model_id: values.validation_model_id,
+            enabled_model_ids: values.enabled_model_ids,
             preview_token: values.preview_token,
             config: values.config
           });
@@ -861,7 +861,7 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
         instances={modalInstances}
         modelCatalog={fetchModelsMutation.data ?? null}
         modelsLoading={fetchModelsMutation.isPending}
-        validating={validateMutation.isPending}
+        refreshingCandidates={refreshCandidatesMutation.isPending}
         refreshing={refreshMutation.isPending}
         deleting={deleteMutation.isPending}
         canManage={canManage}
@@ -894,8 +894,8 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
             instanceId: instance.id
           });
         }}
-        onValidate={(instance) => {
-          validateMutation.mutate(instance.id);
+        onRefreshCandidates={(instance) => {
+          refreshCandidatesMutation.mutate(instance.id);
         }}
         onRefreshModels={(instance) => {
           refreshMutation.mutate(instance.id);

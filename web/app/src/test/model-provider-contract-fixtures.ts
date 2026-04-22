@@ -5,11 +5,34 @@ import type {
 import modelProviderCatalogContractJson from '@1flowbase/model-provider-contracts/catalog.multiple-providers.json';
 import modelProviderOptionsContractJson from '@1flowbase/model-provider-contracts/options.multiple-providers.json';
 
-export const modelProviderCatalogContract =
-  modelProviderCatalogContractJson as ConsoleModelProviderCatalogResponse;
+const modelProviderCatalogContractBase =
+  modelProviderCatalogContractJson as {
+    locale_meta: ConsoleModelProviderCatalogResponse['locale_meta'];
+    i18n_catalog: ConsoleModelProviderCatalogResponse['i18n_catalog'];
+    entries: Array<
+      Omit<
+        ConsoleModelProviderCatalogResponse['entries'][number],
+        'desired_state' | 'availability_status'
+      > & {
+        enabled?: boolean;
+      }
+    >;
+  };
+
+export const modelProviderCatalogContract = {
+  ...modelProviderCatalogContractBase,
+  entries: modelProviderCatalogContractBase.entries.map((entry) => ({
+    ...entry,
+    desired_state: entry.enabled === false ? 'disabled' : 'enabled',
+    availability_status: entry.enabled === false ? 'disabled' : 'available'
+  }))
+} satisfies ConsoleModelProviderCatalogResponse;
+
 export const modelProviderOptionsContract =
   modelProviderOptionsContractJson as ConsoleModelProviderOptions;
 
 export const modelProviderCatalogEntries = modelProviderCatalogContract.entries;
 export const modelProviderOptionsProviders = modelProviderOptionsContract.providers;
 export const primaryContractProviderModels = modelProviderOptionsContract.providers[0].models;
+export const primaryContractProviderEnabledModelIds =
+  primaryContractProviderModels.map((model) => model.model_id);

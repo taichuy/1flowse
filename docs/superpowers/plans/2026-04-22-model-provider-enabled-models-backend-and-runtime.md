@@ -267,3 +267,14 @@ git add api/crates/domain/src/model_provider.rs \
   docs/superpowers/plans/2026-04-22-model-provider-enabled-models-backend-and-runtime.md
 git commit -m "refactor(model-providers): replace validation model with enabled models"
 ```
+
+## Verification Results
+
+- `cargo test -p storage-pg model_provider_repository -- --nocapture`
+  - PASS, `2 passed; 0 failed`
+- `cargo test -p control-plane model_provider -- --nocapture`
+  - PASS, `11 passed; 0 failed`
+- `cargo test -p control-plane orchestration_runtime -- --nocapture`
+  - PASS, `6 passed; 0 failed`
+- `cargo test -p api-server model_provider_routes -- --nocapture`
+  - PASS, `6 passed; 0 failed`

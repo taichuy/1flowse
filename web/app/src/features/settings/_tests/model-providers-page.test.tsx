@@ -226,10 +226,7 @@ describe('ModelProvidersPage', () => {
           base_url: 'https://api.openai.com/v1',
           api_key: 'supe****cret'
         },
-        validation_model_id: 'gpt-4o-mini',
-        last_validated_at: '2026-04-18T10:00:00Z',
-        last_validation_status: 'succeeded',
-        last_validation_message: 'validated',
+        enabled_model_ids: ['gpt-4o-mini', 'gpt-4o'],
         catalog_refresh_status: 'ready',
         catalog_last_error_message: null,
         catalog_refreshed_at: '2026-04-18T10:01:00Z',
@@ -246,10 +243,7 @@ describe('ModelProvidersPage', () => {
           base_url: 'https://backup.openai.example/v1',
           api_key: 'back****cret'
         },
-        validation_model_id: null,
-        last_validated_at: null,
-        last_validation_status: null,
-        last_validation_message: null,
+        enabled_model_ids: [],
         catalog_refresh_status: 'idle',
         catalog_last_error_message: null,
         catalog_refreshed_at: null,
@@ -713,8 +707,11 @@ describe('ModelProvidersPage', () => {
         within(modal).getByRole('columnheader', { name: '缓存模型' })
       ).toBeInTheDocument();
       expect(
+        within(modal).getByRole('columnheader', { name: '生效模型' })
+      ).toBeInTheDocument();
+      expect(
         within(modal).getByRole('button', {
-          name: '验证实例 OpenAI Production'
+          name: '刷新候选模型 OpenAI Production'
         })
       ).toBeInTheDocument();
       expect(
@@ -731,7 +728,7 @@ describe('ModelProvidersPage', () => {
   );
 
   test(
-    'runs validate refresh and delete from the provider instances modal',
+    'runs candidate refresh and delete from the provider instances modal',
     { timeout: 15000 },
     async () => {
       authenticateWithPermissions([
@@ -739,14 +736,6 @@ describe('ModelProvidersPage', () => {
         'state_model.view.all',
         'state_model.manage.all'
       ]);
-      modelProvidersApi.validateSettingsModelProviderInstance.mockResolvedValue(
-        {
-          instance: {
-            id: 'provider-1'
-          },
-          output: {}
-        }
-      );
       modelProvidersApi.refreshSettingsModelProviderModels.mockResolvedValue({
         provider_instance_id: 'provider-1',
         refresh_status: 'ready',
@@ -764,7 +753,7 @@ describe('ModelProvidersPage', () => {
       await openProviderInstancesModal();
 
       fireEvent.click(
-        await screen.findByRole('button', { name: '验证实例 OpenAI Production' })
+        await screen.findByRole('button', { name: '刷新候选模型 OpenAI Production' })
       );
       await waitFor(() => {
         expect(
@@ -793,7 +782,7 @@ describe('ModelProvidersPage', () => {
   );
 
   test(
-    'loads validation model options from the draft drawer and keeps the selector empty before detection',
+    'loads candidate models from the draft drawer and keeps enabled models editable',
     { timeout: 15000 },
     async () => {
       const previewModels = vi.fn().mockResolvedValue({
@@ -814,6 +803,7 @@ describe('ModelProvidersPage', () => {
         preview_token: 'preview-1',
         expires_at: '2026-04-22T12:00:00Z'
       });
+      const submit = vi.fn().mockResolvedValue(undefined);
 
       render(
         <ModelProviderInstanceDrawer
@@ -823,20 +813,22 @@ describe('ModelProvidersPage', () => {
           instance={null}
           submitting={false}
           onClose={() => undefined}
-          onSubmit={async () => undefined}
+          onSubmit={submit}
           onPreviewModels={previewModels}
           onRevealSecret={async () => 'super-secret'}
         />
       );
 
       await screen.findByRole('dialog');
-      const validationModelSelect = screen.getByRole('combobox', { name: '校验模型' });
+      const enabledModelSelect = screen.getByRole('combobox', { name: '生效模型' });
       expect(screen.getByText('API 密钥授权配置')).toBeInTheDocument();
-      expect(validationModelSelect).toBeInTheDocument();
-      expect(screen.queryByText('gpt-4o-mini')).not.toBeInTheDocument();
+      expect(enabledModelSelect).toBeInTheDocument();
+      expect(screen.queryByText('校验模型')).not.toBeInTheDocument();
       expect(screen.queryByText('validate_model')).not.toBeInTheDocument();
 
-      expect(screen.getByRole('button', { name: /检\s*测/ })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /获\s*取候选模型|刷\s*新候选模型/ })
+      ).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /保\s*存/ })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /取\s*消/ })).toBeInTheDocument();
 
@@ -846,8 +838,11 @@ describe('ModelProvidersPage', () => {
       fireEvent.change(screen.getByLabelText('API Key'), {
         target: { value: 'super-secret' }
       });
+      fireEvent.change(screen.getByLabelText('凭据名称'), {
+        target: { value: 'OpenAI Production' }
+      });
 
-      fireEvent.click(screen.getByRole('button', { name: /检\s*测/ }));
+      fireEvent.click(screen.getByRole('button', { name: /获\s*取候选模型|刷\s*新候选模型/ }));
 
       await waitFor(() => {
         expect(previewModels).toHaveBeenCalledWith(
@@ -862,9 +857,63 @@ describe('ModelProvidersPage', () => {
         );
       });
 
-      fireEvent.mouseDown(validationModelSelect);
+      fireEvent.mouseDown(enabledModelSelect);
       expect(await screen.findByRole('option', { name: 'gpt-4o-mini' })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: '保存实例' })).not.toBeInTheDocument();
+      fireEvent.change(enabledModelSelect, {
+        target: { value: 'gpt-4o-mini' }
+      });
+      fireEvent.keyDown(enabledModelSelect, {
+        key: 'Enter',
+        code: 'Enter',
+        charCode: 13
+      });
+      fireEvent.change(enabledModelSelect, {
+        target: { value: 'manual-model-id' }
+      });
+      fireEvent.keyDown(enabledModelSelect, {
+        key: 'Enter',
+        code: 'Enter',
+        charCode: 13
+      });
+
+      previewModels.mockResolvedValueOnce({
+        models: [
+          {
+            model_id: 'gpt-4.1-mini',
+            display_name: 'gpt-4.1-mini',
+            source: 'dynamic',
+            supports_streaming: true,
+            supports_tool_call: true,
+            supports_multimodal: false,
+            context_window: null,
+            max_output_tokens: null,
+            parameter_form: null,
+            provider_metadata: {}
+          }
+        ],
+        preview_token: 'preview-2',
+        expires_at: '2026-04-22T13:00:00Z'
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /获\s*取候选模型|刷\s*新候选模型/ }));
+
+      await waitFor(() => {
+        expect(previewModels).toHaveBeenCalledTimes(2);
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
+
+      await waitFor(() => {
+        expect(submit).toHaveBeenCalledWith({
+          display_name: 'OpenAI Production',
+          config: {
+            base_url: 'https://api.openai.com/v1',
+            api_key: 'super-secret'
+          },
+          enabled_model_ids: ['gpt-4o-mini', 'manual-model-id'],
+          preview_token: 'preview-2'
+        });
+      });
     }
   );
 
@@ -962,7 +1011,7 @@ describe('ModelProvidersPage', () => {
       });
       expect(
         await within(modal).findByRole('combobox', {
-          name: 'OpenAI Production 缓存模型'
+          name: 'OpenAI Production 候选模型'
         })
       ).toBeInTheDocument();
       expect(
@@ -997,10 +1046,14 @@ describe('ModelProvidersPage', () => {
         within(modal).getByRole('columnheader', { name: '缓存模型' })
       ).toBeInTheDocument();
       expect(
+        within(modal).getByRole('columnheader', { name: '生效模型' })
+      ).toBeInTheDocument();
+      expect(
         within(modal).getByRole('columnheader', { name: 'Base URL' })
       ).toBeInTheDocument();
       expect(within(modal).getByText('OpenAI Production')).toBeInTheDocument();
       expect(within(modal).getByText('1 个')).toBeInTheDocument();
+      expect(within(modal).getByText(/gpt-4o-mini/)).toBeInTheDocument();
     }
   );
 

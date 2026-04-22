@@ -10,7 +10,7 @@ function getCatalogDescription(
 ) {
   return (
     family.description?.trim() ||
-    currentCatalogEntry?.description?.trim() ||
+    currentCatalogEntry?.description_key?.trim() ||
     '未提供说明'
   );
 }

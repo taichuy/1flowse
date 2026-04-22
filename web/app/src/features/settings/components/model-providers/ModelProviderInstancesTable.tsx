@@ -22,7 +22,7 @@ export function ModelProviderInstancesTable({
   loading,
   canManage,
   onEdit,
-  onValidate,
+  onRefreshCandidates,
   onRefreshModels,
   onDelete
 }: {
@@ -30,10 +30,19 @@ export function ModelProviderInstancesTable({
   loading?: boolean;
   canManage: boolean;
   onEdit: (instance: SettingsModelProviderInstance) => void;
-  onValidate: (instance: SettingsModelProviderInstance) => void;
+  onRefreshCandidates: (instance: SettingsModelProviderInstance) => void;
   onRefreshModels: (instance: SettingsModelProviderInstance) => void;
   onDelete: (instance: SettingsModelProviderInstance) => void;
 }) {
+  function renderModelPreview(modelIds: string[]) {
+    if (modelIds.length === 0) {
+      return '未设置';
+    }
+
+    const preview = modelIds.slice(0, 2).join(' · ');
+    return modelIds.length > 2 ? `${preview} · …` : preview;
+  }
+
   return (
     <section className="model-provider-panel__instances">
       <Table<SettingsModelProviderInstance>
@@ -78,15 +87,13 @@ export function ModelProviderInstancesTable({
             )
           },
           {
-            title: '校验',
-            key: 'validation',
+            title: '生效模型',
+            key: 'enabled_model_ids',
             render: (_, instance) => (
               <div className="model-provider-panel__instance-cell">
-                <Typography.Text>
-                  {instance.last_validation_status ?? '未校验'}
-                </Typography.Text>
+                <Typography.Text>{instance.enabled_model_ids.length} 个</Typography.Text>
                 <Typography.Text type="secondary">
-                  {instance.last_validation_message ?? '尚无校验结果'}
+                  {renderModelPreview(instance.enabled_model_ids)}
                 </Typography.Text>
               </div>
             )
@@ -121,10 +128,10 @@ export function ModelProviderInstancesTable({
                       </Button>
                       <Button
                         type="link"
-                        aria-label={`验证 ${instance.display_name}`}
-                        onClick={() => onValidate(instance)}
+                        aria-label={`刷新候选模型 ${instance.display_name}`}
+                        onClick={() => onRefreshCandidates(instance)}
                       >
-                        验证
+                        刷新候选模型
                       </Button>
                       <Button
                         type="link"

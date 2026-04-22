@@ -160,3 +160,16 @@ git add web/app/src/features/agent-flow/api/model-provider-options.ts \
   docs/superpowers/plans/2026-04-22-model-provider-enabled-models-consumers-and-regression.md
 git commit -m "test(model-providers): align consumers with enabled models"
 ```
+
+## Verification Results
+
+- `pnpm --dir web/app test -- src/style-boundary/_tests/registry.test.tsx src/features/agent-flow/_tests/validate-document.test.ts`
+  - PASS, `14 passed; 0 failed`
+- `cargo test -p control-plane model_provider -- --nocapture`
+  - PASS, `11 passed; 0 failed`
+- `cargo test -p control-plane orchestration_runtime -- --nocapture`
+  - PASS, `6 passed; 0 failed`
+- `cargo test -p api-server model_provider_routes -- --nocapture`
+  - PASS, `6 passed; 0 failed`
+- `pnpm --dir web/app test -- src/features/settings/api/_tests/settings-api.test.ts src/features/settings/_tests/model-providers-page.test.tsx src/style-boundary/_tests/registry.test.tsx src/features/agent-flow/_tests/validate-document.test.ts`
+  - PASS, `36 passed; 0 failed`
