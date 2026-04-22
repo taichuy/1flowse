@@ -156,7 +156,7 @@ export function ModelProviderCatalogPanel({
           {
             title: '版本',
             key: 'version',
-            width: 140,
+            width: 120,
             render: (_, entry) => {
               const versionOptions = [...entry.installed_versions]
                 .sort((left, right) =>
