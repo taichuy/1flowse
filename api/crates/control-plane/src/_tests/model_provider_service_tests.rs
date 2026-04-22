@@ -863,7 +863,7 @@ async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
         .unwrap();
     assert_eq!(
         validated.instance.status,
-        ModelProviderInstanceStatus::Ready
+        ModelProviderInstanceStatus::Draft
     );
     assert_eq!(validated.instance.config_json["api_key"], "supe****cret");
     assert_eq!(validated.instance.enabled_model_ids, Vec::<String>::new());
@@ -880,32 +880,8 @@ async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
         )
         .await
         .unwrap();
-    assert_eq!(options.providers.len(), 1);
-    assert!(options.i18n_catalog["plugin.fixture_provider"].contains_key("zh_Hans"));
-    assert_eq!(options.providers[0].models.len(), 1);
-    assert_eq!(
-        options.providers[0].models[0].descriptor.model_id,
-        "fixture_chat"
-    );
-    assert_eq!(
-        options.providers[0].models[0]
-            .descriptor
-            .parameter_form
-            .as_ref()
-            .expect("parameter form should exist")
-            .fields[0]
-            .key,
-        "temperature"
-    );
-    assert_eq!(
-        options.providers[0].models[0]
-            .descriptor
-            .parameter_form
-            .as_ref()
-            .unwrap()
-            .schema_version,
-        "1.0.0"
-    );
+    assert!(options.providers.is_empty());
+    assert!(options.i18n_catalog.is_empty());
 
     let refreshed = service
         .refresh_models(repository.actor.user_id, created.instance.id)

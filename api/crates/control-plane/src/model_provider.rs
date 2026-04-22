@@ -593,6 +593,7 @@ where
                 .runtime
                 .list_models(&installation, provider_config)
                 .await?;
+            let next_status = derive_instance_status(false, &instance.enabled_model_ids);
             let now = OffsetDateTime::now_utc();
             let cache = self
                 .repository
@@ -610,7 +611,7 @@ where
                 .await?;
             ensure_model_provider_instance_transition(
                 instance.status,
-                domain::ModelProviderInstanceStatus::Ready,
+                next_status,
                 "validate_instance_success",
             )?;
             let updated_instance = self
@@ -619,7 +620,7 @@ where
                     instance_id: instance.id,
                     workspace_id: actor.current_workspace_id,
                     display_name: instance.display_name.clone(),
-                    status: domain::ModelProviderInstanceStatus::Ready,
+                    status: next_status,
                     config_json: instance.config_json.clone(),
                     enabled_model_ids: instance.enabled_model_ids.clone(),
                     updated_by: actor_user_id,
