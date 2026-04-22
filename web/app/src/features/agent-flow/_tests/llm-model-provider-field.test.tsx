@@ -16,10 +16,8 @@ vi.mock('../api/model-provider-options', () => modelProviderOptionsApi);
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 import { AppProviders } from '../../../app/AppProviders';
 import { NodeConfigTab } from '../components/detail/tabs/NodeConfigTab';
-import {
-  AgentFlowEditorStoreProvider,
-  useAgentFlowEditorStore
-} from '../store/editor/provider';
+import { AgentFlowEditorStoreProvider } from '../store/editor/AgentFlowEditorStoreProvider';
+import { useAgentFlowEditorStore } from '../store/editor/provider';
 import { selectWorkingDocument } from '../store/editor/selectors';
 
 function createInitialState() {

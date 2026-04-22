@@ -1,17 +1,12 @@
 import type { SchemaBlock, CanvasNodeSchema } from '../../../../shared/schema-ui/contracts/canvas-node-schema';
 import { SchemaRenderer } from '../../../../shared/schema-ui/runtime/SchemaRenderer';
 import type { SchemaAdapter } from '../../../../shared/schema-ui/registry/create-renderer-registry';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Typography } from 'antd';
 
-import { createAgentFlowNodeSchemaAdapter } from '../../schema/node-schema-adapter';
 import { agentFlowRendererRegistry } from '../../schema/agent-flow-renderer-registry';
-import { resolveAgentFlowNodeSchema } from '../../schema/node-schema-registry';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
-import {
-  selectSelectedNodeId,
-  selectWorkingDocument
-} from '../../store/editor/selectors';
+import { useNodeSchemaRuntime } from './use-node-schema-runtime';
 
 function isSectionBlock(
   block: SchemaBlock
@@ -43,42 +38,6 @@ function resolveFocusableFieldKey(fieldKey: string) {
   }
 
   return fieldKey;
-}
-
-export function useNodeSchemaRuntime(enabled = true) {
-  const document = useAgentFlowEditorStore(selectWorkingDocument);
-  const selectedNodeId = useAgentFlowEditorStore(selectSelectedNodeId);
-  const setWorkingDocument = useAgentFlowEditorStore(
-    (state) => state.setWorkingDocument
-  );
-  const selectedNode = selectedNodeId
-    ? document.graph.nodes.find((node) => node.id === selectedNodeId) ?? null
-    : null;
-  const schema = useMemo(
-    () =>
-      enabled && selectedNode ? resolveAgentFlowNodeSchema(selectedNode.type) : null,
-    [enabled, selectedNode]
-  );
-  const adapter = useMemo(
-    () =>
-      enabled && selectedNodeId
-        ? createAgentFlowNodeSchemaAdapter({
-            document,
-            nodeId: selectedNodeId,
-            setWorkingDocument,
-            dispatch: () => undefined
-          })
-        : null,
-    [document, enabled, selectedNodeId, setWorkingDocument]
-  );
-
-  return {
-    document,
-    selectedNodeId,
-    selectedNode,
-    schema,
-    adapter
-  };
 }
 
 export function NodeInspector({

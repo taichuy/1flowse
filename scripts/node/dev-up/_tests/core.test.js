@@ -16,6 +16,7 @@ const {
   buildServiceEnv,
   getServicePrestartCommands,
   runServicePrestartCommands,
+  resolveComposeCommand,
   ensureRustfsVolumePermissions,
   waitForServicePort,
 } = require('../core.js');
@@ -316,7 +317,7 @@ test('ensureServiceEnvFile seeds api env defaults and buildServiceEnv loads them
   assert.equal(env.EXTRA_FLAG, 'enabled');
 });
 
-test('ensureServiceEnvFile migrates legacy api-server brand defaults in existing env file', () => {
+test('ensureServiceEnvFile leaves existing api-server env values untouched even if they use old branding', () => {
   const tempRepoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-legacy-env-'));
   const apiServerDir = path.join(tempRepoRoot, 'api', 'apps', 'api-server');
   const envExamplePath = path.join(apiServerDir, '.env.example');
@@ -346,15 +347,48 @@ test('ensureServiceEnvFile migrates legacy api-server brand defaults in existing
   const services = getServiceDefinitions(tempRepoRoot);
   const apiService = services['api-server'];
 
-  assert.equal(ensureServiceEnvFile(apiService), true);
+  assert.equal(ensureServiceEnvFile(apiService), false);
 
   const env = buildServiceEnv(apiService, {});
 
-  assert.equal(env.API_DATABASE_URL, 'postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase');
-  assert.equal(env.API_REDIS_URL, 'redis://:1flowbase@127.0.0.1:36379');
-  assert.equal(env.API_COOKIE_NAME, 'flowbase_console_session');
-  assert.equal(env.BOOTSTRAP_WORKSPACE_NAME, '1flowbase');
+  assert.equal(env.API_DATABASE_URL, 'postgres://postgres:sevenflows@127.0.0.1:35432/sevenflows');
+  assert.equal(env.API_REDIS_URL, 'redis://:sevenflows@127.0.0.1:36379');
+  assert.equal(env.API_COOKIE_NAME, 'flowse_console_session');
+  assert.equal(env.BOOTSTRAP_WORKSPACE_NAME, '1Flowse');
   assert.equal(env.BOOTSTRAP_ROOT_PASSWORD, 'change-me');
+});
+
+test('resolveComposeCommand no longer falls back to docker-compose', () => {
+  assert.throws(
+    () =>
+      resolveComposeCommand({
+        resetCache: true,
+        runCommandImpl(command, args) {
+          if (command === 'docker' && args[0] === 'compose') {
+            return {
+              status: 1,
+              stdout: '',
+              stderr: 'docker compose plugin missing\n',
+            };
+          }
+
+          if (command === 'docker-compose') {
+            return {
+              status: 0,
+              stdout: 'docker-compose version 1.29.2\n',
+              stderr: '',
+            };
+          }
+
+          return {
+            status: 1,
+            stdout: '',
+            stderr: '',
+          };
+        },
+      }),
+    /docker compose/u
+  );
 });
 
 test('getServicePrestartCommands resets api root password in development mode', () => {
@@ -448,6 +482,97 @@ test('runServicePrestartCommands rebuilds local postgres db after migration chec
           status: 1,
           stdout: '',
           stderr: 'Error: migration 20260412183000 was previously applied but has been modified\n',
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: '',
+        stderr: '',
+      };
+    },
+    runMiddlewareComposeImpl(repoRoot, args) {
+      composeCalls.push({ repoRoot, args });
+      return {
+        status: 0,
+        stdout: '',
+        stderr: '',
+      };
+    },
+  });
+
+  assert.equal(commandCalls.length, 2);
+  assert.ok(commandCalls.every((entry) => entry.options.captureOutput === true));
+  assert.deepEqual(
+    composeCalls.map((entry) => entry.args),
+    [
+      [
+        'exec',
+        '-T',
+        'db',
+        'psql',
+        '-U',
+        'postgres',
+        '-d',
+        'postgres',
+        '-c',
+        'DROP DATABASE IF EXISTS "1flowbase" WITH (FORCE);',
+      ],
+      [
+        'exec',
+        '-T',
+        'db',
+        'psql',
+        '-U',
+        'postgres',
+        '-d',
+        'postgres',
+        '-c',
+        'CREATE DATABASE "1flowbase";',
+      ],
+    ]
+  );
+});
+
+test('runServicePrestartCommands rebuilds local postgres db after missing resolved migration drift', () => {
+  const tempRepoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-missing-migration-'));
+  const apiServerDir = path.join(tempRepoRoot, 'api', 'apps', 'api-server');
+  const dockerDir = path.join(tempRepoRoot, 'docker');
+
+  fs.mkdirSync(apiServerDir, { recursive: true });
+  fs.mkdirSync(dockerDir, { recursive: true });
+
+  fs.writeFileSync(
+    path.join(apiServerDir, '.env.example'),
+    [
+      'API_ENV=development',
+      'API_DATABASE_URL=postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase',
+      'API_REDIS_URL=redis://127.0.0.1:36379',
+      'BOOTSTRAP_WORKSPACE_NAME=1flowbase',
+      'BOOTSTRAP_ROOT_ACCOUNT=root',
+      'BOOTSTRAP_ROOT_EMAIL=root@example.com',
+      'BOOTSTRAP_ROOT_PASSWORD=change-me',
+    ].join('\n')
+  );
+  fs.writeFileSync(path.join(dockerDir, 'middleware.env'), 'POSTGRES_PORT=35432\n');
+
+  const services = getServiceDefinitions(tempRepoRoot);
+  const apiService = services['api-server'];
+  ensureServiceEnvFile(apiService);
+
+  const commandCalls = [];
+  const composeCalls = [];
+  let attempt = 0;
+
+  runServicePrestartCommands(apiService, {
+    runCommandImpl(command, args, options) {
+      commandCalls.push({ command, args, options });
+      attempt += 1;
+      if (attempt === 1) {
+        return {
+          status: 1,
+          stdout: '',
+          stderr: 'Error: migration 20260422121000 was previously applied but is missing in the resolved migrations\n',
         };
       }
 

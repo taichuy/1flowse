@@ -13,13 +13,13 @@ test('buildCommands composes repo full gate and coverage gate', () => {
     {
       label: 'ci-verify-repo',
       command: process.execPath,
-      args: [path.join(repoRoot, 'scripts', 'node', 'verify-repo.js')],
+      args: [path.join(repoRoot, 'scripts', 'node', 'verify'), 'repo'],
       cwd: repoRoot,
     },
     {
       label: 'ci-verify-coverage',
       command: process.execPath,
-      args: [path.join(repoRoot, 'scripts', 'node', 'verify-coverage.js'), 'all'],
+      args: [path.join(repoRoot, 'scripts', 'node', 'verify'), 'coverage', 'all'],
       cwd: repoRoot,
     },
   ]);
@@ -40,7 +40,7 @@ test('main runs repo and coverage gates in order and captures advisory output', 
       return {
         status: 0,
         stdout: '',
-        stderr: `warning: ${path.basename(args[0])} advisory\n`,
+        stderr: `warning: ${args[1]} advisory\n`,
       };
     },
   });
@@ -50,16 +50,16 @@ test('main runs repo and coverage gates in order and captures advisory output', 
   assert.deepEqual(
     calls.map((call) => call.args),
     [
-      [path.join(repoRoot, 'scripts', 'node', 'verify-repo.js')],
-      [path.join(repoRoot, 'scripts', 'node', 'verify-coverage.js'), 'all'],
+      [path.join(repoRoot, 'scripts', 'node', 'verify'), 'repo'],
+      [path.join(repoRoot, 'scripts', 'node', 'verify'), 'coverage', 'all'],
     ]
   );
 
   const warningLogPath = path.join(repoRoot, 'tmp', 'test-governance', 'verify-ci.warnings.log');
   assert.equal(fs.existsSync(warningLogPath), true);
   const warningLog = fs.readFileSync(warningLogPath, 'utf8');
-  assert.match(warningLog, /warning: verify-repo\.js advisory/u);
-  assert.match(warningLog, /warning: verify-coverage\.js advisory/u);
+  assert.match(warningLog, /warning: repo advisory/u);
+  assert.match(warningLog, /warning: coverage advisory/u);
 });
 
 test('main passes the inherited lock token to verify-repo and verify-coverage', async () => {

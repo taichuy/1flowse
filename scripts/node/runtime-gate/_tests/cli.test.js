@@ -16,7 +16,8 @@ test('buildCommand proxies runtime-gate arguments to page-debug', () => {
     label: 'runtime-page-debug',
     command: process.execPath,
     args: [
-      path.join(repoRoot, 'scripts', 'node', 'page-debug.js'),
+      path.join(repoRoot, 'scripts', 'node', 'tooling'),
+      'page-debug',
       'snapshot',
       '/settings',
       '--timeout',
@@ -50,7 +51,8 @@ test('main writes advisory warning output under tmp/test-governance', () => {
   assert.equal(calls.length, 1);
   assert.equal(calls[0].command, process.execPath);
   assert.deepEqual(calls[0].args, [
-    path.join(repoRoot, 'scripts', 'node', 'page-debug.js'),
+    path.join(repoRoot, 'scripts', 'node', 'tooling'),
+    'page-debug',
     'snapshot',
     '/settings',
   ]);

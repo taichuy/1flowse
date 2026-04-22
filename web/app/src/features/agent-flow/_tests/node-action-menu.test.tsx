@@ -6,10 +6,8 @@ import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 
 import { NodeActionMenu } from '../components/detail/NodeActionMenu';
 import { useNodeDetailActions } from '../hooks/interactions/use-node-detail-actions';
-import {
-  AgentFlowEditorStoreProvider,
-  useAgentFlowEditorStore
-} from '../store/editor/provider';
+import { AgentFlowEditorStoreProvider } from '../store/editor/AgentFlowEditorStoreProvider';
+import { useAgentFlowEditorStore } from '../store/editor/provider';
 
 function createInitialState() {
   return {

@@ -47,10 +47,8 @@ vi.mock('../schema/node-schema-adapter', async () => {
 
 import { NodeConfigTab } from '../components/detail/tabs/NodeConfigTab';
 import { NodeDetailPanel } from '../components/detail/NodeDetailPanel';
-import {
-  AgentFlowEditorStoreProvider,
-  useAgentFlowEditorStore
-} from '../store/editor/provider';
+import { AgentFlowEditorStoreProvider } from '../store/editor/AgentFlowEditorStoreProvider';
+import { useAgentFlowEditorStore } from '../store/editor/provider';
 import { selectWorkingDocument } from '../store/editor/selectors';
 
 const NODE_DETAIL_PANEL_TEST_TIMEOUT = 15_000;

@@ -1,10 +1,8 @@
 import {
   createContext,
   useContext,
-  useRef,
-  type PropsWithChildren
+  type Context
 } from 'react';
-import type { ConsoleApplicationOrchestrationState } from '@1flowbase/api-client';
 import { useStore } from 'zustand';
 
 import {
@@ -12,29 +10,10 @@ import {
   type AgentFlowEditorState
 } from './index';
 
-type AgentFlowEditorStore = ReturnType<typeof createAgentFlowEditorStore>;
+export type AgentFlowEditorStore = ReturnType<typeof createAgentFlowEditorStore>;
 
-const AgentFlowEditorStoreContext =
+export const AgentFlowEditorStoreContext: Context<AgentFlowEditorStore | null> =
   createContext<AgentFlowEditorStore | null>(null);
-
-export function AgentFlowEditorStoreProvider({
-  initialState,
-  children
-}: PropsWithChildren<{
-  initialState: ConsoleApplicationOrchestrationState;
-}>) {
-  const storeRef = useRef<AgentFlowEditorStore | null>(null);
-
-  if (!storeRef.current) {
-    storeRef.current = createAgentFlowEditorStore(initialState);
-  }
-
-  return (
-    <AgentFlowEditorStoreContext.Provider value={storeRef.current}>
-      {children}
-    </AgentFlowEditorStoreContext.Provider>
-  );
-}
 
 export function useAgentFlowEditorStore<T>(
   selector: (state: AgentFlowEditorState) => T

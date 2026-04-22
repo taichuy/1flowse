@@ -1,107 +1,85 @@
 #!/usr/bin/env node
 
+const fs = require('node:fs');
 const path = require('node:path');
 
 const {
+  parseFrontendCliArgs: parseCliArgs,
+  buildFrontendCommands: buildCommands,
+  runFrontend,
+} = require('./test');
+const {
   getRepoRoot,
-  runManagedCommandSequence,
+  resolveOutputDir,
 } = require('./testing/warning-capture.js');
-const { loadVerifyRuntimeConfig } = require('./testing/verify-runtime.js');
 
-const LAYERS = new Set(['fast', 'full']);
+function createGovernanceLogWriters({
+  repoRoot,
+  env,
+  fileName,
+  writeStdout = (text) => process.stdout.write(text),
+  writeStderr = (text) => process.stderr.write(text),
+}) {
+  const outputDir = resolveOutputDir(repoRoot, env);
+  const logPath = path.join(outputDir, fileName);
 
-function parseCliArgs(argv) {
-  if (argv.includes('-h') || argv.includes('--help')) {
-    return {
-      help: true,
-      layer: 'full',
-    };
-  }
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.rmSync(logPath, { force: true });
 
-  const [layer = 'full'] = argv;
+  const append = (text) => {
+    if (!text) {
+      return;
+    }
 
-  if (!LAYERS.has(layer)) {
-    throw new Error(`Unknown frontend test layer: ${layer}`);
-  }
+    fs.appendFileSync(logPath, text, 'utf8');
+  };
 
   return {
-    help: false,
-    layer,
+    writeStdout(text) {
+      append(text);
+      writeStdout(text);
+    },
+    writeStderr(text) {
+      append(text);
+      writeStderr(text);
+    },
   };
-}
-
-function buildCommands({ layer, repoRoot }) {
-  if (layer === 'fast') {
-    return [
-      {
-        label: 'frontend-fast-test',
-        command: 'pnpm',
-        args: ['--dir', 'web/app', 'test'],
-        cwd: '.',
-      },
-    ];
-  }
-
-  return [
-    {
-      label: 'frontend-lint',
-      command: 'pnpm',
-      args: ['--dir', 'web', 'lint'],
-      cwd: '.',
-    },
-    {
-      label: 'frontend-test',
-      command: 'pnpm',
-      args: ['--dir', 'web', 'test'],
-      cwd: '.',
-    },
-    {
-      label: 'frontend-build',
-      command: 'pnpm',
-      args: ['--dir', 'web/app', 'build'],
-      cwd: '.',
-    },
-    {
-      label: 'frontend-style-boundary',
-      command: process.execPath,
-      args: [path.join(repoRoot, 'scripts', 'node', 'check-style-boundary.js'), 'all-pages'],
-      cwd: repoRoot,
-    },
-  ];
-}
-
-function usage() {
-  process.stdout.write(`Usage: node scripts/node/test-frontend.js [fast|full]\n`);
 }
 
 async function main(argv = [], deps = {}) {
   const options = parseCliArgs(argv);
 
-  if (options.help) {
-    usage();
-    return 0;
+  if (options.help || options.layer !== 'fast') {
+    return runFrontend(argv, deps);
   }
 
   const repoRoot = deps.repoRoot || getRepoRoot();
   const env = deps.env || process.env;
-  const runtimeConfig = deps.runtimeConfig || loadVerifyRuntimeConfig({ repoRoot, env });
-  const managedRunner = deps.managedRunnerImpl || runManagedCommandSequence;
-
-  return managedRunner({
+  const governanceWriters = createGovernanceLogWriters({
     repoRoot,
     env,
-    scope: `test-frontend-${options.layer}`,
-    lockMode: options.layer === 'full' ? 'heavy' : 'none',
-    commandDisplay: `node scripts/node/test-frontend.js ${options.layer}`.trim(),
-    runtimeConfig,
-    commands: buildCommands({
-      layer: options.layer,
-      repoRoot,
-    }),
-    spawnSyncImpl: deps.spawnSyncImpl,
+    fileName: 'frontend-fast.log',
     writeStdout: deps.writeStdout,
     writeStderr: deps.writeStderr,
   });
+
+  const status = await runFrontend(argv, {
+    ...deps,
+    repoRoot,
+    env,
+    writeStdout: governanceWriters.writeStdout,
+    writeStderr: governanceWriters.writeStderr,
+  });
+
+  const warningLogPath = path.join(
+    resolveOutputDir(repoRoot, env),
+    'frontend-fast.warnings.log'
+  );
+  if (!fs.existsSync(warningLogPath)) {
+    fs.writeFileSync(warningLogPath, '', 'utf8');
+  }
+
+  return status;
 }
 
 if (require.main === module) {

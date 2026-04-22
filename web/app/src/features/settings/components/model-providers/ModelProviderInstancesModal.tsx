@@ -71,6 +71,7 @@ export function ModelProviderInstancesModal({
   canManage,
   versionSwitchNotice,
   onClose,
+  onChangeInstance,
   onEdit,
   onFetchModels,
   onRefreshCandidates,
@@ -91,13 +92,14 @@ export function ModelProviderInstancesModal({
     migratedInstanceCount: number | null;
   } | null;
   onClose: () => void;
+  onChangeInstance: (instanceId: string) => void;
   onEdit: (instance: SettingsModelProviderInstance) => void;
   onFetchModels: (instance: SettingsModelProviderInstance) => void;
   onRefreshCandidates: (instance: SettingsModelProviderInstance) => void;
   onRefreshModels: (instance: SettingsModelProviderInstance) => void;
   onDelete: (instance: SettingsModelProviderInstance) => void;
 }) {
-  const [expandedInstanceIds, setExpandedInstanceIds] = useState<string[]>([]);
+  const [expandedInstanceId, setExpandedInstanceId] = useState<string | null>(null);
   const loadedModelsByInstanceId = useMemo(() => {
     if (!modelCatalog) {
       return {};
@@ -148,18 +150,20 @@ export function ModelProviderInstancesModal({
           />
         ) : (
           <Collapse
-            activeKey={expandedInstanceIds}
+            activeKey={expandedInstanceId ? [expandedInstanceId] : []}
             onChange={(nextKeys) => {
               const resolvedKeys = Array.isArray(nextKeys) ? nextKeys : [nextKeys];
-              setExpandedInstanceIds(resolvedKeys);
-
               const nextExpandedId = resolvedKeys[resolvedKeys.length - 1];
+              setExpandedInstanceId(
+                typeof nextExpandedId === 'string' ? nextExpandedId : null
+              );
               if (!nextExpandedId) {
                 return;
               }
 
               const expandedInstance = instances.find((instance) => instance.id === nextExpandedId);
               if (expandedInstance) {
+                onChangeInstance(expandedInstance.id);
                 onFetchModels(expandedInstance);
               }
             }}

@@ -510,6 +510,7 @@ describe('settings api wrappers', () => {
     );
     expect(modelProviderOptionsContract.providers[0]).toEqual(
       expect.objectContaining({
+        effective_instance_id: 'provider-openai-prod',
         provider_code: 'openai_compatible',
         plugin_type: 'model_provider',
         namespace: 'plugin.openai_compatible',
