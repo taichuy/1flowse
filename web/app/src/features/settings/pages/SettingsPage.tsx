@@ -16,7 +16,6 @@ import { ModelProviderInstanceDrawer } from '../components/model-providers/Model
 import { ModelProviderInstancesModal } from '../components/model-providers/ModelProviderInstancesModal';
 import { OfficialPluginInstallPanel } from '../components/model-providers/OfficialPluginInstallPanel';
 import { PluginUploadInstallModal } from '../components/model-providers/PluginUploadInstallModal';
-import { PluginVersionManagementModal } from '../components/model-providers/PluginVersionManagementModal';
 import { formatPluginAvailabilityStatus } from '../components/model-providers/plugin-installation-status';
 import {
   getVisibleSettingsSections,
@@ -133,9 +132,6 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     providerCode: string;
     selectedInstanceId: string | null;
   } | null>(null);
-  const [versionModalProviderCode, setVersionModalProviderCode] = useState<
-    string | null
-  >(null);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadFileList, setUploadFileList] = useState<UploadFile[]>([]);
   const [uploadValidationMessage, setUploadValidationMessage] = useState<
@@ -289,9 +285,6 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
         null)
       : (currentCatalogEntriesByProviderCode[instanceModalState.providerCode] ??
         null)
-    : null;
-  const activeVersionFamily = versionModalProviderCode
-    ? (familiesByProviderCode[versionModalProviderCode] ?? null)
     : null;
   const modelsQuery = useQuery({
     queryKey: modalSelectedInstanceId
@@ -468,7 +461,6 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     onSuccess: async () => {
       setDrawerState(null);
       setInstanceModalState(null);
-      setVersionModalProviderCode(null);
       await invalidateModelProviderQueries();
     }
   });
@@ -568,7 +560,6 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
     onSuccess: async (task, variables) => {
       const detail = task.detail_json ?? {};
 
-      setVersionModalProviderCode(null);
       setRecentVersionSwitchNotice({
         providerCode: variables.providerCode,
         targetVersion: parseTaskDetailString(detail, 'target_version'),
@@ -720,7 +711,14 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
                 : null
             }
             switchingProviderCode={
-              versionMutation.isPending
+              versionMutation.isPending &&
+              versionMutation.variables.mode === 'switch'
+                ? versionMutation.variables.providerCode
+                : null
+            }
+            upgradingProviderCode={
+              versionMutation.isPending &&
+              versionMutation.variables.mode === 'upgrade'
                 ? versionMutation.variables.providerCode
                 : null
             }
@@ -738,52 +736,17 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
                 providerCode: entry.provider_code
               });
             }}
-            onManageVersion={(entry) => {
-              setVersionModalProviderCode(entry.provider_code);
+            onUpgradeLatest={(entry) => {
+              versionMutation.mutate({
+                mode: 'upgrade',
+                providerCode: entry.provider_code
+              });
             }}
             onSwitchVersion={(entry, installationId) => {
-              const targetVersion =
-                entry.installed_versions.find(
-                  (version) => version.installation_id === installationId
-                )?.plugin_version ?? null;
-
-              void modal.confirm({
-                title: '切换版本',
-                icon: null,
-                centered: true,
-                okText: '确认切换',
-                cancelText: '取消',
-                okButtonProps: {
-                  loading:
-                    versionMutation.isPending &&
-                    versionMutation.variables.mode === 'switch' &&
-                    versionMutation.variables.providerCode ===
-                      entry.provider_code &&
-                    versionMutation.variables.installationId === installationId
-                },
-                content: (
-                  <div className="model-provider-panel__install-confirm">
-                    <div className="model-provider-panel__install-confirm-card">
-                      <Typography.Title level={5}>
-                        {entry.display_name}
-                      </Typography.Title>
-                      <Typography.Paragraph type="secondary">
-                        即将把当前 workspace 的该供应商切换到
-                        {targetVersion ?? '目标版本'}。
-                      </Typography.Paragraph>
-                      <Typography.Paragraph type="secondary">
-                        切换后会统一迁移该供应商下的全部实例；完成后建议刷新模型并验证关键实例。
-                      </Typography.Paragraph>
-                    </div>
-                  </div>
-                ),
-                onOk: async () => {
-                  await versionMutation.mutateAsync({
-                    mode: 'switch',
-                    providerCode: entry.provider_code,
-                    installationId
-                  });
-                }
+              versionMutation.mutate({
+                mode: 'switch',
+                providerCode: entry.provider_code,
+                installationId
               });
             }}
             onDelete={(entry) => {
@@ -961,37 +924,6 @@ function ModelProvidersSection({ canManage }: { canManage: boolean }) {
         }}
         onDelete={(instance) => {
           deleteMutation.mutate(instance.id);
-        }}
-      />
-
-      <PluginVersionManagementModal
-        open={versionModalProviderCode !== null}
-        family={activeVersionFamily}
-        submitting={versionMutation.isPending}
-        pendingMode={
-          versionMutation.isPending
-            ? (versionMutation.variables?.mode ?? null)
-            : null
-        }
-        pendingInstallationId={
-          versionMutation.isPending &&
-          versionMutation.variables?.mode === 'switch'
-            ? versionMutation.variables.installationId
-            : null
-        }
-        onClose={() => setVersionModalProviderCode(null)}
-        onUpgradeLatest={(family) => {
-          versionMutation.mutate({
-            mode: 'upgrade',
-            providerCode: family.provider_code
-          });
-        }}
-        onSwitchVersion={(family, installationId) => {
-          versionMutation.mutate({
-            mode: 'switch',
-            providerCode: family.provider_code,
-            installationId
-          });
         }}
       />
 

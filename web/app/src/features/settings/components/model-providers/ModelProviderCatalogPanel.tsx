@@ -30,9 +30,10 @@ export function ModelProviderCatalogPanel({
   canManage,
   deletingProviderCode,
   switchingProviderCode,
+  upgradingProviderCode,
   onCreate,
   onViewInstances,
-  onManageVersion,
+  onUpgradeLatest,
   onSwitchVersion,
   onDelete
 }: {
@@ -46,9 +47,10 @@ export function ModelProviderCatalogPanel({
   canManage: boolean;
   deletingProviderCode?: string | null;
   switchingProviderCode?: string | null;
+  upgradingProviderCode?: string | null;
   onCreate: (entry: SettingsPluginFamilyEntry) => void;
   onViewInstances: (entry: SettingsPluginFamilyEntry) => void;
-  onManageVersion: (entry: SettingsPluginFamilyEntry) => void;
+  onUpgradeLatest: (entry: SettingsPluginFamilyEntry) => void;
   onSwitchVersion: (
     entry: SettingsPluginFamilyEntry,
     installationId: string
@@ -95,12 +97,6 @@ export function ModelProviderCatalogPanel({
                       wrap
                       className="model-provider-panel__catalog-actions"
                     >
-                      <Button
-                        type="link"
-                        onClick={() => onManageVersion(entry)}
-                      >
-                        版本管理
-                      </Button>
                       <Button
                         type="link"
                         onClick={() => onViewInstances(entry)}
@@ -168,41 +164,47 @@ export function ModelProviderCatalogPanel({
                 )
                 .map((version) => ({
                   value: version.installation_id,
-                  label: (
-                    <span className="model-provider-panel__version-option">
-                      <span>{version.plugin_version}</span>
-                      {version.is_current ? (
-                        <Tag color="green">
-                          当前
-                        </Tag>
-                      ) : null}
-                    </span>
-                  )
+                  label: version.plugin_version
                 }));
 
               return (
                 <div className="model-provider-panel__catalog-version">
-                  <Select
-                    size="small"
-                    value={entry.current_installation_id}
-                    className="model-provider-panel__version-select"
-                    classNames={{
-                      popup: {
-                        root: 'model-provider-panel__version-dropdown'
-                      }
-                    }}
-                    aria-label={`切换 ${entry.display_name} 版本`}
-                    loading={switchingProviderCode === entry.provider_code}
-                    disabled={!canManage || entry.installed_versions.length <= 1}
-                    options={versionOptions}
-                    onChange={(installationId) => {
-                      if (installationId === entry.current_installation_id) {
-                        return;
-                      }
+                  {canManage ? (
+                    <Space size={8} wrap className="model-provider-panel__version-inline">
+                      <Select
+                        size="small"
+                        value={entry.current_installation_id}
+                        className="model-provider-panel__version-select"
+                        classNames={{
+                          popup: {
+                            root: 'model-provider-panel__version-dropdown'
+                          }
+                        }}
+                        aria-label={`切换 ${entry.display_name} 版本`}
+                        loading={switchingProviderCode === entry.provider_code}
+                        options={versionOptions}
+                        onChange={(installationId) => {
+                          if (installationId === entry.current_installation_id) {
+                            return;
+                          }
 
-                      onSwitchVersion(entry, installationId);
-                    }}
-                  />
+                          onSwitchVersion(entry, installationId);
+                        }}
+                      />
+                      {entry.has_update ? (
+                        <Button
+                          size="small"
+                          type="default"
+                          loading={upgradingProviderCode === entry.provider_code}
+                          onClick={() => onUpgradeLatest(entry)}
+                        >
+                          更新
+                        </Button>
+                      ) : null}
+                    </Space>
+                  ) : (
+                    <Typography.Text strong>{entry.current_version}</Typography.Text>
+                  )}
                 </div>
               );
             }

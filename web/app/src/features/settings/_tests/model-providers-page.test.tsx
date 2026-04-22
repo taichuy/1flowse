@@ -405,7 +405,7 @@ describe('ModelProvidersPage', () => {
     });
   });
 
-  test('renders provider family rows and upgrades to the latest version from version management', async () => {
+  test('renders provider family rows and upgrades to the latest version from the catalog version column', async () => {
     authenticateWithPermissions([
       'route_page.view.all',
       'state_model.view.all',
@@ -425,15 +425,12 @@ describe('ModelProvidersPage', () => {
     const catalogRow = await screen.findByRole('row', {
       name: /OpenAI Compatible/
     });
-    fireEvent.click(
-      within(catalogRow).getByRole('button', { name: '版本管理' })
-    );
 
-    expect(await screen.findByText('升级到最新版本')).toBeInTheDocument();
-    expect(screen.getAllByText('0.2.0')).toHaveLength(1);
-    expect(screen.getByText('其他本地版本')).toBeInTheDocument();
-    expect(screen.queryByText('最新')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '升级到最新版本' }));
+    expect(
+      within(catalogRow).getByRole('button', { name: /更\s*新/ })
+    ).toBeInTheDocument();
+    expect(within(catalogRow).queryByRole('button', { name: '版本管理' })).not.toBeInTheDocument();
+    fireEvent.click(within(catalogRow).getByRole('button', { name: /更\s*新/ }));
 
     await waitFor(() => {
       expect(pluginsApi.upgradeSettingsPluginFamilyLatest).toHaveBeenCalledWith(
@@ -491,12 +488,11 @@ describe('ModelProvidersPage', () => {
     const catalogRow = await screen.findByRole('row', {
       name: /OpenAI Compatible/
     });
-    fireEvent.click(
-      within(catalogRow).getByRole('button', { name: '版本管理' })
-    );
-    fireEvent.click(
-      await screen.findByRole('button', { name: '回退到该版本' })
-    );
+    const versionSelect = within(catalogRow).getByRole('combobox', {
+      name: '切换 OpenAI Compatible 版本'
+    });
+    fireEvent.mouseDown(versionSelect);
+    fireEvent.click(await screen.findByText('0.1.0'));
 
     await waitFor(() => {
       expect(pluginsApi.switchSettingsPluginFamilyVersion).toHaveBeenCalledWith(
@@ -618,6 +614,9 @@ describe('ModelProvidersPage', () => {
       within(catalogRow).getByRole('button', { name: '添加' })
     ).toBeInTheDocument();
     expect(
+      within(catalogRow).queryByRole('button', { name: '版本管理' })
+    ).not.toBeInTheDocument();
+    expect(
       within(catalogRow).queryByRole('link', { name: '文档' })
     ).not.toBeInTheDocument();
   }, 20000);
@@ -637,20 +636,6 @@ describe('ModelProvidersPage', () => {
 
     fireEvent.mouseDown(versionSelect);
     fireEvent.click(await screen.findByText('0.2.0'));
-
-    const confirmDialog = await screen.findByRole('dialog');
-    expect(within(confirmDialog).getAllByText('切换版本').length).toBeGreaterThan(
-      0
-    );
-    expect(
-      within(confirmDialog).getByText(
-        '切换后会统一迁移该供应商下的全部实例；完成后建议刷新模型并验证关键实例。'
-      )
-    ).toBeInTheDocument();
-
-    fireEvent.click(
-      within(confirmDialog).getByRole('button', { name: '确认切换' })
-    );
 
     await waitFor(() => {
       expect(pluginsApi.switchSettingsPluginFamilyVersion).toHaveBeenCalledWith(
@@ -1083,7 +1068,7 @@ describe('ModelProvidersPage', () => {
     );
   }, 15000);
 
-  test('renders official source metadata, upload entry, and source trust labels', async () => {
+  test('renders upload entry and removes the version management entry point', async () => {
     authenticateWithPermissions([
       'route_page.view.all',
       'state_model.view.all',
@@ -1140,11 +1125,8 @@ describe('ModelProvidersPage', () => {
     const catalogRow = await screen.findByRole('row', {
       name: /OpenAI Compatible/
     });
-    fireEvent.click(
-      within(catalogRow).getByRole('button', { name: '版本管理' })
-    );
-
-    expect(await screen.findByText('官方签发')).toBeInTheDocument();
-    expect(await screen.findByText('手工上传')).toBeInTheDocument();
+    expect(
+      within(catalogRow).queryByRole('button', { name: '版本管理' })
+    ).not.toBeInTheDocument();
   });
 });

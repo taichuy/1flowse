@@ -250,10 +250,8 @@
   min-width: 132px;
 }
 
-.model-provider-panel__version-option {
-  display: inline-flex;
+.model-provider-panel__version-inline {
   align-items: center;
-  gap: 6px;
 }
 
 .model-provider-panel__version-dropdown .ant-select-item-option-content {
@@ -300,67 +298,6 @@
 
 .model-provider-panel__install-confirm-card .ant-typography {
   margin: 0;
-}
-
-.model-provider-panel__version-modal,
-.model-provider-panel__version-block,
-.model-provider-panel__version-list {
-  display: grid;
-  gap: 12px;
-}
-
-.model-provider-panel__version-modal-head,
-.model-provider-panel__version-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.model-provider-panel__version-modal-head .ant-typography,
-.model-provider-panel__version-block-head .ant-typography,
-.model-provider-panel__version-card .ant-typography {
-  margin: 0;
-}
-
-.model-provider-panel__version-card {
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: #fbfcfe;
-}
-
-.model-provider-panel__version-card--featured {
-  border-color: rgba(202, 138, 4, 0.24);
-  background: linear-gradient(
-    180deg,
-    rgba(254, 252, 232, 0.92) 0%,
-    #ffffff 100%
-  );
-}
-
-.model-provider-panel__version-card-main {
-  display: grid;
-  gap: 4px;
-}
-
-.model-provider-panel__version-card-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.model-provider-panel__version-card-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.model-provider-panel__version-card-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
 }
 
 .model-provider-panel__upload-modal {
@@ -447,19 +384,12 @@
     justify-content: flex-start;
   }
 
-  .model-provider-panel__instances-modal-head,
-  .model-provider-panel__version-modal-head,
-  .model-provider-panel__version-card {
+  .model-provider-panel__instances-modal-head {
     flex-direction: column;
   }
 
   .model-provider-panel__instances-modal-select {
     width: 100%;
     min-width: 0;
-  }
-
-  .model-provider-panel__version-card-actions {
-    width: 100%;
-    justify-content: flex-start;
   }
 }
