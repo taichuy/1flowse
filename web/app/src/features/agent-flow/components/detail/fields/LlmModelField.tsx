@@ -142,44 +142,43 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
 
   return (
     <>
-      <div className="agent-flow-model-field">
-        <Space.Compact block>
-          <Select
-            showSearch
-            allowClear
-            aria-label="模型供应商"
-            placeholder="选择模型供应商"
-            value={providerCode || undefined}
-            options={providerOptions.map((option) => ({
-              label: option.label,
-              value: option.value
-            }))}
-            optionFilterProp="label"
-            onChange={(value) => {
-              selectProvider(typeof value === 'string' ? value : '');
-            }}
-            onClear={() => {
-              adapter.setValue('config.model_provider', {
-                provider_code: '',
-                model_id: '',
-                protocol: undefined,
-                provider_label: undefined,
-                model_label: undefined,
-                schema_fetched_at: undefined
-              });
-              adapter.setValue('config.llm_parameters', buildLlmParameterState(null));
-            }}
-            style={{ flex: 1 }}
-          />
-          <Button
-            type="default"
-            aria-label={`${block.label}设置`}
-            className="agent-flow-model-field__settings"
-            icon={<SettingOutlined />}
-            onClick={() => setOpen(true)}
-          />
-        </Space.Compact>
-      </div>
+      <Space.Compact block>
+        <Select
+          showSearch
+          allowClear
+          aria-label="模型供应商"
+          placeholder="选择模型供应商"
+          value={providerCode || undefined}
+          options={providerOptions.map((option) => ({
+            label: option.label,
+            value: option.value
+          }))}
+          optionFilterProp="label"
+          onChange={(value) => {
+            selectProvider(typeof value === 'string' ? value : '');
+          }}
+          onClear={() => {
+            adapter.setValue('config.model_provider', {
+              provider_code: '',
+              model_id: '',
+              protocol: undefined,
+              provider_label: undefined,
+              model_label: undefined,
+              schema_fetched_at: undefined
+            });
+            adapter.setValue('config.llm_parameters', buildLlmParameterState(null));
+          }}
+          style={{ flex: '1 1 auto', minWidth: 0 }}
+        />
+        <Button
+          type="default"
+          aria-label={`${block.label}设置`}
+          className="agent-flow-model-field__settings"
+          icon={<SettingOutlined />}
+          onClick={() => setOpen(true)}
+          style={{ flex: '0 0 44px', width: 44, paddingInline: 0 }}
+        />
+      </Space.Compact>
       <Modal
         open={open}
         footer={null}

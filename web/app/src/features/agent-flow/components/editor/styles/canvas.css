@@ -124,16 +124,6 @@
   line-height: 1.5;
 }
 
-.agent-flow-model-field {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 48px;
-  border: 1px solid #d7dee7;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #f5f7fa;
-}
-
-.agent-flow-model-field__trigger,
 .agent-flow-model-field__settings,
 .agent-flow-model-settings__selector,
 .agent-flow-model-settings__option,
@@ -143,21 +133,11 @@
   cursor: pointer;
 }
 
-.agent-flow-model-field__trigger {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  min-height: 48px;
-  padding: 0 14px;
-}
-
 .agent-flow-model-field__settings {
-  border-left: 1px solid #dde4eb;
   color: #6d7a8d;
   font-size: 16px;
 }
 
-.agent-flow-model-field__caret,
 .agent-flow-model-settings__selector-caret {
   margin-left: auto;
   color: #6d7a8d;

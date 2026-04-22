@@ -84,7 +84,7 @@ describe('LlmModelField', () => {
   test('writes selected provider code and model back to the llm node config', async () => {
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
-    renderWithProviders(
+    const { container } = renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
         <DocumentObserver
           onChange={(document) => {
@@ -94,6 +94,8 @@ describe('LlmModelField', () => {
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
+
+    expect(container.querySelector('.agent-flow-model-field')).toBeNull();
 
     await selectProviderOption(modelProviderOptionsProviders[0].display_name);
     await waitFor(() => {
