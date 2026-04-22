@@ -15,23 +15,22 @@ use crate::{
         UpdateModelProviderInstanceCommand,
     },
     ports::{
-        AuthRepository, CreateModelProviderInstanceInput, CreatePluginAssignmentInput,
-        CreateModelProviderPreviewSessionInput, CreatePluginTaskInput, ModelProviderRepository,
-        PluginRepository,
-        ProviderRuntimeInvocationOutput, ProviderRuntimePort, ReassignModelProviderInstancesInput,
-        UpdateModelProviderInstanceInput, UpdatePluginArtifactSnapshotInput,
-        UpdatePluginDesiredStateInput, UpdatePluginRuntimeSnapshotInput,
-        UpdatePluginTaskStatusInput, UpdateProfileInput, UpsertModelProviderCatalogCacheInput,
-        UpsertModelProviderSecretInput, UpsertPluginInstallationInput,
+        AuthRepository, CreateModelProviderInstanceInput, CreateModelProviderPreviewSessionInput,
+        CreatePluginAssignmentInput, CreatePluginTaskInput, ModelProviderRepository,
+        PluginRepository, ProviderRuntimeInvocationOutput, ProviderRuntimePort,
+        ReassignModelProviderInstancesInput, UpdateModelProviderInstanceInput,
+        UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
+        UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
+        UpsertModelProviderCatalogCacheInput, UpsertModelProviderSecretInput,
+        UpsertPluginInstallationInput,
     },
 };
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, ModelProviderCatalogCacheRecord,
     ModelProviderCatalogRefreshStatus, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
     ModelProviderPreviewSessionRecord, ModelProviderSecretRecord, PermissionDefinition,
-    PluginArtifactStatus, PluginAssignmentRecord,
-    PluginAvailabilityStatus, PluginDesiredState, PluginInstallationRecord, PluginRuntimeStatus,
-    PluginTaskRecord, PluginVerificationStatus,
+    PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
+    PluginInstallationRecord, PluginRuntimeStatus, PluginTaskRecord, PluginVerificationStatus,
     ScopeContext, UserRecord,
 };
 use plugin_framework::provider_contract::{
@@ -51,6 +50,7 @@ struct MemoryModelProviderRepository {
     caches: Arc<RwLock<HashMap<Uuid, ModelProviderCatalogCacheRecord>>>,
     preview_sessions: Arc<RwLock<HashMap<Uuid, ModelProviderPreviewSessionRecord>>>,
     secrets: Arc<RwLock<HashMap<Uuid, (ModelProviderSecretRecord, Value)>>>,
+    routings: Arc<RwLock<HashMap<String, domain::ModelProviderRoutingRecord>>>,
     references: Arc<RwLock<HashMap<Uuid, u64>>>,
     audit_events: Arc<RwLock<Vec<String>>>,
 }
@@ -66,6 +66,7 @@ impl MemoryModelProviderRepository {
             caches: Arc::new(RwLock::new(HashMap::new())),
             preview_sessions: Arc::new(RwLock::new(HashMap::new())),
             secrets: Arc::new(RwLock::new(HashMap::new())),
+            routings: Arc::new(RwLock::new(HashMap::new())),
             references: Arc::new(RwLock::new(HashMap::new())),
             audit_events: Arc::new(RwLock::new(Vec::new())),
         }
@@ -163,6 +164,37 @@ impl MemoryModelProviderRepository {
             .get(&installation_id)
             .cloned()
             .expect("installation should exist for test")
+    }
+
+    async fn seed_instance(
+        &self,
+        installation_id: Uuid,
+        display_name: &str,
+        model_ids: &[&str],
+    ) -> ModelProviderInstanceRecord {
+        self.create_instance(&CreateModelProviderInstanceInput {
+            instance_id: Uuid::now_v7(),
+            workspace_id: self.actor.current_workspace_id,
+            installation_id,
+            provider_code: "fixture_provider".to_string(),
+            protocol: "openai_compatible".to_string(),
+            display_name: display_name.to_string(),
+            status: ModelProviderInstanceStatus::Ready,
+            config_json: json!({
+                "base_url": format!("https://{}.example.com/v1", display_name.to_lowercase().replace(' ', "-"))
+            }),
+            configured_models: model_ids
+                .iter()
+                .map(|model_id| domain::ModelProviderConfiguredModel {
+                    model_id: (*model_id).to_string(),
+                    enabled: true,
+                })
+                .collect(),
+            enabled_model_ids: model_ids.iter().map(|model_id| (*model_id).to_string()).collect(),
+            created_by: self.actor.user_id,
+        })
+        .await
+        .expect("seed instance should succeed")
     }
 }
 
@@ -605,6 +637,53 @@ impl ModelProviderRepository for MemoryModelProviderRepository {
         Ok(record)
     }
 
+    async fn upsert_routing(
+        &self,
+        input: &crate::ports::UpsertModelProviderRoutingInput,
+    ) -> Result<domain::ModelProviderRoutingRecord> {
+        let now = OffsetDateTime::now_utc();
+        let mut routings = self.routings.write().await;
+        let existing = routings.get(&input.provider_code).cloned();
+        let record = domain::ModelProviderRoutingRecord {
+            workspace_id: input.workspace_id,
+            provider_code: input.provider_code.clone(),
+            routing_mode: input.routing_mode,
+            primary_instance_id: input.primary_instance_id,
+            created_by: existing
+                .as_ref()
+                .map(|record| record.created_by)
+                .unwrap_or(input.updated_by),
+            updated_by: input.updated_by,
+            created_at: existing
+                .as_ref()
+                .map(|record| record.created_at)
+                .unwrap_or(now),
+            updated_at: now,
+        };
+        routings.insert(record.provider_code.clone(), record.clone());
+        Ok(record)
+    }
+
+    async fn get_routing(
+        &self,
+        _workspace_id: Uuid,
+        provider_code: &str,
+    ) -> Result<Option<domain::ModelProviderRoutingRecord>> {
+        Ok(self.routings.read().await.get(provider_code).cloned())
+    }
+
+    async fn list_routings(
+        &self,
+        _workspace_id: Uuid,
+    ) -> Result<Vec<domain::ModelProviderRoutingRecord>> {
+        Ok(self.routings.read().await.values().cloned().collect())
+    }
+
+    async fn delete_routing(&self, _workspace_id: Uuid, provider_code: &str) -> Result<()> {
+        self.routings.write().await.remove(provider_code);
+        Ok(())
+    }
+
     async fn create_preview_session(
         &self,
         input: &CreateModelProviderPreviewSessionInput,
@@ -911,6 +990,83 @@ async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
 }
 
 #[tokio::test]
+async fn model_provider_service_marks_primary_instance_and_options_use_primary_routing() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryModelProviderRepository::new(actor_with_permissions(
+        workspace_id,
+        &["state_model.view.all", "state_model.manage.all"],
+    ));
+    let package_root = std::env::temp_dir().join(format!("provider-model-{}", Uuid::now_v7()));
+    create_provider_fixture(&package_root);
+    let installation_id = repository
+        .seed_installation(
+            &package_root.display().to_string(),
+            PluginDesiredState::ActiveRequested,
+            true,
+        )
+        .await;
+
+    let primary = repository
+        .seed_instance(installation_id, "OpenAI Production", &["gpt-4o-mini"])
+        .await;
+    let backup = repository
+        .seed_instance(installation_id, "OpenAI Backup", &["gpt-4.1-mini"])
+        .await;
+
+    repository
+        .upsert_routing(&crate::ports::UpsertModelProviderRoutingInput {
+            workspace_id: repository.actor.current_workspace_id,
+            provider_code: "fixture_provider".to_string(),
+            routing_mode: domain::ModelProviderRoutingMode::ManualPrimary,
+            primary_instance_id: primary.id,
+            updated_by: repository.actor.user_id,
+        })
+        .await
+        .unwrap();
+
+    let service = ModelProviderService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        "test-master-key",
+    );
+
+    let instances = service
+        .list_instances(repository.actor.user_id)
+        .await
+        .unwrap();
+    assert!(
+        instances
+            .iter()
+            .find(|view| view.instance.id == primary.id)
+            .unwrap()
+            .is_primary
+    );
+    assert!(
+        !instances
+            .iter()
+            .find(|view| view.instance.id == backup.id)
+            .unwrap()
+            .is_primary
+    );
+
+    let options = service
+        .options(
+            repository.actor.user_id,
+            RequestedLocales::new("zh_Hans", "en_US"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        options.providers[0].effective_instance_display_name,
+        "OpenAI Production"
+    );
+    assert_eq!(
+        options.providers[0].models[0].descriptor.model_id,
+        "gpt-4o-mini"
+    );
+}
+
+#[tokio::test]
 async fn model_provider_service_create_and_update_allow_empty_enabled_model_ids() {
     let workspace_id = Uuid::now_v7();
     let repository = MemoryModelProviderRepository::new(actor_with_permissions(
@@ -975,8 +1131,10 @@ async fn model_provider_service_options_only_expose_enabled_models_and_keep_unkn
         &["state_model.view.all", "state_model.manage.all"],
     ));
     let runtime = MemoryProviderRuntime::default();
-    let package_root =
-        std::env::temp_dir().join(format!("provider-options-enabled-models-{}", Uuid::now_v7()));
+    let package_root = std::env::temp_dir().join(format!(
+        "provider-options-enabled-models-{}",
+        Uuid::now_v7()
+    ));
     create_provider_fixture(&package_root);
     let installation_id = repository
         .seed_installation(
@@ -1042,6 +1200,17 @@ async fn model_provider_service_options_only_expose_enabled_models_and_keep_unkn
         .await
         .unwrap();
 
+    repository
+        .upsert_routing(&crate::ports::UpsertModelProviderRoutingInput {
+            workspace_id: repository.actor.current_workspace_id,
+            provider_code: created.instance.provider_code.clone(),
+            routing_mode: domain::ModelProviderRoutingMode::ManualPrimary,
+            primary_instance_id: created.instance.id,
+            updated_by: repository.actor.user_id,
+        })
+        .await
+        .unwrap();
+
     let options = service
         .options(
             repository.actor.user_id,
@@ -1060,11 +1229,15 @@ async fn model_provider_service_options_only_expose_enabled_models_and_keep_unkn
         vec!["fixture_chat", "custom-enabled"]
     );
     assert_eq!(
-        options.providers[0].models[0].display_name_fallback.as_deref(),
+        options.providers[0].models[0]
+            .display_name_fallback
+            .as_deref(),
         Some("Fixture Chat")
     );
     assert_eq!(
-        options.providers[0].models[1].display_name_fallback.as_deref(),
+        options.providers[0].models[1]
+            .display_name_fallback
+            .as_deref(),
         Some("custom-enabled")
     );
     assert_eq!(options.providers[0].models[1].label_key, None);
@@ -1134,7 +1307,10 @@ async fn model_provider_service_persists_configured_models_and_derives_enabled_m
             },
         ]
     );
-    assert_eq!(created.instance.enabled_model_ids, vec!["fixture_chat".to_string()]);
+    assert_eq!(
+        created.instance.enabled_model_ids,
+        vec!["fixture_chat".to_string()]
+    );
 
     let updated = service
         .update_instance(UpdateModelProviderInstanceCommand {
@@ -1314,10 +1490,7 @@ async fn model_provider_service_reuses_preview_token_only_to_persist_candidate_c
                 "api_key": "super-secret"
             }),
             configured_models: Vec::new(),
-            enabled_model_ids: vec![
-                "fixture_chat".to_string(),
-                "custom-preview".to_string(),
-            ],
+            enabled_model_ids: vec!["fixture_chat".to_string(), "custom-preview".to_string()],
             preview_token: Some(preview.preview_token),
         })
         .await
@@ -1336,13 +1509,11 @@ async fn model_provider_service_reuses_preview_token_only_to_persist_candidate_c
             .map(|cache| cache.models_json[0]["model_id"].clone()),
         Some(json!("fixture_chat"))
     );
-    assert!(
-        repository
-            .get_preview_session(workspace_id, preview.preview_token)
-            .await
-            .unwrap()
-            .is_none()
-    );
+    assert!(repository
+        .get_preview_session(workspace_id, preview.preview_token)
+        .await
+        .unwrap()
+        .is_none());
 }
 
 #[tokio::test]

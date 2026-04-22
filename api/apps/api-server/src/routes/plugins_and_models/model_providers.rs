@@ -3,15 +3,16 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, Query, State},
     http::{header::ACCEPT_LANGUAGE, HeaderMap, StatusCode},
-    routing::{get, patch, post},
+    routing::{get, patch, post, put},
     Json, Router,
 };
 use control_plane::model_provider::{
     CreateModelProviderInstanceCommand, DeleteModelProviderInstanceCommand,
     LocalizedProviderModelDescriptor, ModelProviderCatalogEntry, ModelProviderCatalogView,
     ModelProviderInstanceView, ModelProviderModelCatalog, ModelProviderOptionEntry,
-    ModelProviderOptionsView, ModelProviderService, PreviewModelProviderModelsCommand,
-    UpdateModelProviderInstanceCommand, ValidateModelProviderResult,
+    ModelProviderOptionsView, ModelProviderRoutingView, ModelProviderService,
+    PreviewModelProviderModelsCommand, UpdateModelProviderInstanceCommand,
+    UpdateModelProviderRoutingCommand, ValidateModelProviderResult,
 };
 use plugin_framework::{
     provider_contract::{
@@ -63,6 +64,12 @@ pub struct UpdateModelProviderBody {
     pub preview_token: Option<String>,
     #[schema(value_type = Object)]
     pub config: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateModelProviderRoutingBody {
+    pub routing_mode: String,
+    pub primary_instance_id: String,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -208,6 +215,7 @@ pub struct ModelProviderInstanceResponse {
     pub protocol: String,
     pub display_name: String,
     pub status: String,
+    pub is_primary: bool,
     #[schema(value_type = Object)]
     pub config_json: serde_json::Value,
     pub configured_models: Vec<ConfiguredModelResponse>,
@@ -275,12 +283,24 @@ pub struct DeletedResponse {
     pub deleted: bool,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ModelProviderRoutingResponse {
+    pub provider_code: String,
+    pub routing_mode: String,
+    pub primary_instance_id: String,
+    pub primary_instance_display_name: String,
+}
+
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route("/model-providers/catalog", get(list_catalog))
         .route(
             "/model-providers",
             get(list_instances).post(create_instance),
+        )
+        .route(
+            "/model-providers/providers/:provider_code/routing",
+            put(update_routing),
         )
         .route("/model-providers/preview-models", post(preview_models))
         .route("/model-providers/options", get(list_options))
@@ -506,6 +526,7 @@ fn to_instance_response(view: ModelProviderInstanceView) -> ModelProviderInstanc
         protocol: view.instance.protocol,
         display_name: view.instance.display_name,
         status: view.instance.status.as_str().to_string(),
+        is_primary: view.is_primary,
         config_json: view.instance.config_json,
         configured_models: view
             .instance
@@ -538,8 +559,18 @@ fn to_validate_response(result: ValidateModelProviderResult) -> ValidateModelPro
         instance: to_instance_response(ModelProviderInstanceView {
             instance: result.instance,
             cache: Some(result.cache),
+            is_primary: result.is_primary,
         }),
         output: result.output,
+    }
+}
+
+fn to_routing_response(view: ModelProviderRoutingView) -> ModelProviderRoutingResponse {
+    ModelProviderRoutingResponse {
+        provider_code: view.provider_code,
+        routing_mode: view.routing_mode,
+        primary_instance_id: view.primary_instance_id.to_string(),
+        primary_instance_display_name: view.primary_instance_display_name,
     }
 }
 
@@ -765,6 +796,36 @@ pub async fn validate_instance(
         .validate_instance(context.user.id, parse_uuid(&id, "id")?)
         .await?;
     Ok(Json(ApiSuccess::new(to_validate_response(result))))
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/console/model-providers/providers/{provider_code}/routing",
+    operation_id = "model_provider_update_routing",
+    request_body = UpdateModelProviderRoutingBody,
+    responses((status = 200, body = ModelProviderRoutingResponse), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn update_routing(
+    State(state): State<Arc<ApiState>>,
+    Path(provider_code): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<UpdateModelProviderRoutingBody>,
+) -> Result<Json<ApiSuccess<ModelProviderRoutingResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    if body.routing_mode != "manual_primary" {
+        return Err(control_plane::errors::ControlPlaneError::InvalidInput("routing_mode").into());
+    }
+    let view = service(&state)
+        .update_routing(UpdateModelProviderRoutingCommand {
+            actor_user_id: context.user.id,
+            provider_code,
+            routing_mode: domain::ModelProviderRoutingMode::ManualPrimary,
+            primary_instance_id: parse_uuid(&body.primary_instance_id, "primary_instance_id")?,
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_routing_response(view))))
 }
 
 #[utoipa::path(

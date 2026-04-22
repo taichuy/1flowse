@@ -17,7 +17,6 @@ use crate::{
 use super::shared::{
     ensure_state_model_permission, load_actor_context_for_user, load_provider_package,
     localized_model_descriptor, model_discovery_mode_string,
-    select_effective_model_provider_instance,
 };
 
 pub(super) async fn list_catalog<R>(
@@ -102,33 +101,31 @@ where
 {
     let actor = load_actor_context_for_user(repository, actor_user_id).await?;
     ensure_state_model_permission(&actor, "view")?;
-    let instances = repository
-        .list_instances(actor.current_workspace_id)
-        .await?;
     let mut installation_map = HashMap::new();
     for installation in repository.list_installations().await? {
         let installation = reconcile_installation_snapshot(repository, installation.id).await?;
         installation_map.insert(installation.id, installation);
     }
-
-    let mut instances_by_provider =
-        BTreeMap::<String, Vec<domain::ModelProviderInstanceRecord>>::new();
-    for instance in instances {
-        instances_by_provider
-            .entry(instance.provider_code.clone())
-            .or_default()
-            .push(instance);
-    }
+    let mut provider_codes = repository
+        .list_routings(actor.current_workspace_id)
+        .await?
+        .into_iter()
+        .map(|routing| routing.provider_code)
+        .collect::<Vec<_>>();
+    provider_codes.sort();
 
     let mut options = Vec::new();
     let mut i18n_catalog = BTreeMap::new();
-    for (provider_code, provider_instances) in instances_by_provider {
-        let Some(instance) = select_effective_model_provider_instance(&provider_instances) else {
+    for provider_code in provider_codes {
+        let Some(instance) = super::routing::resolve_primary_instance(
+            repository,
+            actor.current_workspace_id,
+            &provider_code,
+        )
+        .await?
+        else {
             continue;
         };
-        if instance.status != domain::ModelProviderInstanceStatus::Ready {
-            continue;
-        }
         let Some(installation) = installation_map.get(&instance.installation_id) else {
             continue;
         };

@@ -305,11 +305,9 @@ async fn model_provider_routes_mask_secret_until_reveal_and_keep_ready_options()
         validate_payload["data"]["instance"]["enabled_model_ids"],
         json!([])
     );
-    assert!(
-        validate_payload["data"]["instance"]
-            .get("validation_model_id")
-            .is_none()
-    );
+    assert!(validate_payload["data"]["instance"]
+        .get("validation_model_id")
+        .is_none());
     assert_eq!(
         validate_payload["data"]["output"]["sanitized"]["api_key"].as_str(),
         Some("***")
@@ -804,7 +802,10 @@ async fn model_provider_routes_refresh_models_keeps_enabled_model_ids_unchanged(
     assert_eq!(refresh.status(), StatusCode::OK);
     let refresh_payload: Value =
         serde_json::from_slice(&to_bytes(refresh.into_body(), usize::MAX).await.unwrap()).unwrap();
-    assert_eq!(refresh_payload["data"]["refresh_status"].as_str(), Some("ready"));
+    assert_eq!(
+        refresh_payload["data"]["refresh_status"].as_str(),
+        Some("ready")
+    );
     assert_eq!(
         refresh_payload["data"]["models"][0]["model_id"].as_str(),
         Some("fixture_chat")
@@ -837,4 +838,85 @@ async fn model_provider_routes_refresh_models_keeps_enabled_model_ids_unchanged(
     );
     assert!(list_payload["data"][0].get("validation_model_id").is_none());
     assert_eq!(list_payload["data"][0]["model_count"].as_u64(), Some(1));
+}
+
+#[tokio::test]
+async fn model_provider_routes_update_routing_marks_primary_instance() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let installation_id = install_enable_assign(&app, &cookie, &csrf).await;
+
+    let create = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/model-providers")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "installation_id": installation_id,
+                        "display_name": "Fixture Primary",
+                        "enabled_model_ids": ["gpt-4o-mini"],
+                        "config": {
+                            "base_url": "https://api.example.com",
+                            "api_key": "super-secret"
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create.status(), StatusCode::CREATED);
+    let create_payload: Value =
+        serde_json::from_slice(&to_bytes(create.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let instance_id = create_payload["data"]["id"].as_str().unwrap().to_string();
+
+    let routing = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/api/console/model-providers/providers/fixture_provider/routing")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "routing_mode": "manual_primary",
+                        "primary_instance_id": instance_id
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(routing.status(), StatusCode::OK);
+    let routing_payload: Value =
+        serde_json::from_slice(&to_bytes(routing.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(
+        routing_payload["data"]["primary_instance_id"].as_str(),
+        Some(instance_id.as_str())
+    );
+
+    let list = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/console/model-providers")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(list.status(), StatusCode::OK);
+    let list_payload: Value =
+        serde_json::from_slice(&to_bytes(list.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(list_payload["data"][0]["is_primary"].as_bool(), Some(true));
 }

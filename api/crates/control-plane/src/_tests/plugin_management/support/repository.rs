@@ -10,6 +10,7 @@ pub(crate) struct MemoryPluginManagementRepository {
     tasks: Arc<RwLock<HashMap<Uuid, PluginTaskRecord>>>,
     instances: Arc<RwLock<HashMap<Uuid, ModelProviderInstanceRecord>>>,
     caches: Arc<RwLock<HashMap<Uuid, ModelProviderCatalogCacheRecord>>>,
+    routings: Arc<RwLock<HashMap<String, domain::ModelProviderRoutingRecord>>>,
     node_contributions: Arc<RwLock<Vec<domain::NodeContributionRegistryEntry>>>,
     audit_events: Arc<RwLock<Vec<String>>>,
     created_task_status_override: Arc<RwLock<Option<PluginTaskStatus>>>,
@@ -25,6 +26,7 @@ impl MemoryPluginManagementRepository {
             tasks: Arc::new(RwLock::new(HashMap::new())),
             instances: Arc::new(RwLock::new(HashMap::new())),
             caches: Arc::new(RwLock::new(HashMap::new())),
+            routings: Arc::new(RwLock::new(HashMap::new())),
             node_contributions: Arc::new(RwLock::new(Vec::new())),
             audit_events: Arc::new(RwLock::new(Vec::new())),
             created_task_status_override: Arc::new(RwLock::new(None)),
@@ -624,6 +626,53 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
         provider_instance_id: Uuid,
     ) -> Result<Option<ModelProviderCatalogCacheRecord>> {
         Ok(self.caches.read().await.get(&provider_instance_id).cloned())
+    }
+
+    async fn upsert_routing(
+        &self,
+        input: &crate::ports::UpsertModelProviderRoutingInput,
+    ) -> Result<domain::ModelProviderRoutingRecord> {
+        let now = OffsetDateTime::now_utc();
+        let mut routings = self.routings.write().await;
+        let existing = routings.get(&input.provider_code).cloned();
+        let record = domain::ModelProviderRoutingRecord {
+            workspace_id: input.workspace_id,
+            provider_code: input.provider_code.clone(),
+            routing_mode: input.routing_mode,
+            primary_instance_id: input.primary_instance_id,
+            created_by: existing
+                .as_ref()
+                .map(|record| record.created_by)
+                .unwrap_or(input.updated_by),
+            updated_by: input.updated_by,
+            created_at: existing
+                .as_ref()
+                .map(|record| record.created_at)
+                .unwrap_or(now),
+            updated_at: now,
+        };
+        routings.insert(record.provider_code.clone(), record.clone());
+        Ok(record)
+    }
+
+    async fn get_routing(
+        &self,
+        _workspace_id: Uuid,
+        provider_code: &str,
+    ) -> Result<Option<domain::ModelProviderRoutingRecord>> {
+        Ok(self.routings.read().await.get(provider_code).cloned())
+    }
+
+    async fn list_routings(
+        &self,
+        _workspace_id: Uuid,
+    ) -> Result<Vec<domain::ModelProviderRoutingRecord>> {
+        Ok(self.routings.read().await.values().cloned().collect())
+    }
+
+    async fn delete_routing(&self, _workspace_id: Uuid, provider_code: &str) -> Result<()> {
+        self.routings.write().await.remove(provider_code);
+        Ok(())
     }
 
     async fn create_preview_session(

@@ -252,18 +252,6 @@ pub(super) fn model_discovery_mode_string(mode: ModelDiscoveryMode) -> String {
     format!("{mode:?}").to_ascii_lowercase()
 }
 
-pub(super) fn select_effective_model_provider_instance(
-    instances: &[domain::ModelProviderInstanceRecord],
-) -> Option<&domain::ModelProviderInstanceRecord> {
-    instances.iter().max_by_key(|instance| {
-        (
-            instance.status == domain::ModelProviderInstanceStatus::Ready,
-            instance.updated_at,
-            instance.id,
-        )
-    })
-}
-
 pub(super) fn map_model_discovery_mode(
     mode: ModelDiscoveryMode,
 ) -> domain::ModelProviderDiscoveryMode {

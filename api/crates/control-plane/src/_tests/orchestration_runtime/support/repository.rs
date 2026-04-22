@@ -15,6 +15,7 @@ struct InMemoryOrchestrationRuntimeState {
     instances_by_id: HashMap<Uuid, domain::ModelProviderInstanceRecord>,
     caches_by_instance_id: HashMap<Uuid, domain::ModelProviderCatalogCacheRecord>,
     secret_json_by_instance_id: HashMap<Uuid, Value>,
+    routings_by_provider: HashMap<String, domain::ModelProviderRoutingRecord>,
 }
 
 #[derive(Clone)]
@@ -595,6 +596,61 @@ impl ModelProviderRepository for InMemoryOrchestrationRuntimeRepository {
         _input: &crate::ports::UpsertModelProviderSecretInput,
     ) -> Result<domain::ModelProviderSecretRecord> {
         unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn upsert_routing(
+        &self,
+        input: &crate::ports::UpsertModelProviderRoutingInput,
+    ) -> Result<domain::ModelProviderRoutingRecord> {
+        let now = OffsetDateTime::now_utc();
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let existing = inner
+            .routings_by_provider
+            .get(&input.provider_code)
+            .cloned();
+        let record = domain::ModelProviderRoutingRecord {
+            workspace_id: input.workspace_id,
+            provider_code: input.provider_code.clone(),
+            routing_mode: input.routing_mode,
+            primary_instance_id: input.primary_instance_id,
+            created_by: existing
+                .as_ref()
+                .map(|record| record.created_by)
+                .unwrap_or(input.updated_by),
+            updated_by: input.updated_by,
+            created_at: existing
+                .as_ref()
+                .map(|record| record.created_at)
+                .unwrap_or(now),
+            updated_at: now,
+        };
+        inner
+            .routings_by_provider
+            .insert(record.provider_code.clone(), record.clone());
+        Ok(record)
+    }
+
+    async fn get_routing(
+        &self,
+        _workspace_id: Uuid,
+        provider_code: &str,
+    ) -> Result<Option<domain::ModelProviderRoutingRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner.routings_by_provider.get(provider_code).cloned())
+    }
+
+    async fn list_routings(
+        &self,
+        _workspace_id: Uuid,
+    ) -> Result<Vec<domain::ModelProviderRoutingRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner.routings_by_provider.values().cloned().collect())
+    }
+
+    async fn delete_routing(&self, _workspace_id: Uuid, provider_code: &str) -> Result<()> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        inner.routings_by_provider.remove(provider_code);
+        Ok(())
     }
 
     async fn create_preview_session(

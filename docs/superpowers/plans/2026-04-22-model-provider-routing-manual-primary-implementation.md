@@ -398,7 +398,7 @@ git commit -m "feat: persist model provider manual primary routing"
 - Modify: `api/apps/api-server/src/openapi.rs`
 - Test: `api/apps/api-server/src/_tests/model_provider_routes.rs`
 
-- [ ] **Step 1: Write failing service and route tests for explicit primary routing**
+- [x] **Step 1: Write failing service and route tests for explicit primary routing**
 
 ```rust
 // api/crates/control-plane/src/_tests/model_provider_service_tests.rs
@@ -512,7 +512,7 @@ async fn model_provider_routes_update_routing_marks_primary_instance() {
 }
 ```
 
-- [ ] **Step 2: Run the targeted control-plane and api-server tests and verify they fail**
+- [x] **Step 2: Run the targeted control-plane and api-server tests and verify they fail**
 
 Run:
 
@@ -527,7 +527,7 @@ Expected:
 - FAIL because `ModelProviderService` has no routing update flow.
 - FAIL because the new `PUT /model-providers/providers/:provider_code/routing` route does not exist.
 
-- [ ] **Step 3: Implement routing commands, service views, `/options` resolution, and the console route**
+- [x] **Step 3: Implement routing commands, service views, `/options` resolution, and the console route**
 
 ```rust
 // api/crates/control-plane/src/model_provider.rs
@@ -704,7 +704,7 @@ pub fn router() -> Router<Arc<ApiState>> {
 }
 ```
 
-- [ ] **Step 4: Re-run the targeted tests plus the broader model-provider service/route suites**
+- [x] **Step 4: Re-run the targeted tests plus the broader model-provider service/route suites**
 
 Run:
 
@@ -718,7 +718,7 @@ Expected:
 - PASS for primary-flag and options-routing behavior.
 - PASS for existing catalog / instance / validate / refresh route coverage.
 
-- [ ] **Step 5: Commit the control-plane and API surface**
+- [x] **Step 5: Commit the control-plane and API surface**
 
 ```bash
 git add api/crates/control-plane/src/model_provider.rs \

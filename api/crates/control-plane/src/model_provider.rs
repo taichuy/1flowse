@@ -15,10 +15,10 @@ use crate::{
     i18n::{I18nCatalog, RequestedLocales},
     plugin_lifecycle::reconcile_installation_snapshot,
     ports::{
-        AuthRepository, CreateModelProviderInstanceInput,
-        CreateModelProviderPreviewSessionInput, ModelProviderRepository, PluginRepository,
-        ProviderRuntimePort, UpdateModelProviderInstanceInput,
-        UpsertModelProviderCatalogCacheInput, UpsertModelProviderSecretInput,
+        AuthRepository, CreateModelProviderInstanceInput, CreateModelProviderPreviewSessionInput,
+        ModelProviderRepository, PluginRepository, ProviderRuntimePort,
+        UpdateModelProviderInstanceInput, UpsertModelProviderCatalogCacheInput,
+        UpsertModelProviderSecretInput,
     },
     state_transition::ensure_model_provider_instance_transition,
 };
@@ -26,6 +26,7 @@ use crate::{
 mod catalog;
 mod instances;
 mod options;
+pub(crate) mod routing;
 mod shared;
 
 use self::{
@@ -56,6 +57,13 @@ pub struct UpdateModelProviderInstanceCommand {
     pub configured_models: Vec<domain::ModelProviderConfiguredModel>,
     pub enabled_model_ids: Vec<String>,
     pub preview_token: Option<Uuid>,
+}
+
+pub struct UpdateModelProviderRoutingCommand {
+    pub actor_user_id: Uuid,
+    pub provider_code: String,
+    pub routing_mode: domain::ModelProviderRoutingMode,
+    pub primary_instance_id: Uuid,
 }
 
 pub type ModelProviderConfiguredModelInput = domain::ModelProviderConfiguredModel;
@@ -113,12 +121,22 @@ pub struct LocalizedProviderModelDescriptor {
 pub struct ModelProviderInstanceView {
     pub instance: domain::ModelProviderInstanceRecord,
     pub cache: Option<domain::ModelProviderCatalogCacheRecord>,
+    pub is_primary: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModelProviderRoutingView {
+    pub provider_code: String,
+    pub routing_mode: String,
+    pub primary_instance_id: Uuid,
+    pub primary_instance_display_name: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct ValidateModelProviderResult {
     pub instance: domain::ModelProviderInstanceRecord,
     pub cache: domain::ModelProviderCatalogCacheRecord,
+    pub is_primary: bool,
     pub output: Value,
 }
 
@@ -210,10 +228,15 @@ where
             .repository
             .list_instances(actor.current_workspace_id)
             .await?;
+        let primary_instance_ids =
+            routing::primary_instance_ids_by_provider(&self.repository, actor.current_workspace_id)
+                .await?;
         let mut form_schemas: HashMap<Uuid, Vec<ProviderConfigField>> = HashMap::new();
         let mut output = Vec::with_capacity(instances.len());
         for instance in instances {
             let cache = self.repository.get_catalog_cache(instance.id).await?;
+            let is_primary =
+                primary_instance_ids.get(&instance.provider_code) == Some(&instance.id);
             let form_schema = match form_schemas.get(&instance.installation_id) {
                 Some(form_schema) => form_schema.clone(),
                 None => {
@@ -229,7 +252,7 @@ where
                 }
             };
             output.push(
-                self.hydrate_instance_view(instance, cache, &form_schema)
+                self.hydrate_instance_view(instance, cache, &form_schema, is_primary)
                     .await?,
             );
         }
@@ -347,6 +370,12 @@ where
             instance.clone(),
             self.repository.get_catalog_cache(instance.id).await?,
             &package.provider.form_schema,
+            self.is_primary_instance(
+                actor.current_workspace_id,
+                &instance.provider_code,
+                instance.id,
+            )
+            .await?,
         )
         .await
     }
@@ -417,7 +446,10 @@ where
             )
             .await?;
         let next_status = derive_instance_status(
-            matches!(existing.status, domain::ModelProviderInstanceStatus::Disabled),
+            matches!(
+                existing.status,
+                domain::ModelProviderInstanceStatus::Disabled
+            ),
             &enabled_model_ids,
         );
         ensure_model_provider_instance_transition(existing.status, next_status, "update_instance")?;
@@ -473,6 +505,12 @@ where
             updated,
             self.repository.get_catalog_cache(existing.id).await?,
             &package.provider.form_schema,
+            self.is_primary_instance(
+                actor.current_workspace_id,
+                &existing.provider_code,
+                existing.id,
+            )
+            .await?,
         )
         .await
     }
@@ -499,7 +537,9 @@ where
         {
             return Err(ControlPlaneError::InvalidInput("preview_token").into());
         }
-        if session.installation_id != request.installation_id || session.instance_id != request.instance_id {
+        if session.installation_id != request.installation_id
+            || session.instance_id != request.instance_id
+        {
             return Err(ControlPlaneError::InvalidInput("preview_token").into());
         }
         if session.config_fingerprint != fingerprint_provider_config(request.provider_config)? {
@@ -605,11 +645,18 @@ where
                     updated_instance,
                     Some(cache.clone()),
                     &package.provider.form_schema,
+                    self.is_primary_instance(
+                        actor.current_workspace_id,
+                        &instance.provider_code,
+                        instance.id,
+                    )
+                    .await?,
                 )
                 .await?;
             Ok::<ValidateModelProviderResult, anyhow::Error>(ValidateModelProviderResult {
                 instance: masked_view.instance,
                 cache,
+                is_primary: masked_view.is_primary,
                 output,
             })
         }
@@ -682,96 +729,94 @@ where
         let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
         ensure_state_model_permission(&actor, "manage")?;
 
-        let (
-            installation,
-            _package,
-            provider_config,
-            provider_code,
-            audit_resource_id,
-        ) = match command.instance_id {
-            Some(instance_id) => {
-                let instance = self
-                    .repository
-                    .get_instance(actor.current_workspace_id, instance_id)
-                    .await?
-                    .ok_or(ControlPlaneError::NotFound("model_provider_instance"))?;
-                let installation =
-                    reconcile_installation_snapshot(&self.repository, instance.installation_id)
-                        .await?;
-                if installation.availability_status != domain::PluginAvailabilityStatus::Available {
-                    return Err(
-                        ControlPlaneError::Conflict("plugin_installation_unavailable").into()
-                    );
+        let (installation, _package, provider_config, provider_code, audit_resource_id) =
+            match command.instance_id {
+                Some(instance_id) => {
+                    let instance = self
+                        .repository
+                        .get_instance(actor.current_workspace_id, instance_id)
+                        .await?
+                        .ok_or(ControlPlaneError::NotFound("model_provider_instance"))?;
+                    let installation =
+                        reconcile_installation_snapshot(&self.repository, instance.installation_id)
+                            .await?;
+                    if installation.availability_status
+                        != domain::PluginAvailabilityStatus::Available
+                    {
+                        return Err(
+                            ControlPlaneError::Conflict("plugin_installation_unavailable").into(),
+                        );
+                    }
+                    let package = load_provider_package(&installation.installed_path)?;
+                    let (patch_public_config, patch_secret_config) =
+                        split_provider_config(&package.provider.form_schema, &command.config_json)?;
+                    let current_secret_json = self
+                        .repository
+                        .get_secret_json(instance.id, &self.provider_secret_master_key)
+                        .await?
+                        .unwrap_or_else(empty_object);
+                    let merged_public_config =
+                        merge_json_object(&instance.config_json, &patch_public_config)?;
+                    let merged_secret_config =
+                        merge_json_object(&current_secret_json, &patch_secret_config)?;
+                    validate_required_fields(
+                        &package.provider.form_schema,
+                        &merged_public_config,
+                        &merged_secret_config,
+                    )?;
+                    let provider_config =
+                        merge_json_object(&merged_public_config, &merged_secret_config)?;
+                    (
+                        installation,
+                        package,
+                        provider_config,
+                        instance.provider_code,
+                        Some(instance.id),
+                    )
                 }
-                let package = load_provider_package(&installation.installed_path)?;
-                let (patch_public_config, patch_secret_config) =
-                    split_provider_config(&package.provider.form_schema, &command.config_json)?;
-                let current_secret_json = self
-                    .repository
-                    .get_secret_json(instance.id, &self.provider_secret_master_key)
-                    .await?
-                    .unwrap_or_else(empty_object);
-                let merged_public_config =
-                    merge_json_object(&instance.config_json, &patch_public_config)?;
-                let merged_secret_config =
-                    merge_json_object(&current_secret_json, &patch_secret_config)?;
-                validate_required_fields(
-                    &package.provider.form_schema,
-                    &merged_public_config,
-                    &merged_secret_config,
-                )?;
-                let provider_config =
-                    merge_json_object(&merged_public_config, &merged_secret_config)?;
-                (
-                    installation,
-                    package,
-                    provider_config,
-                    instance.provider_code,
-                    Some(instance.id),
-                )
-            }
-            None => {
-                let installation_id = command
-                    .installation_id
-                    .ok_or(ControlPlaneError::InvalidInput("installation_id"))?;
-                let installation = self
-                    .repository
-                    .get_installation(installation_id)
-                    .await?
-                    .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
-                ensure_installation_assigned(
-                    &self.repository,
-                    actor.current_workspace_id,
-                    installation_id,
-                )
-                .await?;
-                if matches!(
-                    installation.desired_state,
-                    domain::PluginDesiredState::Disabled
-                ) || installation.availability_status != domain::PluginAvailabilityStatus::Available
-                {
-                    return Err(
-                        ControlPlaneError::Conflict("plugin_installation_unavailable").into()
-                    );
+                None => {
+                    let installation_id = command
+                        .installation_id
+                        .ok_or(ControlPlaneError::InvalidInput("installation_id"))?;
+                    let installation = self
+                        .repository
+                        .get_installation(installation_id)
+                        .await?
+                        .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+                    ensure_installation_assigned(
+                        &self.repository,
+                        actor.current_workspace_id,
+                        installation_id,
+                    )
+                    .await?;
+                    if matches!(
+                        installation.desired_state,
+                        domain::PluginDesiredState::Disabled
+                    ) || installation.availability_status
+                        != domain::PluginAvailabilityStatus::Available
+                    {
+                        return Err(
+                            ControlPlaneError::Conflict("plugin_installation_unavailable").into(),
+                        );
+                    }
+                    let package = load_provider_package(&installation.installed_path)?;
+                    let (public_config, secret_config) =
+                        split_provider_config(&package.provider.form_schema, &command.config_json)?;
+                    validate_required_fields(
+                        &package.provider.form_schema,
+                        &public_config,
+                        &secret_config,
+                    )?;
+                    let provider_config = merge_json_object(&public_config, &secret_config)?;
+                    (
+                        installation.clone(),
+                        package,
+                        provider_config,
+                        installation.provider_code,
+                        None,
+                    )
                 }
-                let package = load_provider_package(&installation.installed_path)?;
-                let (public_config, secret_config) =
-                    split_provider_config(&package.provider.form_schema, &command.config_json)?;
-                validate_required_fields(
-                    &package.provider.form_schema,
-                    &public_config,
-                    &secret_config,
-                )?;
-                let provider_config = merge_json_object(&public_config, &secret_config)?;
-                (
-                    installation.clone(),
-                    package,
-                    provider_config,
-                    installation.provider_code,
-                    None,
-                )
-            }
-        };
+            };
 
         self.runtime.ensure_loaded(&installation).await?;
         let models = self
@@ -882,6 +927,39 @@ where
         Ok(())
     }
 
+    pub async fn update_routing(
+        &self,
+        command: UpdateModelProviderRoutingCommand,
+    ) -> Result<ModelProviderRoutingView> {
+        let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
+        ensure_state_model_permission(&actor, "manage")?;
+
+        let (routing_record, primary_instance) =
+            routing::update_routing(&self.repository, actor.current_workspace_id, &command).await?;
+
+        self.repository
+            .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
+                Some(command.actor_user_id),
+                "model_provider",
+                Some(primary_instance.id),
+                "model_provider.routing_updated",
+                json!({
+                    "provider_code": primary_instance.provider_code,
+                    "routing_mode": routing_record.routing_mode.as_str(),
+                    "primary_instance_id": primary_instance.id,
+                }),
+            ))
+            .await?;
+
+        Ok(ModelProviderRoutingView {
+            provider_code: routing_record.provider_code,
+            routing_mode: routing_record.routing_mode.as_str().to_string(),
+            primary_instance_id: routing_record.primary_instance_id,
+            primary_instance_display_name: primary_instance.display_name,
+        })
+    }
+
     pub async fn options(
         &self,
         actor_user_id: Uuid,
@@ -925,6 +1003,7 @@ where
         instance: domain::ModelProviderInstanceRecord,
         cache: Option<domain::ModelProviderCatalogCacheRecord>,
         form_schema: &[ProviderConfigField],
+        is_primary: bool,
     ) -> Result<ModelProviderInstanceView> {
         hydrate_instance_view(
             &self.repository,
@@ -932,8 +1011,21 @@ where
             instance,
             cache,
             form_schema,
+            is_primary,
         )
         .await
+    }
+
+    async fn is_primary_instance(
+        &self,
+        workspace_id: Uuid,
+        provider_code: &str,
+        instance_id: Uuid,
+    ) -> Result<bool> {
+        Ok(
+            routing::primary_instance_id(&self.repository, workspace_id, provider_code).await?
+                == Some(instance_id),
+        )
     }
 }
 

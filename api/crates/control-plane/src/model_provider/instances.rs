@@ -35,6 +35,7 @@ pub(super) async fn hydrate_instance_view<R>(
     instance: domain::ModelProviderInstanceRecord,
     cache: Option<domain::ModelProviderCatalogCacheRecord>,
     form_schema: &[ProviderConfigField],
+    is_primary: bool,
 ) -> Result<ModelProviderInstanceView>
 where
     R: ModelProviderRepository,
@@ -51,5 +52,6 @@ where
             ..instance
         },
         cache,
+        is_primary,
     })
 }
