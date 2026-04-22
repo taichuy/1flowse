@@ -1107,11 +1107,14 @@ describe('ModelProvidersPage', () => {
       expect(
         within(modal).getByText('Base URL')
       ).toBeInTheDocument();
+      expect(
+        within(modal).getByText('2026-04-22 15:35:17')
+      ).toBeInTheDocument();
     }
   );
 
   test(
-    'renders provider instances as a collapsed management list with base url in the details area',
+    'renders provider instances as a collapsed management list with base url grouped under refreshed time',
     { timeout: 15000 },
     async () => {
       authenticateWithPermissions([
@@ -1126,10 +1129,12 @@ describe('ModelProvidersPage', () => {
       expect(within(modal).getByText('OpenAI Production')).toBeInTheDocument();
       expect(within(modal).getAllByText('1 个').length).toBeGreaterThanOrEqual(1);
       expect(within(modal).queryByText('Base URL')).not.toBeInTheDocument();
+      expect(within(modal).queryByText('2026-04-22 15:35:17')).not.toBeInTheDocument();
 
       fireEvent.click(within(modal).getByText('OpenAI Production'));
 
       expect(await within(modal).findByText('Base URL')).toBeInTheDocument();
+      expect(within(modal).getByText('2026-04-22 15:35:17')).toBeInTheDocument();
       expect(within(modal).getAllByText(/gpt-4o-mini/).length).toBeGreaterThanOrEqual(1);
     }
   );

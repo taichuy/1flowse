@@ -2,13 +2,10 @@ import { useMemo, useState } from 'react';
 
 import {
   Alert,
-  Button,
   Collapse,
   Descriptions,
   Empty,
-  Flex,
   Modal,
-  Space,
   Tag,
   Typography
 } from 'antd';
@@ -22,13 +19,44 @@ import type {
 function renderStatusTag(status: string) {
   switch (status) {
     case 'ready':
-      return <Tag color="green">ready</Tag>;
+      return (
+        <Tag 
+          className="model-provider-panel__instance-status-tag"
+          color="green"
+          bordered={false}
+        >
+          ready
+        </Tag>
+      );
     case 'invalid':
-      return <Tag color="red">invalid</Tag>;
+      return (
+        <Tag 
+          className="model-provider-panel__instance-status-tag"
+          color="red"
+          bordered={false}
+        >
+          invalid
+        </Tag>
+      );
     case 'disabled':
-      return <Tag>disabled</Tag>;
+      return (
+        <Tag 
+          className="model-provider-panel__instance-status-tag"
+          bordered={false}
+        >
+          disabled
+        </Tag>
+      );
     default:
-      return <Tag color="gold">{status}</Tag>;
+      return (
+        <Tag 
+          className="model-provider-panel__instance-status-tag"
+          color="gold"
+          bordered={false}
+        >
+          {status}
+        </Tag>
+      );
   }
 }
 
@@ -41,6 +69,21 @@ function formatModelPreview(modelIds: string[], maxItems = 3) {
   return modelIds.length > maxItems ? `${preview} · …` : preview;
 }
 
+function formatCatalogRefreshedAt(value: string | null) {
+  if (!value) {
+    return '未刷新';
+  }
+
+  const matched = value.match(
+    /^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2}:\d{2})/
+  );
+  if (!matched) {
+    return value;
+  }
+
+  return `${matched[1]} ${matched[2]}`;
+}
+
 function renderModelTags(modelIds: string[], maxItems = 6) {
   if (modelIds.length === 0) {
     return <Typography.Text type="secondary">暂无候选模型</Typography.Text>;
@@ -50,12 +93,18 @@ function renderModelTags(modelIds: string[], maxItems = 6) {
   const hiddenCount = modelIds.length - visibleItems.length;
 
   return (
-    <Flex wrap gap={8}>
+    <div className="model-provider-panel__model-tags">
       {visibleItems.map((modelId) => (
-        <Tag key={modelId}>{modelId}</Tag>
+        <span key={modelId} className="model-provider-panel__model-tag">
+          {modelId}
+        </span>
       ))}
-      {hiddenCount > 0 ? <Tag>+{hiddenCount}</Tag> : null}
-    </Flex>
+      {hiddenCount > 0 ? (
+        <span className="model-provider-panel__model-tag model-provider-panel__model-tag-more">
+          +{hiddenCount}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -150,6 +199,7 @@ export function ModelProviderInstancesModal({
           />
         ) : (
           <Collapse
+            className="model-provider-panel__instances-collapse"
             activeKey={expandedInstanceId ? [expandedInstanceId] : []}
             onChange={(nextKeys) => {
               const resolvedKeys = Array.isArray(nextKeys) ? nextKeys : [nextKeys];
@@ -177,37 +227,45 @@ export function ModelProviderInstancesModal({
               return {
                 key: instance.id,
                 label: (
-                  <Flex justify="space-between" align="flex-start" gap={16}>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <Space align="center" size={8} wrap>
-                        <Typography.Text strong>{instance.display_name}</Typography.Text>
+                  <div className="model-provider-panel__instance-header">
+                    <div className="model-provider-panel__instance-header-main">
+                      <div className="model-provider-panel__instance-title-row">
+                        <span className="model-provider-panel__instance-title">
+                          {instance.display_name}
+                        </span>
                         {renderStatusTag(instance.status)}
-                      </Space>
+                      </div>
                       <Typography.Paragraph
-                        type="secondary"
-                        style={{ marginBottom: 0, marginTop: 4 }}
+                        className="model-provider-panel__instance-subtitle"
                         ellipsis={{ rows: 1 }}
                       >
                         {instance.provider_code} · {instance.protocol}
                       </Typography.Paragraph>
                     </div>
-                    <Space size={16} wrap>
-                      <div>
-                        <Typography.Text type="secondary">生效模型</Typography.Text>
-                        <br />
-                        <Typography.Text>{instance.enabled_model_ids.length} 个</Typography.Text>
+                    <div className="model-provider-panel__instance-stats">
+                      <div className="model-provider-panel__instance-stat">
+                        <span className="model-provider-panel__instance-stat-label">
+                          生效模型
+                        </span>
+                        <span className="model-provider-panel__instance-stat-value">
+                          {instance.enabled_model_ids.length}
+                        </span>
                       </div>
-                      <div>
-                        <Typography.Text type="secondary">缓存模型</Typography.Text>
-                        <br />
-                        <Typography.Text>{instance.model_count} 个</Typography.Text>
+                      <div className="model-provider-panel__instance-stat">
+                        <span className="model-provider-panel__instance-stat-label">
+                          缓存模型
+                        </span>
+                        <span className="model-provider-panel__instance-stat-value">
+                          {instance.model_count}
+                        </span>
                       </div>
-                    </Space>
-                  </Flex>
+                    </div>
+                  </div>
                 ),
                 children: (
-                  <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                  <div className="model-provider-panel__instance-content">
                     <Descriptions
+                      className="model-provider-panel__instance-descriptions"
                       size="small"
                       column={1}
                       items={[
@@ -224,9 +282,14 @@ export function ModelProviderInstancesModal({
                           key: 'cached-models',
                           label: '候选缓存',
                           children: isLoadingCurrentCatalog ? (
-                            <Typography.Text type="secondary">
-                              正在加载候选模型...
-                            </Typography.Text>
+                            <div className="model-provider-panel__instance-loading">
+                              <span>正在加载候选模型</span>
+                              <span className="model-provider-panel__instance-loading-dots">
+                                <span className="model-provider-panel__instance-loading-dot" />
+                                <span className="model-provider-panel__instance-loading-dot" />
+                                <span className="model-provider-panel__instance-loading-dot" />
+                              </span>
+                            </div>
                           ) : hasLoadedModels ? (
                             renderModelTags(cachedModels)
                           ) : (
@@ -240,61 +303,63 @@ export function ModelProviderInstancesModal({
                           label: '最近刷新',
                           children: (
                             <Typography.Text type="secondary">
-                              {instance.catalog_refreshed_at ?? '未刷新'}
+                              {formatCatalogRefreshedAt(instance.catalog_refreshed_at)}
                             </Typography.Text>
+                          )
+                        },
+                        {
+                          key: 'base-url',
+                          label: 'Base URL',
+                          children: (
+                            <Typography.Paragraph
+                              className="model-provider-panel__instance-baseurl-value"
+                              ellipsis={{ rows: 2, expandable: true, symbol: '展开' }}
+                              style={{ marginBottom: 0 }}
+                            >
+                              {String(instance.config_json.base_url ?? '未配置')}
+                            </Typography.Paragraph>
                           )
                         }
                       ]}
                     />
 
                     {canManage ? (
-                      <Space size={4} wrap>
-                        <Button
-                          type="link"
-                          aria-label={`编辑 API Key ${instance.display_name}`}
+                      <div className="model-provider-panel__instance-actions">
+                        <button
+                          className="model-provider-panel__instance-action-btn"
                           onClick={() => onEdit(instance)}
+                          aria-label={`编辑 API Key ${instance.display_name}`}
                         >
                           编辑 API Key
-                        </Button>
-                        <Button
-                          type="link"
-                          loading={refreshingCandidates}
-                          aria-label={`刷新候选模型 ${instance.display_name}`}
+                        </button>
+                        <button
+                          className="model-provider-panel__instance-action-btn"
                           onClick={() => onRefreshCandidates(instance)}
+                          aria-label={`刷新候选模型 ${instance.display_name}`}
+                          disabled={refreshingCandidates}
                         >
-                          刷新候选模型
-                        </Button>
-                        <Button
-                          type="link"
-                          loading={refreshing}
-                          aria-label={`刷新模型 ${instance.display_name}`}
+                          {refreshingCandidates ? '刷新中...' : '刷新候选模型'}
+                        </button>
+                        <button
+                          className="model-provider-panel__instance-action-btn"
                           onClick={() => onRefreshModels(instance)}
+                          aria-label={`刷新模型 ${instance.display_name}`}
+                          disabled={refreshing}
                         >
-                          刷新模型
-                        </Button>
-                        <Button
-                          danger
-                          type="link"
-                          loading={deleting}
-                          aria-label={`删除实例 ${instance.display_name}`}
+                          {refreshing ? '刷新中...' : '刷新模型'}
+                        </button>
+                        <button
+                          className="model-provider-panel__instance-action-btn model-provider-panel__instance-action-btn--danger"
                           onClick={() => onDelete(instance)}
+                          aria-label={`删除实例 ${instance.display_name}`}
+                          disabled={deleting}
                         >
-                          删除实例
-                        </Button>
-                      </Space>
+                          {deleting ? '删除中...' : '删除实例'}
+                        </button>
+                      </div>
                     ) : null}
 
-                    <div>
-                      <Typography.Text type="secondary">Base URL</Typography.Text>
-                      <Typography.Paragraph
-                        className="model-provider-panel__mono"
-                        style={{ marginBottom: 0, marginTop: 4 }}
-                        ellipsis={{ rows: 1, expandable: true, symbol: '展开' }}
-                      >
-                        {String(instance.config_json.base_url ?? '未配置')}
-                      </Typography.Paragraph>
-                    </div>
-                  </Space>
+                  </div>
                 )
               };
             })}
