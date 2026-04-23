@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Turn the approved provider-level parameter schema and model-level context override design into an execution map that lands consistent host contracts, settings workflows, Agent Flow consumers, and an upgraded `openai_compatible` plugin package.
+**Goal:** Turn the approved provider-level parameter schema and model-level context override design into an execution map that lands consistent host contracts, settings workflows, Agent Flow consumers, and an upgraded `openai_compatible` plugin package with verified packaging metadata.
 
-**Architecture:** Execute this feature in four dependent slices. First, rewrite the host/backend contract so provider options expose a provider-level `parameter_form` and instance `configured_models` persist `context_window_override_tokens`. Second, update the settings drawer workflow to edit and validate model context overrides. Third, switch Agent Flow to provider-level parameter schema and effective context display. Fourth, upgrade the official `openai_compatible` plugin to emit the new schema and richer model metadata, then close with focused QA.
+**Architecture:** Execute this feature in four dependent slices. First, rewrite the host/backend contract so provider options expose a provider-level `parameter_form` and instance `configured_models` persist `context_window_override_tokens`. Second, update the settings drawer workflow to edit and validate model context overrides. Third, switch Agent Flow to provider-level parameter schema and effective context display. Fourth, upgrade the official `openai_compatible` plugin to emit the new schema and richer model metadata while keeping packaging versioning manifest-led, then close with focused QA.
 
 **Tech Stack:** Markdown planning docs only.
 
@@ -25,7 +25,7 @@ Execute these plans against the approved spec:
 3. [2026-04-23-model-provider-parameter-and-context-agent-flow.md](./2026-04-23-model-provider-parameter-and-context-agent-flow.md)
    Owns provider-level parameter-form consumption, effective context display in the model selector, and Agent Flow regression coverage.
 4. [2026-04-23-openai-compatible-parameter-and-context-plugin.md](./2026-04-23-openai-compatible-parameter-and-context-plugin.md)
-   Owns the sibling official-plugin repository changes: provider YAML schema, model metadata extraction, unit tests, and version bump for packaging.
+   Owns the sibling official-plugin repository changes: provider YAML schema, model metadata extraction, unit tests, and packaging metadata verification.
 
 ## Recommended Execution Order
 
@@ -51,7 +51,7 @@ Run this third. It assumes the options payload and settings workflow are already
 
 4. `2026-04-23-openai-compatible-parameter-and-context-plugin.md`
 
-Run this after the host contract is merged or in a tightly coordinated branch. The plugin package version must align with the new provider-level schema contract before packaging and CI/CD validation.
+Run this after the host contract is merged or in a tightly coordinated branch. The plugin manifest version must align with the new provider-level schema contract before packaging and CI/CD validation, while `Cargo.toml` stays on the repo sentinel version.
 
 ## Shared Scope Rules
 

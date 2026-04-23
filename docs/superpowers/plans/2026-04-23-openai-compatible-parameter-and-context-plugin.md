@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Upgrade the official `openai_compatible` plugin package so it declares a provider-level parameter schema, extracts model context/output metadata from explicit upstream fields, and ships a version bump ready for packaging.
+**Goal:** Upgrade the official `openai_compatible` plugin package so it declares a provider-level parameter schema, extracts model context/output metadata from explicit upstream fields, and verifies manifest-led packaging metadata.
 
-**Architecture:** Keep this work inside the sibling plugin repository. Declare the provider-level schema in `provider/openai_compatible.yaml`, keep runtime extraction logic in `src/lib.rs`, add unit coverage around model normalization, and bump the plugin package version only after tests pass. Do not move host-specific fallback logic into the plugin.
+**Architecture:** Keep this work inside the sibling plugin repository. Declare the provider-level schema in `provider/openai_compatible.yaml`, keep runtime extraction logic in `src/lib.rs`, add unit coverage around model normalization, and verify packaging metadata after tests pass while keeping `Cargo.toml` on the repo-mandated sentinel version. Do not move host-specific fallback logic into the plugin.
 
 **Tech Stack:** Rust, YAML provider package metadata, `cargo test`
 
@@ -27,6 +27,7 @@
 - Extract metadata only from explicit upstream fields. If a provider’s `/models` payload does not expose context or output limits, return `null`.
 - Keep invocation passthrough limited to already supported parameters: `temperature`, `top_p`, `max_tokens`, `seed`.
 - Do not add host-only manual override logic to the plugin.
+- The sibling plugin repository already contains the core feature commit `4de4f11 feat: expose openai compatible parameter schema`; this plan execution verifies that baseline and records the packaging/documentation state without recreating the feature commit.
 
 ### Task 1: Declare The Provider-Level Parameter Schema
 
@@ -101,20 +102,18 @@ Expected:
 
 - PASS with explicit metadata extraction coverage.
 
-### Task 3: Bump The Plugin Version For Packaging
+### Task 3: Verify Packaging Version Metadata
 
 **Files:**
 - Modify: `/home/taichu/git/1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible/manifest.yaml`
-- Modify: `/home/taichu/git/1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible/Cargo.toml`
+- Inspect: `/home/taichu/git/1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible/Cargo.toml`
 
 Current repo constraint:
 - `Cargo.toml` keeps the sentinel crate version `0.0.0`; repo workflow tests enforce `manifest.yaml` as the single release-version source for `openai_compatible`.
 
-- [x] **Step 1: Update version metadata**
-  - Bump the plugin package version in:
-    - `manifest.yaml`
-    - `Cargo.toml`
-  - Keep both files aligned.
+- [x] **Step 1: Verify version metadata**
+  - Confirm `manifest.yaml` carries the release version used for packaging.
+  - Keep `Cargo.toml` on the repo-mandated sentinel version `0.0.0`.
 
 - [x] **Step 2: Build the plugin binary and verify it still compiles**
 
@@ -126,12 +125,16 @@ cargo build --manifest-path /home/taichu/git/1flowbase-official-plugins/runtime-
 
 Expected:
 
-- PASS with the new version metadata and model-normalization code.
+- PASS with the current manifest version and model-normalization code.
 
 ### Task 4: Commit The Plugin Slice
 
 **Files:**
 - Modify only the files listed above in the sibling plugin repository
+
+Execution note:
+- `4de4f11 feat: expose openai compatible parameter schema` already satisfies the feature-slice commit requirement in the sibling plugin repository.
+- This execution path verifies that baseline and avoids creating a duplicate feature commit.
 
 - [x] **Step 1: Stage the plugin-repo files**
 
