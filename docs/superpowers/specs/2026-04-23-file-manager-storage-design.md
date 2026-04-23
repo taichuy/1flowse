@@ -182,6 +182,7 @@
 1. `config_json` 保存驱动配置，例如本地根目录、`rustFS` endpoint、bucket 或 namespace 等
 2. `rule_json` 保存大小、`mimetype`、命名策略等文件规则
 3. `is_default` 只允许同时存在一个默认存储器
+4. 系统内建默认本地存储器时，默认文件根目录固定为 `api/storage`
 
 ### `file_tables`
 
@@ -290,6 +291,12 @@
 1. 写入本地文件系统目录
 2. 读取本地文件流
 3. 生成内部或可访问 URL
+
+默认配置固定为：
+
+1. 本地文件根目录默认上传到 `api/storage`
+2. 该目录属于业务文件根目录，不与 `api/plugins` 插件产物目录复用
+3. 后续如果用户显式修改本地存储器配置，再允许覆盖这个默认路径
 
 ### `rustfs` 驱动
 
