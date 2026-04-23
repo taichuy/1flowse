@@ -563,11 +563,13 @@ git commit -m "feat: add local storage object driver"
 
 ### Task 3: Implement The `rustfs` Driver As An S3-Compatible Adapter
 
+> Execution note (2026-04-23 20): The original placeholder `rustfs` stub already satisfied the two smallest plan assertions, so implementation added one extra offline red test for `public_base_url` before landing the full adapter. `path_style` is now read from JSON with a default of `true`, which aligns the earlier scope note with the concrete adapter behavior.
+
 **Files:**
 - Create: `api/crates/storage-object/src/drivers/rustfs.rs`
 - Create: `api/crates/storage-object/src/_tests/rustfs_driver_tests.rs`
 
-- [ ] **Step 1: Write the failing rustfs config and healthcheck tests**
+- [x] **Step 1: Write the failing rustfs config and healthcheck tests**
 
 Create `api/crates/storage-object/src/_tests/rustfs_driver_tests.rs`:
 
@@ -612,7 +614,7 @@ async fn rustfs_healthcheck_reports_invalid_endpoint_before_network_io() {
 }
 ```
 
-- [ ] **Step 2: Run the focused rustfs tests to verify they fail**
+- [x] **Step 2: Run the focused rustfs tests to verify they fail**
 
 Run:
 
@@ -624,7 +626,7 @@ Expected:
 
 - FAIL because the `rustfs` driver does not exist yet.
 
-- [ ] **Step 3: Implement the rustfs adapter with isolated S3 client construction**
+- [x] **Step 3: Implement the rustfs adapter with isolated S3 client construction**
 
 Create `api/crates/storage-object/src/drivers/rustfs.rs`:
 
@@ -811,7 +813,7 @@ impl FileStorageDriver for RustfsFileStorageDriver {
 }
 ```
 
-- [ ] **Step 4: Re-run the focused rustfs tests**
+- [x] **Step 4: Re-run the focused rustfs tests**
 
 Run:
 
@@ -823,7 +825,7 @@ Expected:
 
 - PASS with config validation covered offline and no live bucket required.
 
-- [ ] **Step 5: Commit the rustfs driver**
+- [x] **Step 5: Commit the rustfs driver**
 
 ```bash
 git add api/Cargo.toml api/crates/storage-object
