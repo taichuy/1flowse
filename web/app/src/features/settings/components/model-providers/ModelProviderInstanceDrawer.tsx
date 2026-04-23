@@ -571,8 +571,8 @@ export function ModelProviderInstanceDrawer({
               <Flex justify="space-between" align="center" gap={12}>
                 <Typography.Text type="secondary">
                   {previewModels.length > 0
-                    ? `已检测到 ${previewModels.length} 个候选模型。每一行都可直接输入 model id，也可从下拉缓存选择，再单独切换启用状态。`
-                    : '先点击“检测”获取候选模型缓存，再按行录入 model id、启用状态和删除动作。'}
+                    ? `已检测到 ${previewModels.length} 个缓存模型。每一行都可直接输入 model id，也可从缓存模型中选择，再单独切换启用状态。`
+                    : '先点击“检测”获取缓存模型，再按行录入 model id、启用状态和删除动作。'}
                 </Typography.Text>
                 <Button type="dashed" onClick={() => appendConfiguredModelRow()}>
                   添加模型
