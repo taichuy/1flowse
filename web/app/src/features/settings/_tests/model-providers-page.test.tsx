@@ -1255,6 +1255,9 @@ describe('ModelProvidersPage', () => {
         await within(modal).findByText(primaryContractProviderModels[0].model_id)
       ).toBeInTheDocument();
       expect(
+        within(modal).getByRole('combobox', { name: '候选缓存 OpenAI Production' })
+      ).toBeInTheDocument();
+      expect(
         within(modal).getByText('Base URL')
       ).toBeInTheDocument();
       expect(

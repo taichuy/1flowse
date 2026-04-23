@@ -85,27 +85,29 @@ function formatCatalogRefreshedAt(value: string | null) {
   return `${matched[1]} ${matched[2]}`;
 }
 
-function renderModelTags(modelIds: string[], maxItems = 6) {
+function renderModelSelect(modelIds: string[], instanceDisplayName: string) {
   if (modelIds.length === 0) {
     return <Typography.Text type="secondary">暂无候选模型</Typography.Text>;
   }
 
-  const visibleItems = modelIds.slice(0, maxItems);
-  const hiddenCount = modelIds.length - visibleItems.length;
-
   return (
-    <div className="model-provider-panel__model-tags">
-      {visibleItems.map((modelId) => (
-        <span key={modelId} className="model-provider-panel__model-tag">
-          {modelId}
-        </span>
-      ))}
-      {hiddenCount > 0 ? (
-        <span className="model-provider-panel__model-tag model-provider-panel__model-tag-more">
-          +{hiddenCount}
-        </span>
-      ) : null}
-    </div>
+    <Select
+      aria-label={`候选缓存 ${instanceDisplayName}`}
+      className="model-provider-panel__model-select"
+      defaultValue={modelIds[0]}
+      options={modelIds.map((modelId) => ({
+        value: modelId,
+        label: modelId
+      }))}
+      filterOption={(input, option) =>
+        String(option?.label ?? '')
+          .toLowerCase()
+          .includes(input.toLowerCase())
+      }
+      optionFilterProp="label"
+      popupMatchSelectWidth={false}
+      showSearch
+    />
   );
 }
 
@@ -331,7 +333,7 @@ export function ModelProviderInstancesModal({
                               </span>
                             </div>
                           ) : hasLoadedModels ? (
-                            renderModelTags(cachedModels)
+                            renderModelSelect(cachedModels, instance.display_name)
                           ) : (
                             <Typography.Text type="secondary">
                               当前仅显示摘要，点击展开时会自动拉取候选缓存。

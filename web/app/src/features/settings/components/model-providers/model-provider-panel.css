@@ -547,35 +547,29 @@
   word-break: break-all;
 }
 
-/* 模型标签样式 */
-.model-provider-panel__model-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
+.model-provider-panel__model-select {
+  min-width: min(100%, 420px);
 }
 
-.model-provider-panel__model-tag {
-  background: color-mix(in srgb, var(--color-primary) 10%, var(--bg-surface));
-  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--border-subtle));
+.model-provider-panel__model-select .ant-select-selector {
+  border-radius: 10px !important;
+  border-color: color-mix(in srgb, var(--color-primary) 26%, var(--border-subtle)) !important;
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--bg-surface)) !important;
+  box-shadow: none !important;
+}
+
+.model-provider-panel__model-select .ant-select-selection-item {
   color: color-mix(in srgb, var(--text-primary) 78%, var(--color-primary));
-  border-radius: 6px;
-  padding: 2px 8px;
-  font-size: 12px;
   font-weight: 500;
-  transition: all 0.2s ease;
 }
 
-.model-provider-panel__model-tag:hover {
-  background: color-mix(in srgb, var(--color-primary) 14%, var(--bg-surface));
-  border-color: color-mix(in srgb, var(--color-primary) 36%, var(--border-default));
-  transform: translateY(-1px);
+.model-provider-panel__model-select.ant-select-focused .ant-select-selector,
+.model-provider-panel__model-select:hover .ant-select-selector {
+  border-color: color-mix(in srgb, var(--color-primary) 44%, var(--border-default)) !important;
 }
 
-.model-provider-panel__model-tag-more {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
+.model-provider-panel__model-select .ant-select-arrow {
+  color: var(--color-primary);
 }
 
 /* 加载状态样式 */
