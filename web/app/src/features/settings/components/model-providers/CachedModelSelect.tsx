@@ -1,6 +1,6 @@
 import { Select, Typography } from 'antd';
 
-type EmptyMode = 'text' | 'disabled-select';
+type EmptyMode = 'text' | 'select';
 
 export function CachedModelSelect({
   modelIds,
@@ -38,7 +38,6 @@ export function CachedModelSelect({
       defaultValue={defaultValue}
       options={options}
       placeholder={placeholder}
-      disabled={options.length === 0}
       filterOption={(input, option) =>
         String(option?.label ?? '')
           .toLowerCase()

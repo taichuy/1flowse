@@ -1084,6 +1084,9 @@ describe('ModelProvidersPage', () => {
       expect(screen.queryByText('validate_model')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('organization')).not.toBeInTheDocument();
       expect(screen.getByText('高级配置（可选）')).toBeInTheDocument();
+      expect(
+        screen.getByRole('combobox', { name: '缓存模型' })
+      ).not.toHaveAttribute('aria-disabled', 'true');
       expect(screen.getByRole('button', { name: /检\s*测/ })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /保\s*存/ })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /取\s*消/ })).toBeInTheDocument();

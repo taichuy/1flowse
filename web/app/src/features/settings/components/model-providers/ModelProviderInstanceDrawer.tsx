@@ -594,7 +594,7 @@ export function ModelProviderInstanceDrawer({
                   ariaLabel="缓存模型"
                   placeholder="缓存模型"
                   value={selectedCachedModelId}
-                  emptyMode="disabled-select"
+                  emptyMode="select"
                   onChange={applyCachedModelSelection}
                 />
                 <Button type="dashed" onClick={() => appendConfiguredModelRow()}>
