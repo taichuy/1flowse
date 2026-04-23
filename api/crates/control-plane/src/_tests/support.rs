@@ -859,6 +859,7 @@ pub struct MemoryFileManagementRepository {
     actor: ActorContext,
     file_storages: Arc<RwLock<HashMap<Uuid, FileStorageRecord>>>,
     file_tables: Arc<RwLock<HashMap<Uuid, FileTableRecord>>>,
+    models: Arc<Mutex<HashMap<Uuid, ModelDefinitionRecord>>>,
 }
 
 impl MemoryFileManagementRepository {
@@ -867,7 +868,23 @@ impl MemoryFileManagementRepository {
             actor,
             file_storages: Arc::new(RwLock::new(HashMap::new())),
             file_tables: Arc::new(RwLock::new(HashMap::new())),
+            models: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    pub async fn insert_file_storage(&self, record: FileStorageRecord) {
+        self.file_storages.write().await.insert(record.id, record);
+    }
+
+    pub async fn insert_file_table(&self, record: FileTableRecord) {
+        self.file_tables.write().await.insert(record.id, record);
+    }
+
+    pub fn insert_model_definition(&self, model: ModelDefinitionRecord) {
+        self.models
+            .lock()
+            .expect("model lock poisoned")
+            .insert(model.id, model);
     }
 }
 
@@ -1009,6 +1026,163 @@ impl FileManagementRepository for MemoryFileManagementRepository {
         record.updated_by = input.actor_user_id;
         record.updated_at = now;
         Ok(record.clone())
+    }
+}
+
+#[async_trait]
+impl ModelDefinitionRepository for MemoryFileManagementRepository {
+    async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
+        let mut actor = self.actor.clone();
+        actor.user_id = actor_user_id;
+        Ok(actor)
+    }
+
+    async fn list_model_definitions(&self, _workspace_id: Uuid) -> Result<Vec<ModelDefinitionRecord>> {
+        Ok(self
+            .models
+            .lock()
+            .expect("model lock poisoned")
+            .values()
+            .cloned()
+            .collect())
+    }
+
+    async fn get_model_definition(
+        &self,
+        workspace_id: Uuid,
+        model_id: Uuid,
+    ) -> Result<Option<ModelDefinitionRecord>> {
+        Ok(self
+            .models
+            .lock()
+            .expect("model lock poisoned")
+            .get(&model_id)
+            .filter(|model| {
+                workspace_id.is_nil()
+                    || !matches!(model.scope_kind, domain::DataModelScopeKind::Workspace)
+                    || model.scope_id == workspace_id
+            })
+            .cloned())
+    }
+
+    async fn create_model_definition(
+        &self,
+        input: &CreateModelDefinitionInput,
+    ) -> Result<ModelDefinitionRecord> {
+        let model = ModelDefinitionRecord {
+            id: Uuid::now_v7(),
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            code: input.code.clone(),
+            title: input.title.clone(),
+            physical_table_name: format!("rtm_{}_{}", input.scope_kind.as_str(), input.code),
+            acl_namespace: format!("state_model.{}", input.code),
+            audit_namespace: format!("audit.state_model.{}", input.code),
+            fields: vec![],
+            availability_status: MetadataAvailabilityStatus::Available,
+        };
+        self.models
+            .lock()
+            .expect("model lock poisoned")
+            .insert(model.id, model.clone());
+        Ok(model)
+    }
+
+    async fn update_model_definition(
+        &self,
+        input: &UpdateModelDefinitionInput,
+    ) -> Result<ModelDefinitionRecord> {
+        let mut models = self.models.lock().expect("model lock poisoned");
+        let model = models
+            .get_mut(&input.model_id)
+            .expect("model should exist for updates");
+        model.title = input.title.clone();
+        Ok(model.clone())
+    }
+
+    async fn add_model_field(&self, input: &AddModelFieldInput) -> Result<ModelFieldRecord> {
+        let mut models = self.models.lock().expect("model lock poisoned");
+        let model = models
+            .get_mut(&input.model_id)
+            .expect("model should exist for field inserts");
+        let field = ModelFieldRecord {
+            id: Uuid::now_v7(),
+            data_model_id: input.model_id,
+            code: input.code.clone(),
+            title: input.title.clone(),
+            physical_column_name: input.code.replace('-', "_"),
+            field_kind: input.field_kind,
+            is_required: input.is_required,
+            is_unique: input.is_unique,
+            default_value: input.default_value.clone(),
+            display_interface: input.display_interface.clone(),
+            display_options: input.display_options.clone(),
+            relation_target_model_id: input.relation_target_model_id,
+            relation_options: input.relation_options.clone(),
+            sort_order: model.fields.len() as i32,
+            availability_status: MetadataAvailabilityStatus::Available,
+        };
+        model.fields.push(field.clone());
+        Ok(field)
+    }
+
+    async fn update_model_field(&self, input: &UpdateModelFieldInput) -> Result<ModelFieldRecord> {
+        let mut models = self.models.lock().expect("model lock poisoned");
+        let model = models
+            .get_mut(&input.model_id)
+            .expect("model should exist for field updates");
+        let field = model
+            .fields
+            .iter_mut()
+            .find(|field| field.id == input.field_id)
+            .expect("field should exist for updates");
+        field.title = input.title.clone();
+        field.is_required = input.is_required;
+        field.is_unique = input.is_unique;
+        field.default_value = input.default_value.clone();
+        field.display_interface = input.display_interface.clone();
+        field.display_options = input.display_options.clone();
+        field.relation_options = input.relation_options.clone();
+        Ok(field.clone())
+    }
+
+    async fn delete_model_definition(&self, _actor_user_id: Uuid, model_id: Uuid) -> Result<()> {
+        self.models
+            .lock()
+            .expect("model lock poisoned")
+            .remove(&model_id);
+        Ok(())
+    }
+
+    async fn delete_model_field(
+        &self,
+        _actor_user_id: Uuid,
+        model_id: Uuid,
+        field_id: Uuid,
+    ) -> Result<()> {
+        let mut models = self.models.lock().expect("model lock poisoned");
+        if let Some(model) = models.get_mut(&model_id) {
+            model.fields.retain(|field| field.id != field_id);
+        }
+        Ok(())
+    }
+
+    async fn publish_model_definition(
+        &self,
+        _actor_user_id: Uuid,
+        model_id: Uuid,
+    ) -> Result<ModelDefinitionRecord> {
+        Ok(self
+            .models
+            .lock()
+            .expect("model lock poisoned")
+            .get(&model_id)
+            .expect("model should exist for publish")
+            .clone())
+    }
+
+    async fn append_audit_log(&self, _event: &AuditLogRecord) -> Result<()> {
+        Ok(())
     }
 }
 

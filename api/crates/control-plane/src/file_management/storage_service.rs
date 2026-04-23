@@ -29,6 +29,18 @@ where
         Self { repository }
     }
 
+    pub async fn list_storages(&self, actor_user_id: Uuid) -> Result<Vec<domain::FileStorageRecord>> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(actor_user_id)
+            .await?;
+        if !actor.is_root {
+            return Err(ControlPlaneError::PermissionDenied("permission_denied").into());
+        }
+
+        self.repository.list_file_storages().await
+    }
+
     pub async fn create_storage(
         &self,
         command: CreateFileStorageCommand,

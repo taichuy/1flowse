@@ -5,6 +5,7 @@ use super::applications::{
 use super::plugins::InMemoryOfficialPluginSource;
 use super::*;
 use control_plane::ports::SessionStore;
+use control_plane::ports::FileManagementRepository;
 use storage_ephemeral::MemorySessionStore;
 
 #[derive(Clone)]
@@ -101,17 +102,22 @@ async fn test_state_with_runtime_profile_state(
 ) -> (Arc<ApiState>, String) {
     let mut config = default_test_config();
     config.database_url = isolated_database_url(&config.database_url).await;
+    config.business_file_local_root = std::env::temp_dir()
+        .join(format!("api-business-files-{}", Uuid::now_v7()))
+        .display()
+        .to_string();
     let durable = storage_durable::build_main_durable_postgres(&config.database_url)
         .await
         .unwrap();
     let store = durable.store.clone();
+    let file_storage_registry = Arc::new(storage_object::builtin_driver_registry());
     let salt = SaltString::generate(&mut rand_core::OsRng);
     let root_password_hash = Argon2::default()
         .hash_password(config.bootstrap_root_password.as_bytes(), &salt)
         .unwrap()
         .to_string();
 
-    BootstrapService::new(store.clone())
+    let bootstrap = BootstrapService::new(store.clone())
         .run(&BootstrapConfig {
             workspace_name: config.bootstrap_workspace_name.clone(),
             root_account: config.bootstrap_root_account.clone(),
@@ -120,6 +126,36 @@ async fn test_state_with_runtime_profile_state(
             root_name: config.bootstrap_root_name.clone(),
             root_nickname: config.bootstrap_root_nickname.clone(),
         })
+        .await
+        .unwrap();
+    let default_storage = if let Some(existing) =
+        <storage_durable::MainDurableStore as FileManagementRepository>::get_default_file_storage(
+            &store,
+        )
+        .await
+        .unwrap()
+    {
+        existing
+    } else {
+        control_plane::file_management::FileStorageService::new(store.clone())
+            .create_storage(control_plane::file_management::CreateFileStorageCommand {
+                actor_user_id: bootstrap.root_user_id,
+                code: "local_default".into(),
+                title: "Local".into(),
+                driver_type: "local".into(),
+                enabled: true,
+                is_default: true,
+                config_json: serde_json::json!({
+                    "root_path": config.business_file_local_root.clone(),
+                    "public_base_url": null
+                }),
+                rule_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap()
+    };
+    control_plane::file_management::FileManagementBootstrapService::new(store.clone())
+        .ensure_builtin_attachments(bootstrap.root_user_id, default_storage.id, "attachments")
         .await
         .unwrap();
     let runtime_registry = runtime_core::runtime_model_registry::RuntimeModelRegistry::default();
@@ -136,6 +172,7 @@ async fn test_state_with_runtime_profile_state(
     (
         Arc::new(ApiState {
             store,
+            file_storage_registry,
             runtime_engine,
             provider_runtime: Arc::new(ApiRuntimeServices::new(
                 Arc::new(RwLock::new(

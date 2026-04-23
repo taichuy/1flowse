@@ -132,6 +132,7 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
     app_with_state_and_config(
         std::sync::Arc::new(ApiState {
             store,
+            file_storage_registry: std::sync::Arc::new(storage_object::builtin_driver_registry()),
             runtime_engine,
             provider_runtime: std::sync::Arc::new(ApiRuntimeServices::new(
                 std::sync::Arc::new(RwLock::new(

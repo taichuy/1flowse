@@ -52,6 +52,7 @@ impl SessionStore for SessionStoreHandle {
 #[derive(Clone)]
 pub struct ApiState {
     pub store: MainDurableStore,
+    pub file_storage_registry: std::sync::Arc<storage_object::FileStorageDriverRegistry>,
     pub runtime_engine: std::sync::Arc<RuntimeEngine>,
     pub provider_runtime: std::sync::Arc<ApiRuntimeServices>,
     pub process_started_at: OffsetDateTime,
