@@ -137,6 +137,7 @@ export function ModelProviderInstanceDrawer({
   mode,
   catalogEntry,
   instance,
+  cachedModelCatalog,
   submitting,
   onClose,
   onSubmit,
@@ -147,6 +148,7 @@ export function ModelProviderInstanceDrawer({
   mode: DrawerMode;
   catalogEntry: SettingsModelProviderCatalogEntry | null;
   instance: SettingsModelProviderInstance | null;
+  cachedModelCatalog: SettingsModelProviderModelCatalog | null;
   submitting: boolean;
   onClose: () => void;
   onSubmit: (input: {
@@ -217,15 +219,23 @@ export function ModelProviderInstanceDrawer({
       display_name: instance?.display_name ?? catalogEntry?.display_name ?? '',
       config: buildInitialConfig(mode, catalogEntry, instance)
     });
+    setPreviewModels([]);
     setConfiguredModels(buildInitialConfiguredModels());
     setSelectedCachedModelId(undefined);
     setSecretDrafts({});
     setRevealedSecretKeys({});
     setRevealingSecretKey(null);
-    setPreviewModels([]);
     setPreviewToken(undefined);
     setPreviewingModels(false);
   }, [catalogEntry, form, instance, mode, open]);
+
+  useEffect(() => {
+    if (!open || mode !== 'edit' || !cachedModelCatalog || previewModels.length > 0) {
+      return;
+    }
+
+    setPreviewModels(cachedModelCatalog.models);
+  }, [cachedModelCatalog, mode, open, previewModels.length]);
 
   function clearPreviewState() {
     setPreviewModels([]);

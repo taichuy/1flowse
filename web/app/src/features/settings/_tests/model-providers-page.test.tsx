@@ -1062,6 +1062,7 @@ describe('ModelProvidersPage', () => {
           mode="create"
           catalogEntry={modelProviderCatalogEntries[0]}
           instance={null}
+          cachedModelCatalog={null}
           submitting={false}
           onClose={() => undefined}
           onSubmit={submit}
@@ -1196,6 +1197,44 @@ describe('ModelProvidersPage', () => {
   );
 
   test(
+    'hydrates cached model select from existing model catalog in edit mode',
+    { timeout: 15000 },
+    async () => {
+      authenticateWithPermissions([
+        'route_page.view.all',
+        'state_model.view.all',
+        'state_model.manage.all'
+      ]);
+
+      renderApp('/settings/model-providers');
+
+      const modal = await openProviderInstancesModal();
+      clickProviderInstanceTitle(modal, 'OpenAI Production');
+
+      await waitFor(() => {
+        expect(
+          modelProvidersApi.fetchSettingsModelProviderModels
+        ).toHaveBeenCalledWith('provider-1');
+      });
+
+      fireEvent.click(
+        within(modal).getByRole('button', {
+          name: '编辑 API Key OpenAI Production'
+        })
+      );
+
+      expect(await screen.findByText('编辑 API 密钥配置')).toBeInTheDocument();
+
+      const cachedModelSelect = screen.getByRole('combobox', { name: '缓存模型' });
+      fireEvent.mouseDown(cachedModelSelect);
+
+      expect(
+        await screen.findByText(primaryContractProviderModels[0].model_id)
+      ).toBeInTheDocument();
+    }
+  );
+
+  test(
     'masks api key by default and reveals it only after explicit action',
     { timeout: 15000 },
     async () => {
@@ -1228,9 +1267,9 @@ describe('ModelProvidersPage', () => {
           modelProvidersApi.revealSettingsModelProviderSecret
         ).toHaveBeenCalledWith('provider-1', 'api_key', 'csrf-123');
       });
-      expect(
-        await screen.findByDisplayValue('super-secret')
-      ).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByLabelText('API Key')).toHaveValue('super-secret');
+      });
     }
   );
 

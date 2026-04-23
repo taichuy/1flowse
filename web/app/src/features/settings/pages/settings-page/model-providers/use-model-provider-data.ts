@@ -183,6 +183,13 @@ export function useModelProviderData({
     queryFn: () => fetchSettingsModelProviderModels(modalSelectedInstanceId!),
     enabled: false
   });
+  const editingModelsQuery = useQuery({
+    queryKey: editingInstance
+      ? settingsModelProviderModelsQueryKey(editingInstance.id)
+      : IDLE_MODEL_PROVIDER_MODELS_QUERY_KEY,
+    queryFn: () => fetchSettingsModelProviderModels(editingInstance!.id),
+    enabled: false
+  });
 
   useEffect(() => {
     if (!instanceModalState) {
@@ -238,6 +245,7 @@ export function useModelProviderData({
     instanceCounts,
     primaryInstanceSummary,
     editingInstance,
+    editingModelCatalog: editingModelsQuery.data ?? null,
     drawerCatalogEntry,
     modalInstances,
     modalSelectedInstanceId,

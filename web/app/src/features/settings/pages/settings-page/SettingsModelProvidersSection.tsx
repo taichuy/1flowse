@@ -119,6 +119,7 @@ export function SettingsModelProvidersSection({
     instanceCounts,
     primaryInstanceSummary,
     editingInstance,
+    editingModelCatalog,
     drawerCatalogEntry,
     modalInstances,
     modalCatalogEntry,
@@ -320,6 +321,7 @@ export function SettingsModelProvidersSection({
         mode={drawerState?.mode ?? 'create'}
         catalogEntry={drawerCatalogEntry}
         instance={editingInstance}
+        cachedModelCatalog={editingModelCatalog}
         submitting={createMutation.isPending || updateMutation.isPending}
         onClose={() => setDrawerState(null)}
         onRevealSecret={async (fieldKey) => {
