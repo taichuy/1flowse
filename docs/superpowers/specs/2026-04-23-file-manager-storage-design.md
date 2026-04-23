@@ -242,6 +242,7 @@
 1. `storage_id` 是文件记录实际使用的存储器快照，不等于文件表当前绑定
 2. `url` 只是派生或缓存字段，不是唯一真相
 3. 真正可靠的读定位依据是 `storage_id + path + filename`
+4. 文件记录第一版不额外冗余 `storage_type`；存储器类型统一通过 `storage_id -> file_storages.driver_type` 解析
 
 ## 默认文件表与新建文件表
 
