@@ -35,6 +35,9 @@ type ConfiguredModelRow = {
   enabled: boolean;
 };
 
+const CONFIGURED_MODEL_GRID_TEMPLATE_COLUMNS = 'minmax(0, 1fr) 48px 40px';
+const CONFIGURED_MODEL_GRID_GAP = 8;
+
 function normalizeConfigFieldValue(value: unknown): ModelProviderFormValue {
   if (typeof value === 'boolean') {
     return value;
@@ -586,16 +589,20 @@ export function ModelProviderInstanceDrawer({
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'minmax(0, 1fr) 96px 72px',
-                    gap: 12,
+                    gridTemplateColumns: CONFIGURED_MODEL_GRID_TEMPLATE_COLUMNS,
+                    gap: CONFIGURED_MODEL_GRID_GAP,
                     padding: '10px 12px',
                     background: 'var(--ant-color-fill-tertiary)',
                     alignItems: 'center'
                   }}
                 >
                   <Typography.Text strong>模型 ID</Typography.Text>
-                  <Typography.Text strong>启用</Typography.Text>
-                  <Typography.Text strong>操作</Typography.Text>
+                  <Typography.Text strong style={{ textAlign: 'center' }}>
+                    启用
+                  </Typography.Text>
+                  <Typography.Text strong style={{ textAlign: 'center' }}>
+                    操作
+                  </Typography.Text>
                 </div>
 
                 {configuredModels.length > 0 ? (
@@ -604,8 +611,8 @@ export function ModelProviderInstanceDrawer({
                       key={row.key}
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: 'minmax(0, 1fr) 96px 72px',
-                        gap: 12,
+                        gridTemplateColumns: CONFIGURED_MODEL_GRID_TEMPLATE_COLUMNS,
+                        gap: CONFIGURED_MODEL_GRID_GAP,
                         padding: '12px',
                         borderTop: '1px solid var(--ant-color-border-secondary)',
                         alignItems: 'center'
@@ -633,8 +640,10 @@ export function ModelProviderInstanceDrawer({
                         <Input aria-label={`模型 ID ${index + 1}`} />
                       </AutoComplete>
                       <Switch
+                        size="small"
                         aria-label={`启用模型 ${index + 1}`}
                         checked={row.enabled}
+                        style={{ justifySelf: 'center' }}
                         onChange={(checked) => {
                           updateConfiguredModelRow(row.key, {
                             enabled: checked
@@ -643,8 +652,10 @@ export function ModelProviderInstanceDrawer({
                       />
                       <Button
                         danger
+                        size="small"
                         type="text"
                         aria-label={`删除模型 ${index + 1}`}
+                        style={{ justifySelf: 'center', minWidth: 0, paddingInline: 0 }}
                         onClick={() => removeConfiguredModelRow(row.key)}
                       >
                         删除
