@@ -23,6 +23,7 @@ import type {
   PreviewSettingsModelProviderModelsResponse
 } from '../../api/model-providers';
 import { CollapseShell } from '../../../../shared/ui/collapse-shell/CollapseShell';
+import { CachedModelSelect } from './CachedModelSelect';
 
 type DrawerMode = 'create' | 'edit';
 type ModelProviderFormValue = string | boolean;
@@ -33,7 +34,6 @@ type ConfiguredModelRow = {
   key: string;
   model_id: string;
   enabled: boolean;
-  source: 'manual' | 'cache';
 };
 
 const CONFIGURED_MODEL_GRID_TEMPLATE_COLUMNS = 'minmax(0, 1fr) 48px 40px';
@@ -173,6 +173,7 @@ export function ModelProviderInstanceDrawer({
   const [previewModels, setPreviewModels] = useState<PreviewModelDescriptor[]>([]);
   const configuredModelKeyRef = useRef(0);
   const [configuredModels, setConfiguredModels] = useState<ConfiguredModelRow[]>([]);
+  const [selectedCachedModelId, setSelectedCachedModelId] = useState<string | undefined>();
   const [previewToken, setPreviewToken] = useState<string | undefined>();
   const [previewingModels, setPreviewingModels] = useState(false);
 
@@ -195,8 +196,7 @@ export function ModelProviderInstanceDrawer({
     return sourceModels.map((model) => ({
       key: nextConfiguredModelKey(),
       model_id: model.model_id,
-      enabled: model.enabled,
-      source: 'manual'
+      enabled: model.enabled
     }));
   }
 
@@ -209,6 +209,7 @@ export function ModelProviderInstanceDrawer({
       setPreviewModels([]);
       configuredModelKeyRef.current = 0;
       setConfiguredModels([]);
+      setSelectedCachedModelId(undefined);
       setPreviewToken(undefined);
       setPreviewingModels(false);
       return;
@@ -220,6 +221,7 @@ export function ModelProviderInstanceDrawer({
     });
     setPreviewModels([]);
     setConfiguredModels(buildInitialConfiguredModels());
+    setSelectedCachedModelId(undefined);
     setSecretDrafts({});
     setRevealedSecretKeys({});
     setRevealingSecretKey(null);
@@ -233,69 +235,12 @@ export function ModelProviderInstanceDrawer({
     }
 
     setPreviewModels(cachedModelCatalog.models);
-    setConfiguredModels((current) =>
-      mergeCachedModelsIntoConfiguredRows(
-        current,
-        cachedModelCatalog.models.map((model) => model.model_id)
-      )
-    );
   }, [cachedModelCatalog, mode, open, previewModels.length]);
 
   function clearPreviewState() {
     setPreviewModels([]);
     setPreviewToken(undefined);
-  }
-
-  function mergeCachedModelsIntoConfiguredRows(
-    currentRows: ConfiguredModelRow[],
-    cachedModelIds: string[]
-  ) {
-    const normalizedCachedModelIds = Array.from(
-      new Set(cachedModelIds.map((modelId) => modelId.trim()).filter(Boolean))
-    );
-
-    if (normalizedCachedModelIds.length === 0) {
-      return currentRows;
-    }
-
-    const currentRowsByModelId = new Map(
-      currentRows
-        .map((row) => [row.model_id.trim(), row] as const)
-        .filter(([modelId]) => modelId.length > 0)
-    );
-
-    const cachedRows = normalizedCachedModelIds.map((modelId) => {
-      const existingRow = currentRowsByModelId.get(modelId);
-      if (existingRow) {
-        return {
-          ...existingRow,
-          model_id: modelId,
-          source: 'cache' as const
-        };
-      }
-
-      return {
-        key: nextConfiguredModelKey(),
-        model_id: modelId,
-        enabled: false,
-        source: 'cache' as const
-      };
-    });
-
-    const remainingRows = currentRows.filter((row) => {
-      const normalizedModelId = row.model_id.trim();
-      if (!normalizedModelId) {
-        return true;
-      }
-
-      if (normalizedCachedModelIds.includes(normalizedModelId)) {
-        return false;
-      }
-
-      return row.source !== 'cache';
-    });
-
-    return [...cachedRows, ...remainingRows];
+    setSelectedCachedModelId(undefined);
   }
 
   function normalizeConfiguredModels(rows: ConfiguredModelRow[]) {
@@ -327,10 +272,13 @@ export function ModelProviderInstanceDrawer({
       {
         key: nextConfiguredModelKey(),
         model_id: initial?.model_id ?? '',
-        enabled: initial?.enabled ?? true,
-        source: initial?.source ?? 'manual'
+        enabled: initial?.enabled ?? true
       }
     ]);
+  }
+
+  function applyCachedModelSelection(modelId: string | null) {
+    setSelectedCachedModelId(modelId ?? undefined);
   }
 
   async function handleRevealSecret(fieldKey: string) {
@@ -400,15 +348,7 @@ export function ModelProviderInstanceDrawer({
     patch: Partial<Pick<ConfiguredModelRow, 'model_id' | 'enabled'>>
   ) {
     setConfiguredModels((current) =>
-      current.map((row) =>
-        row.key === rowKey
-          ? {
-              ...row,
-              ...patch,
-              source: patch.model_id !== undefined ? 'manual' : row.source
-            }
-          : row
-      )
+      current.map((row) => (row.key === rowKey ? { ...row, ...patch } : row))
     );
   }
 
@@ -425,12 +365,7 @@ export function ModelProviderInstanceDrawer({
         buildDraftConfig((values.config ?? {}) as Record<string, ModelProviderFormValue>)
       );
       setPreviewModels(preview.models);
-      setConfiguredModels((current) =>
-        mergeCachedModelsIntoConfiguredRows(
-          current,
-          preview.models.map((model) => model.model_id)
-        )
-      );
+      setSelectedCachedModelId(undefined);
       setPreviewToken(preview.preview_token);
     } finally {
       setPreviewingModels(false);
@@ -654,9 +589,14 @@ export function ModelProviderInstanceDrawer({
             <Divider orientation="left">模型配置</Divider>
             <Space direction="vertical" size={12} style={{ width: '100%' }}>
               <Flex justify="space-between" align="center" gap={12}>
-                <Typography.Text type="secondary">
-                  检测或实例缓存会直接映射到下方列表；需要额外 model id 时再手动添加。
-                </Typography.Text>
+                <CachedModelSelect
+                  modelIds={previewModels.map((model) => model.model_id)}
+                  ariaLabel="缓存模型"
+                  placeholder="缓存模型"
+                  value={selectedCachedModelId}
+                  emptyMode="disabled-select"
+                  onChange={applyCachedModelSelection}
+                />
                 <Button type="dashed" onClick={() => appendConfiguredModelRow()}>
                   添加模型
                 </Button>
