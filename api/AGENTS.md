@@ -15,7 +15,7 @@
 - `crates/runtime-core` 放 runtime registry 与 runtime CRUD 核心。
 - `crates/plugin-framework` 放插件消费类型、绑定约束、插件边界。
 - `crates/storage-pg` 放 PostgreSQL `repository impl`、查询、事务、`migrations`、存储层 `mapper`。
-- `crates/storage-redis` 放 Redis session store 等持久化实现。
+- `crates/storage-ephemeral` 放非持久 session store、短期协同原语与可选 backend 适配。
 - `crates/storage-object` 是对象存储边界。
 - `crates/publish-gateway` 是发布网关边界。
 - `crates/observability` 放日志、trace 与可观测性基础能力。
@@ -29,7 +29,7 @@
 - `apps/api-server/src/middleware` 只做请求链路约束，不写业务状态变更。
 - `crates/control-plane/src/*.rs` 是业务边界；关键写动作只能从命名明确的 `service command` 进入。
 - `crates/control-plane/src/ports.rs` 统一定义 `repository trait` 与外部端口。
-- `crates/storage-pg/src/*_repository.rs`、`crates/storage-redis/src/*` 只实现持久化端口，不承载 HTTP 语义。
+- `crates/storage-pg/src/*_repository.rs`、`crates/storage-ephemeral/src/*` 只实现存储或短期协同端口，不承载 HTTP 语义。
 - actor / scope 过滤型查询属于持久化查询职责；状态流转、权限决策、审计写入属于 `control-plane`。
 - `crates/storage-pg/src/mappers` 只做存储模型与领域模型转换，不承载业务规则。
 - session 必须显式持有 `tenant_id` 与 `current_workspace_id`。
@@ -60,7 +60,7 @@
   - `apps/api-server/src/routes/<resource>.rs`
   - `crates/control-plane/src/<resource>.rs`
   - `crates/control-plane/src/ports.rs` 中对应的 `repository trait`
-  - `crates/storage-pg/src/<resource>_repository.rs` 或 `crates/storage-redis/src/<resource>_repository.rs`
+  - `crates/storage-pg/src/<resource>_repository.rs` 或 `crates/storage-ephemeral/src/<resource>_repository.rs`
   - 对应 `_tests`
 - `dto` 可定义在 route 模块内，不为凑结构拆空文件。
 - 只有存在存储层结构转换时才新增 `mapper`。

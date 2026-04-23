@@ -3,7 +3,7 @@ use control_plane::ports::{OfficialPluginSourcePort, SessionStore};
 use domain::SessionRecord;
 use runtime_core::runtime_engine::RuntimeEngine;
 use storage_pg::PgControlPlaneStore;
-use storage_ephemeral::{MemorySessionStore, RedisSessionStore};
+use storage_ephemeral::{MemorySessionStore, RedisBackedSessionStore};
 use time::OffsetDateTime;
 
 use crate::openapi_docs::ApiDocsRegistry;
@@ -14,7 +14,7 @@ use crate::{
 
 #[derive(Clone)]
 pub enum SessionStoreHandle {
-    Redis(Box<RedisSessionStore>),
+    Redis(Box<RedisBackedSessionStore>),
     Memory(MemorySessionStore),
 }
 

@@ -6,12 +6,12 @@ use redis::{aio::ConnectionManager, AsyncCommands};
 use crate::session_store::{is_session_expired, session_ttl};
 
 #[derive(Clone)]
-pub struct RedisSessionStore {
+pub struct RedisBackedSessionStore {
     manager: ConnectionManager,
     key_prefix: String,
 }
 
-impl RedisSessionStore {
+impl RedisBackedSessionStore {
     pub async fn new(redis_url: &str, key_prefix: impl Into<String>) -> anyhow::Result<Self> {
         let client = redis::Client::open(redis_url)?;
         let manager = ConnectionManager::new(client).await?;
@@ -38,7 +38,7 @@ impl RedisSessionStore {
 }
 
 #[async_trait]
-impl SessionStore for RedisSessionStore {
+impl SessionStore for RedisBackedSessionStore {
     async fn put(&self, session: SessionRecord) -> anyhow::Result<()> {
         let ttl = session_ttl(session.expires_at_unix).whole_seconds().max(1) as u64;
         let payload = serde_json::to_string(&session)?;

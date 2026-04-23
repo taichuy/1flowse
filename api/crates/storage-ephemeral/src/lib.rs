@@ -15,7 +15,7 @@ pub use memory::MemoryKvStore;
 pub use memory::MemoryLeaseStore;
 pub use memory::MemorySessionStore;
 pub use memory::MemoryWakeupSignalBus;
-pub use redis::RedisSessionStore;
+pub use redis::RedisBackedSessionStore;
 pub use wakeup_signal::WakeupSignalBus;
 
 #[cfg(test)]

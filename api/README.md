@@ -6,7 +6,7 @@
 - `crates/control-plane`: backend application services and permission-checked state transitions
 - `crates/runtime-core`: runtime resource descriptors, registries, and capability slot engine
 - `crates/storage-pg`: Postgres-backed repository implementations and migrations
-- `crates/storage-redis`: session store adapters
+- `crates/storage-ephemeral`: non-durable session and ephemeral coordination adapters
 
 ## Verification
 

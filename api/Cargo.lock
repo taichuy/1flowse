@@ -2539,21 +2539,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "storage-redis"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "control-plane",
- "domain",
- "redis",
- "serde_json",
- "time",
- "tokio",
- "uuid",
-]
-
-[[package]]
 name = "stringprep"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -26,7 +26,7 @@ use control_plane::bootstrap::{BootstrapConfig, BootstrapService};
 use rand_core::OsRng;
 use serde::Serialize;
 use storage_pg::{connect, run_migrations, PgControlPlaneStore};
-use storage_ephemeral::{EphemeralBackendKind, MemorySessionStore, RedisSessionStore};
+use storage_ephemeral::{EphemeralBackendKind, MemorySessionStore, RedisBackedSessionStore};
 use time::OffsetDateTime;
 use tokio::sync::RwLock;
 use tower_http::{
@@ -166,7 +166,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
             SessionStoreHandle::Memory(MemorySessionStore::new(SESSION_STORE_NAMESPACE))
         }
         EphemeralBackendKind::Redis => SessionStoreHandle::Redis(Box::new(
-            RedisSessionStore::new(
+            RedisBackedSessionStore::new(
                 config.ephemeral_redis_url.as_deref().unwrap(),
                 SESSION_STORE_NAMESPACE,
             )
