@@ -5,6 +5,7 @@ use std::{
 
 use plugin_framework::{
     capability_kind::PluginConsumptionKind,
+    data_source_package::DataSourcePackage,
     error::{FrameworkResult, PluginFrameworkError},
     manifest_v1::{PluginExecutionMode, PluginManifestV1},
     provider_package::ProviderPackage,
@@ -15,6 +16,13 @@ pub struct LoadedProviderPackage {
     pub package_root: PathBuf,
     pub runtime_executable: PathBuf,
     pub package: ProviderPackage,
+}
+
+#[derive(Debug, Clone)]
+pub struct LoadedDataSourcePackage {
+    pub package_root: PathBuf,
+    pub runtime_executable: PathBuf,
+    pub package: DataSourcePackage,
 }
 
 pub struct PackageLoader;
@@ -43,6 +51,37 @@ impl PackageLoader {
         }
 
         Ok(LoadedProviderPackage {
+            package_root,
+            runtime_executable,
+            package,
+        })
+    }
+
+    pub fn load_data_source(
+        package_root: impl AsRef<Path>,
+    ) -> FrameworkResult<LoadedDataSourcePackage> {
+        let package_root = fs::canonicalize(package_root.as_ref()).map_err(|error| {
+            PluginFrameworkError::invalid_provider_package(format!(
+                "cannot resolve package root: {error}"
+            ))
+        })?;
+
+        if Self::looks_like_source_tree(&package_root) {
+            return Err(PluginFrameworkError::invalid_provider_package(
+                "data source package root looks like a source tree; load an installed or unpacked artifact instead",
+            ));
+        }
+
+        let package = DataSourcePackage::load_from_dir(&package_root)?;
+        let runtime_executable = package.runtime_entry();
+        if !runtime_executable.is_file() {
+            return Err(PluginFrameworkError::invalid_provider_package(format!(
+                "data source runtime entry does not exist: {}",
+                runtime_executable.display()
+            )));
+        }
+
+        Ok(LoadedDataSourcePackage {
             package_root,
             runtime_executable,
             package,

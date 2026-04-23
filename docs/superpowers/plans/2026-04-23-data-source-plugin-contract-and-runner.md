@@ -20,16 +20,19 @@
 - `api/crates/plugin-framework/src/_tests/data_source_contract_tests.rs`
 - `api/crates/plugin-framework/src/_tests/data_source_package_tests.rs`
 - `api/apps/plugin-runner/src/data_source_host.rs`
+- `api/apps/plugin-runner/src/data_source_stdio.rs`
 - `api/apps/plugin-runner/tests/data_source_runtime_routes.rs`
 
 **Modify**
 - `api/crates/plugin-framework/src/lib.rs`
 - `api/crates/plugin-framework/src/_tests/mod.rs`
+- `api/apps/plugin-runner/src/package_loader.rs`
 - `api/apps/plugin-runner/src/lib.rs`
 
 **Notes**
 - Do not mutate `provider_contract.rs` into a generic “everything” protocol. Data-source runtime gets its own contract file.
 - The new plugin path still uses `runtime_extension + process_per_call + stdio_json`.
+- `plugin-runner` uses a dedicated `data_source_stdio.rs` helper so the host only orchestrates package lookup and route I/O.
 
 ### Task 1: Add RED Tests For The Data-Source Package Contract
 
@@ -231,10 +234,12 @@ git commit -m "feat: add data source plugin contract root"
 
 **Files:**
 - Create: `api/apps/plugin-runner/src/data_source_host.rs`
+- Create: `api/apps/plugin-runner/src/data_source_stdio.rs`
 - Create: `api/apps/plugin-runner/tests/data_source_runtime_routes.rs`
+- Modify: `api/apps/plugin-runner/src/package_loader.rs`
 - Modify: `api/apps/plugin-runner/src/lib.rs`
 
-- [ ] **Step 1: Write failing route tests for the new host**
+- [x] **Step 1: Write failing route tests for the new host**
 
 Create `api/apps/plugin-runner/tests/data_source_runtime_routes.rs` with a temp package whose executable speaks the new methods:
 
@@ -271,19 +276,19 @@ Also add route-level checks for:
 5. `/data-sources/preview-read`
 6. `/data-sources/import-snapshot`
 
-- [ ] **Step 2: Run the new plugin-runner tests to verify failure**
+- [x] **Step 2: Run the new plugin-runner tests to verify failure**
 
 Run:
 
 ```bash
-cargo test --manifest-path api/Cargo.toml -p plugin-runner data_source_runtime_routes -- --nocapture
+cargo test --manifest-path api/Cargo.toml -p plugin-runner --test data_source_runtime_routes -- --nocapture
 ```
 
 Expected:
 
 - FAIL because the host and routes do not exist yet.
 
-- [ ] **Step 3: Implement `DataSourceHost` And Expose Runtime Routes**
+- [x] **Step 3: Implement `DataSourceHost` And Expose Runtime Routes**
 
 Create `api/apps/plugin-runner/src/data_source_host.rs`:
 
@@ -332,19 +337,19 @@ Add routes:
 .route("/data-sources/import-snapshot", post(import_data_source_snapshot))
 ```
 
-- [ ] **Step 4: Re-run the plugin-runner data-source tests**
+- [x] **Step 4: Re-run the plugin-runner data-source tests**
 
 Run:
 
 ```bash
-cargo test --manifest-path api/Cargo.toml -p plugin-runner data_source_runtime_routes -- --nocapture
+cargo test --manifest-path api/Cargo.toml -p plugin-runner --test data_source_runtime_routes -- --nocapture
 ```
 
 Expected:
 
 - PASS with the new host and route surface rooted.
 
-- [ ] **Step 5: Commit the runner host**
+- [x] **Step 5: Commit the runner host**
 
 ```bash
 git add api/apps/plugin-runner

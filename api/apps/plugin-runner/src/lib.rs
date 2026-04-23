@@ -10,6 +10,10 @@ use axum::{
     Json, Router,
 };
 use plugin_framework::{
+    data_source_contract::{
+        DataSourceConfigInput, DataSourceImportSnapshotInput, DataSourceImportSnapshotOutput,
+        DataSourcePreviewReadInput, DataSourcePreviewReadOutput,
+    },
     error::{PluginFrameworkError, PluginFrameworkErrorKind},
     provider_contract::ProviderInvocationInput,
 };
@@ -20,17 +24,24 @@ use tokio::sync::RwLock;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
+use crate::data_source_host::{
+    DataSourceCatalogOutput, DataSourceDescriptorOutput, DataSourceValueOutput,
+    LoadedDataSourceSummary,
+};
 use crate::provider_host::{
     LoadedProviderSummary, ProviderHost, ProviderInvokeStreamOutput, ProviderModelsOutput,
     ProviderValidationOutput,
 };
 pub use capability_host::CapabilityHost;
+pub use data_source_host::DataSourceHost;
 
 pub const DEFAULT_PLUGIN_RUNNER_ADDR: &str = "0.0.0.0:7801";
 static STARTED_AT: OnceLock<OffsetDateTime> = OnceLock::new();
 
 pub mod capability_host;
 pub mod capability_stdio;
+pub mod data_source_host;
+pub mod data_source_stdio;
 pub mod package_loader;
 pub mod provider_host;
 pub mod stdio_runtime;
@@ -46,6 +57,7 @@ pub struct HealthResponse {
 pub struct AppState {
     provider_host: Arc<RwLock<ProviderHost>>,
     capability_host: Arc<RwLock<CapabilityHost>>,
+    data_source_host: Arc<RwLock<DataSourceHost>>,
 }
 
 impl AppState {
@@ -53,6 +65,7 @@ impl AppState {
         Self {
             provider_host: Arc::new(RwLock::new(ProviderHost::default())),
             capability_host: Arc::new(RwLock::new(capability_host)),
+            data_source_host: Arc::new(RwLock::new(DataSourceHost::default())),
         }
     }
 }
@@ -93,6 +106,43 @@ struct ValidateCapabilityRequest {
     contribution_code: String,
     #[serde(default)]
     config_payload: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct LoadDataSourceRequest {
+    package_root: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReloadDataSourceRequest {
+    plugin_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DataSourceConnectionRequest {
+    plugin_id: String,
+    #[serde(flatten)]
+    input: DataSourceConfigInput,
+}
+
+#[derive(Debug, Deserialize)]
+struct DescribeDataSourceRequest {
+    plugin_id: String,
+    #[serde(flatten)]
+    input: DataSourceConfigInput,
+    resource_key: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct PreviewDataSourceRequest {
+    plugin_id: String,
+    input: DataSourcePreviewReadInput,
+}
+
+#[derive(Debug, Deserialize)]
+struct ImportDataSourceRequest {
+    plugin_id: String,
+    input: DataSourceImportSnapshotInput,
 }
 
 #[derive(Debug, Deserialize)]
@@ -198,6 +248,92 @@ async fn validate_capability_config(
     .map_err(map_framework_error)
 }
 
+async fn load_data_source(
+    State(state): State<AppState>,
+    Json(request): Json<LoadDataSourceRequest>,
+) -> Result<Json<LoadedDataSourceSummary>, (StatusCode, Json<ErrorResponse>)> {
+    let mut host = state.data_source_host.write().await;
+    host.load(&request.package_root)
+        .map(Json)
+        .map_err(map_framework_error)
+}
+
+async fn reload_data_source(
+    State(state): State<AppState>,
+    Json(request): Json<ReloadDataSourceRequest>,
+) -> Result<Json<LoadedDataSourceSummary>, (StatusCode, Json<ErrorResponse>)> {
+    let mut host = state.data_source_host.write().await;
+    host.reload(&request.plugin_id)
+        .map(Json)
+        .map_err(map_framework_error)
+}
+
+async fn validate_data_source_config(
+    State(state): State<AppState>,
+    Json(request): Json<DataSourceConnectionRequest>,
+) -> Result<Json<DataSourceValueOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.data_source_host.read().await;
+    host.validate_config(&request.plugin_id, request.input)
+        .await
+        .map(Json)
+        .map_err(map_framework_error)
+}
+
+async fn test_data_source_connection(
+    State(state): State<AppState>,
+    Json(request): Json<DataSourceConnectionRequest>,
+) -> Result<Json<DataSourceValueOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.data_source_host.read().await;
+    host.test_connection(&request.plugin_id, request.input)
+        .await
+        .map(Json)
+        .map_err(map_framework_error)
+}
+
+async fn discover_data_source_catalog(
+    State(state): State<AppState>,
+    Json(request): Json<DataSourceConnectionRequest>,
+) -> Result<Json<DataSourceCatalogOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.data_source_host.read().await;
+    host.discover_catalog(&request.plugin_id, request.input)
+        .await
+        .map(Json)
+        .map_err(map_framework_error)
+}
+
+async fn describe_data_source_resource(
+    State(state): State<AppState>,
+    Json(request): Json<DescribeDataSourceRequest>,
+) -> Result<Json<DataSourceDescriptorOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.data_source_host.read().await;
+    host.describe_resource(&request.plugin_id, request.input, request.resource_key)
+        .await
+        .map(Json)
+        .map_err(map_framework_error)
+}
+
+async fn preview_data_source_read(
+    State(state): State<AppState>,
+    Json(request): Json<PreviewDataSourceRequest>,
+) -> Result<Json<DataSourcePreviewReadOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.data_source_host.read().await;
+    host.preview_read(&request.plugin_id, request.input)
+        .await
+        .map(Json)
+        .map_err(map_framework_error)
+}
+
+async fn import_data_source_snapshot(
+    State(state): State<AppState>,
+    Json(request): Json<ImportDataSourceRequest>,
+) -> Result<Json<DataSourceImportSnapshotOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.data_source_host.read().await;
+    host.import_snapshot(&request.plugin_id, request.input)
+        .await
+        .map(Json)
+        .map_err(map_framework_error)
+}
+
 async fn resolve_capability_dynamic_options(
     State(state): State<AppState>,
     Json(request): Json<ValidateCapabilityRequest>,
@@ -263,6 +399,29 @@ pub fn app_with_state(state: AppState) -> Router {
         .route("/providers/validate", post(validate_provider))
         .route("/providers/list-models", post(list_models))
         .route("/providers/invoke-stream", post(invoke_stream))
+        .route("/data-sources/load", post(load_data_source))
+        .route("/data-sources/reload", post(reload_data_source))
+        .route(
+            "/data-sources/validate-config",
+            post(validate_data_source_config),
+        )
+        .route(
+            "/data-sources/test-connection",
+            post(test_data_source_connection),
+        )
+        .route(
+            "/data-sources/discover-catalog",
+            post(discover_data_source_catalog),
+        )
+        .route(
+            "/data-sources/describe-resource",
+            post(describe_data_source_resource),
+        )
+        .route("/data-sources/preview-read", post(preview_data_source_read))
+        .route(
+            "/data-sources/import-snapshot",
+            post(import_data_source_snapshot),
+        )
         .route(
             "/capabilities/validate-config",
             post(validate_capability_config),

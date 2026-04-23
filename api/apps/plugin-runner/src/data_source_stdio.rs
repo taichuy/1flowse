@@ -1,0 +1,126 @@
+use std::{path::Path, process::Stdio, time::Duration};
+
+use plugin_framework::{
+    data_source_contract::{DataSourceStdioError, DataSourceStdioRequest, DataSourceStdioResponse},
+    error::{FrameworkResult, PluginFrameworkError},
+    provider_contract::ProviderRuntimeError,
+    PluginRuntimeLimits,
+};
+use serde_json::Value;
+use tokio::{io::AsyncWriteExt, process::Command};
+
+pub async fn call_executable(
+    executable_path: &Path,
+    request: &DataSourceStdioRequest,
+    limits: &PluginRuntimeLimits,
+) -> FrameworkResult<Value> {
+    let mut command = Command::new(executable_path);
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    apply_memory_limit(&mut command, limits.memory_bytes)?;
+
+    let mut child = command
+        .spawn()
+        .map_err(|error| PluginFrameworkError::io(Some(executable_path), error.to_string()))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let payload = serde_json::to_vec(request)
+            .map_err(|error| PluginFrameworkError::serialization(None, error.to_string()))?;
+        stdin
+            .write_all(&payload)
+            .await
+            .map_err(|error| PluginFrameworkError::io(Some(executable_path), error.to_string()))?;
+    }
+
+    let output = tokio::time::timeout(
+        Duration::from_millis(limits.timeout_ms.unwrap_or(30_000)),
+        child.wait_with_output(),
+    )
+    .await
+    .map_err(|_| {
+        PluginFrameworkError::runtime(ProviderRuntimeError::normalize(
+            "data_source_runtime",
+            "data source runtime timed out",
+            None,
+        ))
+    })?
+    .map_err(|error| PluginFrameworkError::io(Some(executable_path), error.to_string()))?;
+
+    parse_stdio_response(executable_path, &output.stdout, &output.stderr)
+}
+
+fn parse_stdio_response(
+    executable_path: &Path,
+    stdout: &[u8],
+    stderr: &[u8],
+) -> FrameworkResult<Value> {
+    let stdout = String::from_utf8_lossy(stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(stderr).trim().to_string();
+    if stdout.is_empty() {
+        return Err(PluginFrameworkError::runtime(
+            ProviderRuntimeError::normalize(
+                "data_source_runtime",
+                if stderr.is_empty() {
+                    "data source runtime returned empty output"
+                } else {
+                    stderr.as_str()
+                },
+                None,
+            ),
+        ));
+    }
+
+    let envelope = serde_json::from_str::<DataSourceStdioResponse>(&stdout).map_err(|error| {
+        PluginFrameworkError::serialization(Some(executable_path), error.to_string())
+    })?;
+
+    if envelope.ok {
+        return Ok(envelope.result);
+    }
+
+    let error = envelope.error.unwrap_or_else(|| DataSourceStdioError {
+        message: if stderr.is_empty() {
+            "data source runtime execution failed".to_string()
+        } else {
+            stderr.clone()
+        },
+        provider_summary: None,
+    });
+
+    Err(PluginFrameworkError::runtime(
+        ProviderRuntimeError::normalize(
+            "data_source_runtime",
+            error.message,
+            error.provider_summary.as_deref(),
+        ),
+    ))
+}
+
+fn apply_memory_limit(command: &mut Command, memory_bytes: Option<u64>) -> FrameworkResult<()> {
+    #[cfg(unix)]
+    {
+        if let Some(limit) = memory_bytes {
+            unsafe {
+                command.pre_exec(move || {
+                    let limit = libc::rlimit {
+                        rlim_cur: limit as libc::rlim_t,
+                        rlim_max: limit as libc::rlim_t,
+                    };
+                    if libc::setrlimit(libc::RLIMIT_AS, &limit) != 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    Ok(())
+                });
+            }
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = (command, memory_bytes);
+    }
+
+    Ok(())
+}
