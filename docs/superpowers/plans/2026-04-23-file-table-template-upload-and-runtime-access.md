@@ -58,7 +58,7 @@
 - Modify: `api/crates/control-plane/src/_tests/mod.rs`
 - Modify: `api/crates/control-plane/src/_tests/support.rs`
 
-- [ ] **Step 1: Write the failing provisioning tests for builtin and workspace file tables**
+- [x] **Step 1: Write the failing provisioning tests for builtin and workspace file tables**
 
 Create `api/crates/control-plane/src/_tests/file_management_bootstrap_tests.rs`:
 
@@ -134,7 +134,7 @@ async fn workspace_file_tables_reuse_the_same_template_and_default_storage() {
 }
 ```
 
-- [ ] **Step 2: Run the focused provisioning tests to verify they fail**
+- [x] **Step 2: Run the focused provisioning tests to verify they fail**
 
 Run:
 
@@ -146,7 +146,7 @@ Expected:
 
 - FAIL because the template helpers, bootstrap service, and provisioning service do not exist yet.
 
-- [ ] **Step 3: Implement the fixed template and provisioning helpers**
+- [x] **Step 3: Implement the fixed template and provisioning helpers**
 
 Create `api/crates/control-plane/src/file_management/template.rs`:
 
@@ -400,7 +400,7 @@ impl MemoryProvisioningRepository {
 }
 ```
 
-- [ ] **Step 4: Re-run the focused provisioning tests**
+- [x] **Step 4: Re-run the focused provisioning tests**
 
 Run:
 
@@ -412,7 +412,7 @@ Expected:
 
 - PASS with the fixed field codes in order and `attachments` bootstrap idempotent.
 
-- [ ] **Step 5: Commit the provisioning layer**
+- [x] **Step 5: Commit the provisioning layer**
 
 ```bash
 git add api/crates/control-plane api/crates/storage-postgres
