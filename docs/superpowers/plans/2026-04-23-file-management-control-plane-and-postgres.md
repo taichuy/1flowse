@@ -51,7 +51,7 @@
 - Modify: `api/crates/access-control/src/catalog.rs`
 - Modify: `api/crates/access-control/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write the failing permission-catalog tests**
+- [x] **Step 1: Write the failing permission-catalog tests**
 
 Create `api/crates/access-control/src/_tests/catalog_file_management_tests.rs`:
 
@@ -82,7 +82,7 @@ mod catalog_file_management_tests;
 mod catalog_tests;
 ```
 
-- [ ] **Step 2: Run the focused permission-catalog test to verify it fails**
+- [x] **Step 2: Run the focused permission-catalog test to verify it fails**
 
 Run:
 
@@ -94,7 +94,7 @@ Expected:
 
 - FAIL because the catalog does not yet contain `file_storage` or `file_table` resources.
 
-- [ ] **Step 3: Add domain record types and the new permission resources**
+- [x] **Step 3: Add domain record types and the new permission resources**
 
 Create `api/crates/domain/src/file_management.rs`:
 
@@ -193,7 +193,7 @@ Update `api/crates/access-control/src/catalog.rs`:
     );
 ```
 
-- [ ] **Step 4: Re-run the focused permission-catalog test**
+- [x] **Step 4: Re-run the focused permission-catalog test**
 
 Run:
 
@@ -205,7 +205,7 @@ Expected:
 
 - PASS with the new file-management codes present exactly once.
 
-- [ ] **Step 5: Commit the domain and ACL foundation**
+- [x] **Step 5: Commit the domain and ACL foundation**
 
 ```bash
 git add api/crates/domain api/crates/access-control

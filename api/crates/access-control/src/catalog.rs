@@ -126,6 +126,21 @@ pub fn permission_catalog() -> Vec<PermissionDefinition> {
     );
     push_permissions(
         &mut permissions,
+        "file_storage",
+        &[("view", &["all"]), ("manage", &["all"])],
+    );
+    push_permissions(
+        &mut permissions,
+        "file_table",
+        &[
+            ("view", &["own", "all"]),
+            ("create", &["all"]),
+            ("delete", &["own", "all"]),
+            ("bind", &["all"]),
+        ],
+    );
+    push_permissions(
+        &mut permissions,
         "user",
         &[("view", &["all"]), ("manage", &["all"])],
     );
