@@ -174,6 +174,11 @@ vi.mock('@1flowbase/api-client', () => ({
   installConsoleOfficialPlugin: vi.fn().mockResolvedValue({
     installation: { id: 'installation-1' }
   }),
+  fetchConsoleFileStorages: vi.fn().mockResolvedValue([]),
+  createConsoleFileStorage: vi.fn().mockResolvedValue({ id: 'storage-1' }),
+  fetchConsoleFileTables: vi.fn().mockResolvedValue([]),
+  createConsoleFileTable: vi.fn().mockResolvedValue({ id: 'table-1' }),
+  updateConsoleFileTableBinding: vi.fn().mockResolvedValue({ id: 'table-1' }),
   uploadConsolePluginPackage: vi.fn().mockResolvedValue({
     installation: { id: 'installation-upload' }
   }),
@@ -224,6 +229,11 @@ import {
   listConsolePluginFamilies,
   listConsoleOfficialPluginCatalog,
   installConsoleOfficialPlugin,
+  fetchConsoleFileStorages,
+  createConsoleFileStorage,
+  fetchConsoleFileTables,
+  createConsoleFileTable,
+  updateConsoleFileTableBinding,
   uploadConsolePluginPackage,
   upgradeConsolePluginFamilyLatest,
   switchConsolePluginFamilyVersion,
@@ -303,6 +313,15 @@ import {
   switchSettingsPluginFamilyVersion,
   fetchSettingsPluginTask
 } from '../plugins';
+import {
+  settingsFileStoragesQueryKey,
+  settingsFileTablesQueryKey,
+  fetchSettingsFileStorages,
+  createSettingsFileStorage,
+  fetchSettingsFileTables,
+  createSettingsFileTable,
+  updateSettingsFileTableBinding
+} from '../file-management';
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -829,5 +848,52 @@ describe('settings api wrappers', () => {
       'csrf-123'
     );
     expect(getConsolePluginTask).toHaveBeenCalledWith('task-1');
+  });
+
+  test('forwards file management query keys and request helpers', async () => {
+    const storageInput = {
+      code: 'local-default',
+      title: 'Local Default',
+      driver_type: 'local',
+      enabled: true,
+      is_default: true,
+      config_json: {
+        root_path: '/srv/files'
+      },
+      rule_json: {}
+    };
+    const tableInput = {
+      code: 'workspace_assets',
+      title: 'Workspace Assets'
+    };
+    const bindingInput = {
+      bound_storage_id: 'storage-2'
+    };
+
+    expect(settingsFileStoragesQueryKey).toEqual([
+      'settings',
+      'files',
+      'storages'
+    ]);
+    expect(settingsFileTablesQueryKey).toEqual(['settings', 'files', 'tables']);
+
+    await fetchSettingsFileStorages();
+    await createSettingsFileStorage(storageInput as never, 'csrf-123');
+    await fetchSettingsFileTables();
+    await createSettingsFileTable(tableInput as never, 'csrf-123');
+    await updateSettingsFileTableBinding('table-1', bindingInput, 'csrf-123');
+
+    expect(fetchConsoleFileStorages).toHaveBeenCalledTimes(1);
+    expect(createConsoleFileStorage).toHaveBeenCalledWith(
+      storageInput,
+      'csrf-123'
+    );
+    expect(fetchConsoleFileTables).toHaveBeenCalledTimes(1);
+    expect(createConsoleFileTable).toHaveBeenCalledWith(tableInput, 'csrf-123');
+    expect(updateConsoleFileTableBinding).toHaveBeenCalledWith(
+      'table-1',
+      bindingInput,
+      'csrf-123'
+    );
   });
 });

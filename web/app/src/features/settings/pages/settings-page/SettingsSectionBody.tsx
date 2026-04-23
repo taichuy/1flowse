@@ -3,15 +3,20 @@ import { MemberManagementPanel } from '../../components/MemberManagementPanel';
 import { RolePermissionPanel } from '../../components/RolePermissionPanel';
 import { SystemRuntimePanel } from '../../components/SystemRuntimePanel';
 import type { SettingsSectionKey } from '../../lib/settings-sections';
+import { SettingsFilesSection } from './SettingsFilesSection';
 import { SettingsModelProvidersSection } from './SettingsModelProvidersSection';
 
 export function SettingsSectionBody({
   sectionKey,
+  isRoot,
+  permissions,
   canManageMembers,
   canManageRoles,
   canManageModelProviders
 }: {
   sectionKey: SettingsSectionKey;
+  isRoot: boolean;
+  permissions: string[];
   canManageMembers: boolean;
   canManageRoles: boolean;
   canManageModelProviders: boolean;
@@ -26,6 +31,8 @@ export function SettingsSectionBody({
       );
     case 'system-runtime':
       return <SystemRuntimePanel />;
+    case 'files':
+      return <SettingsFilesSection isRoot={isRoot} permissions={permissions} />;
     case 'model-providers':
       return (
         <SettingsModelProvidersSection canManage={canManageModelProviders} />

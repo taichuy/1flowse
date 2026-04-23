@@ -50,6 +50,8 @@ export function SettingsPage({
       {activeSection ? (
         <SettingsSectionBody
           sectionKey={activeSection.key}
+          isRoot={isRoot}
+          permissions={permissions}
           canManageMembers={canManageMembers}
           canManageRoles={canManageRoles}
           canManageModelProviders={canManageModelProviders}

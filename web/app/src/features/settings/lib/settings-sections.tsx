@@ -3,6 +3,7 @@ import type { SectionNavItem } from '../../../shared/ui/section-page-layout/Sect
 export type SettingsSectionKey =
   | 'docs'
   | 'system-runtime'
+  | 'files'
   | 'model-providers'
   | 'members'
   | 'roles';
@@ -27,6 +28,16 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
     label: '系统运行',
     to: '/settings/system-runtime',
     requiredPermissions: ['system_runtime.view.all']
+  },
+  {
+    key: 'files',
+    label: '文件管理',
+    to: '/settings/files',
+    requiredPermissions: [
+      'file_table.view.all',
+      'file_table.view.own',
+      'file_table.create.all'
+    ]
   },
   {
     key: 'model-providers',

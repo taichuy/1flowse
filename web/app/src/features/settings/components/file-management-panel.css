@@ -1,0 +1,118 @@
+.file-management-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+}
+
+.file-management-panel__header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-management-panel__header .ant-typography {
+  margin-bottom: 0;
+}
+
+.file-management-panel__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.file-management-panel__summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 120px;
+  padding: 18px 20px;
+  border: 1px solid rgba(5, 46, 22, 0.08);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top right, rgba(22, 119, 255, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 1));
+}
+
+.file-management-panel__summary-item .ant-typography {
+  margin-bottom: 0;
+}
+
+.file-management-panel__section {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px 24px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.04);
+}
+
+.file-management-panel__section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.file-management-panel__section-header .ant-typography {
+  margin-bottom: 0;
+}
+
+.file-management-panel__form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
+.file-management-panel__driver-fields {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
+.file-management-panel__form-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  grid-column: 1 / -1;
+}
+
+.file-management-panel__switch-item {
+  min-width: 120px;
+  margin-bottom: 0;
+}
+
+.file-management-panel__entity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-management-panel__entity .ant-typography {
+  margin-bottom: 0;
+}
+
+.file-management-panel__action-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+}
+
+@media (max-width: 960px) {
+  .file-management-panel__form-grid,
+  .file-management-panel__driver-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .file-management-panel__form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .file-management-panel__summary-item {
+    min-height: auto;
+  }
+}

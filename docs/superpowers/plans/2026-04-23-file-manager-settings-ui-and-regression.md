@@ -10,6 +10,13 @@
 
 **Source Discussion:** Approved by the current file-manager storage spec; the settings console is the first operator surface for file storages and file tables.
 
+**Execution Status (2026-04-24):** Completed.
+
+**Implementation Notes (2026-04-24)**
+- The binding endpoint used by the shared client and the settings console is `PUT /api/console/file-tables/{file_table_id}/binding`.
+- `ConsoleFileTable.bound_storage_title` is nullable and is returned from backend responses to support workspace-mode read-only rendering.
+- Final regression artifacts are saved locally under `tmp/test-governance/file-manager/` and remain ignored from git.
+
 ---
 
 ## File Structure
@@ -47,7 +54,7 @@
 - Create: `web/app/src/features/settings/api/file-management.ts`
 - Modify: `web/packages/api-client/src/index.ts`
 
-- [ ] **Step 1: Write the failing client-contract tests**
+- [x] **Step 1: Write the failing client-contract tests**
 
 Create `web/packages/api-client/src/_tests/console-file-management.test.ts`:
 
@@ -78,12 +85,12 @@ describe('console-file-management client', () => {
     });
   });
 
-  test('updateConsoleFileTableBinding posts to the binding route', async () => {
+  test('updateConsoleFileTableBinding puts to the binding route', async () => {
     await expect(
       updateConsoleFileTableBinding('table-1', { bound_storage_id: 'storage-1' })
     ).resolves.toMatchObject({
       path: '/api/console/file-tables/table-1/binding',
-      method: 'POST'
+      method: 'PUT'
     });
   });
 
@@ -106,7 +113,7 @@ describe('console-file-management client', () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused API-client test to verify it fails**
+- [x] **Step 2: Run the focused API-client test to verify it fails**
 
 Run:
 
@@ -118,7 +125,7 @@ Expected:
 
 - FAIL because the shared file-management client file does not exist yet.
 
-- [ ] **Step 3: Implement the shared client and settings API wrappers**
+- [x] **Step 3: Implement the shared client and settings API wrappers**
 
 Create `web/packages/api-client/src/console-file-management.ts`:
 
@@ -144,7 +151,7 @@ export interface ConsoleFileTable {
   scope_kind: 'system' | 'workspace';
   scope_id: string;
   bound_storage_id: string;
-  bound_storage_title: string;
+  bound_storage_title: string | null;
   is_builtin: boolean;
   is_default: boolean;
 }
@@ -194,7 +201,7 @@ export function updateConsoleFileTableBinding(
 ) {
   return apiFetch<ConsoleFileTable>({
     path: `/api/console/file-tables/${fileTableId}/binding`,
-    method: 'POST',
+    method: 'PUT',
     body,
     baseUrl
   });
@@ -235,7 +242,7 @@ export {
 };
 ```
 
-- [ ] **Step 4: Re-run the focused API-client test**
+- [x] **Step 4: Re-run the focused API-client test**
 
 Run:
 
@@ -247,7 +254,7 @@ Expected:
 
 - PASS with the shared client pointing to the approved routes.
 
-- [ ] **Step 5: Commit the frontend API contract layer**
+- [x] **Step 5: Commit the frontend API contract layer**
 
 ```bash
 git add web/packages/api-client web/app/src/features/settings/api/file-management.ts
@@ -265,7 +272,7 @@ git commit -m "feat: add file management api clients"
 - Modify: `web/app/src/features/settings/_tests/settings-page.test.tsx`
 - Modify: `web/app/src/routes/_tests/section-shell-routing.test.tsx`
 
-- [ ] **Step 1: Write the failing settings-shell tests**
+- [x] **Step 1: Write the failing settings-shell tests**
 
 Add to `web/app/src/features/settings/_tests/settings-page.test.tsx`:
 
@@ -300,7 +307,7 @@ Add to `web/app/src/routes/_tests/section-shell-routing.test.tsx`:
   });
 ```
 
-- [ ] **Step 2: Run the focused settings-shell tests to verify they fail**
+- [x] **Step 2: Run the focused settings-shell tests to verify they fail**
 
 Run:
 
@@ -312,7 +319,7 @@ Expected:
 
 - FAIL because the `files` section is not registered anywhere yet.
 
-- [ ] **Step 3: Register the new settings section and route**
+- [x] **Step 3: Register the new settings section and route**
 
 Create `web/app/src/features/settings/pages/settings-page/SettingsFilesSection.tsx`:
 
@@ -402,7 +409,7 @@ Update `web/app/src/features/settings/pages/SettingsPage.tsx`:
   />
 ```
 
-- [ ] **Step 4: Re-run the focused settings-shell tests**
+- [x] **Step 4: Re-run the focused settings-shell tests**
 
 Run:
 
@@ -415,7 +422,7 @@ Expected:
 
 - PASS with `/settings/files` routable for root users and correctly hidden when unavailable.
 
-- [ ] **Step 5: Commit the settings-shell integration**
+- [x] **Step 5: Commit the settings-shell integration**
 
 ```bash
 git add web/app/src/app/router.tsx web/app/src/features/settings
@@ -429,7 +436,7 @@ git commit -m "feat: add file management settings section"
 - Create: `web/app/src/features/settings/components/file-management-panel.css`
 - Create: `web/app/src/features/settings/_tests/file-management-page.test.tsx`
 
-- [ ] **Step 1: Write the failing panel behavior tests**
+- [x] **Step 1: Write the failing panel behavior tests**
 
 Create `web/app/src/features/settings/_tests/file-management-page.test.tsx`:
 
@@ -474,7 +481,7 @@ describe('FileManagementPanel', () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused panel test to verify it fails**
+- [x] **Step 2: Run the focused panel test to verify it fails**
 
 Run:
 
@@ -486,7 +493,7 @@ Expected:
 
 - FAIL because the file-management panel component does not exist yet.
 
-- [ ] **Step 3: Implement the combined panel with explicit root/workspace states**
+- [x] **Step 3: Implement the combined panel with explicit root/workspace states**
 
 Create `web/app/src/features/settings/components/FileManagementPanel.tsx`:
 
@@ -597,7 +604,7 @@ Create `web/app/src/features/settings/components/file-management-panel.css`:
 }
 ```
 
-- [ ] **Step 4: Re-run the focused panel test**
+- [x] **Step 4: Re-run the focused panel test**
 
 Run:
 
@@ -609,7 +616,7 @@ Expected:
 
 - PASS with root mode showing both cards and workspace mode hiding storage creation controls.
 
-- [ ] **Step 5: Commit the file-management panel**
+- [x] **Step 5: Commit the file-management panel**
 
 ```bash
 git add web/app/src/features/settings/components web/app/src/features/settings/_tests/file-management-page.test.tsx
@@ -621,7 +628,7 @@ git commit -m "feat: add file management settings panel"
 **Files:**
 - Modify: `tmp/test-governance/.gitkeep`
 
-- [ ] **Step 1: Create the regression output directory if it does not already exist**
+- [x] **Step 1: Create the regression output directory if it does not already exist**
 
 Run:
 
@@ -634,37 +641,37 @@ Expected:
 
 - The directory exists for saved verification outputs and future coverage artifacts.
 
-- [ ] **Step 2: Run the targeted backend and frontend regression suite**
+- [x] **Step 2: Run the targeted backend and frontend regression suite**
 
 Run:
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p storage-object -- --nocapture | tee tmp/test-governance/file-manager/storage-object.log
-cargo test --manifest-path api/Cargo.toml -p control-plane file_management_ -- --nocapture | tee tmp/test-governance/file-manager/control-plane.log
-cargo test --manifest-path api/Cargo.toml -p api-server file_management_routes -- --nocapture | tee tmp/test-governance/file-manager/api-server.log
-pnpm --dir web --filter @1flowbase/api-client test -- src/_tests/console-file-management.test.ts | tee tmp/test-governance/file-manager/api-client.log
-pnpm --dir web --filter @1flowbase/web test -- src/features/settings/_tests/settings-page.test.tsx | tee tmp/test-governance/file-manager/settings-page.log
-pnpm --dir web --filter @1flowbase/web test -- src/features/settings/_tests/file-management-page.test.tsx | tee tmp/test-governance/file-manager/file-management-page.log
+cargo test --manifest-path api/Cargo.toml -p access-control permission_catalog_includes_file_management_resources -- --nocapture | tee tmp/test-governance/file-manager/access-control-file-management.log
+cargo test --manifest-path api/Cargo.toml -p control-plane file_management_ -- --nocapture | tee tmp/test-governance/file-manager/control-plane-file-management.log
+cargo test --manifest-path api/Cargo.toml -p api-server file_management_routes -- --nocapture | tee tmp/test-governance/file-manager/api-server-file-management-routes.log
+pnpm --dir web --filter @1flowbase/api-client test -- src/_tests/console-file-management.test.ts | tee tmp/test-governance/file-manager/web-api-client-file-management.log
+pnpm --dir web/app test -- src/features/settings/api/_tests/settings-api.test.ts src/features/settings/_tests/settings-page.test.tsx src/routes/_tests/section-shell-routing.test.tsx src/features/settings/_tests/file-management-page.test.tsx | tee tmp/test-governance/file-manager/web-settings-file-management.log
 ```
 
 Expected:
 
 - PASS for all six commands, with logs saved under `tmp/test-governance/file-manager/`.
 
-- [ ] **Step 3: Run one focused OpenAPI and routing regression**
+- [x] **Step 3: Run one focused OpenAPI and routing regression**
 
 Run:
 
 ```bash
-cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment -- --nocapture | tee tmp/test-governance/file-manager/openapi.log
-pnpm --dir web --filter @1flowbase/web test -- src/routes/_tests/section-shell-routing.test.tsx | tee tmp/test-governance/file-manager/section-routing.log
+cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment -- --nocapture | tee tmp/test-governance/file-manager/api-server-openapi-alignment.log
+cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes -- --nocapture | tee tmp/test-governance/file-manager/api-server-runtime-model-routes.log
 ```
 
 Expected:
 
-- PASS with the new file-management routes documented and `/settings/files` integrated into the existing shell.
+- PASS with the new file-management routes documented and runtime CRUD regression still green after file-table provisioning changes.
 
-- [ ] **Step 4: Perform the final QA review using `qa-evaluation`**
+- [x] **Step 4: Perform the final QA review using `qa-evaluation`**
 
 Review with the `qa-evaluation` skill in task mode against these acceptance points:
 
@@ -679,8 +686,9 @@ Review with the `qa-evaluation` skill in task mode against these acceptance poin
 Expected:
 
 - A concise QA conclusion with evidence from the saved logs and no unsupported claims.
+- Observed on `2026-04-24`: no `Blocking` or `High` findings from the targeted regression set. Residual risk is limited frontend runtime evidence for `/settings/files`; current UI conclusion is based on Vitest route/component coverage rather than browser `page-debug` output.
 
-- [ ] **Step 5: Commit the console and regression closeout**
+- [x] **Step 5: Commit the console and regression closeout**
 
 ```bash
 git add web tmp/test-governance

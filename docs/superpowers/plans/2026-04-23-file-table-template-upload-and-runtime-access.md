@@ -10,6 +10,13 @@
 
 **Source Discussion:** Approved by the current file-manager storage spec; upload stays `Browser -> API Server -> storage-object driver` in V1.
 
+**Execution Status (2026-04-24):** Completed.
+
+**Implementation Notes (2026-04-24)**
+- File-table binding mutation is exposed as `PUT /api/console/file-tables/{file_table_id}/binding` and reused by the settings console.
+- `FileTableResponse` includes `bound_storage_title: Option<String>` so workspace-level settings can display the current storage label as read-only state.
+- Focused regressions passed with `cargo test --manifest-path api/Cargo.toml -p control-plane file_management_upload_tests -- --nocapture`, `cargo test --manifest-path api/Cargo.toml -p api-server file_management_routes -- --nocapture`, `cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment -- --nocapture`, and `cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes -- --nocapture`.
+
 ---
 
 ## File Structure
@@ -640,7 +647,7 @@ git commit -m "feat: bootstrap file management at api startup"
 - Modify: `api/apps/api-server/src/routes/settings/mod.rs`
 - Modify: `api/apps/api-server/src/openapi.rs`
 
-- [ ] **Step 1: Write the failing upload and content-route tests**
+- [x] **Step 1: Write the failing upload and content-route tests**
 
 Create `api/apps/api-server/src/_tests/file_management_routes.rs`:
 
@@ -697,7 +704,7 @@ async fn file_content_route_reads_by_record_storage_snapshot() {
 }
 ```
 
-- [ ] **Step 2: Run the focused route tests to verify they fail**
+- [x] **Step 2: Run the focused route tests to verify they fail**
 
 Run:
 
@@ -709,7 +716,7 @@ Expected:
 
 - FAIL because the new routes and upload service do not exist yet.
 
-- [ ] **Step 3: Implement the upload orchestrator and route handlers**
+- [x] **Step 3: Implement the upload orchestrator and route handlers**
 
 Create `api/crates/control-plane/src/file_management/upload_service.rs`:
 
@@ -993,7 +1000,7 @@ pub use files_group as files;
 pub use settings_group::{docs, file_storages, file_tables, members, permissions, roles, system, workspace, workspaces};
 ```
 
-- [ ] **Step 4: Re-run the focused route tests**
+- [x] **Step 4: Re-run the focused route tests**
 
 Run:
 
@@ -1005,7 +1012,7 @@ Expected:
 
 - PASS with `/api/console/files/upload` returning `201` and the content route no longer returning `501` or missing-route errors.
 
-- [ ] **Step 5: Commit the file-management APIs**
+- [x] **Step 5: Commit the file-management APIs**
 
 ```bash
 git add api/crates/control-plane api/apps/api-server
@@ -1017,7 +1024,7 @@ git commit -m "feat: add file management upload and content routes"
 **Files:**
 - Modify: `api/apps/api-server/src/openapi.rs`
 
-- [ ] **Step 1: Register the new route handlers and schemas in OpenAPI**
+- [x] **Step 1: Register the new route handlers and schemas in OpenAPI**
 
 Update `api/apps/api-server/src/openapi.rs`:
 
@@ -1039,7 +1046,7 @@ And add the response bodies:
         crate::routes::file_tables::FileTableResponse,
 ```
 
-- [ ] **Step 2: Run the focused backend regression set**
+- [x] **Step 2: Run the focused backend regression set**
 
 Run:
 
@@ -1053,7 +1060,7 @@ Expected:
 
 - PASS with provisioning, upload, route registration, and OpenAPI alignment all green.
 
-- [ ] **Step 3: Run one runtime regression to ensure dynamic record CRUD still works**
+- [x] **Step 3: Run one runtime regression to ensure dynamic record CRUD still works**
 
 Run:
 
@@ -1065,7 +1072,7 @@ Expected:
 
 - PASS, proving the new file-table provisioning still fits the existing runtime engine behavior.
 
-- [ ] **Step 4: Review the diff for forbidden scope changes**
+- [x] **Step 4: Review the diff for forbidden scope changes**
 
 Run:
 
@@ -1079,7 +1086,7 @@ Expected:
 - No `api/plugins` references in business-file code paths.
 - Content read still depends on record-level `storage_id`.
 
-- [ ] **Step 5: Commit the completed backend runtime slice**
+- [x] **Step 5: Commit the completed backend runtime slice**
 
 ```bash
 git add api/crates/control-plane api/apps/api-server
