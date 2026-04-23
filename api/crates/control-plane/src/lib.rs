@@ -5,6 +5,7 @@ pub mod audit;
 pub mod auth;
 pub mod bootstrap;
 pub mod capability_plugin_runtime;
+pub mod data_source;
 pub mod errors;
 pub mod flow;
 pub mod host_extension;

@@ -55,7 +55,7 @@
 - Modify: `api/crates/control-plane/src/lib.rs`
 - Create: `api/crates/control-plane/src/_tests/data_source_service_tests.rs`
 
-- [ ] **Step 1: Write failing service tests for instance validation and preview**
+- [x] **Step 1: Write failing service tests for instance validation and preview**
 
 Create `api/crates/control-plane/src/_tests/data_source_service_tests.rs` with a repository stub and runtime stub:
 
@@ -93,7 +93,7 @@ async fn validate_instance_updates_status_and_catalog_cache() {
 }
 ```
 
-- [ ] **Step 2: Run the focused control-plane test to verify failure**
+- [x] **Step 2: Run the focused control-plane test to verify failure**
 
 Run:
 
@@ -105,7 +105,7 @@ Expected:
 
 - FAIL because the domain records, service, and ports do not exist yet.
 
-- [ ] **Step 3: Add the new records, repository port, runtime port, and service**
+- [x] **Step 3: Add the new records, repository port, runtime port, and service**
 
 Create `api/crates/domain/src/data_source.rs` with the V1 record set:
 
@@ -230,7 +230,7 @@ where
 }
 ```
 
-- [ ] **Step 4: Re-run the control-plane data-source tests**
+- [x] **Step 4: Re-run the control-plane data-source tests**
 
 Run:
 

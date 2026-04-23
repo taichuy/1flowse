@@ -4,6 +4,7 @@ pub mod application;
 pub mod audit;
 pub mod auth;
 pub mod base;
+pub mod data_source;
 pub mod flow;
 pub mod model_provider;
 pub mod modeling;
@@ -24,6 +25,10 @@ pub use auth::{
     RoleTemplate, SessionRecord, UserAuthIdentity, UserRecord, UserStatus,
 };
 pub use base::BaseFields;
+pub use data_source::{
+    DataSourceCatalogCacheRecord, DataSourceCatalogRefreshStatus, DataSourceInstanceRecord,
+    DataSourceInstanceStatus, DataSourcePreviewSessionRecord, DataSourceSecretRecord,
+};
 pub use flow::{
     default_flow_document, FlowChangeKind, FlowDraftRecord, FlowEditorState, FlowRecord,
     FlowVersionRecord, FlowVersionTrigger, FLOW_AUTOSAVE_INTERVAL_SECONDS, FLOW_HISTORY_LIMIT,
