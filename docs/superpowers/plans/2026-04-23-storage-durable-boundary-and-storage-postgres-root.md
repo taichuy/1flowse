@@ -150,7 +150,7 @@ git commit -m "feat: add storage-postgres crate root"
 - Create: `api/crates/storage-durable/src/_tests/runtime_tests.rs`
 - Modify: `api/Cargo.toml`
 
-- [ ] **Step 1: Write the failing public-surface tests**
+- [x] **Step 1: Write the failing public-surface tests**
 
 Create `api/crates/storage-durable/src/_tests/runtime_tests.rs`:
 
@@ -183,7 +183,7 @@ Wire it in `api/crates/storage-durable/src/_tests/mod.rs`:
 mod runtime_tests;
 ```
 
-- [ ] **Step 2: Run the focused test to verify it fails**
+- [x] **Step 2: Run the focused test to verify it fails**
 
 Run:
 
@@ -195,7 +195,7 @@ Expected:
 
 - FAIL because the crate and exports do not exist yet.
 
-- [ ] **Step 3: Implement the durable capability surface**
+- [x] **Step 3: Implement the durable capability surface**
 
 Create `api/crates/storage-durable/src/backend_kind.rs`:
 
@@ -261,7 +261,7 @@ pub fn crate_name() -> &'static str {
 }
 ```
 
-- [ ] **Step 4: Re-run the durable crate tests**
+- [x] **Step 4: Re-run the durable crate tests**
 
 Run:
 
@@ -273,7 +273,7 @@ Expected:
 
 - PASS with `DurableBackendKind`, `MainDurableStore`, and the PostgreSQL builder exported.
 
-- [ ] **Step 5: Commit the durable capability crate**
+- [x] **Step 5: Commit the durable capability crate**
 
 ```bash
 git add api/Cargo.toml api/crates/storage-durable

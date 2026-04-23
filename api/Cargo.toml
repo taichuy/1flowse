@@ -12,6 +12,7 @@ members = [
   "crates/plugin-framework",
   "crates/storage-pg",
   "crates/storage-postgres",
+  "crates/storage-durable",
   "crates/storage-ephemeral",
   "crates/storage-object",
   "crates/observability"
