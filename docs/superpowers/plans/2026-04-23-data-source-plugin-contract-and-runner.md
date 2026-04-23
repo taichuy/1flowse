@@ -38,7 +38,7 @@
 - Create: `api/crates/plugin-framework/src/_tests/data_source_package_tests.rs`
 - Modify: `api/crates/plugin-framework/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write failing fixture tests for the new package shape**
+- [x] **Step 1: Write failing fixture tests for the new package shape**
 
 Create `api/crates/plugin-framework/src/_tests/data_source_package_tests.rs` with a temp-package fixture similar to the provider-package tests:
 
@@ -127,7 +127,7 @@ mod data_source_contract_tests;
 mod data_source_package_tests;
 ```
 
-- [ ] **Step 2: Run the new plugin-framework tests to verify failure**
+- [x] **Step 2: Run the new plugin-framework tests to verify failure**
 
 Run:
 
@@ -139,7 +139,7 @@ Expected:
 
 - FAIL because `DataSourcePackage` and `data_source_contract` do not exist yet.
 
-- [ ] **Step 3: Implement the dedicated data-source contract and package loader**
+- [x] **Step 3: Implement the dedicated data-source contract and package loader**
 
 Create `api/crates/plugin-framework/src/data_source_contract.rs` with a dedicated runtime protocol:
 
@@ -207,7 +207,7 @@ if manifest.runtime.protocol != "stdio_json" { ... }
 
 Export both from `api/crates/plugin-framework/src/lib.rs`.
 
-- [ ] **Step 4: Re-run the new plugin-framework tests**
+- [x] **Step 4: Re-run the new plugin-framework tests**
 
 Run:
 
@@ -220,7 +220,7 @@ Expected:
 
 - PASS with the new contract and package loader rooted.
 
-- [ ] **Step 5: Commit the plugin-framework contract root**
+- [x] **Step 5: Commit the plugin-framework contract root**
 
 ```bash
 git add api/crates/plugin-framework

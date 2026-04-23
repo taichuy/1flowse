@@ -327,7 +327,13 @@ fn validate_required_auth(required_auth: &[String]) -> FrameworkResult<()> {
 fn validate_contract_version(manifest: &PluginManifestV1) -> FrameworkResult<()> {
     let expected = match manifest.consumption_kind {
         PluginConsumptionKind::HostExtension => "1flowbase.host_extension/v1",
-        PluginConsumptionKind::RuntimeExtension => "1flowbase.provider/v1",
+        PluginConsumptionKind::RuntimeExtension => {
+            if manifest.slot_codes.iter().any(|slot| slot == "data_source") {
+                "1flowbase.data_source/v1"
+            } else {
+                "1flowbase.provider/v1"
+            }
+        }
         PluginConsumptionKind::CapabilityPlugin => "1flowbase.capability/v1",
     };
 
