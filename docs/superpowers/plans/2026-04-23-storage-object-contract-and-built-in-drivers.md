@@ -50,7 +50,7 @@
 - Modify: `api/crates/storage-object/Cargo.toml`
 - Modify: `api/Cargo.toml`
 
-- [ ] **Step 1: Write the failing registry contract tests**
+- [x] **Step 1: Write the failing registry contract tests**
 
 Create `api/crates/storage-object/src/_tests/driver_registry_tests.rs`:
 
@@ -89,7 +89,7 @@ mod local_driver_tests;
 mod rustfs_driver_tests;
 ```
 
-- [ ] **Step 2: Run the focused test to verify it fails**
+- [x] **Step 2: Run the focused test to verify it fails**
 
 Run:
 
@@ -101,7 +101,7 @@ Expected:
 
 - FAIL because the registry, error type, and driver exports do not exist yet.
 
-- [ ] **Step 3: Implement the shared driver contract, typed payloads, and registry**
+- [x] **Step 3: Implement the shared driver contract, typed payloads, and registry**
 
 Add workspace dependencies in `api/Cargo.toml`:
 
@@ -294,7 +294,7 @@ pub fn crate_name() -> &'static str {
 mod _tests;
 ```
 
-- [ ] **Step 4: Re-run the focused registry tests**
+- [x] **Step 4: Re-run the focused registry tests**
 
 Run:
 
@@ -306,7 +306,7 @@ Expected:
 
 - PASS with the registry returning `local` and `rustfs` in sorted order.
 
-- [ ] **Step 5: Commit the contract root**
+- [x] **Step 5: Commit the contract root**
 
 ```bash
 git add api/Cargo.toml api/crates/storage-object
