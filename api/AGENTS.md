@@ -14,7 +14,7 @@
 - `crates/access-control` 放权限目录、内建角色、权限校验。
 - `crates/runtime-core` 放 runtime registry 与 runtime CRUD 核心。
 - `crates/plugin-framework` 放插件消费类型、绑定约束、插件边界。
-- `crates/storage-durable` 放平台主存储边界、主存储启动入口与健康检查入口。
+- `crates/storage-durable` 放平台主存储边界、主存储启动入口与健康检查入口；只暴露宿主消费的稳定入口。
 - `crates/storage-postgres` 放 PostgreSQL `repository impl`、查询、事务、`migrations`、存储层 `mapper`。
 - `crates/storage-ephemeral` 放非持久 session store、短期协同原语与可选 backend 适配。
 - `crates/storage-object` 是对象存储边界。
@@ -33,6 +33,7 @@
 - `crates/storage-postgres/src/*_repository.rs`、`crates/storage-ephemeral/src/*` 只实现存储或短期协同端口，不承载 HTTP 语义。
 - actor / scope 过滤型查询属于持久化查询职责；状态流转、权限决策、审计写入属于 `control-plane`。
 - `crates/storage-postgres/src/mappers` 只做存储模型与领域模型转换，不承载业务规则。
+- 主仓 durable 后端官方只支持 PostgreSQL；不要把额外 durable backend 塞进主存储边界。
 - session 必须显式持有 `tenant_id` 与 `current_workspace_id`。
 - 单个请求链路只允许落在一个显式 `workspace` 上下文。
 - `root/system` 与业务 `workspace` 严格分离。
