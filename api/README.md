@@ -5,7 +5,8 @@
 - `apps/api-server`: Axum HTTP entrypoint for public, console, and runtime routes
 - `crates/control-plane`: backend application services and permission-checked state transitions
 - `crates/runtime-core`: runtime resource descriptors, registries, and capability slot engine
-- `crates/storage-pg`: Postgres-backed repository implementations and migrations
+- `crates/storage-durable`: Main durable storage boundary used by API-server and other hosts
+- `crates/storage-postgres`: PostgreSQL-backed repository implementations and migrations
 - `crates/storage-ephemeral`: non-durable session and ephemeral coordination adapters
 
 ## Verification

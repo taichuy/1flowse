@@ -226,7 +226,7 @@ git commit -m "refactor: replace storage-pg with storage-postgres"
 - Modify: `api/README.md`
 - Modify: `api/AGENTS.md`
 
-- [ ] **Step 1: Add a docs grep check for the old durable name**
+- [x] **Step 1: Add a docs grep check for the old durable name**
 
 Run:
 
@@ -238,7 +238,7 @@ Expected:
 
 - FAIL with hits showing the docs still point at the old name.
 
-- [ ] **Step 2: Update the local docs and rules**
+- [x] **Step 2: Update the local docs and rules**
 
 In `api/README.md`, change the durable crate description to:
 
@@ -256,7 +256,7 @@ In `api/AGENTS.md`, update the durable rules to:
 - `storage-postgres/migrations` 只放 PostgreSQL 数据库迁移。
 ```
 
-- [ ] **Step 3: Re-run the docs grep**
+- [x] **Step 3: Re-run the docs grep**
 
 Run:
 
@@ -268,7 +268,7 @@ Expected:
 
 - No hits in the local API docs or rules.
 
-- [ ] **Step 4: Run a final API-server smoke check**
+- [x] **Step 4: Run a final API-server smoke check**
 
 Run:
 
@@ -280,7 +280,7 @@ Expected:
 
 - PASS with docs and code pointing at the same durable boundary names.
 
-- [ ] **Step 5: Commit the docs cleanup**
+- [x] **Step 5: Commit the docs cleanup**
 
 ```bash
 git add api/README.md api/AGENTS.md

@@ -14,7 +14,8 @@
 - `crates/access-control` 放权限目录、内建角色、权限校验。
 - `crates/runtime-core` 放 runtime registry 与 runtime CRUD 核心。
 - `crates/plugin-framework` 放插件消费类型、绑定约束、插件边界。
-- `crates/storage-pg` 放 PostgreSQL `repository impl`、查询、事务、`migrations`、存储层 `mapper`。
+- `crates/storage-durable` 放平台主存储边界、主存储启动入口与健康检查入口。
+- `crates/storage-postgres` 放 PostgreSQL `repository impl`、查询、事务、`migrations`、存储层 `mapper`。
 - `crates/storage-ephemeral` 放非持久 session store、短期协同原语与可选 backend 适配。
 - `crates/storage-object` 是对象存储边界。
 - `crates/publish-gateway` 是发布网关边界。
@@ -29,9 +30,9 @@
 - `apps/api-server/src/middleware` 只做请求链路约束，不写业务状态变更。
 - `crates/control-plane/src/*.rs` 是业务边界；关键写动作只能从命名明确的 `service command` 进入。
 - `crates/control-plane/src/ports.rs` 统一定义 `repository trait` 与外部端口。
-- `crates/storage-pg/src/*_repository.rs`、`crates/storage-ephemeral/src/*` 只实现存储或短期协同端口，不承载 HTTP 语义。
+- `crates/storage-postgres/src/*_repository.rs`、`crates/storage-ephemeral/src/*` 只实现存储或短期协同端口，不承载 HTTP 语义。
 - actor / scope 过滤型查询属于持久化查询职责；状态流转、权限决策、审计写入属于 `control-plane`。
-- `crates/storage-pg/src/mappers` 只做存储模型与领域模型转换，不承载业务规则。
+- `crates/storage-postgres/src/mappers` 只做存储模型与领域模型转换，不承载业务规则。
 - session 必须显式持有 `tenant_id` 与 `current_workspace_id`。
 - 单个请求链路只允许落在一个显式 `workspace` 上下文。
 - `root/system` 与业务 `workspace` 严格分离。
@@ -48,20 +49,22 @@
 - workspace / tenant 只允许配置、绑定或消费宿主已安装能力。
 - `runtime extension` 的绑定目标只能是 `workspace` 或 `model`。
 - runtime 模型或字段对应物理表/列缺失时，必须标记不可用；不健康元数据不得继续进入 runtime registry。
+- 外部数据库、SaaS、API 数据源统一走 `data-source` runtime extension，不塞进 `storage-durable`。
+- data-source plugin 禁止注册 HTTP 接口，禁止直接写平台数据库，禁止自管 OAuth callback。
 
 ## Verification
 - 进入自检、验收、回归或交付阶段时，使用 `qa-evaluation` 并自行执行对应脚本。
 - 新增后端功能的 QA 结论必须覆盖 service 测试与 route 测试。
 - 同一工作区内 `cargo` 验证命令默认串行执行，不并发抢锁。
-- 修改 `storage-pg/migrations` 下历史 migration 文件后，数据库测试优先使用独立 schema，避免 `sqlx` migration checksum 污染共享 schema。
+- 修改 `storage-postgres/migrations` 下历史 migration 文件后，数据库测试优先使用独立 schema，避免 `sqlx` migration checksum 污染共享 schema。
 
 ## 新增资源最低模板
 - 新增关键写资源至少包含：
   - `apps/api-server/src/routes/<resource>.rs`
   - `crates/control-plane/src/<resource>.rs`
   - `crates/control-plane/src/ports.rs` 中对应的 `repository trait`
-  - `crates/storage-pg/src/<resource>_repository.rs` 或 `crates/storage-ephemeral/src/<resource>_repository.rs`
+  - `crates/storage-postgres/src/<resource>_repository.rs` 或 `crates/storage-ephemeral/src/<resource>_repository.rs`
   - 对应 `_tests`
 - `dto` 可定义在 route 模块内，不为凑结构拆空文件。
 - 只有存在存储层结构转换时才新增 `mapper`。
-- `storage-pg/migrations` 只放数据库迁移。
+- `storage-postgres/migrations` 只放数据库迁移。
