@@ -46,7 +46,7 @@
 - Modify: `api/crates/storage-postgres/src/lib.rs`
 - Modify: `api/crates/storage-postgres/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write the failing smoke test for the renamed crate**
+- [x] **Step 1: Write the failing smoke test for the renamed crate**
 
 Create `api/crates/storage-postgres/src/_tests/crate_smoke_tests.rs`:
 
@@ -63,7 +63,7 @@ And wire it in `api/crates/storage-postgres/src/_tests/mod.rs`:
 mod crate_smoke_tests;
 ```
 
-- [ ] **Step 2: Run the focused test to verify it fails**
+- [x] **Step 2: Run the focused test to verify it fails**
 
 Run:
 
@@ -75,7 +75,7 @@ Expected:
 
 - FAIL because `storage-postgres` is not yet a workspace member or crate.
 
-- [ ] **Step 3: Copy the current PostgreSQL implementation into the new crate name**
+- [x] **Step 3: Copy the current PostgreSQL implementation into the new crate name**
 
 Create `api/crates/storage-postgres/Cargo.toml` from the current `storage-pg` manifest, but change the package name:
 
@@ -120,7 +120,7 @@ pub fn crate_name() -> &'static str {
 
 Also add `storage-postgres` to `api/Cargo.toml` workspace members without deleting `storage-pg` yet.
 
-- [ ] **Step 4: Re-run the focused crate smoke test**
+- [x] **Step 4: Re-run the focused crate smoke test**
 
 Run:
 
@@ -132,7 +132,7 @@ Expected:
 
 - PASS with the new crate name resolved and exported.
 
-- [ ] **Step 5: Commit the renamed PostgreSQL root**
+- [x] **Step 5: Commit the renamed PostgreSQL root**
 
 ```bash
 git add api/Cargo.toml api/crates/storage-postgres
