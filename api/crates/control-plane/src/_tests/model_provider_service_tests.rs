@@ -1271,7 +1271,11 @@ async fn model_provider_service_options_group_models_by_source_instance_and_keep
             config_json: json!({
                 "base_url": "https://alpha.example.com/v1"
             }),
-            configured_models: Vec::new(),
+            configured_models: vec![domain::ModelProviderConfiguredModel {
+                model_id: "fixture_chat".to_string(),
+                enabled: true,
+                context_window_override_tokens: Some(256_000),
+            }],
             enabled_model_ids: vec!["fixture_chat".to_string(), "custom-enabled".to_string()],
             included_in_main: Some(true),
             created_by: repository.actor.user_id,
@@ -1413,6 +1417,7 @@ async fn model_provider_service_options_group_models_by_source_instance_and_keep
         alpha_group.models[0].display_name_fallback.as_deref(),
         Some("Fixture Chat")
     );
+    assert_eq!(alpha_group.models[0].descriptor.context_window, Some(256_000));
     assert_eq!(
         alpha_group.models[1].display_name_fallback.as_deref(),
         Some("custom-enabled")

@@ -164,8 +164,12 @@ where
                 Some(cache) => serde_json::from_value(cache.models_json).unwrap_or_default(),
                 None => package.predefined_models.clone(),
             };
-            let models =
-                expose_enabled_models(&namespace, candidate_models, &instance.enabled_model_ids);
+            let models = expose_enabled_models(
+                &namespace,
+                candidate_models,
+                &instance.configured_models,
+                &instance.enabled_model_ids,
+            );
             model_count += models.len();
             model_groups.push(ModelProviderOptionGroup {
                 source_instance_id: instance.id,
@@ -202,29 +206,53 @@ where
 fn expose_enabled_models(
     namespace: &str,
     models: Vec<ProviderModelDescriptor>,
+    configured_models: &[domain::ModelProviderConfiguredModel],
     enabled_model_ids: &[String],
 ) -> Vec<crate::model_provider::LocalizedProviderModelDescriptor> {
+    let configured_models_by_id = configured_models
+        .iter()
+        .map(|model| (model.model_id.as_str(), model))
+        .collect::<HashMap<_, _>>();
     let localized_models = models
         .into_iter()
         .map(|model| {
             let model_id = model.model_id.clone();
-            (model_id, localized_model_descriptor(namespace, model))
+            let configured_model = configured_models_by_id.get(model_id.as_str()).copied();
+            (
+                model_id,
+                localized_model_descriptor(namespace, apply_context_override(model, configured_model)),
+            )
         })
         .collect::<HashMap<_, _>>();
 
     enabled_model_ids
         .iter()
         .map(|model_id| {
+            let configured_model = configured_models_by_id.get(model_id.as_str()).copied();
             localized_models
                 .get(model_id)
                 .cloned()
-                .unwrap_or_else(|| fallback_enabled_model_descriptor(model_id))
+                .unwrap_or_else(|| fallback_enabled_model_descriptor(model_id, configured_model))
         })
         .collect()
 }
 
+fn apply_context_override(
+    mut model: ProviderModelDescriptor,
+    configured_model: Option<&domain::ModelProviderConfiguredModel>,
+) -> ProviderModelDescriptor {
+    if let Some(override_tokens) = configured_model
+        .and_then(|configured_model| configured_model.context_window_override_tokens)
+    {
+        model.context_window = Some(override_tokens);
+    }
+
+    model
+}
+
 fn fallback_enabled_model_descriptor(
     model_id: &str,
+    configured_model: Option<&domain::ModelProviderConfiguredModel>,
 ) -> crate::model_provider::LocalizedProviderModelDescriptor {
     crate::model_provider::LocalizedProviderModelDescriptor {
         descriptor: ProviderModelDescriptor {
@@ -234,7 +262,8 @@ fn fallback_enabled_model_descriptor(
             supports_streaming: false,
             supports_tool_call: false,
             supports_multimodal: false,
-            context_window: None,
+            context_window: configured_model
+                .and_then(|configured_model| configured_model.context_window_override_tokens),
             max_output_tokens: None,
             provider_metadata: serde_json::json!({}),
         },

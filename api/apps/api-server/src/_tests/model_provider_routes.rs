@@ -1106,6 +1106,13 @@ async fn model_provider_routes_main_instance_settings_drive_inclusion_and_groupe
                     json!({
                         "installation_id": installation_id,
                         "display_name": "Alpha",
+                        "configured_models": [
+                            {
+                                "model_id": "fixture_chat",
+                                "enabled": true,
+                                "context_window_override_tokens": 256000
+                            }
+                        ],
                         "enabled_model_ids": ["fixture_chat"],
                         "included_in_main": true,
                         "config": {
@@ -1220,6 +1227,10 @@ async fn model_provider_routes_main_instance_settings_drive_inclusion_and_groupe
     assert_eq!(
         alpha_group["models"][0]["model_id"].as_str(),
         Some("fixture_chat")
+    );
+    assert_eq!(
+        alpha_group["models"][0]["context_window"].as_u64(),
+        Some(256000)
     );
     assert!(alpha_group["models"][0].get("parameter_form").is_none());
     let beta_group = groups
