@@ -15,6 +15,7 @@ struct InMemoryOrchestrationRuntimeState {
     instances_by_id: HashMap<Uuid, domain::ModelProviderInstanceRecord>,
     caches_by_instance_id: HashMap<Uuid, domain::ModelProviderCatalogCacheRecord>,
     secret_json_by_instance_id: HashMap<Uuid, Value>,
+    main_instances_by_provider: HashMap<String, domain::ModelProviderMainInstanceRecord>,
     routings_by_provider: HashMap<String, domain::ModelProviderRoutingRecord>,
 }
 
@@ -144,6 +145,7 @@ impl InMemoryOrchestrationRuntimeRepository {
                 enabled: true,
             }],
             enabled_model_ids: vec!["gpt-5.4-mini".to_string()],
+            included_in_main: true,
             created_by: Uuid::nil(),
             updated_by: Uuid::nil(),
             created_at: now,
@@ -245,6 +247,7 @@ impl InMemoryOrchestrationRuntimeRepository {
                 enabled: true,
             }],
             enabled_model_ids: vec!["gpt-5.4-mini".to_string()],
+            included_in_main: true,
             created_by: Uuid::nil(),
             updated_by: Uuid::nil(),
             created_at: primary_now,
@@ -732,6 +735,46 @@ impl ModelProviderRepository for InMemoryOrchestrationRuntimeRepository {
         _input: &crate::ports::UpsertModelProviderSecretInput,
     ) -> Result<domain::ModelProviderSecretRecord> {
         unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn upsert_main_instance(
+        &self,
+        input: &crate::ports::UpsertModelProviderMainInstanceInput,
+    ) -> Result<domain::ModelProviderMainInstanceRecord> {
+        let now = OffsetDateTime::now_utc();
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let existing = inner
+            .main_instances_by_provider
+            .get(&input.provider_code)
+            .cloned();
+        let record = domain::ModelProviderMainInstanceRecord {
+            workspace_id: input.workspace_id,
+            provider_code: input.provider_code.clone(),
+            auto_include_new_instances: input.auto_include_new_instances,
+            created_by: existing
+                .as_ref()
+                .map(|record| record.created_by)
+                .unwrap_or(input.updated_by),
+            updated_by: input.updated_by,
+            created_at: existing
+                .as_ref()
+                .map(|record| record.created_at)
+                .unwrap_or(now),
+            updated_at: now,
+        };
+        inner
+            .main_instances_by_provider
+            .insert(record.provider_code.clone(), record.clone());
+        Ok(record)
+    }
+
+    async fn get_main_instance(
+        &self,
+        _workspace_id: Uuid,
+        provider_code: &str,
+    ) -> Result<Option<domain::ModelProviderMainInstanceRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner.main_instances_by_provider.get(provider_code).cloned())
     }
 
     async fn upsert_routing(

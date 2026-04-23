@@ -21,17 +21,19 @@ use crate::{
         ReassignModelProviderInstancesInput, UpdateModelProviderInstanceInput,
         UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
         UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
-        UpsertModelProviderCatalogCacheInput, UpsertModelProviderSecretInput,
+        UpsertModelProviderCatalogCacheInput, UpsertModelProviderMainInstanceInput,
+        UpsertModelProviderSecretInput,
         UpsertPluginInstallationInput,
     },
 };
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, ModelProviderCatalogCacheRecord,
     ModelProviderCatalogRefreshStatus, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
-    ModelProviderPreviewSessionRecord, ModelProviderSecretRecord, PermissionDefinition,
-    PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
-    PluginInstallationRecord, PluginRuntimeStatus, PluginTaskRecord, PluginVerificationStatus,
-    ScopeContext, UserRecord,
+    ModelProviderMainInstanceRecord, ModelProviderPreviewSessionRecord,
+    ModelProviderSecretRecord, PermissionDefinition, PluginArtifactStatus,
+    PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
+    PluginInstallationRecord, PluginRuntimeStatus, PluginTaskRecord,
+    PluginVerificationStatus, ScopeContext, UserRecord,
 };
 use plugin_framework::provider_contract::{
     ProviderInvocationInput, ProviderInvocationResult, ProviderModelDescriptor, ProviderModelSource,
@@ -50,6 +52,7 @@ struct MemoryModelProviderRepository {
     caches: Arc<RwLock<HashMap<Uuid, ModelProviderCatalogCacheRecord>>>,
     preview_sessions: Arc<RwLock<HashMap<Uuid, ModelProviderPreviewSessionRecord>>>,
     secrets: Arc<RwLock<HashMap<Uuid, (ModelProviderSecretRecord, Value)>>>,
+    main_instances: Arc<RwLock<HashMap<String, ModelProviderMainInstanceRecord>>>,
     routings: Arc<RwLock<HashMap<String, domain::ModelProviderRoutingRecord>>>,
     references: Arc<RwLock<HashMap<Uuid, u64>>>,
     audit_events: Arc<RwLock<Vec<String>>>,
@@ -66,6 +69,7 @@ impl MemoryModelProviderRepository {
             caches: Arc::new(RwLock::new(HashMap::new())),
             preview_sessions: Arc::new(RwLock::new(HashMap::new())),
             secrets: Arc::new(RwLock::new(HashMap::new())),
+            main_instances: Arc::new(RwLock::new(HashMap::new())),
             routings: Arc::new(RwLock::new(HashMap::new())),
             references: Arc::new(RwLock::new(HashMap::new())),
             audit_events: Arc::new(RwLock::new(Vec::new())),
@@ -191,6 +195,7 @@ impl MemoryModelProviderRepository {
                 })
                 .collect(),
             enabled_model_ids: model_ids.iter().map(|model_id| (*model_id).to_string()).collect(),
+            included_in_main: None,
             created_by: self.actor.user_id,
         })
         .await
@@ -492,6 +497,16 @@ impl ModelProviderRepository for MemoryModelProviderRepository {
         input: &CreateModelProviderInstanceInput,
     ) -> Result<ModelProviderInstanceRecord> {
         let now = OffsetDateTime::now_utc();
+        let included_in_main = match input.included_in_main {
+            Some(value) => value,
+            None => self
+                .main_instances
+                .read()
+                .await
+                .get(&input.provider_code)
+                .map(|record| record.auto_include_new_instances)
+                .unwrap_or(true),
+        };
         let record = ModelProviderInstanceRecord {
             id: input.instance_id,
             workspace_id: input.workspace_id,
@@ -503,6 +518,7 @@ impl ModelProviderRepository for MemoryModelProviderRepository {
             config_json: input.config_json.clone(),
             configured_models: input.configured_models.clone(),
             enabled_model_ids: input.enabled_model_ids.clone(),
+            included_in_main,
             created_by: input.created_by,
             updated_by: input.created_by,
             created_at: now,
@@ -528,6 +544,7 @@ impl ModelProviderRepository for MemoryModelProviderRepository {
         instance.config_json = input.config_json.clone();
         instance.configured_models = input.configured_models.clone();
         instance.enabled_model_ids = input.enabled_model_ids.clone();
+        instance.included_in_main = input.included_in_main;
         instance.updated_by = input.updated_by;
         instance.updated_at = OffsetDateTime::now_utc();
         Ok(instance.clone())
@@ -635,6 +652,40 @@ impl ModelProviderRepository for MemoryModelProviderRepository {
             (record.clone(), input.plaintext_secret_json.clone()),
         );
         Ok(record)
+    }
+
+    async fn upsert_main_instance(
+        &self,
+        input: &UpsertModelProviderMainInstanceInput,
+    ) -> Result<ModelProviderMainInstanceRecord> {
+        let now = OffsetDateTime::now_utc();
+        let mut main_instances = self.main_instances.write().await;
+        let existing = main_instances.get(&input.provider_code).cloned();
+        let record = ModelProviderMainInstanceRecord {
+            workspace_id: input.workspace_id,
+            provider_code: input.provider_code.clone(),
+            auto_include_new_instances: input.auto_include_new_instances,
+            created_by: existing
+                .as_ref()
+                .map(|record| record.created_by)
+                .unwrap_or(input.updated_by),
+            updated_by: input.updated_by,
+            created_at: existing
+                .as_ref()
+                .map(|record| record.created_at)
+                .unwrap_or(now),
+            updated_at: now,
+        };
+        main_instances.insert(record.provider_code.clone(), record.clone());
+        Ok(record)
+    }
+
+    async fn get_main_instance(
+        &self,
+        _workspace_id: Uuid,
+        provider_code: &str,
+    ) -> Result<Option<ModelProviderMainInstanceRecord>> {
+        Ok(self.main_instances.read().await.get(provider_code).cloned())
     }
 
     async fn upsert_routing(

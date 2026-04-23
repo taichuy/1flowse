@@ -10,6 +10,7 @@ pub(crate) struct MemoryPluginManagementRepository {
     tasks: Arc<RwLock<HashMap<Uuid, PluginTaskRecord>>>,
     instances: Arc<RwLock<HashMap<Uuid, ModelProviderInstanceRecord>>>,
     caches: Arc<RwLock<HashMap<Uuid, ModelProviderCatalogCacheRecord>>>,
+    main_instances: Arc<RwLock<HashMap<String, domain::ModelProviderMainInstanceRecord>>>,
     routings: Arc<RwLock<HashMap<String, domain::ModelProviderRoutingRecord>>>,
     node_contributions: Arc<RwLock<Vec<domain::NodeContributionRegistryEntry>>>,
     audit_events: Arc<RwLock<Vec<String>>>,
@@ -26,6 +27,7 @@ impl MemoryPluginManagementRepository {
             tasks: Arc::new(RwLock::new(HashMap::new())),
             instances: Arc::new(RwLock::new(HashMap::new())),
             caches: Arc::new(RwLock::new(HashMap::new())),
+            main_instances: Arc::new(RwLock::new(HashMap::new())),
             routings: Arc::new(RwLock::new(HashMap::new())),
             node_contributions: Arc::new(RwLock::new(Vec::new())),
             audit_events: Arc::new(RwLock::new(Vec::new())),
@@ -84,6 +86,7 @@ impl MemoryPluginManagementRepository {
                 config_json: json!({ "base_url": "https://api.example.com" }),
                 configured_models: vec![],
                 enabled_model_ids: vec![],
+                included_in_main: true,
                 created_by: self.actor.user_id,
                 updated_by: self.actor.user_id,
                 created_at: now,
@@ -500,6 +503,16 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
         input: &CreateModelProviderInstanceInput,
     ) -> Result<ModelProviderInstanceRecord> {
         let now = OffsetDateTime::now_utc();
+        let included_in_main = match input.included_in_main {
+            Some(value) => value,
+            None => self
+                .main_instances
+                .read()
+                .await
+                .get(&input.provider_code)
+                .map(|record| record.auto_include_new_instances)
+                .unwrap_or(true),
+        };
         let record = ModelProviderInstanceRecord {
             id: input.instance_id,
             workspace_id: input.workspace_id,
@@ -511,6 +524,7 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
             config_json: input.config_json.clone(),
             configured_models: input.configured_models.clone(),
             enabled_model_ids: input.enabled_model_ids.clone(),
+            included_in_main,
             created_by: input.created_by,
             updated_by: input.created_by,
             created_at: now,
@@ -536,6 +550,7 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
         instance.config_json = input.config_json.clone();
         instance.configured_models = input.configured_models.clone();
         instance.enabled_model_ids = input.enabled_model_ids.clone();
+        instance.included_in_main = input.included_in_main;
         instance.updated_by = input.updated_by;
         instance.updated_at = OffsetDateTime::now_utc();
         Ok(instance.clone())
@@ -626,6 +641,40 @@ impl ModelProviderRepository for MemoryPluginManagementRepository {
         provider_instance_id: Uuid,
     ) -> Result<Option<ModelProviderCatalogCacheRecord>> {
         Ok(self.caches.read().await.get(&provider_instance_id).cloned())
+    }
+
+    async fn upsert_main_instance(
+        &self,
+        input: &crate::ports::UpsertModelProviderMainInstanceInput,
+    ) -> Result<domain::ModelProviderMainInstanceRecord> {
+        let now = OffsetDateTime::now_utc();
+        let mut main_instances = self.main_instances.write().await;
+        let existing = main_instances.get(&input.provider_code).cloned();
+        let record = domain::ModelProviderMainInstanceRecord {
+            workspace_id: input.workspace_id,
+            provider_code: input.provider_code.clone(),
+            auto_include_new_instances: input.auto_include_new_instances,
+            created_by: existing
+                .as_ref()
+                .map(|record| record.created_by)
+                .unwrap_or(input.updated_by),
+            updated_by: input.updated_by,
+            created_at: existing
+                .as_ref()
+                .map(|record| record.created_at)
+                .unwrap_or(now),
+            updated_at: now,
+        };
+        main_instances.insert(record.provider_code.clone(), record.clone());
+        Ok(record)
+    }
+
+    async fn get_main_instance(
+        &self,
+        _workspace_id: Uuid,
+        provider_code: &str,
+    ) -> Result<Option<domain::ModelProviderMainInstanceRecord>> {
+        Ok(self.main_instances.read().await.get(provider_code).cloned())
     }
 
     async fn upsert_routing(

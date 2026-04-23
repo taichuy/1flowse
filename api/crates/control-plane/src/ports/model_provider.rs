@@ -12,6 +12,7 @@ pub struct CreateModelProviderInstanceInput {
     pub config_json: serde_json::Value,
     pub configured_models: Vec<domain::ModelProviderConfiguredModel>,
     pub enabled_model_ids: Vec<String>,
+    pub included_in_main: Option<bool>,
     pub created_by: Uuid,
 }
 
@@ -24,6 +25,7 @@ pub struct UpdateModelProviderInstanceInput {
     pub config_json: serde_json::Value,
     pub configured_models: Vec<domain::ModelProviderConfiguredModel>,
     pub enabled_model_ids: Vec<String>,
+    pub included_in_main: bool,
     pub updated_by: Uuid,
 }
 
@@ -76,6 +78,14 @@ pub struct UpsertModelProviderRoutingInput {
     pub updated_by: Uuid,
 }
 
+#[derive(Debug, Clone)]
+pub struct UpsertModelProviderMainInstanceInput {
+    pub workspace_id: Uuid,
+    pub provider_code: String,
+    pub auto_include_new_instances: bool,
+    pub updated_by: Uuid,
+}
+
 #[async_trait]
 pub trait ModelProviderRepository: Send + Sync {
     async fn create_instance(
@@ -115,6 +125,15 @@ pub trait ModelProviderRepository: Send + Sync {
         &self,
         input: &UpsertModelProviderSecretInput,
     ) -> anyhow::Result<domain::ModelProviderSecretRecord>;
+    async fn upsert_main_instance(
+        &self,
+        input: &UpsertModelProviderMainInstanceInput,
+    ) -> anyhow::Result<domain::ModelProviderMainInstanceRecord>;
+    async fn get_main_instance(
+        &self,
+        workspace_id: Uuid,
+        provider_code: &str,
+    ) -> anyhow::Result<Option<domain::ModelProviderMainInstanceRecord>>;
     async fn upsert_routing(
         &self,
         input: &UpsertModelProviderRoutingInput,

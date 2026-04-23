@@ -2,7 +2,8 @@ use anyhow::{anyhow, Result};
 use domain::{
     ModelProviderCatalogCacheRecord, ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource,
     ModelProviderDiscoveryMode, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
-    ModelProviderRoutingMode, ModelProviderRoutingRecord, ModelProviderSecretRecord,
+    ModelProviderMainInstanceRecord, ModelProviderRoutingMode, ModelProviderRoutingRecord,
+    ModelProviderSecretRecord,
 };
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -19,6 +20,18 @@ pub struct StoredModelProviderInstanceRow {
     pub config_json: serde_json::Value,
     pub configured_models_json: serde_json::Value,
     pub enabled_model_ids: Vec<String>,
+    pub included_in_main: bool,
+    pub created_by: Uuid,
+    pub updated_by: Uuid,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredModelProviderMainInstanceRow {
+    pub workspace_id: Uuid,
+    pub provider_code: String,
+    pub auto_include_new_instances: bool,
     pub created_by: Uuid,
     pub updated_by: Uuid,
     pub created_at: OffsetDateTime,
@@ -87,6 +100,21 @@ impl PgModelProviderMapper {
             config_json: row.config_json,
             configured_models: serde_json::from_value(row.configured_models_json)?,
             enabled_model_ids: row.enabled_model_ids,
+            included_in_main: row.included_in_main,
+            created_by: row.created_by,
+            updated_by: row.updated_by,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+    }
+
+    pub fn to_main_instance_record(
+        row: StoredModelProviderMainInstanceRow,
+    ) -> Result<ModelProviderMainInstanceRecord> {
+        Ok(ModelProviderMainInstanceRecord {
+            workspace_id: row.workspace_id,
+            provider_code: row.provider_code,
+            auto_include_new_instances: row.auto_include_new_instances,
             created_by: row.created_by,
             updated_by: row.updated_by,
             created_at: row.created_at,

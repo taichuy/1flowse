@@ -342,6 +342,17 @@ pub struct ModelProviderRoutingRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelProviderMainInstanceRecord {
+    pub workspace_id: Uuid,
+    pub provider_code: String,
+    pub auto_include_new_instances: bool,
+    pub created_by: Uuid,
+    pub updated_by: Uuid,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelProviderInstanceRecord {
     pub id: Uuid,
     pub workspace_id: Uuid,
@@ -353,6 +364,7 @@ pub struct ModelProviderInstanceRecord {
     pub config_json: serde_json::Value,
     pub configured_models: Vec<ModelProviderConfiguredModel>,
     pub enabled_model_ids: Vec<String>,
+    pub included_in_main: bool,
     pub created_by: Uuid,
     pub updated_by: Uuid,
     pub created_at: OffsetDateTime,

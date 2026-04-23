@@ -6,7 +6,8 @@ use control_plane::{
         CreateModelProviderInstanceInput, CreateModelProviderPreviewSessionInput,
         ModelProviderRepository, ReassignModelProviderInstancesInput,
         UpdateModelProviderInstanceInput, UpsertModelProviderCatalogCacheInput,
-        UpsertModelProviderRoutingInput, UpsertModelProviderSecretInput,
+        UpsertModelProviderMainInstanceInput, UpsertModelProviderRoutingInput,
+        UpsertModelProviderSecretInput,
     },
 };
 use serde_json::{json, Value};
@@ -16,8 +17,8 @@ use uuid::Uuid;
 use crate::{
     mappers::model_provider_mapper::{
         PgModelProviderMapper, StoredModelProviderCatalogCacheRow, StoredModelProviderInstanceRow,
-        StoredModelProviderPreviewSessionRow, StoredModelProviderRoutingRow,
-        StoredModelProviderSecretRow,
+        StoredModelProviderMainInstanceRow, StoredModelProviderPreviewSessionRow,
+        StoredModelProviderRoutingRow, StoredModelProviderSecretRow,
     },
     repositories::PgControlPlaneStore,
 };
@@ -34,6 +35,21 @@ fn map_instance(row: sqlx::postgres::PgRow) -> Result<domain::ModelProviderInsta
         config_json: row.get("config_json"),
         configured_models_json: row.get("configured_models_json"),
         enabled_model_ids: row.get("enabled_model_ids"),
+        included_in_main: row.get("included_in_main"),
+        created_by: row.get("created_by"),
+        updated_by: row.get("updated_by"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+    })
+}
+
+fn map_main_instance(
+    row: sqlx::postgres::PgRow,
+) -> Result<domain::ModelProviderMainInstanceRecord> {
+    PgModelProviderMapper::to_main_instance_record(StoredModelProviderMainInstanceRow {
+        workspace_id: row.get("workspace_id"),
+        provider_code: row.get("provider_code"),
+        auto_include_new_instances: row.get("auto_include_new_instances"),
         created_by: row.get("created_by"),
         updated_by: row.get("updated_by"),
         created_at: row.get("created_at"),
@@ -113,9 +129,33 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 config_json,
                 configured_models_json,
                 enabled_model_ids,
+                included_in_main,
                 created_by,
                 updated_by
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)
+            ) values (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                $6,
+                $7,
+                $8,
+                $9,
+                $10,
+                coalesce(
+                    $11,
+                    (
+                        select auto_include_new_instances
+                        from model_provider_main_instances
+                        where workspace_id = $2
+                          and provider_code = $4
+                    ),
+                    true
+                ),
+                $12,
+                $12
+            )
             returning
                 id,
                 workspace_id,
@@ -127,6 +167,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 config_json,
                 configured_models_json,
                 enabled_model_ids,
+                included_in_main,
                 created_by,
                 updated_by,
                 created_at,
@@ -143,6 +184,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
         .bind(&input.config_json)
         .bind(serde_json::to_value(&input.configured_models)?)
         .bind(&input.enabled_model_ids)
+        .bind(input.included_in_main)
         .bind(input.created_by)
         .fetch_one(self.pool())
         .await?;
@@ -163,7 +205,8 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 config_json = $5,
                 configured_models_json = $6,
                 enabled_model_ids = $7,
-                updated_by = $8,
+                included_in_main = $8,
+                updated_by = $9,
                 updated_at = now()
             where workspace_id = $1
               and id = $2
@@ -178,6 +221,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 config_json,
                 configured_models_json,
                 enabled_model_ids,
+                included_in_main,
                 created_by,
                 updated_by,
                 created_at,
@@ -191,6 +235,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
         .bind(&input.config_json)
         .bind(serde_json::to_value(&input.configured_models)?)
         .bind(&input.enabled_model_ids)
+        .bind(input.included_in_main)
         .bind(input.updated_by)
         .fetch_optional(self.pool())
         .await?;
@@ -219,6 +264,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 config_json,
                 configured_models_json,
                 enabled_model_ids,
+                included_in_main,
                 created_by,
                 updated_by,
                 created_at,
@@ -253,6 +299,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 config_json,
                 configured_models_json,
                 enabled_model_ids,
+                included_in_main,
                 created_by,
                 updated_by,
                 created_at,
@@ -286,6 +333,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 config_json,
                 configured_models_json,
                 enabled_model_ids,
+                included_in_main,
                 created_by,
                 updated_by,
                 created_at,
@@ -327,6 +375,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 config_json,
                 configured_models_json,
                 enabled_model_ids,
+                included_in_main,
                 created_by,
                 updated_by,
                 created_at,
@@ -446,6 +495,72 @@ impl ModelProviderRepository for PgControlPlaneStore {
         .await?;
 
         map_secret(row)
+    }
+
+    async fn upsert_main_instance(
+        &self,
+        input: &UpsertModelProviderMainInstanceInput,
+    ) -> Result<domain::ModelProviderMainInstanceRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into model_provider_main_instances (
+                workspace_id,
+                provider_code,
+                auto_include_new_instances,
+                created_by,
+                updated_by
+            ) values ($1, $2, $3, $4, $4)
+            on conflict (workspace_id, provider_code) do update
+            set
+                auto_include_new_instances = excluded.auto_include_new_instances,
+                updated_by = excluded.updated_by,
+                updated_at = now()
+            returning
+                workspace_id,
+                provider_code,
+                auto_include_new_instances,
+                created_by,
+                updated_by,
+                created_at,
+                updated_at
+            "#,
+        )
+        .bind(input.workspace_id)
+        .bind(&input.provider_code)
+        .bind(input.auto_include_new_instances)
+        .bind(input.updated_by)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_main_instance(row)
+    }
+
+    async fn get_main_instance(
+        &self,
+        workspace_id: Uuid,
+        provider_code: &str,
+    ) -> Result<Option<domain::ModelProviderMainInstanceRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                workspace_id,
+                provider_code,
+                auto_include_new_instances,
+                created_by,
+                updated_by,
+                created_at,
+                updated_at
+            from model_provider_main_instances
+            where workspace_id = $1
+              and provider_code = $2
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(provider_code)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_main_instance).transpose()
     }
 
     async fn upsert_routing(

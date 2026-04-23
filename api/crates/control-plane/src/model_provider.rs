@@ -319,6 +319,7 @@ where
                 config_json: public_config.clone(),
                 configured_models: configured_models.clone(),
                 enabled_model_ids,
+                included_in_main: None,
                 created_by: command.actor_user_id,
             })
             .await?;
@@ -464,6 +465,7 @@ where
                 config_json: merged_public_config,
                 configured_models: configured_models.clone(),
                 enabled_model_ids,
+                included_in_main: existing.included_in_main,
                 updated_by: command.actor_user_id,
             })
             .await?;
@@ -624,6 +626,7 @@ where
                     config_json: instance.config_json.clone(),
                     configured_models: instance.configured_models.clone(),
                     enabled_model_ids: instance.enabled_model_ids.clone(),
+                    included_in_main: instance.included_in_main,
                     updated_by: actor_user_id,
                 })
                 .await?;
@@ -699,6 +702,7 @@ where
                             config_json: instance.config_json.clone(),
                             configured_models: instance.configured_models.clone(),
                             enabled_model_ids: instance.enabled_model_ids.clone(),
+                            included_in_main: instance.included_in_main,
                             updated_by: actor_user_id,
                         })
                         .await;
