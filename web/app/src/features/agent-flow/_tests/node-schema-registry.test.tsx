@@ -61,6 +61,7 @@ describe('agent-flow node schema registry', () => {
     expect(adapter.getValue('alias')).toBe('LLM');
     expect(adapter.getValue('config.model_provider')).toEqual({
       provider_code: '',
+      source_instance_id: '',
       model_id: ''
     });
 

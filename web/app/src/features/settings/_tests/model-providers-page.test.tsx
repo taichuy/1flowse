@@ -1376,8 +1376,10 @@ describe('ModelProvidersPage', () => {
         await within(modal).findByText('聚合视图')
       ).toBeInTheDocument();
       expect(
-        within(modal).getByText(primaryContractProviderModels[0].model_id)
-      ).toBeInTheDocument();
+        within(modal).getAllByText(
+          new RegExp(primaryContractProviderModels[0].model_id, 'i')
+        ).length
+      ).toBeGreaterThanOrEqual(1);
       expect(
         within(modal).getByRole('switch', { name: '加入主实例 OpenAI Production' })
       ).toBeInTheDocument();

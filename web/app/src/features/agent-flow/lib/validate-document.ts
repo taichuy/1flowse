@@ -33,6 +33,7 @@ function isMissingRequiredField(
       const modelProvider = getLlmModelProvider(node.config);
       return (
         modelProvider.provider_code.trim().length === 0 ||
+        modelProvider.source_instance_id.trim().length === 0 ||
         modelProvider.model_id.trim().length === 0
       );
     }
@@ -191,13 +192,23 @@ export function validateDocument(
             if (node.type === 'llm' && field.key === 'config.model_provider') {
               const modelProvider = getLlmModelProvider(node.config);
               const providerMissing = modelProvider.provider_code.trim().length === 0;
+              const sourceInstanceMissing =
+                modelProvider.source_instance_id.trim().length === 0;
 
               pushFieldIssue(
                 issues,
                 node,
                 field.key,
-                providerMissing ? 'LLM 缺少模型供应商' : 'LLM 缺少模型',
-                providerMissing ? '请先选择模型供应商。' : '请先选择模型。'
+                providerMissing
+                  ? 'LLM 缺少模型供应商'
+                  : sourceInstanceMissing
+                    ? 'LLM 缺少模型来源实例'
+                    : 'LLM 缺少模型',
+                providerMissing
+                  ? '请先选择模型供应商。'
+                  : sourceInstanceMissing
+                    ? '请先选择来源实例。'
+                    : '请先选择模型。'
               );
               continue;
             }
@@ -217,6 +228,7 @@ export function validateDocument(
     if (node.type === 'llm') {
       const modelProvider = getLlmModelProvider(node.config);
       const providerCode = modelProvider.provider_code.trim();
+      const sourceInstanceId = modelProvider.source_instance_id.trim();
       const model = modelProvider.model_id.trim();
 
       if (providerOptions && providerCode.length > 0) {
@@ -231,17 +243,32 @@ export function validateDocument(
             '当前模型供应商不存在、未就绪或你无权访问。',
             'inputs'
           );
-        } else if (
-          model.length > 0 &&
-          !provider.models.some((entry) => entry.model_id === model)
-        ) {
+        } else if (sourceInstanceId.length > 0) {
+          const modelGroup = provider.model_groups.find(
+            (group) => group.source_instance_id === sourceInstanceId
+          );
+
+          if (!modelGroup) {
+            pushFieldIssue(
+              issues,
+              node,
+              'config.model_provider',
+              'LLM 模型来源实例不可用',
+              '当前模型来源实例不存在、已移出主实例或你无权访问。',
+              'inputs'
+            );
+          } else if (
+            model.length > 0 &&
+            !modelGroup.models.some((entry) => entry.model_id === model)
+          ) {
           pushFieldIssue(
             issues,
             node,
             'config.model_provider',
             'LLM 模型不可用',
-            '当前模型不属于所选模型供应商。'
+            '当前模型不属于所选模型来源实例。'
           );
+          }
         }
       }
     }

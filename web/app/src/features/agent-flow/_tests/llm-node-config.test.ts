@@ -16,11 +16,36 @@ describe('llm-node-config', () => {
       })
     ).toEqual({
       provider_code: '',
+      source_instance_id: '',
       model_id: '',
       protocol: undefined,
       provider_label: undefined,
       model_label: undefined,
       schema_fetched_at: undefined
+    });
+  });
+
+  test('getLlmModelProvider reads source_instance_id from the nested contract', () => {
+    expect(
+      getLlmModelProvider({
+        model_provider: {
+          provider_code: 'openai_compatible',
+          source_instance_id: 'provider-1',
+          model_id: 'gpt-4o-mini',
+          protocol: 'openai_compatible',
+          provider_label: 'OpenAI Compatible',
+          model_label: 'gpt-4o-mini',
+          schema_fetched_at: '2026-04-23T10:00:00Z'
+        }
+      })
+    ).toEqual({
+      provider_code: 'openai_compatible',
+      source_instance_id: 'provider-1',
+      model_id: 'gpt-4o-mini',
+      protocol: 'openai_compatible',
+      provider_label: 'OpenAI Compatible',
+      model_label: 'gpt-4o-mini',
+      schema_fetched_at: '2026-04-23T10:00:00Z'
     });
   });
 

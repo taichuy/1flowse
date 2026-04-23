@@ -33,6 +33,10 @@ export const modelProviderOptionsContract =
 
 export const modelProviderCatalogEntries = modelProviderCatalogContract.entries;
 export const modelProviderOptionsProviders = modelProviderOptionsContract.providers;
-export const primaryContractProviderModels = modelProviderOptionsContract.providers[0].models;
+export const primaryContractProviderGroups =
+  modelProviderOptionsContract.providers[0].model_groups;
+export const primaryContractProviderModels = primaryContractProviderGroups.flatMap(
+  (group) => group.models
+);
 export const primaryContractProviderEnabledModelIds =
   primaryContractProviderModels.map((model) => model.model_id);

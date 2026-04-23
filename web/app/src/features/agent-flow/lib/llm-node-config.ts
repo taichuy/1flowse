@@ -2,6 +2,7 @@ import type { ConsolePluginFormFieldSchema, ConsolePluginFormSchema } from '@1fl
 
 export interface LlmNodeModelProvider {
   provider_code: string;
+  source_instance_id: string;
   model_id: string;
   protocol?: string;
   provider_label?: string;
@@ -93,6 +94,7 @@ export function getLlmModelProvider(config: Record<string, unknown>): LlmNodeMod
   if (!isRecord(provider)) {
     return {
       provider_code: '',
+      source_instance_id: '',
       model_id: '',
       protocol: undefined,
       provider_label: undefined,
@@ -103,6 +105,7 @@ export function getLlmModelProvider(config: Record<string, unknown>): LlmNodeMod
 
   return {
     provider_code: asString(provider.provider_code),
+    source_instance_id: asString(provider.source_instance_id),
     model_id: asString(provider.model_id),
     protocol: asString(provider.protocol) || undefined,
     provider_label: asString(provider.provider_label) || undefined,

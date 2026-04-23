@@ -62,6 +62,7 @@ function getProviderSelection(option: ReturnType<typeof listLlmProviderOptions>[
 
   return {
     provider_code: option?.value ?? '',
+    source_instance_id: nextModel?.sourceInstanceId ?? '',
     model_id: nextModel?.value ?? '',
     protocol: option?.protocol,
     provider_label: option?.label,
@@ -79,13 +80,19 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
   const config = getNodeConfig(adapter);
   const modelProvider = getLlmModelProvider(config);
   const providerCode = modelProvider.provider_code.trim();
+  const sourceInstanceId = modelProvider.source_instance_id.trim();
   const modelValue = modelProvider.model_id.trim();
   const providerOptions = useMemo(
     () => listLlmProviderOptions(providerOptionsQuery.data),
     [providerOptionsQuery.data]
   );
   const selectedProvider = findLlmProviderOption(providerOptionsQuery.data, providerCode);
-  const selectedModel = findLlmModelOption(providerOptionsQuery.data, providerCode, modelValue);
+  const selectedModel = findLlmModelOption(
+    providerOptionsQuery.data,
+    providerCode,
+    sourceInstanceId,
+    modelValue
+  );
 
   const providerUnavailable = Boolean(
     providerCode && providerOptionsQuery.isSuccess && selectedProvider === null
@@ -114,6 +121,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
   function selectModel(nextModel: LlmModelOption) {
     adapter.setValue('config.model_provider', {
       provider_code: nextModel.providerCode,
+      source_instance_id: nextModel.sourceInstanceId,
       model_id: nextModel.value,
       protocol: nextModel.protocol,
       provider_label: nextModel.providerLabel,
@@ -143,6 +151,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
           onClear={() => {
             adapter.setValue('config.model_provider', {
               provider_code: '',
+              source_instance_id: '',
               model_id: '',
               protocol: undefined,
               provider_label: undefined,
@@ -206,16 +215,21 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
             showSearch
             aria-label="生效模型"
             placeholder={selectedProvider ? '选择生效模型' : '请先选择模型供应商'}
-            value={selectedModel?.value ?? (modelValue || undefined)}
+            value={selectedModel?.selectionValue}
             disabled={!selectedProvider || !hasSelectedProviderModels}
-            options={(selectedProvider?.models ?? []).map((option) => ({
-              label: option.label,
-              value: option.value
+            options={(selectedProvider?.modelGroups ?? []).map((group) => ({
+              label: group.label,
+              options: group.models.map((option) => ({
+                label: option.label,
+                value: option.selectionValue
+              }))
             }))}
             optionFilterProp="label"
             onChange={(value) => {
               const nextModel =
-                selectedProvider?.models.find((option) => option.value === value) ?? null;
+                selectedProvider?.models.find(
+                  (option) => option.selectionValue === value
+                ) ?? null;
               if (nextModel) {
                 selectModel(nextModel);
               }

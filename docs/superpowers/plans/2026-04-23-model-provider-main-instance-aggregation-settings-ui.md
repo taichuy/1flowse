@@ -267,7 +267,7 @@ Expected:
 - [x] **Step 2: Update this plan with actual verification output**
   - Append a `Verification Results` section with concrete pass/fail output.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add web/packages/api-client/src/console-model-providers.ts \

@@ -9,6 +9,11 @@ import { createNodeDocument } from '../lib/document/node-factory';
 import { listLlmProviderOptions } from '../lib/model-options';
 import { validateDocument } from '../lib/validate-document';
 
+const primaryProvider = modelProviderOptionsContract.providers[0];
+const primaryGroup = primaryProvider.model_groups[0];
+const primaryModel = primaryGroup.models[0];
+const secondaryGroup = primaryProvider.model_groups[1];
+
 function createCodeDocumentWithOutputs(
   outputs: Array<{
     key: string;
@@ -43,23 +48,28 @@ describe('validateDocument', () => {
       ...modelProviderOptionsContract,
       providers: [
         {
-          ...modelProviderOptionsContract.providers[0],
-          models: [
+          ...primaryProvider,
+          model_groups: [
             {
-              ...modelProviderOptionsContract.providers[0].models[0],
-              model_id: 'gpt-4o-mini',
-              display_name: 'GPT-4o Mini'
-            },
-            {
-              ...modelProviderOptionsContract.providers[0].models[0],
-              model_id: 'gpt-4o',
-              display_name: 'GPT-4o'
-            },
-            {
-              ...modelProviderOptionsContract.providers[0].models[0],
-              model_id: 'manual-enabled-model',
-              display_name: '手动启用模型',
-              source: 'manual'
+              ...primaryGroup,
+              models: [
+                {
+                  ...primaryModel,
+                  model_id: 'gpt-4o-mini',
+                  display_name: 'GPT-4o Mini'
+                },
+                {
+                  ...primaryModel,
+                  model_id: 'gpt-4o',
+                  display_name: 'GPT-4o'
+                },
+                {
+                  ...primaryModel,
+                  model_id: 'manual-enabled-model',
+                  display_name: '手动启用模型',
+                  source: 'manual'
+                }
+              ]
             }
           ]
         }
@@ -153,40 +163,11 @@ describe('validateDocument', () => {
 
     llmNode.config.model_provider = {
       provider_code: 'provider-stale',
+      source_instance_id: 'provider-stale-instance',
       model_id: 'gpt-4.1'
     };
 
-    const issues = validateDocument(document, {
-      locale_meta: {},
-      i18n_catalog: {},
-      providers: [
-        {
-          provider_code: 'openai_compatible',
-          plugin_type: 'model_provider',
-          namespace: 'plugin.openai_compatible',
-          label_key: 'provider.label',
-          description_key: 'provider.description',
-          protocol: 'openai_responses',
-          display_name: 'OpenAI Compatible',
-          effective_instance_id: 'provider-ready',
-          effective_instance_display_name: 'OpenAI Prod',
-          models: [
-            {
-              model_id: 'gpt-4o-mini',
-              display_name: 'GPT-4o Mini',
-              source: 'catalog',
-              supports_streaming: true,
-              supports_tool_call: true,
-              supports_multimodal: false,
-              context_window: 128000,
-              max_output_tokens: 16384,
-              parameter_form: null,
-              provider_metadata: {}
-            }
-          ]
-        }
-      ]
-    });
+    const issues = validateDocument(document, modelProviderOptionsContract);
 
     expect(issues).toEqual(
       expect.arrayContaining([
@@ -209,53 +190,100 @@ describe('validateDocument', () => {
 
     llmNode.config.model_provider = {
       provider_code: 'openai_compatible',
+      source_instance_id: primaryGroup.source_instance_id,
       model_id: 'gpt-4o'
     };
 
-    const issues = validateDocument(document, {
-      locale_meta: {},
-      i18n_catalog: {},
-      providers: [
-        {
-          provider_code: 'openai_compatible',
-          plugin_type: 'model_provider',
-          namespace: 'plugin.openai_compatible',
-          label_key: 'provider.label',
-          description_key: 'provider.description',
-          protocol: 'openai_responses',
-          display_name: 'OpenAI Compatible',
-          effective_instance_id: 'provider-ready',
-          effective_instance_display_name: 'OpenAI Prod',
-          models: [
-            {
-              model_id: 'gpt-4o-mini',
-              display_name: 'GPT-4o Mini',
-              source: 'catalog',
-              supports_streaming: true,
-              supports_tool_call: true,
-              supports_multimodal: false,
-              context_window: 128000,
-              max_output_tokens: 16384,
-              parameter_form: null,
-              provider_metadata: {}
-            },
-            {
-              model_id: 'manual-enabled-model',
-              display_name: '手动启用模型',
-              source: 'manual',
-              supports_streaming: true,
-              supports_tool_call: true,
-              supports_multimodal: false,
-              context_window: 128000,
-              max_output_tokens: 16384,
-              parameter_form: null,
-              provider_metadata: {}
-            }
-          ]
-        }
-      ]
-    });
+    const issues = validateDocument(document, modelProviderOptionsContract);
 
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-llm',
+          fieldKey: 'config.model_provider',
+          title: 'LLM 模型不可用'
+        })
+      ])
+    );
+  });
+
+  test('flags a missing llm source instance on the unified field', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+
+    if (!llmNode) {
+      throw new Error('expected default LLM node');
+    }
+
+    llmNode.config.model_provider = {
+      provider_code: primaryProvider.provider_code,
+      source_instance_id: '',
+      model_id: primaryModel.model_id
+    };
+
+    const issues = validateDocument(document, modelProviderOptionsContract);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-llm',
+          fieldKey: 'config.model_provider',
+          title: 'LLM 缺少模型来源实例'
+        })
+      ])
+    );
+  });
+
+  test('flags a saved source instance that is no longer present in the grouped provider options', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+
+    if (!llmNode) {
+      throw new Error('expected default LLM node');
+    }
+
+    llmNode.config.model_provider = {
+      provider_code: primaryProvider.provider_code,
+      source_instance_id: 'provider-openai-missing',
+      model_id: primaryModel.model_id
+    };
+
+    const issues = validateDocument(document, modelProviderOptionsContract);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-llm',
+          fieldKey: 'config.model_provider',
+          title: 'LLM 模型来源实例不可用'
+        })
+      ])
+    );
+  });
+
+  test('keeps the node populated but flags a model that does not exist under the selected source instance', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+
+    if (!llmNode) {
+      throw new Error('expected default LLM node');
+    }
+
+    llmNode.config.model_provider = {
+      provider_code: primaryProvider.provider_code,
+      source_instance_id: secondaryGroup.source_instance_id,
+      model_id: primaryModel.model_id
+    };
+
+    const issues = validateDocument(document, modelProviderOptionsContract);
+
+    expect(llmNode.config.model_provider).toEqual(
+      expect.objectContaining({
+        provider_code: primaryProvider.provider_code,
+        source_instance_id: secondaryGroup.source_instance_id,
+        model_id: primaryModel.model_id
+      })
+    );
     expect(issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

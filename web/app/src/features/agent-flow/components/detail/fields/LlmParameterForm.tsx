@@ -46,6 +46,7 @@ export function LlmParameterForm({ adapter, block }: SchemaDynamicFormRendererPr
   const selectedModel = findLlmModelOption(
     providerOptionsQuery.data,
     modelProvider.provider_code,
+    modelProvider.source_instance_id,
     modelProvider.model_id
   );
   const parameterForm = selectedModel?.parameterForm ?? null;
