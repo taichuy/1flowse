@@ -2,7 +2,7 @@
 memory_type: feedback
 feedback_category: repository
 topic: 模型供应商参数归供应商协议，上下文覆盖归模型配置且底层存纯数字
-summary: 设计模型供应商参数、模型元信息和设置页模型配置时，`parameter_form` 应归供应商协议，`context_window` 覆盖应归单模型配置；界面可显示 `16K/1M` 等缩写，但数据库底层必须存纯数字。
+summary: 设计模型供应商参数、模型元信息和设置页模型配置时，`parameter_form` 应归供应商协议，`context_window` 覆盖应归单模型配置；界面可显示 `16K/1M` 等缩写，但数据库底层必须存纯数字，缩写输入必须先小写归一化并做严格校验。
 keywords:
   - model-provider
   - parameter-form
@@ -12,6 +12,8 @@ keywords:
   - llm
   - numeric-storage
   - display-format
+  - validation
+  - lowercase-normalization
 match_when:
   - 调整模型供应商 options 合同中的参数 schema 归属
   - 设计模型上下文窗口、输出上限等模型级元信息
@@ -44,12 +46,14 @@ scope:
 - `context_window` 这类信息属于模型元信息；当需要人工兜底时，应放在单模型配置里，而不是供应商配置里。
 - 模型上下文兜底字段应直接进入 `configured_models[*]` 之类的模型级配置结构，不要混入 `config_json` 这类供应商凭据配置。
 - 界面层可以显示 `16K`、`32K`、`128K`、`1M` 这类缩写，但数据库和接口底层必须统一存纯数字 token 值。
+- 用户输入缩写时，解析前必须先做 `trim + toLowerCase`，只接受合法数字或 `k/m` 后缀格式；非法输入必须在前端直接拦截。
 
 ## 原因
 
 - 参数能力和模型元信息是两类不同性质的数据，混在一层会让插件边界和宿主边界一起变脏。
 - 上下文窗口本来就可能因模型而异，不能因为供应商协议相同就提升为供应商级配置。
 - 纯数字存储更稳定，后续无论展示格式、排序、比较还是运行时计算都更直接。
+- 缩写输入如果不做统一小写归一化和严格校验，很容易把非法值带进数据库，后续展示和运行时解析都会出错。
 
 ## 适用场景
 
