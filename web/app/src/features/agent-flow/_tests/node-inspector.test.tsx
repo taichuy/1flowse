@@ -294,7 +294,7 @@ describe('NodeInspector', () => {
     const modelTrigger = await screen.findByRole('button', { name: '模型' });
 
     await waitFor(() => {
-      expect(within(modelTrigger).getByText('上下文 128K')).toBeInTheDocument();
+      expect(within(modelTrigger).getByLabelText('上下文 128K')).toBeInTheDocument();
     });
   });
 

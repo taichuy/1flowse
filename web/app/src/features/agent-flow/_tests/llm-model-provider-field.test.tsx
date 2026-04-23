@@ -262,9 +262,9 @@ describe('LlmModelField', () => {
     await openModelSettings();
     await openModelDropdown();
 
-    expect(await screen.findByText('上下文 256K')).toBeInTheDocument();
+    expect(await screen.findByLabelText('上下文 256K')).toBeInTheDocument();
     expect(screen.getAllByText('输出 8192').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('上下文 64K')).toBeInTheDocument();
+    expect(screen.getByLabelText('上下文 64K')).toBeInTheDocument();
   });
 
   test('shows a formal error state when the current provider is unavailable', async () => {

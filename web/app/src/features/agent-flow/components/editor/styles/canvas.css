@@ -222,6 +222,26 @@
 .agent-flow-model-chip__meta-item {
   display: inline-flex;
   align-items: center;
+  min-width: 0;
+}
+
+.agent-flow-model-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.agent-flow-model-meta-pill--context {
+  background: #ecf4ff;
+  color: #2457d6;
 }
 
 .agent-flow-model-settings .ant-modal-content {
@@ -346,6 +366,7 @@
 
 .agent-flow-model-settings__option-meta {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   color: #738196;

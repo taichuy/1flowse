@@ -1,7 +1,7 @@
 import { CloseOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Button, Divider, Empty, Modal, Select, Typography } from 'antd';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import type { SchemaFieldRendererProps } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 import type {
@@ -81,28 +81,45 @@ function buildModelSelection(nextModel: LlmModelOption) {
   };
 }
 
-function buildContextLabel(value: number | null | undefined) {
-  const formattedValue = formatLlmTokenCount(value);
-  return formattedValue ? `上下文 ${formattedValue}` : null;
-}
-
 function buildOutputLabel(value: number | null | undefined) {
   const formattedValue = formatLlmTokenCount(value);
   return formattedValue ? `输出 ${formattedValue}` : null;
 }
 
+function ContextMarker({
+  value
+}: {
+  value: number | null | undefined;
+}) {
+  const formattedValue = formatLlmTokenCount(value);
+
+  if (!formattedValue) {
+    return null;
+  }
+
+  return (
+    <span
+      className="agent-flow-model-meta-pill agent-flow-model-meta-pill--context"
+      aria-label={`上下文 ${formattedValue}`}
+      title={`上下文 ${formattedValue}`}
+    >
+      {formattedValue}
+    </span>
+  );
+}
+
 function ModelChip({
   providerLabel,
   modelLabel,
-  details = [],
+  metaItems = [],
   placeholder = '选择供应商和模型'
 }: {
   providerLabel?: string | null;
   modelLabel?: string | null;
-  details?: Array<string | null | undefined>;
+  metaItems?: ReactNode[];
   placeholder?: string;
 }) {
-  const detailItems = details.filter(Boolean);
+  const visibleMetaItems = metaItems.filter(Boolean);
 
   return (
     <div
@@ -116,11 +133,11 @@ function ModelChip({
           {providerLabel || '模型供应商'}
         </span>
         <span className="agent-flow-model-chip__label">{modelLabel || placeholder}</span>
-        {detailItems.length > 0 ? (
+        {visibleMetaItems.length > 0 ? (
           <span className="agent-flow-model-chip__meta">
-            {detailItems.map((detail) => (
-              <span key={detail} className="agent-flow-model-chip__meta-item">
-                {detail}
+            {visibleMetaItems.map((item, index) => (
+              <span key={index} className="agent-flow-model-chip__meta-item">
+                {item}
               </span>
             ))}
           </span>
@@ -274,9 +291,9 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
             null
           }
           modelLabel={modelProvider.model_label?.trim() || selectedModel?.label || modelValue || null}
-          details={[
-            selectedSourceInstanceLabel,
-            buildContextLabel(selectedModel?.effectiveContextWindow)
+          metaItems={[
+            selectedSourceInstanceLabel ? <span>{selectedSourceInstanceLabel}</span> : null,
+            <ContextMarker value={selectedModel?.effectiveContextWindow} />
           ]}
         />
         <span className="agent-flow-model-field__trigger-caret" aria-hidden="true">
@@ -424,11 +441,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                                           </span>
                                           <span className="agent-flow-model-settings__option-meta">
                                             <span>{option.value}</span>
-                                            {buildContextLabel(option.effectiveContextWindow) ? (
-                                              <span>
-                                                {buildContextLabel(option.effectiveContextWindow)}
-                                              </span>
-                                            ) : null}
+                                            <ContextMarker value={option.effectiveContextWindow} />
                                             {buildOutputLabel(option.maxOutputTokens) ? (
                                               <span>{buildOutputLabel(option.maxOutputTokens)}</span>
                                             ) : null}
