@@ -218,10 +218,7 @@ mod tests {
     use serde_json::{json, Value};
 
     use super::*;
-    use crate::{
-        errors::ControlPlaneError,
-        ports::{ModelProviderRepository, UpsertModelProviderRoutingInput},
-    };
+    use crate::{errors::ControlPlaneError, ports::ModelProviderRepository};
 
     fn llm_document(
         flow_id: Uuid,
@@ -318,31 +315,12 @@ mod tests {
         }
     }
 
-    async fn seed_primary_routing(
-        repository: &super::super::test_support::InMemoryOrchestrationRuntimeRepository,
-        primary_instance_id: Uuid,
-    ) {
-        ModelProviderRepository::upsert_routing(
-            repository,
-            &UpsertModelProviderRoutingInput {
-                workspace_id: Uuid::nil(),
-                provider_code: "fixture_provider".to_string(),
-                routing_mode: domain::ModelProviderRoutingMode::ManualPrimary,
-                primary_instance_id,
-                updated_by: Uuid::nil(),
-            },
-        )
-        .await
-        .expect("routing should seed");
-    }
-
     #[tokio::test]
     async fn orchestration_runtime_compile_context_requires_source_instance_id() {
         let repository =
             super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
                 vec![],
             );
-        seed_primary_routing(&repository, repository.default_provider_instance_id()).await;
 
         let field = compile_error_field(
             &repository,
@@ -359,7 +337,6 @@ mod tests {
             super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
                 vec![],
             );
-        seed_primary_routing(&repository, repository.default_provider_instance_id()).await;
         let foreign_instance_id = repository.seed_provider_instance(
             "other_provider",
             "Foreign Provider Instance",
@@ -390,7 +367,6 @@ mod tests {
             );
         let instance_id = repository.default_provider_instance_id();
         repository.set_instance_status(instance_id, domain::ModelProviderInstanceStatus::Disabled);
-        seed_primary_routing(&repository, instance_id).await;
 
         let field = compile_error_field(
             &repository,
@@ -413,7 +389,6 @@ mod tests {
             super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
                 vec![],
             );
-        seed_primary_routing(&repository, repository.default_provider_instance_id()).await;
         let excluded_instance_id = repository.seed_provider_instance(
             "fixture_provider",
             "Excluded",
@@ -442,7 +417,6 @@ mod tests {
             super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
                 vec![],
             );
-        seed_primary_routing(&repository, repository.default_provider_instance_id()).await;
         let selected_instance_id = repository.seed_provider_instance(
             "fixture_provider",
             "Narrow Model Set",
@@ -472,7 +446,6 @@ mod tests {
             super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
                 vec![],
             );
-        seed_primary_routing(&repository, repository.default_provider_instance_id()).await;
         let selected_instance_id = repository.seed_provider_instance(
             "fixture_provider",
             "Cache Wider Than Enabled",

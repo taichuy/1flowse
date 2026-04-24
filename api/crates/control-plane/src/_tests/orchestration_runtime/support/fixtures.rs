@@ -272,7 +272,7 @@ esac
 pub struct SeededPreviewApplication {
     pub actor_user_id: Uuid,
     pub application_id: Uuid,
-    pub primary_provider_instance_id: Uuid,
+    pub source_provider_instance_id: Uuid,
 }
 
 pub struct SeededWaitingHumanRun {
@@ -341,7 +341,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         SeededPreviewApplication {
             actor_user_id,
             application_id: application.id,
-            primary_provider_instance_id: self.repository.default_provider_instance_id(),
+            source_provider_instance_id: self.repository.default_provider_instance_id(),
         }
     }
 
@@ -409,8 +409,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         name: &str,
     ) -> SeededPreviewApplication {
         let seeded = self.seed_application_with_flow(name).await;
-        let (primary_provider_instance_id, _) =
-            self.repository.seed_primary_and_backup_provider_instances();
+        let (source_provider_instance_id, _) = self.repository.seed_included_provider_instances();
         let editor_state = FlowRepository::get_or_create_editor_state(
             &self.repository,
             Uuid::nil(),
@@ -424,7 +423,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
             Uuid::nil(),
             seeded.application_id,
             seeded.actor_user_id,
-            build_ready_provider_flow_document(editor_state.flow.id, primary_provider_instance_id),
+            build_ready_provider_flow_document(editor_state.flow.id, source_provider_instance_id),
             domain::FlowChangeKind::Logical,
             "seed multi instance runtime preview flow",
         )
@@ -434,7 +433,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         SeededPreviewApplication {
             actor_user_id: seeded.actor_user_id,
             application_id: seeded.application_id,
-            primary_provider_instance_id,
+            source_provider_instance_id,
         }
     }
 

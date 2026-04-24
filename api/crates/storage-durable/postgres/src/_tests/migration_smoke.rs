@@ -48,6 +48,31 @@ async fn migration_smoke_creates_auth_and_workspace_tables() {
 }
 
 #[tokio::test]
+async fn migration_smoke_removes_legacy_model_provider_routing_table() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let schema: String = sqlx::query_scalar("select current_schema()")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    let legacy_table_count: i64 = sqlx::query_scalar(
+        r#"
+        select count(*)
+        from information_schema.tables
+        where table_schema = $1
+          and table_name = 'model_provider_routings'
+        "#,
+    )
+    .bind(&schema)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(legacy_table_count, 0);
+}
+
+#[tokio::test]
 async fn migration_smoke_creates_workspace_tables_and_workspace_scoped_indexes() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();

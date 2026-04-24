@@ -42,11 +42,10 @@ pub use model_provider::{
     ModelProviderCatalogCacheRecord, ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource,
     ModelProviderConfiguredModel, ModelProviderDiscoveryMode, ModelProviderInstanceRecord,
     ModelProviderInstanceStatus, ModelProviderMainInstanceRecord,
-    ModelProviderPreviewSessionRecord, ModelProviderRoutingMode, ModelProviderRoutingRecord,
-    ModelProviderSecretRecord, ModelProviderValidationStatus, PluginArtifactStatus,
-    PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState, PluginInstallationRecord,
-    PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord, PluginTaskStatus,
-    PluginVerificationStatus,
+    ModelProviderPreviewSessionRecord, ModelProviderSecretRecord, ModelProviderValidationStatus,
+    PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
+    PluginInstallationRecord, PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord,
+    PluginTaskStatus, PluginVerificationStatus,
 };
 pub use modeling::{
     DataModelScopeKind, MetadataAvailabilityStatus, ModelDefinitionRecord, ModelFieldKind,

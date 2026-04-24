@@ -16,7 +16,6 @@ struct InMemoryOrchestrationRuntimeState {
     caches_by_instance_id: HashMap<Uuid, domain::ModelProviderCatalogCacheRecord>,
     secret_json_by_instance_id: HashMap<Uuid, Value>,
     main_instances_by_provider: HashMap<(Uuid, String), domain::ModelProviderMainInstanceRecord>,
-    routings_by_provider: HashMap<String, domain::ModelProviderRoutingRecord>,
 }
 
 #[derive(Clone)]
@@ -462,25 +461,25 @@ impl InMemoryOrchestrationRuntimeRepository {
         installation.availability_status = availability_status;
     }
 
-    pub(crate) fn seed_primary_and_backup_provider_instances(&self) -> (Uuid, Uuid) {
+    pub(crate) fn seed_included_provider_instances(&self) -> (Uuid, Uuid) {
         let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
         let now = OffsetDateTime::now_utc();
         let installation_id = Self::fixture_provider_installation_id(&inner, "fixture_provider");
 
-        let primary_instance_id = Uuid::now_v7();
+        let alpha_instance_id = Uuid::now_v7();
         let backup_instance_id = self.default_provider_instance_id;
-        let primary_now = now - time::Duration::minutes(5);
+        let alpha_now = now - time::Duration::minutes(5);
 
-        let primary_instance = domain::ModelProviderInstanceRecord {
-            id: primary_instance_id,
+        let alpha_instance = domain::ModelProviderInstanceRecord {
+            id: alpha_instance_id,
             workspace_id: Uuid::nil(),
             installation_id,
             provider_code: "fixture_provider".to_string(),
             protocol: "openai_compatible".to_string(),
-            display_name: "Fixture Primary".to_string(),
+            display_name: "Fixture Alpha".to_string(),
             status: domain::ModelProviderInstanceStatus::Ready,
             config_json: json!({
-                "base_url": "https://primary.example.com/v1",
+                "base_url": "https://alpha.example.com/v1",
             }),
             configured_models: vec![domain::ModelProviderConfiguredModel {
                 model_id: "gpt-5.4-mini".to_string(),
@@ -491,8 +490,8 @@ impl InMemoryOrchestrationRuntimeRepository {
             included_in_main: true,
             created_by: Uuid::nil(),
             updated_by: Uuid::nil(),
-            created_at: primary_now,
-            updated_at: primary_now,
+            created_at: alpha_now,
+            updated_at: alpha_now,
         };
         let backup_instance = inner
             .instances_by_id
@@ -517,8 +516,8 @@ impl InMemoryOrchestrationRuntimeRepository {
         backup_instance.created_at = now;
         backup_instance.updated_at = now;
 
-        let primary_cache = domain::ModelProviderCatalogCacheRecord {
-            provider_instance_id: primary_instance_id,
+        let alpha_cache = domain::ModelProviderCatalogCacheRecord {
+            provider_instance_id: alpha_instance_id,
             model_discovery_mode: domain::ModelProviderDiscoveryMode::Hybrid,
             refresh_status: domain::ModelProviderCatalogRefreshStatus::Ready,
             source: domain::ModelProviderCatalogSource::Hybrid,
@@ -564,34 +563,21 @@ impl InMemoryOrchestrationRuntimeRepository {
 
         inner
             .instances_by_id
-            .insert(primary_instance_id, primary_instance);
+            .insert(alpha_instance_id, alpha_instance);
         inner
             .caches_by_instance_id
-            .insert(primary_instance_id, primary_cache);
+            .insert(alpha_instance_id, alpha_cache);
         inner
             .caches_by_instance_id
             .insert(backup_instance_id, backup_cache);
         inner
             .secret_json_by_instance_id
-            .insert(primary_instance_id, json!({ "api_key": "primary-secret" }));
+            .insert(alpha_instance_id, json!({ "api_key": "alpha-secret" }));
         inner
             .secret_json_by_instance_id
             .insert(backup_instance_id, json!({ "api_key": "backup-secret" }));
-        inner.routings_by_provider.insert(
-            "fixture_provider".to_string(),
-            domain::ModelProviderRoutingRecord {
-                workspace_id: Uuid::nil(),
-                provider_code: "fixture_provider".to_string(),
-                routing_mode: domain::ModelProviderRoutingMode::ManualPrimary,
-                primary_instance_id,
-                created_by: Uuid::nil(),
-                updated_by: Uuid::nil(),
-                created_at: now,
-                updated_at: now,
-            },
-        );
 
-        (primary_instance_id, backup_instance_id)
+        (alpha_instance_id, backup_instance_id)
     }
 
     pub(super) fn force_flow_run_status(&self, flow_run_id: Uuid, status: domain::FlowRunStatus) {
@@ -1016,61 +1002,6 @@ impl ModelProviderRepository for InMemoryOrchestrationRuntimeRepository {
             .main_instances_by_provider
             .get(&Self::main_instance_key(workspace_id, provider_code))
             .cloned())
-    }
-
-    async fn upsert_routing(
-        &self,
-        input: &crate::ports::UpsertModelProviderRoutingInput,
-    ) -> Result<domain::ModelProviderRoutingRecord> {
-        let now = OffsetDateTime::now_utc();
-        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
-        let existing = inner
-            .routings_by_provider
-            .get(&input.provider_code)
-            .cloned();
-        let record = domain::ModelProviderRoutingRecord {
-            workspace_id: input.workspace_id,
-            provider_code: input.provider_code.clone(),
-            routing_mode: input.routing_mode,
-            primary_instance_id: input.primary_instance_id,
-            created_by: existing
-                .as_ref()
-                .map(|record| record.created_by)
-                .unwrap_or(input.updated_by),
-            updated_by: input.updated_by,
-            created_at: existing
-                .as_ref()
-                .map(|record| record.created_at)
-                .unwrap_or(now),
-            updated_at: now,
-        };
-        inner
-            .routings_by_provider
-            .insert(record.provider_code.clone(), record.clone());
-        Ok(record)
-    }
-
-    async fn get_routing(
-        &self,
-        _workspace_id: Uuid,
-        provider_code: &str,
-    ) -> Result<Option<domain::ModelProviderRoutingRecord>> {
-        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
-        Ok(inner.routings_by_provider.get(provider_code).cloned())
-    }
-
-    async fn list_routings(
-        &self,
-        _workspace_id: Uuid,
-    ) -> Result<Vec<domain::ModelProviderRoutingRecord>> {
-        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
-        Ok(inner.routings_by_provider.values().cloned().collect())
-    }
-
-    async fn delete_routing(&self, _workspace_id: Uuid, provider_code: &str) -> Result<()> {
-        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
-        inner.routings_by_provider.remove(provider_code);
-        Ok(())
     }
 
     async fn create_preview_session(
