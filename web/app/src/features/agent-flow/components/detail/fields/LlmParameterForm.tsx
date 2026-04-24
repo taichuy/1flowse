@@ -12,6 +12,7 @@ import {
   Tooltip,
   Typography
 } from 'antd';
+import type { InputNumberProps } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { SchemaDynamicFormRendererProps } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
@@ -36,9 +37,6 @@ type LlmParameterField = NonNullable<
 >['fields'][number];
 
 const DEFAULT_CONTEXT_WINDOW_TOKENS = 16_000;
-const LLM_PARAMETER_BLUE = '#69b1ff';
-const LLM_PARAMETER_BLUE_LIGHT = '#bae0ff';
-const LLM_PARAMETER_RAIL = '#eef3f8';
 
 function getNodeConfig(adapter: SchemaDynamicFormRendererProps['adapter']) {
   const node = adapter.getDerived('node') as
@@ -177,26 +175,22 @@ function LlmNumericControl({
     return clampNumericValue(nextValue, min, max);
   }
 
+  const onChange: InputNumberProps['onChange'] = (next) => {
+    if (typeof next !== 'number' || Number.isNaN(next)) {
+      return;
+    }
+
+    setDraftValue(normalizeNextValue(next));
+  };
+
   return (
     <div className="agent-flow-llm-parameter-form__numeric-control">
       <Slider
         min={min}
         max={max}
         step={step}
-        value={draftValue}
-        styles={{
-          track: { backgroundColor: LLM_PARAMETER_BLUE_LIGHT },
-          tracks: { backgroundColor: LLM_PARAMETER_BLUE_LIGHT },
-          handle: {
-            borderColor: LLM_PARAMETER_BLUE
-          },
-          rail: { backgroundColor: LLM_PARAMETER_RAIL }
-        }}
-        onChange={(next) => {
-          const nextValue = Array.isArray(next) ? (next[0] ?? min) : next;
-
-          setDraftValue(normalizeNextValue(nextValue));
-        }}
+        value={typeof draftValue === 'number' ? draftValue : 0}
+        onChange={onChange}
         onChangeComplete={(next) => {
           const nextValue = Array.isArray(next) ? (next[0] ?? min) : next;
 
@@ -211,14 +205,12 @@ function LlmNumericControl({
           step={step}
           precision={field.precision}
           value={draftValue}
-          onChange={(next) => {
-            const nextValue =
-              typeof next === 'number'
-                ? normalizeNextValue(next)
-                : getNumericDefaultValue(field);
-
-            setDraftValue(getNumericValue(field, nextValue));
-            nextParameters(nextValue);
+          onChange={onChange}
+          onBlur={() => {
+            nextParameters(draftValue);
+          }}
+          onPressEnter={() => {
+            nextParameters(draftValue);
           }}
         />
         <Tooltip title="还原默认值">
