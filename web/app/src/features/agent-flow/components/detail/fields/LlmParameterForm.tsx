@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Button,
+  ConfigProvider,
   Empty,
   Input,
   InputNumber,
@@ -12,7 +13,7 @@ import {
   Tooltip,
   Typography
 } from 'antd';
-import type { InputNumberProps } from 'antd';
+import type { InputNumberProps, ThemeConfig } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { SchemaDynamicFormRendererProps } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
@@ -37,6 +38,26 @@ type LlmParameterField = NonNullable<
 >['fields'][number];
 
 const DEFAULT_CONTEXT_WINDOW_TOKENS = 16_000;
+const NUMERIC_CONTROL_THEME: ThemeConfig = {
+  token: {
+    colorPrimary: '#1677ff',
+    colorInfo: '#1677ff'
+  },
+  components: {
+    Slider: {
+      trackBg: '#91caff',
+      trackHoverBg: '#69b1ff',
+      handleColor: '#1677ff',
+      handleActiveColor: '#0958d9',
+      handleActiveOutlineColor: 'rgba(5, 145, 255, 0.12)'
+    },
+    InputNumber: {
+      hoverBorderColor: '#4096ff',
+      activeBorderColor: '#1677ff',
+      activeShadow: '0 0 0 2px rgba(5, 145, 255, 0.1)'
+    }
+  }
+};
 
 function getNodeConfig(adapter: SchemaDynamicFormRendererProps['adapter']) {
   const node = adapter.getDerived('node') as
@@ -81,6 +102,18 @@ function getNumericValue(field: LlmParameterField, value: unknown) {
 
 function clampNumericValue(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function formatNumericInputValue(value: unknown) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(value) : '';
+  }
+
+  if (typeof value === 'string') {
+    return value.endsWith('.') ? value.slice(0, -1) : value;
+  }
+
+  return '';
 }
 
 function formatParameterValue(value: unknown) {
@@ -184,47 +217,50 @@ function LlmNumericControl({
   };
 
   return (
-    <div className="agent-flow-llm-parameter-form__numeric-control">
-      <Slider
-        min={min}
-        max={max}
-        step={step}
-        value={typeof draftValue === 'number' ? draftValue : 0}
-        onChange={onChange}
-        onChangeComplete={(next) => {
-          const nextValue = Array.isArray(next) ? (next[0] ?? min) : next;
-
-          nextParameters(normalizeNextValue(nextValue));
-        }}
-      />
-      <div className="agent-flow-llm-parameter-form__number-actions">
-        <InputNumber
-          aria-label={`${field.label} 当前值`}
+    <ConfigProvider theme={NUMERIC_CONTROL_THEME}>
+      <div className="agent-flow-llm-parameter-form__numeric-control">
+        <Slider
           min={min}
           max={max}
           step={step}
-          precision={field.precision}
-          value={draftValue}
+          value={typeof draftValue === 'number' ? draftValue : 0}
           onChange={onChange}
-          onBlur={() => {
-            nextParameters(draftValue);
-          }}
-          onPressEnter={() => {
-            nextParameters(draftValue);
+          onChangeComplete={(next) => {
+            const nextValue = Array.isArray(next) ? (next[0] ?? min) : next;
+
+            nextParameters(normalizeNextValue(nextValue));
           }}
         />
-        <Tooltip title="还原默认值">
-          <Button
-            type="text"
-            size="small"
-            aria-label={`${field.label} 还原默认值`}
-            className="agent-flow-llm-parameter-form__default-icon"
-            icon={<ReloadOutlined />}
-            onClick={restoreDefaultValue}
+        <div className="agent-flow-llm-parameter-form__number-actions">
+          <InputNumber
+            aria-label={`${field.label} 当前值`}
+            min={min}
+            max={max}
+            step={step}
+            precision={field.precision}
+            value={draftValue}
+            formatter={(next) => formatNumericInputValue(next)}
+            onChange={onChange}
+            onBlur={() => {
+              nextParameters(draftValue);
+            }}
+            onPressEnter={() => {
+              nextParameters(draftValue);
+            }}
           />
-        </Tooltip>
+          <Tooltip title="还原默认值">
+            <Button
+              type="text"
+              size="small"
+              aria-label={`${field.label} 还原默认值`}
+              className="agent-flow-llm-parameter-form__default-icon"
+              icon={<ReloadOutlined />}
+              onClick={restoreDefaultValue}
+            />
+          </Tooltip>
+        </div>
       </div>
-    </div>
+    </ConfigProvider>
   );
 }
 
