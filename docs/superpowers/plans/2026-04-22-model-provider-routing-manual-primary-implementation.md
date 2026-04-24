@@ -1,5 +1,7 @@
 # Model Provider Routing Manual Primary Implementation Plan
 
+> **已废弃 / Superseded：** 本计划实现的是旧 `manual_primary / primary_instance_id` 路由方案，已被 [模型供应商主实例聚合设计](../specs/2026-04-23-model-provider-main-instance-aggregation-design.md) 和对应执行计划取代。后续不要按本文继续实现、补测或复制 `storage-pg` 路径；它只作为历史执行记录保留。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the current “latest ready instance wins” behavior with an explicit workspace-level provider routing layer that supports `manual_primary` selection, and make settings, model-provider options, and orchestration runtime all resolve through the same primary instance.

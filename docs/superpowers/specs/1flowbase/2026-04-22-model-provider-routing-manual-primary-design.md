@@ -1,5 +1,7 @@
 # 1flowbase 模型供应商路由层与手动主实例设计稿
 
+> **已废弃 / Superseded：** 本文的 `manual_primary / primary_instance_id` 方案已被 [模型供应商主实例聚合设计](../../2026-04-23-model-provider-main-instance-aggregation-design.md) 取代。后续实现、评审和排障不要再把本文作为当前产品真相；它只保留为历史设计背景。
+
 日期：2026-04-22
 状态：已确认设计，待用户审阅
 

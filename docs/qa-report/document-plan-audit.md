@@ -1,5 +1,7 @@
 # 文档计划审计优化报告
 
+> **历史 QA 报告：** 本报告反映 `2026-04-17` 当时的文档/代码状态，文中的旧路径和旧实现状态不代表当前架构真相。后续判断当前路径与规范时，以根目录 `AGENTS.md`、`api/AGENTS.md`、`web/AGENTS.md` 和最新 spec / plan 为准。
+
 更新时间：`2026-04-17 07:09 CST`
 
 审计模式：`qa-evaluation / project evaluation`

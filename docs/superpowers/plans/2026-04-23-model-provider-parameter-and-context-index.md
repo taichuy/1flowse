@@ -1,5 +1,7 @@
 # Model Provider Parameter And Context Plan Index
 
+> **历史执行索引 / 当前路径口径：** 本索引下的部分执行计划生成于 `storage-pg` 重命名前。后续如果继续参考这些计划，只以设计规则和验收语义为准；存储路径按 `api/crates/storage-durable/postgres`，crate 名按 `storage-postgres`，不要复制旧 `storage-pg` 命令。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn the approved provider-level parameter schema and model-level context override design into an execution map that lands consistent host contracts, settings workflows, Agent Flow consumers, and an upgraded `openai_compatible` plugin package with verified packaging metadata.
