@@ -179,8 +179,7 @@ function renderNumericControl({
           track: { backgroundColor: LLM_PARAMETER_BLUE_LIGHT },
           tracks: { backgroundColor: LLM_PARAMETER_BLUE_LIGHT },
           handle: {
-            borderColor: LLM_PARAMETER_BLUE,
-            boxShadow: `0 0 0 2px ${LLM_PARAMETER_BLUE_LIGHT}`
+            borderColor: LLM_PARAMETER_BLUE
           },
           rail: { backgroundColor: LLM_PARAMETER_RAIL }
         }}
