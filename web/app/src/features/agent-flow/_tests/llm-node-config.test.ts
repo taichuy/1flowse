@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 
 import {
   DEFAULT_LLM_PARAMETERS,
+  getLlmParameterDefaultValue,
   getLlmModelProvider,
   getLlmParameters
 } from '../lib/llm-node-config';
@@ -59,5 +60,32 @@ describe('llm-node-config', () => {
         max_tokens: 1024
       })
     ).toEqual(DEFAULT_LLM_PARAMETERS);
+  });
+
+  test('getLlmParameterDefaultValue derives stable defaults when schema omits them', () => {
+    expect(
+      getLlmParameterDefaultValue({
+        key: 'temperature',
+        label: 'Temperature',
+        type: 'number',
+        required: false,
+        advanced: false,
+        options: [],
+        visible_when: [],
+        disabled_when: []
+      })
+    ).toBe(0);
+    expect(
+      getLlmParameterDefaultValue({
+        key: 'stop',
+        label: 'Stop',
+        type: 'string_list',
+        required: false,
+        advanced: false,
+        options: [],
+        visible_when: [],
+        disabled_when: []
+      })
+    ).toEqual([]);
   });
 });

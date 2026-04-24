@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
+  Button,
   Empty,
   Input,
   InputNumber,
@@ -18,6 +19,7 @@ import {
 } from '../../../api/model-provider-options';
 import {
   DEFAULT_LLM_PARAMETERS,
+  getLlmParameterDefaultValue,
   getLlmModelProvider,
   getLlmParameters,
   type LlmNodeParameters
@@ -26,6 +28,10 @@ import {
   findLlmModelOption,
   findLlmProviderOption
 } from '../../../lib/model-options';
+
+type LlmParameterField = NonNullable<
+  NonNullable<ReturnType<typeof findLlmProviderOption>>['parameterForm']
+>['fields'][number];
 
 function getNodeConfig(adapter: SchemaDynamicFormRendererProps['adapter']) {
   const node = adapter.getDerived('node') as
@@ -54,41 +60,115 @@ function updateParameters(
   adapter.setValue('config.llm_parameters', nextParameters);
 }
 
-function renderFieldControl({
+function getNumericDefaultValue(field: LlmParameterField) {
+  const defaultValue = getLlmParameterDefaultValue(field);
+
+  return typeof defaultValue === 'number' && Number.isFinite(defaultValue)
+    ? defaultValue
+    : 0;
+}
+
+function getNumericValue(field: LlmParameterField, value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : getNumericDefaultValue(field);
+}
+
+function formatParameterValue(value: unknown) {
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  if (typeof value === 'string') {
+    return value || '空';
+  }
+
+  if (Array.isArray(value)) {
+    return value.length === 0 ? '空数组' : JSON.stringify(value);
+  }
+
+  if (value && typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+
+  return '空';
+}
+
+function getSliderBounds(field: LlmParameterField, currentValue: number) {
+  const min = typeof field.min === 'number' ? field.min : 0;
+  const inferredMax =
+    field.type === 'integer'
+      ? Math.max(1, currentValue, getNumericDefaultValue(field), 4096)
+      : Math.max(1, currentValue, getNumericDefaultValue(field));
+  const max = typeof field.max === 'number' ? field.max : inferredMax;
+
+  return {
+    min,
+    max: max > min ? max : min + 1
+  };
+}
+
+function renderNumericControl({
   field,
-  enabled,
   value,
   nextParameters
 }: {
-  field: NonNullable<
-    NonNullable<ReturnType<typeof findLlmProviderOption>>['parameterForm']
-  >['fields'][number];
-  enabled: boolean;
+  field: LlmParameterField;
   value: unknown;
   nextParameters: (nextValue: unknown) => void;
 }) {
-  if (field.control === 'slider') {
-    return (
+  const numericValue = getNumericValue(field, value);
+  const { min, max } = getSliderBounds(field, numericValue);
+  const step = field.step ?? (field.type === 'integer' ? 1 : 0.1);
+
+  return (
+    <div className="agent-flow-llm-parameter-form__numeric-control">
       <Slider
-        disabled={!enabled}
-        min={field.min ?? 0}
-        max={field.max ?? 1}
-        step={field.step ?? 0.1}
-        value={
-          typeof value === 'number' ? value : Number(field.default_value ?? 0)
-        }
+        min={min}
+        max={max}
+        step={step}
+        value={numericValue}
         onChange={(next) =>
-          nextParameters(Array.isArray(next) ? (next[0] ?? 0) : next)
+          nextParameters(Array.isArray(next) ? (next[0] ?? min) : next)
         }
       />
-    );
+      <InputNumber
+        aria-label={`${field.label} 当前值`}
+        min={field.min}
+        max={field.max}
+        step={step}
+        precision={field.precision}
+        value={numericValue}
+        onChange={(next) =>
+          nextParameters(typeof next === 'number' ? next : getNumericDefaultValue(field))
+        }
+      />
+    </div>
+  );
+}
+
+function renderFieldControl({
+  field,
+  value,
+  nextParameters
+}: {
+  field: LlmParameterField;
+  value: unknown;
+  nextParameters: (nextValue: unknown) => void;
+}) {
+  if (
+    field.control === 'slider' ||
+    field.type === 'integer' ||
+    field.type === 'number' ||
+    field.control === 'number'
+  ) {
+    return renderNumericControl({ field, value, nextParameters });
   }
 
   if (field.control === 'switch' || field.type === 'boolean') {
     return (
       <Switch
         checked={Boolean(value)}
-        disabled={!enabled}
         onChange={(checked) => nextParameters(checked)}
       />
     );
@@ -98,7 +178,6 @@ function renderFieldControl({
     return (
       <Select
         style={{ width: '100%' }}
-        disabled={!enabled}
         value={value as string | number | boolean | undefined}
         options={(field.options ?? []).map((option) => ({
           label: option.label,
@@ -113,7 +192,6 @@ function renderFieldControl({
     return (
       <Input.TextArea
         rows={4}
-        disabled={!enabled}
         value={typeof value === 'string' ? value : String(value ?? '')}
         placeholder={field.placeholder}
         onChange={(event) => nextParameters(event.target.value)}
@@ -125,7 +203,6 @@ function renderFieldControl({
     return (
       <Input.TextArea
         rows={6}
-        disabled={!enabled}
         value={
           typeof value === 'string'
             ? value
@@ -137,28 +214,8 @@ function renderFieldControl({
     );
   }
 
-  if (
-    field.type === 'integer' ||
-    field.type === 'number' ||
-    field.control === 'number'
-  ) {
-    return (
-      <InputNumber
-        style={{ width: '100%' }}
-        disabled={!enabled}
-        min={field.min}
-        max={field.max}
-        step={field.step ?? (field.type === 'integer' ? 1 : 0.1)}
-        precision={field.precision}
-        value={typeof value === 'number' ? value : undefined}
-        onChange={(next) => nextParameters(next)}
-      />
-    );
-  }
-
   return (
     <Input
-      disabled={!enabled}
       value={typeof value === 'string' ? value : String(value ?? '')}
       placeholder={field.placeholder}
       onChange={(event) => nextParameters(event.target.value)}
@@ -279,6 +336,7 @@ export function LlmParameterForm({
                 alwaysEnabled
               );
               const value = getFieldValue(parameters, field.key);
+              const defaultValue = getLlmParameterDefaultValue(field);
               const nextParameters = (
                 nextValue: unknown,
                 nextEnabled = enabled
@@ -313,10 +371,25 @@ export function LlmParameterForm({
                   <div className="agent-flow-llm-parameter-form__row-control">
                     {renderFieldControl({
                       field,
-                      enabled,
                       value,
                       nextParameters: (nextValue) => nextParameters(nextValue)
                     })}
+                    <div className="agent-flow-llm-parameter-form__default">
+                      <Typography.Text
+                        type="secondary"
+                        className="agent-flow-llm-parameter-form__default-value"
+                      >
+                        默认值 {formatParameterValue(defaultValue)}
+                      </Typography.Text>
+                      <Button
+                        type="link"
+                        size="small"
+                        className="agent-flow-llm-parameter-form__default-action"
+                        onClick={() => nextParameters(defaultValue)}
+                      >
+                        还原默认值
+                      </Button>
+                    </div>
                   </div>
                   <div className="agent-flow-llm-parameter-form__row-toggle">
                     {!alwaysEnabled ? (
@@ -326,7 +399,7 @@ export function LlmParameterForm({
                           nextParameters(
                             parameters.items[field.key]?.value ??
                               value ??
-                              field.default_value,
+                              defaultValue,
                             checked
                           )
                         }

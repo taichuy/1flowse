@@ -479,6 +479,13 @@
   min-width: 0;
 }
 
+.agent-flow-llm-parameter-form__numeric-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  gap: 12px;
+  align-items: center;
+}
+
 .agent-flow-llm-parameter-form__row-control .ant-input,
 .agent-flow-llm-parameter-form__row-control .ant-input-number,
 .agent-flow-llm-parameter-form__row-control .ant-select {
@@ -487,6 +494,24 @@
 
 .agent-flow-llm-parameter-form__row-control .ant-slider {
   margin: 0;
+}
+
+.agent-flow-llm-parameter-form__default {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.agent-flow-llm-parameter-form__default-value {
+  font-size: 12px;
+}
+
+.agent-flow-llm-parameter-form__default-action {
+  height: auto;
+  padding: 0;
+  font-size: 12px;
 }
 
 .agent-flow-llm-parameter-form__row-toggle {
@@ -768,6 +793,10 @@
 
   .agent-flow-llm-parameter-form__row-control {
     grid-column: 1 / -1;
+  }
+
+  .agent-flow-llm-parameter-form__numeric-control {
+    grid-template-columns: minmax(0, 1fr) 88px;
   }
 
   .agent-flow-model-settings__row {
