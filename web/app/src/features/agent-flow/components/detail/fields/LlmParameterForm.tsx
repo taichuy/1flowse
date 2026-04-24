@@ -1,4 +1,4 @@
-import { ReloadOutlined } from '@ant-design/icons';
+import { QuestionCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -114,26 +114,6 @@ function formatNumericInputValue(value: unknown) {
   }
 
   return '';
-}
-
-function formatParameterValue(value: unknown) {
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-
-  if (typeof value === 'string') {
-    return value || '空';
-  }
-
-  if (Array.isArray(value)) {
-    return value.length === 0 ? '空数组' : JSON.stringify(value);
-  }
-
-  if (value && typeof value === 'object') {
-    return JSON.stringify(value);
-  }
-
-  return '空';
 }
 
 function isMaxTokenField(field: LlmParameterField) {
@@ -488,15 +468,17 @@ export function LlmParameterForm({
                   className="agent-flow-llm-parameter-form__row"
                 >
                   <div className="agent-flow-llm-parameter-form__row-label">
-                    <Typography.Text strong>{field.label}</Typography.Text>
-                    {field.description ? (
-                      <Typography.Text
-                        type="secondary"
-                        className="agent-flow-llm-parameter-form__row-description"
-                      >
-                        {field.description}
-                      </Typography.Text>
-                    ) : null}
+                    <span className="agent-flow-llm-parameter-form__label-line">
+                      <Typography.Text strong>{field.label}</Typography.Text>
+                      {field.description ? (
+                        <Tooltip title={field.description}>
+                          <QuestionCircleOutlined
+                            className="agent-flow-llm-parameter-form__help-icon"
+                            aria-label={`${field.label} 字段说明`}
+                          />
+                        </Tooltip>
+                      ) : null}
+                    </span>
                   </div>
                   <div className="agent-flow-llm-parameter-form__row-control">
                     {renderFieldControl({
@@ -506,29 +488,6 @@ export function LlmParameterForm({
                       nextParameters: (nextValue) => nextParameters(nextValue),
                       restoreDefaultValue: () => nextParameters(defaultValue)
                     })}
-                    <div className="agent-flow-llm-parameter-form__default">
-                      <Typography.Text
-                        type="secondary"
-                        className="agent-flow-llm-parameter-form__default-value"
-                      >
-                        默认值 {formatParameterValue(defaultValue)}
-                      </Typography.Text>
-                      {field.type !== 'integer' &&
-                      field.type !== 'number' &&
-                      field.control !== 'slider' &&
-                      field.control !== 'number' ? (
-                        <Tooltip title="还原默认值">
-                          <Button
-                            type="text"
-                            size="small"
-                            aria-label={`${field.label} 还原默认值`}
-                            className="agent-flow-llm-parameter-form__default-icon"
-                            icon={<ReloadOutlined />}
-                            onClick={() => nextParameters(defaultValue)}
-                          />
-                        </Tooltip>
-                      ) : null}
-                    </div>
                   </div>
                   <div className="agent-flow-llm-parameter-form__row-toggle">
                     {!alwaysEnabled ? (

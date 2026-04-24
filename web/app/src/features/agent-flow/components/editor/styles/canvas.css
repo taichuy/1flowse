@@ -470,9 +470,22 @@
   min-width: 0;
 }
 
-.agent-flow-llm-parameter-form__row-description {
-  font-size: 12px;
-  line-height: 1.4;
+.agent-flow-llm-parameter-form__label-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.agent-flow-llm-parameter-form__help-icon {
+  flex: none;
+  color: #7b8982;
+  font-size: 13px;
+  cursor: help;
+}
+
+.agent-flow-llm-parameter-form__help-icon:hover {
+  color: #1677ff;
 }
 
 .agent-flow-llm-parameter-form__row-control {
@@ -501,18 +514,6 @@
 
 .agent-flow-llm-parameter-form__row-control .ant-slider {
   margin: 0;
-}
-
-.agent-flow-llm-parameter-form__default {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.agent-flow-llm-parameter-form__default-value {
-  font-size: 12px;
 }
 
 .agent-flow-llm-parameter-form__default-icon {
