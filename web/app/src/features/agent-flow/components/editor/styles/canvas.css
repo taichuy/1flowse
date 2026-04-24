@@ -481,8 +481,15 @@
 
 .agent-flow-llm-parameter-form__numeric-control {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 96px;
+  grid-template-columns: minmax(0, 1fr) 132px;
   gap: 12px;
+  align-items: center;
+}
+
+.agent-flow-llm-parameter-form__number-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -508,10 +515,15 @@
   font-size: 12px;
 }
 
-.agent-flow-llm-parameter-form__default-action {
-  height: auto;
-  padding: 0;
-  font-size: 12px;
+.agent-flow-llm-parameter-form__default-icon {
+  width: 28px;
+  height: 28px;
+  color: #4f8edc;
+}
+
+.agent-flow-llm-parameter-form__default-icon:hover {
+  color: #2457d6;
+  background: #eef6ff;
 }
 
 .agent-flow-llm-parameter-form__row-toggle {
@@ -796,7 +808,7 @@
   }
 
   .agent-flow-llm-parameter-form__numeric-control {
-    grid-template-columns: minmax(0, 1fr) 88px;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .agent-flow-model-settings__row {
