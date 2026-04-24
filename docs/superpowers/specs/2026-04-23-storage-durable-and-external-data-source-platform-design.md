@@ -108,6 +108,8 @@
 
 #### `storage-postgres`
 
+物理路径为 `api/crates/storage-durable/postgres`，package/crate 名保持 `storage-postgres`。
+
 只负责 PostgreSQL 具体实现，包含：
 
 1. 连接创建
@@ -133,7 +135,7 @@
 5. import / sync job state
 6. workspace 级绑定和配置
 
-真正接外部源的 adapter 不放在主仓库核心主线里，而是走插件扩展口。
+真正接外部源的 adapter 不放在主仓库核心主线里，而是走插件扩展口。这里的插件是外部协议翻译/接入适配层，不是持久化 backend，也不拥有平台控制面状态。
 
 ## 主仓库官方支持矩阵
 
@@ -189,7 +191,7 @@
 
 1. `storage-durable` 不放任何物理 migration
 2. migration 永远归具体 backend 所有
-3. 当前只有 `storage-postgres/migrations`
+3. 当前只有 `storage-durable/postgres/migrations`
 
 ### 未来第二种 durable backend 的处理
 
@@ -206,6 +208,8 @@
 ### 设计原则
 
 外部数据源平台从第一天开始就按“平台扩展单元”设计，但契约先收窄，不追求一次到位。
+
+数据源插件的层级定位是外部协议翻译/接入适配层：把 PostgreSQL、MySQL、Salesforce、Notion、HTTP API 等外部系统差异翻译成平台可理解的 catalog、schema、preview rows 和 import snapshot。插件不直接成为 `storage-durable` 的下级 backend，也不拥有平台权限、secret、job 状态或落盘入口。
 
 V1 只支持：
 
@@ -249,6 +253,8 @@ V1 不支持：
 5. `runtime.protocol = stdio_json`
 
 这允许平台继续复用现有 `plugin-framework` 的安装、artifact 校验、运行时调用和权限模型。
+
+因此，`data-source-postgres` 这类插件即使连接的是 PostgreSQL，也属于“外部 PostgreSQL 数据源翻译接入”，不是平台主库 `storage-postgres` 的同级或子实现。
 
 ### 最小运行时方法
 
@@ -395,7 +401,7 @@ V1 最低要求是前四个；`SyncJob` 和 `Checkpoint` 可在 V2 引入。
 
 ### V1
 
-1. `storage-pg` 重命名为 `storage-postgres`
+1. `storage-pg` 重命名为 `storage-postgres`，物理目录收纳到 `storage-durable/postgres`
 2. 新建 `storage-durable`
 3. `api-server` 改为只依赖 `storage-durable`
 4. 新建 `data-source-platform` 的基础领域模型与 service
@@ -458,8 +464,8 @@ V1 最低要求是前四个；`SyncJob` 和 `Checkpoint` 可在 V2 引入。
 
 最终架构结论如下：
 
-1. `storage-durable + storage-postgres` 负责平台主存储
-2. `data-source-platform + data-source plugin` 负责外部数据源接入
+1. `storage-durable + storage-postgres` 负责平台主存储，其中 `storage-postgres` 物理路径是 `storage-durable/postgres`
+2. `data-source-platform + data-source plugin` 负责外部数据源接入，插件定位是外部协议翻译/接入适配层
 3. 主仓库官方只维护 `PostgreSQL` 主存储
 4. 外部数据源从一开始就按插件扩展口设计
 5. V1 只做接入、发现、预览、导入，不做统一写回

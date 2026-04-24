@@ -4,7 +4,7 @@
 
 **Goal:** Replace the implementation-named `storage-pg` boundary with `storage-durable + storage-postgres`, keep PostgreSQL as the only official durable backend in the main repo, and add a separate plugin-oriented `data-source-platform` path for future external database, SaaS, and API adapters.
 
-**Architecture:** Execute this work in five ordered tracks. First, introduce the new durable boundary crate plus the renamed PostgreSQL implementation crate. Second, rewire API-server and docs onto the new durable names and delete the old crate. Third, add a dedicated data-source plugin contract and plugin-runner host instead of forcing external sources into the provider contract. Fourth, add `data-source-platform` domain, control-plane, PostgreSQL persistence, and API routes. Fifth, publish a concrete example plugin template, author guidance, and close the feature with focused regression plus QA.
+**Architecture:** Execute this work in five ordered tracks. First, introduce the new durable boundary crate plus the renamed PostgreSQL implementation crate under `storage-durable/postgres`. Second, rewire API-server and docs onto the new durable names and delete the old crate. Third, add a dedicated data-source plugin contract and plugin-runner host instead of forcing external sources into the provider contract. Fourth, add `data-source-platform` domain, control-plane, PostgreSQL persistence, and API routes. Fifth, publish a concrete example plugin template, author guidance, and close the feature with focused regression plus QA.
 
 **Tech Stack:** Markdown planning docs only.
 
@@ -66,9 +66,9 @@ Run this last. It assumes both the durable boundary migration and the data-sourc
 These rules apply to every plan in this set:
 
 1. The main repo officially supports only one durable backend: `PostgreSQL`.
-2. `storage-durable` is the capability boundary; `storage-postgres` is the concrete implementation.
+2. `storage-durable` is the capability boundary; `storage-postgres` is the concrete implementation crate under `storage-durable/postgres`.
 3. External databases, SaaS products, and HTTP APIs must not be folded into `storage-durable`.
-4. External data sources enter through plugin-based runtime extensions and platform-owned metadata records.
+4. External data sources enter through plugin-based runtime extensions as protocol translation/access adapters plus platform-owned metadata records.
 5. V1 supports `validate_config`, `test_connection`, `discover_catalog`, `describe_resource`, `preview_read`, and `import_snapshot`; it does not define a generic write-back contract.
 6. Runtime extensions must not register HTTP routes, own OAuth callback endpoints, or run platform migrations.
 7. Platform-owned metadata for external sources still lands in main durable storage.
@@ -80,10 +80,10 @@ Use these names consistently across plans:
 
 1. “main durable storage” means the platform-owned long-lived persistence boundary.
 2. “`storage-durable`” means the main durable capability crate.
-3. “`storage-postgres`” means the PostgreSQL implementation crate.
+3. “`storage-postgres`” means the PostgreSQL implementation crate at `storage-durable/postgres`.
 4. “external data source” means a remote database, SaaS object model, or HTTP/API resource system that the platform does not own physically.
 5. “`data-source-platform`” means the platform metadata and orchestration layer for external sources.
-6. “data-source plugin” means a `runtime_extension` package that implements the `1flowbase.data_source/v1` contract.
+6. “data-source plugin” means a protocol translation/access adapter `runtime_extension` package that implements the `1flowbase.data_source/v1` contract.
 7. “preview read” means temporary, non-durable sample access.
 8. “import snapshot” means a controlled handoff into main durable storage.
 

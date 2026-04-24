@@ -21,17 +21,17 @@
 - `api/crates/storage-durable/src/runtime.rs`
 - `api/crates/storage-durable/src/_tests/mod.rs`
 - `api/crates/storage-durable/src/_tests/runtime_tests.rs`
-- `api/crates/storage-postgres/Cargo.toml`
-- `api/crates/storage-postgres/src/_tests/crate_smoke_tests.rs`
+- `api/crates/storage-durable/postgres/Cargo.toml`
+- `api/crates/storage-durable/postgres/src/_tests/crate_smoke_tests.rs`
 
 **Move / Copy**
-- `api/crates/storage-pg/src` -> `api/crates/storage-postgres/src`
-- `api/crates/storage-pg/migrations` -> `api/crates/storage-postgres/migrations`
+- `api/crates/storage-pg/src` -> `api/crates/storage-durable/postgres/src`
+- `api/crates/storage-pg/migrations` -> `api/crates/storage-durable/postgres/migrations`
 
 **Modify**
 - `api/Cargo.toml`
-- `api/crates/storage-postgres/src/lib.rs`
-- `api/crates/storage-postgres/src/_tests/mod.rs`
+- `api/crates/storage-durable/postgres/src/lib.rs`
+- `api/crates/storage-durable/postgres/src/_tests/mod.rs`
 
 **Notes**
 - Keep `api/crates/storage-pg` in place until the next plan finishes consumer rewires.
@@ -40,15 +40,15 @@
 ### Task 1: Create The New `storage-postgres` Crate Root
 
 **Files:**
-- Create: `api/crates/storage-postgres/Cargo.toml`
-- Create: `api/crates/storage-postgres/src/_tests/crate_smoke_tests.rs`
+- Create: `api/crates/storage-durable/postgres/Cargo.toml`
+- Create: `api/crates/storage-durable/postgres/src/_tests/crate_smoke_tests.rs`
 - Modify: `api/Cargo.toml`
-- Modify: `api/crates/storage-postgres/src/lib.rs`
-- Modify: `api/crates/storage-postgres/src/_tests/mod.rs`
+- Modify: `api/crates/storage-durable/postgres/src/lib.rs`
+- Modify: `api/crates/storage-durable/postgres/src/_tests/mod.rs`
 
 - [x] **Step 1: Write the failing smoke test for the renamed crate**
 
-Create `api/crates/storage-postgres/src/_tests/crate_smoke_tests.rs`:
+Create `api/crates/storage-durable/postgres/src/_tests/crate_smoke_tests.rs`:
 
 ```rust
 #[test]
@@ -57,7 +57,7 @@ fn crate_name_matches_storage_postgres() {
 }
 ```
 
-And wire it in `api/crates/storage-postgres/src/_tests/mod.rs`:
+And wire it in `api/crates/storage-durable/postgres/src/_tests/mod.rs`:
 
 ```rust
 mod crate_smoke_tests;
@@ -77,7 +77,7 @@ Expected:
 
 - [x] **Step 3: Copy the current PostgreSQL implementation into the new crate name**
 
-Create `api/crates/storage-postgres/Cargo.toml` from the current `storage-pg` manifest, but change the package name:
+Create `api/crates/storage-durable/postgres/Cargo.toml` from the current `storage-pg` manifest, but change the package name:
 
 ```toml
 [package]
@@ -135,7 +135,7 @@ Expected:
 - [x] **Step 5: Commit the renamed PostgreSQL root**
 
 ```bash
-git add api/Cargo.toml api/crates/storage-postgres
+git add api/Cargo.toml api/crates/storage-durable/postgres
 git commit -m "feat: add storage-postgres crate root"
 ```
 
@@ -285,7 +285,7 @@ git commit -m "feat: add storage-durable capability crate"
 **Files:**
 - Modify: `api/crates/storage-durable/src/lib.rs`
 - Modify: `api/crates/storage-durable/src/_tests/runtime_tests.rs`
-- Modify: `api/crates/storage-postgres/src/lib.rs`
+- Modify: `api/crates/storage-durable/postgres/src/lib.rs`
 
 - [x] **Step 1: Extend the tests so the public names are explicit**
 
@@ -344,6 +344,6 @@ Expected:
 - [x] **Step 5: Commit the frozen public surface**
 
 ```bash
-git add api/crates/storage-durable api/crates/storage-postgres
+git add api/crates/storage-durable api/crates/storage-durable/postgres
 git commit -m "refactor: freeze durable storage public surface"
 ```

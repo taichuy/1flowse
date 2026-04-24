@@ -171,7 +171,7 @@ members = [
   "crates/publish-gateway",
   "crates/access-control",
   "crates/plugin-framework",
-  "crates/storage-postgres",
+  "crates/storage-durable/postgres",
   "crates/storage-durable",
   "crates/storage-ephemeral",
   "crates/storage-object",
@@ -244,16 +244,16 @@ In `api/README.md`, change the durable crate description to:
 
 ```md
 - `crates/storage-durable`: Main durable storage boundary used by API-server and other hosts
-- `crates/storage-postgres`: PostgreSQL-backed repository implementations and migrations
+- `crates/storage-durable/postgres`: `storage-postgres` crate with PostgreSQL-backed repository implementations and migrations
 ```
 
 In `api/AGENTS.md`, update the durable rules to:
 
 ```md
 - `crates/storage-durable` 放平台主存储边界、主存储启动入口与健康检查入口。
-- `crates/storage-postgres` 放 PostgreSQL `repository impl`、查询、事务、`migrations`、存储层 `mapper`。
-- `crates/storage-postgres/src/*_repository.rs` 只实现存储端口，不承载 HTTP 语义。
-- `storage-postgres/migrations` 只放 PostgreSQL 数据库迁移。
+- `crates/storage-durable/postgres` 放 `storage-postgres` crate，是 PostgreSQL `repository impl`、查询、事务、`migrations`、存储层 `mapper`。
+- `crates/storage-durable/postgres/src/*_repository.rs` 只实现存储端口，不承载 HTTP 语义。
+- `storage-durable/postgres/migrations` 只放 PostgreSQL 数据库迁移。
 ```
 
 - [x] **Step 3: Re-run the docs grep**

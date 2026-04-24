@@ -6,4 +6,4 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-storage-postgres = { path = "../storage-postgres" }
+storage-postgres = { path = "postgres" }

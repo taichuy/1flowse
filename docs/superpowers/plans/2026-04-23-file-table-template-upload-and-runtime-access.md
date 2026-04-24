@@ -39,8 +39,8 @@
 - `api/crates/control-plane/src/_tests/mod.rs`
 - `api/crates/control-plane/src/_tests/support.rs`
 - `api/crates/control-plane/src/_tests/bootstrap_tests.rs`
-- `api/crates/storage-postgres/src/file_management_repository.rs`
-- `api/crates/storage-postgres/src/_tests/file_management_repository_tests.rs`
+- `api/crates/storage-durable/postgres/src/file_management_repository.rs`
+- `api/crates/storage-durable/postgres/src/_tests/file_management_repository_tests.rs`
 - `api/apps/api-server/src/app_state.rs`
 - `api/apps/api-server/src/config.rs`
 - `api/apps/api-server/src/lib.rs`
@@ -333,7 +333,7 @@ pub trait FileManagementRepository: Send + Sync {
 }
 ```
 
-Update `api/crates/storage-postgres/src/file_management_repository.rs` with the matching repository methods:
+Update `api/crates/storage-durable/postgres/src/file_management_repository.rs` with the matching repository methods:
 
 ```rust
     async fn find_file_table_by_code(
@@ -422,7 +422,7 @@ Expected:
 - [x] **Step 5: Commit the provisioning layer**
 
 ```bash
-git add api/crates/control-plane api/crates/storage-postgres
+git add api/crates/control-plane api/crates/storage-durable/postgres
 git commit -m "feat: add file table provisioning services"
 ```
 
@@ -434,8 +434,8 @@ git commit -m "feat: add file table provisioning services"
 - Modify: `api/crates/control-plane/src/bootstrap.rs`
 - Modify: `api/crates/control-plane/src/_tests/bootstrap_tests.rs`
 - Modify: `api/crates/control-plane/src/file_management/storage_service.rs`
-- Modify: `api/crates/storage-postgres/src/file_management_repository.rs`
-- Modify: `api/crates/storage-postgres/src/_tests/file_management_repository_tests.rs`
+- Modify: `api/crates/storage-durable/postgres/src/file_management_repository.rs`
+- Modify: `api/crates/storage-durable/postgres/src/_tests/file_management_repository_tests.rs`
 - Modify: `api/apps/api-server/src/app_state.rs`
 - Modify: `api/apps/api-server/src/config.rs`
 - Modify: `api/apps/api-server/src/lib.rs`
@@ -630,7 +630,7 @@ Expected:
 - [x] **Step 5: Commit the startup bootstrap wiring**
 
 ```bash
-git add api/crates/control-plane api/crates/storage-postgres api/apps/api-server
+git add api/crates/control-plane api/crates/storage-durable/postgres api/apps/api-server
 git commit -m "feat: bootstrap file management at api startup"
 ```
 

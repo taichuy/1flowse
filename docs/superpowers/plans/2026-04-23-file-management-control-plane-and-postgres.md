@@ -4,7 +4,7 @@
 
 **Goal:** Add the durable metadata layer for `file_storages` and `file_tables`, including domain records, permission catalog entries, control-plane services, and PostgreSQL repositories that later API and UI slices can safely consume.
 
-**Architecture:** Model file management as control-plane metadata, not runtime file content. `domain` owns durable record types, `access-control` owns the new management permission catalog, `control-plane` owns permission-checked services and ports, and `storage-postgres` owns migrations plus SQL implementations. This plan must not provision the built-in `attachments` runtime table yet; it only creates the metadata and service foundation that later plans depend on.
+**Architecture:** Model file management as control-plane metadata, not runtime file content. `domain` owns durable record types, `access-control` owns the new management permission catalog, `control-plane` owns permission-checked services and ports, and the `storage-postgres` crate under `storage-durable/postgres` owns migrations plus SQL implementations. This plan must not provision the built-in `attachments` runtime table yet; it only creates the metadata and service foundation that later plans depend on.
 
 **Tech Stack:** Rust workspace crates, `sqlx`, targeted `cargo test`.
 
@@ -22,9 +22,9 @@
 - `api/crates/control-plane/src/file_management/table_service.rs`
 - `api/crates/control-plane/src/ports/file_management.rs`
 - `api/crates/control-plane/src/_tests/file_management_service_tests.rs`
-- `api/crates/storage-postgres/src/file_management_repository.rs`
-- `api/crates/storage-postgres/src/_tests/file_management_repository_tests.rs`
-- `api/crates/storage-postgres/migrations/20260423203000_add_file_management_platform.sql`
+- `api/crates/storage-durable/postgres/src/file_management_repository.rs`
+- `api/crates/storage-durable/postgres/src/_tests/file_management_repository_tests.rs`
+- `api/crates/storage-durable/postgres/migrations/20260423203000_add_file_management_platform.sql`
 
 **Modify**
 - `api/crates/domain/src/lib.rs`
@@ -34,8 +34,8 @@
 - `api/crates/control-plane/src/ports/mod.rs`
 - `api/crates/control-plane/src/_tests/mod.rs`
 - `api/crates/control-plane/src/_tests/support.rs`
-- `api/crates/storage-postgres/src/lib.rs`
-- `api/crates/storage-postgres/src/_tests/mod.rs`
+- `api/crates/storage-durable/postgres/src/lib.rs`
+- `api/crates/storage-durable/postgres/src/_tests/mod.rs`
 
 **Notes**
 - This plan owns metadata tables and services only. Do not add upload routes, multipart parsing, or runtime file-record insertion here.
@@ -493,15 +493,15 @@ git commit -m "feat: add file management control plane services"
 ### Task 3: Add PostgreSQL Tables And Repository Implementations
 
 **Files:**
-- Create: `api/crates/storage-postgres/migrations/20260423203000_add_file_management_platform.sql`
-- Create: `api/crates/storage-postgres/src/file_management_repository.rs`
-- Create: `api/crates/storage-postgres/src/_tests/file_management_repository_tests.rs`
-- Modify: `api/crates/storage-postgres/src/lib.rs`
-- Modify: `api/crates/storage-postgres/src/_tests/mod.rs`
+- Create: `api/crates/storage-durable/postgres/migrations/20260423203000_add_file_management_platform.sql`
+- Create: `api/crates/storage-durable/postgres/src/file_management_repository.rs`
+- Create: `api/crates/storage-durable/postgres/src/_tests/file_management_repository_tests.rs`
+- Modify: `api/crates/storage-durable/postgres/src/lib.rs`
+- Modify: `api/crates/storage-durable/postgres/src/_tests/mod.rs`
 
 - [x] **Step 1: Write the failing PostgreSQL repository tests**
 
-Create `api/crates/storage-postgres/src/_tests/file_management_repository_tests.rs`:
+Create `api/crates/storage-durable/postgres/src/_tests/file_management_repository_tests.rs`:
 
 ```rust
 use control_plane::ports::{CreateFileStorageInput, FileManagementRepository, UpdateFileStorageBindingInput};
@@ -560,7 +560,7 @@ Expected:
 
 - [x] **Step 3: Add the migration and repository implementation**
 
-Create `api/crates/storage-postgres/migrations/20260423203000_add_file_management_platform.sql`:
+Create `api/crates/storage-durable/postgres/migrations/20260423203000_add_file_management_platform.sql`:
 
 ```sql
 create table if not exists file_storages (
@@ -605,7 +605,7 @@ create index if not exists file_tables_scope_idx
     on file_tables (scope_kind, scope_id, created_at desc);
 ```
 
-Create `api/crates/storage-postgres/src/file_management_repository.rs`:
+Create `api/crates/storage-durable/postgres/src/file_management_repository.rs`:
 
 ```rust
 use anyhow::Result;
@@ -786,7 +786,7 @@ impl FileManagementRepository for PgControlPlaneStore {
 }
 ```
 
-Update `api/crates/storage-postgres/src/lib.rs` and `_tests/mod.rs`:
+Update `api/crates/storage-durable/postgres/src/lib.rs` and `_tests/mod.rs`:
 
 ```rust
 pub mod file_management_repository;
@@ -808,7 +808,7 @@ Expected:
 - [x] **Step 5: Commit the durable metadata layer**
 
 ```bash
-git add api/crates/storage-postgres
+git add api/crates/storage-durable/postgres
 git commit -m "feat: persist file management metadata in postgres"
 ```
 
@@ -874,7 +874,7 @@ Expected:
 Run:
 
 ```bash
-git diff -- api/crates/domain api/crates/access-control api/crates/control-plane api/crates/storage-postgres
+git diff -- api/crates/domain api/crates/access-control api/crates/control-plane api/crates/storage-durable/postgres
 ```
 
 Expected:
@@ -884,6 +884,6 @@ Expected:
 - [x] **Step 5: Commit the completed control-plane and persistence foundation**
 
 ```bash
-git add api/crates/domain api/crates/access-control api/crates/control-plane api/crates/storage-postgres
+git add api/crates/domain api/crates/access-control api/crates/control-plane api/crates/storage-durable/postgres
 git commit -m "feat: finalize file management metadata foundation"
 ```

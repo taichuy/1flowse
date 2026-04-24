@@ -242,7 +242,7 @@ Add to `api/README.md`:
 
 ```md
 - `crates/storage-durable`: Main durable storage boundary
-- `crates/storage-postgres`: PostgreSQL durable implementation and migrations
+- `crates/storage-durable/postgres`: `storage-postgres` crate with PostgreSQL durable implementation and migrations
 - `crates/plugin-framework`: Plugin contracts, including model-provider, capability, and data-source runtime packages
 - `plugins/templates/data_source_http_fixture`: Example external data-source runtime-extension package
 ```
@@ -251,7 +251,8 @@ Add to `api/AGENTS.md`:
 
 ```md
 - `crates/storage-durable` 是平台主存储边界；只暴露宿主消费的稳定入口。
-- 外部数据库、SaaS、API 数据源统一走 `data-source` runtime extension，不塞进 `storage-durable`。
+- 外部数据库、SaaS、API 数据源统一走 `data-source` runtime extension；它是外部协议翻译/接入适配层，不塞进 `storage-durable`。
+- data-source plugin 只负责配置校验、连接测试、catalog/schema 发现、预览读取和导入快照输出；权限、secret、preview session、import job 与落盘由宿主和 `data-source-platform` 编排。
 - data-source plugin 禁止注册 HTTP 接口，禁止直接写平台数据库，禁止自管 OAuth callback。
 ```
 

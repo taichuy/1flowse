@@ -7,7 +7,7 @@
 - `crates/runtime-core`: runtime resource descriptors, registries, and capability slot engine
 - `crates/plugin-framework`: Plugin contracts, including model-provider, capability, and data-source runtime packages
 - `crates/storage-durable`: Main durable storage boundary used by API-server and other hosts
-- `crates/storage-postgres`: PostgreSQL-backed repository implementations and migrations
+- `crates/storage-durable/postgres`: `storage-postgres` crate with PostgreSQL-backed repository implementations and migrations
 - `crates/storage-ephemeral`: non-durable session and ephemeral coordination adapters
 - `plugins/templates/data_source_http_fixture`: Example external data-source runtime-extension package
 

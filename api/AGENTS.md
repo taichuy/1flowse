@@ -17,7 +17,7 @@
 - `crates/runtime-profile` 放运行目标、locale、profile fingerprint 与插件运行环境快照。
 - `crates/plugin-framework` 放插件消费类型、绑定约束、插件边界。
 - `crates/storage-durable` 放平台主存储边界、主存储启动入口与健康检查入口；只暴露宿主消费的稳定入口。
-- `crates/storage-postgres` 放 PostgreSQL `repository impl`、查询、事务、`migrations`、存储层 `mapper`。
+- `crates/storage-durable/postgres` 放 `storage-postgres` crate，是 PostgreSQL `repository impl`、查询、事务、`migrations`、存储层 `mapper`。
 - `crates/storage-ephemeral` 放非持久 session store、短期协同原语与可选 backend 适配。
 - `crates/storage-object` 放业务文件对象存储 driver 边界；内建 `local` 与 `rustfs` driver。
 - `crates/publish-gateway` 是发布网关边界。
@@ -32,9 +32,9 @@
 - `apps/api-server/src/middleware` 只做请求链路约束，不写业务状态变更。
 - `crates/control-plane/src/*` 是业务边界；关键写动作只能从命名明确的 `service command` 进入。
 - `crates/control-plane/src/ports/` 统一定义 `repository trait` 与外部端口。
-- `crates/storage-postgres/src/**/*_repository.rs`、`crates/storage-ephemeral/src/*` 只实现存储或短期协同端口，不承载 HTTP 语义。
+- `crates/storage-durable/postgres/src/**/*_repository.rs`、`crates/storage-ephemeral/src/*` 只实现存储或短期协同端口，不承载 HTTP 语义。
 - actor / scope 过滤型查询属于持久化查询职责；状态流转、权限决策、审计写入属于 `control-plane`。
-- `crates/storage-postgres/src/mappers` 只做存储模型与领域模型转换，不承载业务规则。
+- `crates/storage-durable/postgres/src/mappers` 只做存储模型与领域模型转换，不承载业务规则。
 - 主仓 durable 后端官方只支持 PostgreSQL；不要把额外 durable backend 塞进主存储边界。
 - 业务文件二进制走 `storage-object`；插件安装包和业务文件禁止复用 `api/plugins` 存储目录。
 - 默认本地业务文件根目录固定为 `api/storage`；`rustfs` driver 内建但不默认启用。
@@ -56,22 +56,23 @@
 - workspace / tenant 只允许配置、绑定或消费宿主已安装能力。
 - `runtime extension` 的绑定目标只能是 `workspace` 或 `model`。
 - runtime 模型或字段对应物理表/列缺失时，必须标记不可用；不健康元数据不得继续进入 runtime registry。
-- 外部数据库、SaaS、API 数据源统一走 `data-source` runtime extension，不塞进 `storage-durable`。
+- 外部数据库、SaaS、API 数据源统一走 `data-source` runtime extension；它是外部协议翻译/接入适配层，不塞进 `storage-durable`。
+- data-source plugin 只负责配置校验、连接测试、catalog/schema 发现、预览读取和导入快照输出；权限、secret、preview session、import job 与落盘由宿主和 `data-source-platform` 编排。
 - data-source plugin 禁止注册 HTTP 接口，禁止直接写平台数据库，禁止自管 OAuth callback。
 
 ## Verification
 - 进入自检、验收、回归或交付阶段时，使用 `qa-evaluation` 并自行执行对应脚本。
 - 新增后端功能的 QA 结论必须覆盖 service 测试与 route 测试。
 - 同一工作区内 `cargo` 验证命令默认串行执行，不并发抢锁。
-- 修改 `storage-postgres/migrations` 下历史 migration 文件后，数据库测试优先使用独立 schema，避免 `sqlx` migration checksum 污染共享 schema。
+- 修改 `storage-durable/postgres/migrations` 下历史 migration 文件后，数据库测试优先使用独立 schema，避免 `sqlx` migration checksum 污染共享 schema。
 
 ## 新增资源最低模板
 - 新增关键写资源至少包含：
   - `apps/api-server/src/routes/<resource>.rs`
   - `crates/control-plane/src/<resource>.rs` 或 `crates/control-plane/src/<resource>/mod.rs`
   - `crates/control-plane/src/ports/<resource>.rs` 中对应的 `repository trait`
-  - `crates/storage-postgres/src/<resource>_repository.rs` 或 `crates/storage-ephemeral/src/<resource>_repository.rs`
+  - `crates/storage-durable/postgres/src/<resource>_repository.rs` 或 `crates/storage-ephemeral/src/<resource>_repository.rs`
   - 对应 `_tests`
 - `dto` 可定义在 route 模块内，不为凑结构拆空文件。
 - 只有存在存储层结构转换时才新增 `mapper`。
-- `storage-postgres/migrations` 只放数据库迁移。
+- `storage-durable/postgres/migrations` 只放数据库迁移。

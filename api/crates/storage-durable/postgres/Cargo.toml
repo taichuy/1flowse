@@ -5,12 +5,12 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-access-control = { path = "../access-control" }
+access-control = { path = "../../access-control" }
 anyhow.workspace = true
 async-trait.workspace = true
-control-plane = { path = "../control-plane" }
-domain = { path = "../domain" }
-runtime-core = { path = "../runtime-core" }
+control-plane = { path = "../../control-plane" }
+domain = { path = "../../domain" }
+runtime-core = { path = "../../runtime-core" }
 serde_json.workspace = true
 sqlx.workspace = true
 time.workspace = true

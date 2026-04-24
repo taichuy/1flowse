@@ -4,7 +4,7 @@
 
 **Goal:** Add `data-source-platform` domain records, control-plane services and ports, PostgreSQL persistence, API-server runtime wiring, and console routes so the platform can register, validate, preview, and import external data sources through the new plugin contract.
 
-**Architecture:** Reuse the successful `model_provider` pattern instead of inventing a second architecture. Domain owns the new records; control-plane owns the business commands and runtime port; `storage-postgres` owns persistence and migrations; API-server owns the protocol surface and runtime-host composition. The platform stores only metadata and controlled imports, never external source schemas as platform-owned truth.
+**Architecture:** Reuse the successful `model_provider` pattern instead of inventing a second architecture. Domain owns the new records; control-plane owns the business commands and runtime port; the `storage-postgres` crate under `storage-durable/postgres` owns persistence and migrations; API-server owns the protocol surface and runtime-host composition. Data-source plugins are protocol translation/access adapters; the platform stores only metadata and controlled imports, never external source schemas as platform-owned truth.
 
 **Tech Stack:** Rust workspace crates, `sqlx`, `axum`, `utoipa`, targeted `cargo test`.
 
@@ -19,9 +19,9 @@
 - `api/crates/control-plane/src/data_source.rs`
 - `api/crates/control-plane/src/ports/data_source.rs`
 - `api/crates/control-plane/src/_tests/data_source_service_tests.rs`
-- `api/crates/storage-postgres/src/data_source_repository.rs`
-- `api/crates/storage-postgres/src/_tests/data_source_repository_tests.rs`
-- `api/crates/storage-postgres/migrations/20260423190000_add_data_source_platform.sql`
+- `api/crates/storage-durable/postgres/src/data_source_repository.rs`
+- `api/crates/storage-durable/postgres/src/_tests/data_source_repository_tests.rs`
+- `api/crates/storage-durable/postgres/migrations/20260423190000_add_data_source_platform.sql`
 - `api/apps/api-server/src/routes/plugins_and_models/data_sources.rs`
 - `api/apps/api-server/src/_tests/data_sources_routes.rs`
 
@@ -30,8 +30,8 @@
 - `api/crates/control-plane/src/lib.rs`
 - `api/crates/control-plane/src/ports/mod.rs`
 - `api/crates/control-plane/src/ports/runtime.rs`
-- `api/crates/storage-postgres/src/lib.rs`
-- `api/crates/storage-postgres/src/_tests/mod.rs`
+- `api/crates/storage-durable/postgres/src/lib.rs`
+- `api/crates/storage-durable/postgres/src/_tests/mod.rs`
 - `api/apps/api-server/src/provider_runtime.rs`
 - `api/apps/api-server/src/app_state.rs`
 - `api/apps/api-server/src/lib.rs`
@@ -252,15 +252,15 @@ git commit -m "feat: add data source platform domain and service"
 ### Task 2: Add PostgreSQL Persistence And Migrations For Data-Source Platform State
 
 **Files:**
-- Create: `api/crates/storage-postgres/src/data_source_repository.rs`
-- Create: `api/crates/storage-postgres/src/_tests/data_source_repository_tests.rs`
-- Create: `api/crates/storage-postgres/migrations/20260423190000_add_data_source_platform.sql`
-- Modify: `api/crates/storage-postgres/src/lib.rs`
-- Modify: `api/crates/storage-postgres/src/_tests/mod.rs`
+- Create: `api/crates/storage-durable/postgres/src/data_source_repository.rs`
+- Create: `api/crates/storage-durable/postgres/src/_tests/data_source_repository_tests.rs`
+- Create: `api/crates/storage-durable/postgres/migrations/20260423190000_add_data_source_platform.sql`
+- Modify: `api/crates/storage-durable/postgres/src/lib.rs`
+- Modify: `api/crates/storage-durable/postgres/src/_tests/mod.rs`
 
 - [x] **Step 1: Write the failing repository tests**
 
-Create `api/crates/storage-postgres/src/_tests/data_source_repository_tests.rs`:
+Create `api/crates/storage-durable/postgres/src/_tests/data_source_repository_tests.rs`:
 
 ```rust
 #[tokio::test]
@@ -304,7 +304,7 @@ Expected:
 
 - [x] **Step 3: Add the migration and repository implementation**
 
-Create `api/crates/storage-postgres/migrations/20260423190000_add_data_source_platform.sql`:
+Create `api/crates/storage-durable/postgres/migrations/20260423190000_add_data_source_platform.sql`:
 
 ```sql
 create table data_source_instances (
@@ -347,9 +347,9 @@ create table data_source_preview_sessions (
 );
 ```
 
-Create `api/crates/storage-postgres/src/data_source_repository.rs` and implement `DataSourceRepository for PgControlPlaneStore`.
+Create `api/crates/storage-durable/postgres/src/data_source_repository.rs` and implement `DataSourceRepository for PgControlPlaneStore`.
 
-Add the new repository module to `api/crates/storage-postgres/src/lib.rs`:
+Add the new repository module to `api/crates/storage-durable/postgres/src/lib.rs`:
 
 ```rust
 pub mod data_source_repository;
@@ -370,7 +370,7 @@ Expected:
 - [x] **Step 5: Commit the persistence layer**
 
 ```bash
-git add api/crates/storage-postgres
+git add api/crates/storage-durable/postgres
 git commit -m "feat: persist data source platform state"
 ```
 
