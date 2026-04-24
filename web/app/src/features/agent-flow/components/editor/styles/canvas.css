@@ -546,9 +546,17 @@
 
 .agent-flow-llm-parameter-form__row {
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr) auto;
-  gap: 14px;
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 8px 14px;
+  align-items: start;
+}
+
+.agent-flow-llm-parameter-form__row-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
   align-items: center;
+  min-width: 0;
 }
 
 .agent-flow-llm-parameter-form__row-label {
@@ -577,6 +585,7 @@
 }
 
 .agent-flow-llm-parameter-form__row-control {
+  align-self: center;
   min-width: 0;
 }
 
@@ -605,15 +614,19 @@
 }
 
 .agent-flow-model-settings__panel .agent-flow-llm-parameter-form__row {
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
   align-items: start;
   padding: 8px 0 10px;
   border-bottom: 1px solid #edf1f5;
 }
 
+.agent-flow-model-settings__panel .agent-flow-llm-parameter-form__row-head {
+  grid-column: 1 / -1;
+  gap: 10px;
+}
+
 .agent-flow-model-settings__panel .agent-flow-llm-parameter-form__row-label {
-  grid-column: 1 / 2;
   gap: 2px;
 }
 
@@ -1027,9 +1040,13 @@
 
 @media (max-width: 768px) {
   .agent-flow-llm-parameter-form__row {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px 12px;
     align-items: start;
+  }
+
+  .agent-flow-llm-parameter-form__row-head {
+    grid-column: 1 / -1;
   }
 
   .agent-flow-llm-parameter-form__row-label {

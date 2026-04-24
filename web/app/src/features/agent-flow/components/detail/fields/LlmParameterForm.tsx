@@ -467,18 +467,42 @@ export function LlmParameterForm({
                   key={field.key}
                   className="agent-flow-llm-parameter-form__row"
                 >
-                  <div className="agent-flow-llm-parameter-form__row-label">
-                    <span className="agent-flow-llm-parameter-form__label-line">
-                      <Typography.Text strong>{field.label}</Typography.Text>
-                      {field.description ? (
-                        <Tooltip title={field.description}>
-                          <QuestionCircleOutlined
-                            className="agent-flow-llm-parameter-form__help-icon"
-                            aria-label={`${field.label} 字段说明`}
-                          />
-                        </Tooltip>
-                      ) : null}
-                    </span>
+                  <div className="agent-flow-llm-parameter-form__row-head">
+                    <div className="agent-flow-llm-parameter-form__row-label">
+                      <span className="agent-flow-llm-parameter-form__label-line">
+                        <Typography.Text strong>{field.label}</Typography.Text>
+                        {field.description ? (
+                          <Tooltip title={field.description}>
+                            <QuestionCircleOutlined
+                              className="agent-flow-llm-parameter-form__help-icon"
+                              aria-label={`${field.label} 字段说明`}
+                            />
+                          </Tooltip>
+                        ) : null}
+                      </span>
+                    </div>
+                    <div className="agent-flow-llm-parameter-form__row-toggle">
+                      {!alwaysEnabled ? (
+                        <Switch
+                          checked={enabled}
+                          onChange={(checked) =>
+                            nextParameters(
+                              parameters.items[field.key]?.value ??
+                                value ??
+                                defaultValue,
+                              checked
+                            )
+                          }
+                        />
+                      ) : (
+                        <Typography.Text
+                          type="secondary"
+                          className="agent-flow-llm-parameter-form__row-fixed"
+                        >
+                          始终开启
+                        </Typography.Text>
+                      )}
+                    </div>
                   </div>
                   <div className="agent-flow-llm-parameter-form__row-control">
                     {renderFieldControl({
@@ -488,28 +512,6 @@ export function LlmParameterForm({
                       nextParameters: (nextValue) => nextParameters(nextValue),
                       restoreDefaultValue: () => nextParameters(defaultValue)
                     })}
-                  </div>
-                  <div className="agent-flow-llm-parameter-form__row-toggle">
-                    {!alwaysEnabled ? (
-                      <Switch
-                        checked={enabled}
-                        onChange={(checked) =>
-                          nextParameters(
-                            parameters.items[field.key]?.value ??
-                              value ??
-                              defaultValue,
-                            checked
-                          )
-                        }
-                      />
-                    ) : (
-                      <Typography.Text
-                        type="secondary"
-                        className="agent-flow-llm-parameter-form__row-fixed"
-                      >
-                        始终开启
-                      </Typography.Text>
-                    )}
                   </div>
                 </div>
               );

@@ -626,10 +626,14 @@ describe('LlmModelField', () => {
     const stopRow = screen
       .getByText('Stop')
       .closest('.agent-flow-llm-parameter-form__row');
+    const temperatureHead = temperatureRow?.querySelector(
+      '.agent-flow-llm-parameter-form__row-head'
+    );
 
     expect(temperatureRow).not.toBeNull();
+    expect(temperatureHead).not.toBeNull();
     expect(
-      temperatureRow?.querySelector('.agent-flow-llm-parameter-form__row-label')
+      temperatureHead?.querySelector('.agent-flow-llm-parameter-form__row-label')
     ).not.toBeNull();
     expect(
       temperatureRow?.querySelector(
@@ -637,10 +641,13 @@ describe('LlmModelField', () => {
       )
     ).not.toBeNull();
     expect(
-      temperatureRow?.querySelector(
+      temperatureHead?.querySelector(
         '.agent-flow-llm-parameter-form__row-toggle'
       )
     ).not.toBeNull();
+    expect(temperatureHead?.nextElementSibling?.classList).toContain(
+      'agent-flow-llm-parameter-form__row-control'
+    );
     expect(temperatureRow?.querySelector('.ant-slider')).not.toBeNull();
     expect(stopRow?.querySelector('input')).not.toBeNull();
     expect(
