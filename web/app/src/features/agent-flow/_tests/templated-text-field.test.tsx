@@ -5,6 +5,7 @@ import {
   useState,
   type ReactElement,
   type ReactNode,
+  type MouseEvent,
   type TextareaHTMLAttributes,
 } from 'react';
 import { describe, expect, test, vi } from 'vitest';
@@ -17,11 +18,14 @@ vi.mock('antd', async () => {
     Input: {
       ...actual.Input,
       TextArea: ({
-        autoSize: _autoSize,
+        autoSize,
         ...props
       }: TextareaHTMLAttributes<HTMLTextAreaElement> & {
         autoSize?: unknown;
-      }) => <textarea {...props} />
+      }) => {
+        void autoSize;
+        return <textarea {...props} />;
+      }
     },
     Dropdown: ({
       children,
@@ -36,12 +40,15 @@ vi.mock('antd', async () => {
       };
     }) => {
       const [open, setOpen] = useState(false);
+      type DropdownTriggerProps = {
+        onClick?: (event: MouseEvent<HTMLElement>) => void;
+      };
 
-      const trigger = isValidElement(children)
+      const trigger = isValidElement<DropdownTriggerProps>(children)
         ? cloneElement(
-            children as ReactElement<{ onClick?: (event: React.MouseEvent) => void }>,
+            children as ReactElement<DropdownTriggerProps>,
             {
-              onClick: (event) => {
+              onClick: (event: MouseEvent<HTMLElement>) => {
                 children.props.onClick?.(event);
 
                 if (!disabled) {
@@ -111,12 +118,8 @@ describe('TemplatedTextField', () => {
     textarea.focus();
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '插入变量' }));
-    });
-    await act(async () => {
-      fireEvent.click(await screen.findByRole('menuitem', { name: 'Start / 用户输入' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: '插入变量' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Start / 用户输入' }));
     await act(async () => {
       await new Promise((resolve) => {
         window.setTimeout(resolve, 0);

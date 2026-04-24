@@ -4,6 +4,9 @@ use super::applications::{
 };
 use super::plugins::InMemoryOfficialPluginSource;
 use super::*;
+use control_plane::ports::FileManagementRepository;
+use control_plane::ports::SessionStore;
+use storage_ephemeral::MemorySessionStore;
 
 #[derive(Clone)]
 struct StaticApiRuntimeProfileCollector {
@@ -37,8 +40,9 @@ impl PluginRunnerSystemPort for StubPluginRunnerSystemClient {
 fn default_test_config() -> ApiConfig {
     let database_url = std::env::var("API_DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase".into());
-    let redis_url = std::env::var("API_REDIS_URL")
-        .unwrap_or_else(|_| "redis://:1flowbase@127.0.0.1:36379".into());
+    let ephemeral_backend =
+        std::env::var("API_EPHEMERAL_BACKEND").unwrap_or_else(|_| "memory".into());
+    let ephemeral_redis_url = std::env::var("API_EPHEMERAL_REDIS_URL").ok();
     let root_account = std::env::var("BOOTSTRAP_ROOT_ACCOUNT").unwrap_or_else(|_| "root".into());
     let root_email =
         std::env::var("BOOTSTRAP_ROOT_EMAIL").unwrap_or_else(|_| "root@example.com".into());
@@ -46,17 +50,38 @@ fn default_test_config() -> ApiConfig {
         std::env::var("BOOTSTRAP_ROOT_PASSWORD").unwrap_or_else(|_| "change-me".into());
     let workspace_name =
         std::env::var("BOOTSTRAP_WORKSPACE_NAME").unwrap_or_else(|_| "1flowbase".into());
+    let mut entries = vec![
+        ("API_DATABASE_URL".to_string(), database_url),
+        (
+            "API_EPHEMERAL_BACKEND".to_string(),
+            ephemeral_backend.clone(),
+        ),
+        (
+            "API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS".to_string(),
+            "true".to_string(),
+        ),
+        ("BOOTSTRAP_ROOT_ACCOUNT".to_string(), root_account),
+        ("BOOTSTRAP_ROOT_EMAIL".to_string(), root_email),
+        ("BOOTSTRAP_ROOT_PASSWORD".to_string(), root_password),
+        ("BOOTSTRAP_WORKSPACE_NAME".to_string(), workspace_name),
+    ];
 
-    ApiConfig::from_env_map(&[
-        ("API_DATABASE_URL", database_url.as_str()),
-        ("API_REDIS_URL", redis_url.as_str()),
-        ("API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS", "true"),
-        ("BOOTSTRAP_ROOT_ACCOUNT", root_account.as_str()),
-        ("BOOTSTRAP_ROOT_EMAIL", root_email.as_str()),
-        ("BOOTSTRAP_ROOT_PASSWORD", root_password.as_str()),
-        ("BOOTSTRAP_WORKSPACE_NAME", workspace_name.as_str()),
-    ])
-    .unwrap()
+    if ephemeral_backend.eq_ignore_ascii_case("redis") {
+        entries.push((
+            "API_EPHEMERAL_REDIS_URL".to_string(),
+            ephemeral_redis_url.unwrap_or_else(|| "redis://:1flowbase@127.0.0.1:36379".to_string()),
+        ));
+    }
+
+    let refs = entries
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect::<Vec<_>>();
+    ApiConfig::from_env_map(&refs).unwrap()
+}
+
+pub(crate) fn test_config() -> ApiConfig {
+    default_test_config()
 }
 
 async fn isolated_database_url(base_url: &str) -> String {
@@ -77,17 +102,22 @@ async fn test_state_with_runtime_profile_state(
 ) -> (Arc<ApiState>, String) {
     let mut config = default_test_config();
     config.database_url = isolated_database_url(&config.database_url).await;
-    let pool = storage_pg::connect(&config.database_url).await.unwrap();
-    storage_pg::run_migrations(&pool).await.unwrap();
-
-    let store = storage_pg::PgControlPlaneStore::new(pool);
+    config.business_file_local_root = std::env::temp_dir()
+        .join(format!("api-business-files-{}", Uuid::now_v7()))
+        .display()
+        .to_string();
+    let durable = storage_durable::build_main_durable_postgres(&config.database_url)
+        .await
+        .unwrap();
+    let store = durable.store.clone();
+    let file_storage_registry = Arc::new(storage_object::builtin_driver_registry());
     let salt = SaltString::generate(&mut rand_core::OsRng);
     let root_password_hash = Argon2::default()
         .hash_password(config.bootstrap_root_password.as_bytes(), &salt)
         .unwrap()
         .to_string();
 
-    BootstrapService::new(store.clone())
+    let bootstrap = BootstrapService::new(store.clone())
         .run(&BootstrapConfig {
             workspace_name: config.bootstrap_workspace_name.clone(),
             root_account: config.bootstrap_root_account.clone(),
@@ -96,6 +126,36 @@ async fn test_state_with_runtime_profile_state(
             root_name: config.bootstrap_root_name.clone(),
             root_nickname: config.bootstrap_root_nickname.clone(),
         })
+        .await
+        .unwrap();
+    let default_storage = if let Some(existing) =
+        <storage_durable::MainDurableStore as FileManagementRepository>::get_default_file_storage(
+            &store,
+        )
+        .await
+        .unwrap()
+    {
+        existing
+    } else {
+        control_plane::file_management::FileStorageService::new(store.clone())
+            .create_storage(control_plane::file_management::CreateFileStorageCommand {
+                actor_user_id: bootstrap.root_user_id,
+                code: "local_default".into(),
+                title: "Local".into(),
+                driver_type: "local".into(),
+                enabled: true,
+                is_default: true,
+                config_json: serde_json::json!({
+                    "root_path": config.business_file_local_root.clone(),
+                    "public_base_url": null
+                }),
+                rule_json: serde_json::json!({}),
+            })
+            .await
+            .unwrap()
+    };
+    control_plane::file_management::FileManagementBootstrapService::new(store.clone())
+        .ensure_builtin_attachments(bootstrap.root_user_id, default_storage.id, "attachments")
         .await
         .unwrap();
     let runtime_registry = runtime_core::runtime_model_registry::RuntimeModelRegistry::default();
@@ -112,6 +172,7 @@ async fn test_state_with_runtime_profile_state(
     (
         Arc::new(ApiState {
             store,
+            file_storage_registry,
             runtime_engine,
             provider_runtime: Arc::new(ApiRuntimeServices::new(
                 Arc::new(RwLock::new(
@@ -119,6 +180,9 @@ async fn test_state_with_runtime_profile_state(
                 )),
                 Arc::new(RwLock::new(
                     plugin_runner::capability_host::CapabilityHost::default(),
+                )),
+                Arc::new(RwLock::new(
+                    plugin_runner::data_source_host::DataSourceHost::default(),
                 )),
             )),
             process_started_at,
@@ -130,9 +194,9 @@ async fn test_state_with_runtime_profile_state(
             host_extension_dropin_root: config.host_extension_dropin_root.clone(),
             allow_unverified_filesystem_dropins: config.allow_unverified_filesystem_dropins,
             allow_uploaded_host_extensions: config.allow_uploaded_host_extensions,
-            session_store: SessionStoreHandle::InMemory(
-                storage_redis::InMemorySessionStore::default(),
-            ),
+            session_store: SessionStoreHandle::Memory(MemorySessionStore::new(
+                "flowbase:console:session",
+            )),
             api_docs,
             cookie_name: config.cookie_name.clone(),
             session_ttl_days: config.session_ttl_days,
@@ -183,6 +247,10 @@ pub(crate) async fn test_api_state_with_database_url() -> (Arc<ApiState>, String
         }),
     )
     .await
+}
+
+pub(crate) async fn seed_session(state: &ApiState, session: domain::SessionRecord) {
+    state.session_store.put(session).await.unwrap();
 }
 
 pub async fn login_and_capture_cookie(

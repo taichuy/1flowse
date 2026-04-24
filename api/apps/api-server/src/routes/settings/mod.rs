@@ -1,4 +1,6 @@
 pub mod docs;
+pub mod file_storages;
+pub mod file_tables;
 pub mod members;
 pub mod permissions;
 pub mod roles;

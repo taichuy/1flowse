@@ -973,10 +973,7 @@ async fn model_provider_service_masks_secret_in_views_and_reveals_on_demand() {
         .await
         .unwrap();
     assert_eq!(refreshed.models.len(), 1);
-    assert_eq!(
-        refreshed.models[0].context_window,
-        Some(128000)
-    );
+    assert_eq!(refreshed.models[0].context_window, Some(128000));
     assert_eq!(
         repository.audit_events().await,
         vec![
@@ -1417,7 +1414,10 @@ async fn model_provider_service_options_group_models_by_source_instance_and_keep
         alpha_group.models[0].display_name_fallback.as_deref(),
         Some("Fixture Chat")
     );
-    assert_eq!(alpha_group.models[0].descriptor.context_window, Some(256_000));
+    assert_eq!(
+        alpha_group.models[0].descriptor.context_window,
+        Some(256_000)
+    );
     assert_eq!(
         alpha_group.models[1].display_name_fallback.as_deref(),
         Some("custom-enabled")

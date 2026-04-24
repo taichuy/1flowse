@@ -1,4 +1,7 @@
 use super::*;
+use plugin_framework::data_source_contract::{
+    DataSourcePreviewReadInput, DataSourcePreviewReadOutput,
+};
 
 #[async_trait]
 pub trait RuntimeRegistrySync: Send + Sync {
@@ -216,4 +219,35 @@ pub trait ProviderRuntimePort: Send + Sync {
         installation: &domain::PluginInstallationRecord,
         input: ProviderInvocationInput,
     ) -> anyhow::Result<ProviderRuntimeInvocationOutput>;
+}
+
+#[async_trait]
+pub trait DataSourceRuntimePort: Send + Sync {
+    async fn ensure_loaded(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+    ) -> anyhow::Result<()>;
+    async fn validate_config(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        config_json: serde_json::Value,
+        secret_json: serde_json::Value,
+    ) -> anyhow::Result<serde_json::Value>;
+    async fn test_connection(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        config_json: serde_json::Value,
+        secret_json: serde_json::Value,
+    ) -> anyhow::Result<serde_json::Value>;
+    async fn discover_catalog(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        config_json: serde_json::Value,
+        secret_json: serde_json::Value,
+    ) -> anyhow::Result<serde_json::Value>;
+    async fn preview_read(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourcePreviewReadInput,
+    ) -> anyhow::Result<DataSourcePreviewReadOutput>;
 }

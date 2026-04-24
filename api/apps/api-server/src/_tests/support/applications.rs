@@ -1,9 +1,17 @@
 use super::*;
+use storage_durable::MainDurableStore;
+
+async fn main_durable_store(database_url: &str) -> MainDurableStore {
+    storage_durable::build_main_durable_postgres(database_url)
+        .await
+        .unwrap()
+        .store
+}
 
 pub async fn seed_workspace(database_url: &str, workspace_name: &str) -> Uuid {
-    let pool = storage_pg::connect(database_url).await.unwrap();
+    let store = main_durable_store(database_url).await;
     let tenant_id: Uuid = sqlx::query_scalar("select id from tenants where code = 'root-tenant'")
-        .fetch_one(&pool)
+        .fetch_one(store.pool())
         .await
         .unwrap();
     let workspace_id = Uuid::now_v7();
@@ -14,7 +22,7 @@ pub async fn seed_workspace(database_url: &str, workspace_name: &str) -> Uuid {
     .bind(workspace_id)
     .bind(tenant_id)
     .bind(workspace_name)
-    .execute(&pool)
+    .execute(store.pool())
     .await
     .unwrap();
 
@@ -45,7 +53,7 @@ pub(super) fn sample_runtime_profile(service: &str, host_fingerprint: &str) -> R
     }
 }
 
-pub(super) async fn create_member(
+pub(crate) async fn create_member(
     app: &Router,
     cookie: &str,
     csrf: &str,
@@ -87,7 +95,7 @@ pub(super) async fn create_member(
     payload["data"]["id"].as_str().unwrap().to_string()
 }
 
-pub(super) async fn create_role(app: &Router, cookie: &str, csrf: &str, code: &str) {
+pub(crate) async fn create_role(app: &Router, cookie: &str, csrf: &str, code: &str) {
     let response = app
         .clone()
         .oneshot(
@@ -113,7 +121,7 @@ pub(super) async fn create_role(app: &Router, cookie: &str, csrf: &str, code: &s
     assert_eq!(response.status(), StatusCode::CREATED);
 }
 
-pub(super) async fn replace_role_permissions(
+pub(crate) async fn replace_role_permissions(
     app: &Router,
     cookie: &str,
     csrf: &str,
@@ -143,7 +151,7 @@ pub(super) async fn replace_role_permissions(
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
 }
 
-pub(super) async fn replace_member_roles(
+pub(crate) async fn replace_member_roles(
     app: &Router,
     cookie: &str,
     csrf: &str,
@@ -178,11 +186,11 @@ pub(super) async fn set_user_preferred_locale(
     account: &str,
     locale: Option<&str>,
 ) {
-    let pool = storage_pg::connect(database_url).await.unwrap();
+    let store = main_durable_store(database_url).await;
     sqlx::query("update users set preferred_locale = $1 where account = $2")
         .bind(locale)
         .bind(account)
-        .execute(&pool)
+        .execute(store.pool())
         .await
         .unwrap();
 }

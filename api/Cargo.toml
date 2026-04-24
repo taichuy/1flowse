@@ -10,8 +10,9 @@ members = [
   "crates/publish-gateway",
   "crates/access-control",
   "crates/plugin-framework",
-  "crates/storage-pg",
-  "crates/storage-redis",
+  "crates/storage-postgres",
+  "crates/storage-durable",
+  "crates/storage-ephemeral",
   "crates/storage-object",
   "crates/observability"
 ]
@@ -26,6 +27,8 @@ version = "0.1.0"
 anyhow = "1"
 argon2 = "0.5"
 async-trait = "0.1"
+aws-config = { version = "1", default-features = false, features = ["behavior-version-latest", "rt-tokio", "rustls"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio", "rustls"] }
 axum = { version = "0.7", features = ["macros"] }
 axum-extra = { version = "0.9", features = ["cookie"] }
 flate2 = "1"

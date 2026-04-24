@@ -220,7 +220,10 @@ fn expose_enabled_models(
             let configured_model = configured_models_by_id.get(model_id.as_str()).copied();
             (
                 model_id,
-                localized_model_descriptor(namespace, apply_context_override(model, configured_model)),
+                localized_model_descriptor(
+                    namespace,
+                    apply_context_override(model, configured_model),
+                ),
             )
         })
         .collect::<HashMap<_, _>>();

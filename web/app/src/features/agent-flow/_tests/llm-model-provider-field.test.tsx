@@ -1,3 +1,4 @@
+/* eslint-disable testing-library/no-container, testing-library/no-node-access */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useEffect, type ReactNode } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';

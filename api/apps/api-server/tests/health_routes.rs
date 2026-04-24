@@ -23,6 +23,7 @@ use control_plane::ports::{
 };
 use serde_json::Value;
 use sqlx::PgPool;
+use storage_ephemeral::{EphemeralBackendKind, MemorySessionStore};
 use time::OffsetDateTime;
 use tokio::sync::RwLock;
 use tower::ServiceExt;
@@ -72,7 +73,6 @@ fn default_test_config() -> ApiConfig {
             "API_DATABASE_URL",
             "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
         ),
-        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
         ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
         ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
         ("BOOTSTRAP_ROOT_PASSWORD", "change-me"),
@@ -98,10 +98,10 @@ async fn test_app() -> Router {
 
 async fn test_app_with_config(mut config: ApiConfig) -> Router {
     config.database_url = isolated_database_url(&config.database_url).await;
-    let pool = storage_pg::connect(&config.database_url).await.unwrap();
-    storage_pg::run_migrations(&pool).await.unwrap();
-
-    let store = storage_pg::PgControlPlaneStore::new(pool);
+    let durable = storage_durable::build_main_durable_postgres(&config.database_url)
+        .await
+        .unwrap();
+    let store = durable.store.clone();
     let salt = SaltString::generate(&mut rand_core::OsRng);
     let root_password_hash = Argon2::default()
         .hash_password(config.bootstrap_root_password.as_bytes(), &salt)
@@ -132,6 +132,7 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
     app_with_state_and_config(
         std::sync::Arc::new(ApiState {
             store,
+            file_storage_registry: std::sync::Arc::new(storage_object::builtin_driver_registry()),
             runtime_engine,
             provider_runtime: std::sync::Arc::new(ApiRuntimeServices::new(
                 std::sync::Arc::new(RwLock::new(
@@ -139,6 +140,9 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
                 )),
                 std::sync::Arc::new(RwLock::new(
                     plugin_runner::capability_host::CapabilityHost::default(),
+                )),
+                std::sync::Arc::new(RwLock::new(
+                    plugin_runner::data_source_host::DataSourceHost::default(),
                 )),
             )),
             process_started_at: OffsetDateTime::now_utc(),
@@ -150,9 +154,9 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
             host_extension_dropin_root: config.host_extension_dropin_root.clone(),
             allow_unverified_filesystem_dropins: config.allow_unverified_filesystem_dropins,
             allow_uploaded_host_extensions: config.allow_uploaded_host_extensions,
-            session_store: SessionStoreHandle::InMemory(
-                storage_redis::InMemorySessionStore::default(),
-            ),
+            session_store: SessionStoreHandle::Memory(MemorySessionStore::new(
+                "flowbase:console:session",
+            )),
             api_docs,
             cookie_name: config.cookie_name.clone(),
             session_ttl_days: config.session_ttl_days,
@@ -258,6 +262,36 @@ async fn health_route_returns_ok_payload() {
 
     assert_eq!(payload["service"], "api-server");
     assert_eq!(payload["status"], "ok");
+}
+
+#[tokio::test]
+async fn app_from_config_supports_memory_ephemeral_backend() {
+    let mut config = default_test_config();
+    config.database_url = isolated_database_url(&config.database_url).await;
+    config.ephemeral_backend = EphemeralBackendKind::Memory;
+    config.ephemeral_redis_url = None;
+
+    let app = api_server::app_from_config(&config).await.unwrap();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/public/auth/providers/password-local/sign-in")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "identifier": "root",
+                        "password": "change-me"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(response.headers().get("set-cookie").is_some());
 }
 
 #[tokio::test]

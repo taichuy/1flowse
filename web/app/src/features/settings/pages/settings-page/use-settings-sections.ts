@@ -25,9 +25,7 @@ export function useSettingsSections({
               permissions.includes(permission)
             )
         )
-        .map(({ requiredPermissions: _requiredPermissions, ...section }) => ({
-          ...section
-        })),
+        .map(({ key, label, to }) => ({ key, label, to })),
     [isRoot, permissions]
   );
   const fallbackSection = visibleSections[0] ?? null;

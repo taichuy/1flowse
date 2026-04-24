@@ -64,14 +64,27 @@ const modelProvidersApi = vi.hoisted(() => ({
   ]),
   fetchSettingsModelProviderCatalog: vi.fn(),
   fetchSettingsModelProviderInstances: vi.fn(),
+  fetchSettingsModelProviderOptions: vi.fn(),
+  fetchSettingsModelProviderMainInstance: vi.fn(),
   fetchSettingsModelProviderModels: vi.fn(),
   previewSettingsModelProviderModels: vi.fn(),
   createSettingsModelProviderInstance: vi.fn(),
   updateSettingsModelProviderInstance: vi.fn(),
+  updateSettingsModelProviderMainInstance: vi.fn(),
   revealSettingsModelProviderSecret: vi.fn(),
   validateSettingsModelProviderInstance: vi.fn(),
   refreshSettingsModelProviderModels: vi.fn(),
   deleteSettingsModelProviderInstance: vi.fn()
+}));
+
+const fileManagementApi = vi.hoisted(() => ({
+  settingsFileStoragesQueryKey: ['settings', 'files', 'storages'],
+  settingsFileTablesQueryKey: ['settings', 'files', 'tables'],
+  fetchSettingsFileStorages: vi.fn(),
+  createSettingsFileStorage: vi.fn(),
+  fetchSettingsFileTables: vi.fn(),
+  createSettingsFileTable: vi.fn(),
+  updateSettingsFileTableBinding: vi.fn()
 }));
 
 vi.mock('../../features/settings/api/members', () => membersApi);
@@ -79,6 +92,7 @@ vi.mock('../../features/settings/api/roles', () => rolesApi);
 vi.mock('../../features/settings/api/permissions', () => permissionsApi);
 vi.mock('../../features/settings/api/api-docs', () => docsApi);
 vi.mock('../../features/settings/api/model-providers', () => modelProvidersApi);
+vi.mock('../../features/settings/api/file-management', () => fileManagementApi);
 
 import { AppProviders } from '../../app/AppProviders';
 import { AppRouterProvider } from '../../app/router';
@@ -149,6 +163,36 @@ describe('section shell routing', () => {
     });
     modelProvidersApi.fetchSettingsModelProviderCatalog.mockResolvedValue([]);
     modelProvidersApi.fetchSettingsModelProviderInstances.mockResolvedValue([]);
+    modelProvidersApi.fetchSettingsModelProviderOptions.mockResolvedValue({
+      locale_meta: {
+        requested_locale: 'zh_Hans',
+        resolved_locale: 'zh_Hans',
+        fallback_locale: 'en_US',
+        supported_locales: ['zh_Hans', 'en_US']
+      },
+      i18n_catalog: {},
+      providers: []
+    });
+    modelProvidersApi.fetchSettingsModelProviderMainInstance.mockResolvedValue({
+      provider_code: 'openai_compatible',
+      auto_include_new_instances: true
+    });
+    fileManagementApi.fetchSettingsFileStorages.mockResolvedValue([]);
+    fileManagementApi.fetchSettingsFileTables.mockResolvedValue([
+      {
+        id: 'table-1',
+        code: 'attachments',
+        title: 'Attachments',
+        scope_kind: 'workspace',
+        scope_id: 'workspace-1',
+        model_definition_id: 'model-1',
+        bound_storage_id: 'storage-1',
+        bound_storage_title: 'Local Default',
+        is_builtin: true,
+        is_default: true,
+        status: 'active'
+      }
+    ]);
   });
 
   test(
@@ -196,5 +240,16 @@ describe('section shell routing', () => {
       expect(window.location.pathname).toBe('/settings/model-providers');
     });
     expect(await screen.findByRole('heading', { name: '模型供应商', level: 4 })).toBeInTheDocument();
+  });
+
+  test('redirects /settings/docs to /settings/files when file management is the only visible section', async () => {
+    authenticateWithPermissions(['route_page.view.all', 'file_table.view.own']);
+
+    renderApp('/settings/docs');
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/settings/files');
+    });
+    expect(await screen.findByRole('heading', { name: '文件管理', level: 4 })).toBeInTheDocument();
   });
 });

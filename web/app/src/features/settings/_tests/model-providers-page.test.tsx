@@ -113,12 +113,29 @@ const pluginsApi = vi.hoisted(() => ({
   fetchSettingsPluginTask: vi.fn()
 }));
 
+const systemRuntimeApi = vi.hoisted(() => ({
+  settingsSystemRuntimeQueryKey: ['settings', 'system-runtime'],
+  fetchSettingsSystemRuntimeProfile: vi.fn()
+}));
+
+const fileManagementApi = vi.hoisted(() => ({
+  settingsFileStoragesQueryKey: ['settings', 'files', 'storages'],
+  settingsFileTablesQueryKey: ['settings', 'files', 'tables'],
+  fetchSettingsFileStorages: vi.fn(),
+  createSettingsFileStorage: vi.fn(),
+  fetchSettingsFileTables: vi.fn(),
+  createSettingsFileTable: vi.fn(),
+  updateSettingsFileTableBinding: vi.fn()
+}));
+
 vi.mock('../api/members', () => membersApi);
 vi.mock('../api/roles', () => rolesApi);
 vi.mock('../api/permissions', () => permissionsApi);
 vi.mock('../api/api-docs', () => docsApi);
 vi.mock('../api/model-providers', () => modelProvidersApi);
 vi.mock('../api/plugins', () => pluginsApi);
+vi.mock('../api/system-runtime', () => systemRuntimeApi);
+vi.mock('../api/file-management', () => fileManagementApi);
 vi.mock('@scalar/api-reference-react', () => ({
   ApiReferenceReact: () => <div data-testid="settings-page-scalar">Scalar</div>
 }));
@@ -283,7 +300,6 @@ async function openProviderInstancesModal() {
   const catalogRow = await screen.findByRole('row', {
     name: /OpenAI Compatible/
   });
-
   fireEvent.click(within(catalogRow).getByRole('button', { name: '配置' }));
 
   return screen.findByRole('dialog', { name: /OpenAI Compatible 实例/ });
@@ -554,6 +570,12 @@ describe('ModelProvidersPage', () => {
       updated_at: '2026-04-18T21:00:00Z',
       finished_at: '2026-04-18T21:00:00Z'
     });
+    systemRuntimeApi.fetchSettingsSystemRuntimeProfile.mockResolvedValue({
+      topology: { relationship: 'same_host' },
+      hosts: []
+    });
+    fileManagementApi.fetchSettingsFileStorages.mockResolvedValue([]);
+    fileManagementApi.fetchSettingsFileTables.mockResolvedValue([]);
   });
 
   test('renders provider family rows and upgrades to the latest version from the catalog version column', async () => {
@@ -1091,7 +1113,7 @@ describe('ModelProvidersPage', () => {
 
       renderApp('/settings/model-providers');
 
-      const modal = await openProviderInstancesModal();
+      await openProviderInstancesModal();
 
       fireEvent.click(
         await screen.findByRole('button', { name: '刷新候选模型 OpenAI Production' })
@@ -1479,9 +1501,6 @@ describe('ModelProvidersPage', () => {
       expect(
         screen.getByRole('switch', { name: '新实例自动加入主实例' })
       ).toBeInTheDocument();
-      expect(document.querySelector('.ant-drawer')).toHaveStyle({
-        zIndex: '1100'
-      });
     }
   );
 

@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc,
+        Arc, Mutex,
     },
 };
 
@@ -12,18 +12,23 @@ use argon2::{
     Argon2,
 };
 use async_trait::async_trait;
+use time::OffsetDateTime;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::ports::{
-    AuthRepository, BootstrapRepository, CreateMemberInput, CreateWorkspaceRoleInput,
-    MemberRepository, RoleRepository, SessionStore, UpdateProfileInput, UpdateWorkspaceRoleInput,
-    WorkspaceRepository,
+    AddModelFieldInput, AuthRepository, BootstrapRepository, CreateFileStorageInput,
+    CreateFileTableRegistrationInput, CreateMemberInput, CreateModelDefinitionInput,
+    CreateWorkspaceRoleInput, FileManagementRepository, MemberRepository,
+    ModelDefinitionRepository, RoleRepository, SessionStore, UpdateFileStorageBindingInput,
+    UpdateModelDefinitionInput, UpdateModelFieldInput, UpdateProfileInput,
+    UpdateWorkspaceRoleInput, WorkspaceRepository,
 };
 use domain::{
-    ActorContext, AuditLogRecord, AuthenticatorRecord, BoundRole, PermissionDefinition,
-    RoleScopeKind, RoleTemplate, ScopeContext, SessionRecord, TenantRecord, UserRecord, UserStatus,
-    WorkspaceRecord,
+    ActorContext, AuditLogRecord, AuthenticatorRecord, BoundRole, FileStorageHealthStatus,
+    FileStorageRecord, FileTableRecord, FileTableScopeKind, MetadataAvailabilityStatus,
+    ModelDefinitionRecord, ModelFieldRecord, PermissionDefinition, RoleScopeKind, RoleTemplate,
+    ScopeContext, SessionRecord, TenantRecord, UserRecord, UserStatus, WorkspaceRecord,
 };
 
 #[derive(Default, Clone)]
@@ -830,6 +835,619 @@ impl SessionStore for MemorySessionStore {
         if let Some(existing) = self.sessions.write().await.get_mut(session_id) {
             existing.expires_at_unix = expires_at_unix;
         }
+        Ok(())
+    }
+}
+
+pub fn memory_actor_context(is_root: bool, permissions: &[&str]) -> ActorContext {
+    let user_id = Uuid::now_v7();
+    let workspace_id = Uuid::nil();
+    if is_root {
+        ActorContext::root(user_id, workspace_id, "root")
+    } else {
+        ActorContext::scoped(
+            user_id,
+            workspace_id,
+            "manager",
+            permissions.iter().map(|permission| permission.to_string()),
+        )
+    }
+}
+
+#[derive(Clone)]
+pub struct MemoryFileManagementRepository {
+    actor: ActorContext,
+    file_storages: Arc<RwLock<HashMap<Uuid, FileStorageRecord>>>,
+    file_tables: Arc<RwLock<HashMap<Uuid, FileTableRecord>>>,
+    models: Arc<Mutex<HashMap<Uuid, ModelDefinitionRecord>>>,
+}
+
+impl MemoryFileManagementRepository {
+    pub fn new(actor: ActorContext) -> Self {
+        Self {
+            actor,
+            file_storages: Arc::new(RwLock::new(HashMap::new())),
+            file_tables: Arc::new(RwLock::new(HashMap::new())),
+            models: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub async fn insert_file_storage(&self, record: FileStorageRecord) {
+        self.file_storages.write().await.insert(record.id, record);
+    }
+
+    pub async fn insert_file_table(&self, record: FileTableRecord) {
+        self.file_tables.write().await.insert(record.id, record);
+    }
+
+    pub fn insert_model_definition(&self, model: ModelDefinitionRecord) {
+        self.models
+            .lock()
+            .expect("model lock poisoned")
+            .insert(model.id, model);
+    }
+}
+
+#[async_trait]
+impl FileManagementRepository for MemoryFileManagementRepository {
+    async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
+        let mut actor = self.actor.clone();
+        actor.user_id = actor_user_id;
+        Ok(actor)
+    }
+
+    async fn find_file_table_by_code(&self, code: &str) -> Result<Option<FileTableRecord>> {
+        Ok(self
+            .file_tables
+            .read()
+            .await
+            .values()
+            .find(|record| record.code == code)
+            .cloned())
+    }
+
+    async fn get_file_table(&self, file_table_id: Uuid) -> Result<Option<FileTableRecord>> {
+        Ok(self.file_tables.read().await.get(&file_table_id).cloned())
+    }
+
+    async fn create_file_storage(
+        &self,
+        input: &CreateFileStorageInput,
+    ) -> Result<FileStorageRecord> {
+        let now = OffsetDateTime::now_utc();
+        let record = FileStorageRecord {
+            id: input.storage_id,
+            code: input.code.clone(),
+            title: input.title.clone(),
+            driver_type: input.driver_type.clone(),
+            enabled: input.enabled,
+            is_default: input.is_default,
+            config_json: input.config_json.clone(),
+            rule_json: input.rule_json.clone(),
+            health_status: FileStorageHealthStatus::Unknown,
+            last_health_error: None,
+            created_by: input.actor_user_id,
+            updated_by: input.actor_user_id,
+            created_at: now,
+            updated_at: now,
+        };
+        self.file_storages
+            .write()
+            .await
+            .insert(record.id, record.clone());
+        Ok(record)
+    }
+
+    async fn create_file_table_registration(
+        &self,
+        input: &CreateFileTableRegistrationInput,
+    ) -> Result<FileTableRecord> {
+        let now = OffsetDateTime::now_utc();
+        let record = FileTableRecord {
+            id: input.file_table_id,
+            code: input.code.clone(),
+            title: input.title.clone(),
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            model_definition_id: input.model_definition_id,
+            bound_storage_id: input.bound_storage_id,
+            is_builtin: input.is_builtin,
+            is_default: input.is_default,
+            status: "active".to_string(),
+            created_by: input.actor_user_id,
+            updated_by: input.actor_user_id,
+            created_at: now,
+            updated_at: now,
+        };
+        self.file_tables
+            .write()
+            .await
+            .insert(record.id, record.clone());
+        Ok(record)
+    }
+
+    async fn list_file_storages(&self) -> Result<Vec<FileStorageRecord>> {
+        Ok(self.file_storages.read().await.values().cloned().collect())
+    }
+
+    async fn get_default_file_storage(&self) -> Result<Option<FileStorageRecord>> {
+        Ok(self
+            .file_storages
+            .read()
+            .await
+            .values()
+            .find(|record| record.is_default)
+            .cloned())
+    }
+
+    async fn get_file_storage(&self, storage_id: Uuid) -> Result<Option<FileStorageRecord>> {
+        Ok(self.file_storages.read().await.get(&storage_id).cloned())
+    }
+
+    async fn list_visible_file_tables(&self, workspace_id: Uuid) -> Result<Vec<FileTableRecord>> {
+        Ok(self
+            .file_tables
+            .read()
+            .await
+            .values()
+            .filter(|record| {
+                matches!(record.scope_kind, FileTableScopeKind::System)
+                    || record.scope_id == workspace_id
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn update_file_table_binding(
+        &self,
+        input: &UpdateFileStorageBindingInput,
+    ) -> Result<FileTableRecord> {
+        let mut file_tables = self.file_tables.write().await;
+        let now = OffsetDateTime::now_utc();
+        let record = file_tables
+            .entry(input.file_table_id)
+            .or_insert_with(|| FileTableRecord {
+                id: input.file_table_id,
+                code: format!("file-table-{}", input.file_table_id),
+                title: "File Table".to_string(),
+                scope_kind: FileTableScopeKind::Workspace,
+                scope_id: Uuid::nil(),
+                model_definition_id: Uuid::nil(),
+                bound_storage_id: input.bound_storage_id,
+                is_builtin: false,
+                is_default: false,
+                status: "active".to_string(),
+                created_by: input.actor_user_id,
+                updated_by: input.actor_user_id,
+                created_at: now,
+                updated_at: now,
+            });
+        record.bound_storage_id = input.bound_storage_id;
+        record.updated_by = input.actor_user_id;
+        record.updated_at = now;
+        Ok(record.clone())
+    }
+}
+
+#[async_trait]
+impl ModelDefinitionRepository for MemoryFileManagementRepository {
+    async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
+        let mut actor = self.actor.clone();
+        actor.user_id = actor_user_id;
+        Ok(actor)
+    }
+
+    async fn list_model_definitions(
+        &self,
+        _workspace_id: Uuid,
+    ) -> Result<Vec<ModelDefinitionRecord>> {
+        Ok(self
+            .models
+            .lock()
+            .expect("model lock poisoned")
+            .values()
+            .cloned()
+            .collect())
+    }
+
+    async fn get_model_definition(
+        &self,
+        workspace_id: Uuid,
+        model_id: Uuid,
+    ) -> Result<Option<ModelDefinitionRecord>> {
+        Ok(self
+            .models
+            .lock()
+            .expect("model lock poisoned")
+            .get(&model_id)
+            .filter(|model| {
+                workspace_id.is_nil()
+                    || !matches!(model.scope_kind, domain::DataModelScopeKind::Workspace)
+                    || model.scope_id == workspace_id
+            })
+            .cloned())
+    }
+
+    async fn create_model_definition(
+        &self,
+        input: &CreateModelDefinitionInput,
+    ) -> Result<ModelDefinitionRecord> {
+        let model = ModelDefinitionRecord {
+            id: Uuid::now_v7(),
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            code: input.code.clone(),
+            title: input.title.clone(),
+            physical_table_name: format!("rtm_{}_{}", input.scope_kind.as_str(), input.code),
+            acl_namespace: format!("state_model.{}", input.code),
+            audit_namespace: format!("audit.state_model.{}", input.code),
+            fields: vec![],
+            availability_status: MetadataAvailabilityStatus::Available,
+        };
+        self.models
+            .lock()
+            .expect("model lock poisoned")
+            .insert(model.id, model.clone());
+        Ok(model)
+    }
+
+    async fn update_model_definition(
+        &self,
+        input: &UpdateModelDefinitionInput,
+    ) -> Result<ModelDefinitionRecord> {
+        let mut models = self.models.lock().expect("model lock poisoned");
+        let model = models
+            .get_mut(&input.model_id)
+            .expect("model should exist for updates");
+        model.title = input.title.clone();
+        Ok(model.clone())
+    }
+
+    async fn add_model_field(&self, input: &AddModelFieldInput) -> Result<ModelFieldRecord> {
+        let mut models = self.models.lock().expect("model lock poisoned");
+        let model = models
+            .get_mut(&input.model_id)
+            .expect("model should exist for field inserts");
+        let field = ModelFieldRecord {
+            id: Uuid::now_v7(),
+            data_model_id: input.model_id,
+            code: input.code.clone(),
+            title: input.title.clone(),
+            physical_column_name: input.code.replace('-', "_"),
+            field_kind: input.field_kind,
+            is_required: input.is_required,
+            is_unique: input.is_unique,
+            default_value: input.default_value.clone(),
+            display_interface: input.display_interface.clone(),
+            display_options: input.display_options.clone(),
+            relation_target_model_id: input.relation_target_model_id,
+            relation_options: input.relation_options.clone(),
+            sort_order: model.fields.len() as i32,
+            availability_status: MetadataAvailabilityStatus::Available,
+        };
+        model.fields.push(field.clone());
+        Ok(field)
+    }
+
+    async fn update_model_field(&self, input: &UpdateModelFieldInput) -> Result<ModelFieldRecord> {
+        let mut models = self.models.lock().expect("model lock poisoned");
+        let model = models
+            .get_mut(&input.model_id)
+            .expect("model should exist for field updates");
+        let field = model
+            .fields
+            .iter_mut()
+            .find(|field| field.id == input.field_id)
+            .expect("field should exist for updates");
+        field.title = input.title.clone();
+        field.is_required = input.is_required;
+        field.is_unique = input.is_unique;
+        field.default_value = input.default_value.clone();
+        field.display_interface = input.display_interface.clone();
+        field.display_options = input.display_options.clone();
+        field.relation_options = input.relation_options.clone();
+        Ok(field.clone())
+    }
+
+    async fn delete_model_definition(&self, _actor_user_id: Uuid, model_id: Uuid) -> Result<()> {
+        self.models
+            .lock()
+            .expect("model lock poisoned")
+            .remove(&model_id);
+        Ok(())
+    }
+
+    async fn delete_model_field(
+        &self,
+        _actor_user_id: Uuid,
+        model_id: Uuid,
+        field_id: Uuid,
+    ) -> Result<()> {
+        let mut models = self.models.lock().expect("model lock poisoned");
+        if let Some(model) = models.get_mut(&model_id) {
+            model.fields.retain(|field| field.id != field_id);
+        }
+        Ok(())
+    }
+
+    async fn publish_model_definition(
+        &self,
+        _actor_user_id: Uuid,
+        model_id: Uuid,
+    ) -> Result<ModelDefinitionRecord> {
+        Ok(self
+            .models
+            .lock()
+            .expect("model lock poisoned")
+            .get(&model_id)
+            .expect("model should exist for publish")
+            .clone())
+    }
+
+    async fn append_audit_log(&self, _event: &AuditLogRecord) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct MemoryProvisioningRepository {
+    models: Arc<Mutex<HashMap<Uuid, ModelDefinitionRecord>>>,
+    pub file_tables: Arc<Mutex<Vec<FileTableRecord>>>,
+}
+
+impl MemoryProvisioningRepository {
+    pub fn recorded_file_tables(&self) -> Vec<FileTableRecord> {
+        self.file_tables
+            .lock()
+            .expect("file table lock should be free in assertions")
+            .clone()
+    }
+}
+
+#[async_trait]
+impl FileManagementRepository for MemoryProvisioningRepository {
+    async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
+        Ok(ActorContext::root(actor_user_id, Uuid::nil(), "root"))
+    }
+
+    async fn find_file_table_by_code(&self, code: &str) -> Result<Option<FileTableRecord>> {
+        Ok(self
+            .file_tables
+            .lock()
+            .expect("file table lock poisoned")
+            .iter()
+            .find(|record| record.code == code)
+            .cloned())
+    }
+
+    async fn get_file_table(&self, file_table_id: Uuid) -> Result<Option<FileTableRecord>> {
+        Ok(self
+            .file_tables
+            .lock()
+            .expect("file table lock poisoned")
+            .iter()
+            .find(|record| record.id == file_table_id)
+            .cloned())
+    }
+
+    async fn create_file_storage(
+        &self,
+        _input: &CreateFileStorageInput,
+    ) -> Result<FileStorageRecord> {
+        anyhow::bail!("not implemented for provisioning tests")
+    }
+
+    async fn create_file_table_registration(
+        &self,
+        input: &CreateFileTableRegistrationInput,
+    ) -> Result<FileTableRecord> {
+        let now = OffsetDateTime::now_utc();
+        let record = FileTableRecord {
+            id: input.file_table_id,
+            code: input.code.clone(),
+            title: input.title.clone(),
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            model_definition_id: input.model_definition_id,
+            bound_storage_id: input.bound_storage_id,
+            is_builtin: input.is_builtin,
+            is_default: input.is_default,
+            status: "active".to_string(),
+            created_by: input.actor_user_id,
+            updated_by: input.actor_user_id,
+            created_at: now,
+            updated_at: now,
+        };
+        self.file_tables
+            .lock()
+            .expect("file table lock poisoned")
+            .push(record.clone());
+        Ok(record)
+    }
+
+    async fn list_file_storages(&self) -> Result<Vec<FileStorageRecord>> {
+        Ok(vec![])
+    }
+
+    async fn get_default_file_storage(&self) -> Result<Option<FileStorageRecord>> {
+        Ok(None)
+    }
+
+    async fn get_file_storage(&self, _storage_id: Uuid) -> Result<Option<FileStorageRecord>> {
+        Ok(None)
+    }
+
+    async fn list_visible_file_tables(&self, workspace_id: Uuid) -> Result<Vec<FileTableRecord>> {
+        Ok(self
+            .file_tables
+            .lock()
+            .expect("file table lock poisoned")
+            .iter()
+            .filter(|record| {
+                matches!(record.scope_kind, FileTableScopeKind::System)
+                    || record.scope_id == workspace_id
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn update_file_table_binding(
+        &self,
+        _input: &UpdateFileStorageBindingInput,
+    ) -> Result<FileTableRecord> {
+        anyhow::bail!("not implemented for provisioning tests")
+    }
+}
+
+#[async_trait]
+impl ModelDefinitionRepository for MemoryProvisioningRepository {
+    async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
+        Ok(ActorContext::root(actor_user_id, Uuid::nil(), "root"))
+    }
+
+    async fn list_model_definitions(
+        &self,
+        _workspace_id: Uuid,
+    ) -> Result<Vec<ModelDefinitionRecord>> {
+        Ok(self
+            .models
+            .lock()
+            .expect("model lock poisoned")
+            .values()
+            .cloned()
+            .collect())
+    }
+
+    async fn get_model_definition(
+        &self,
+        _workspace_id: Uuid,
+        model_id: Uuid,
+    ) -> Result<Option<ModelDefinitionRecord>> {
+        Ok(self
+            .models
+            .lock()
+            .expect("model lock poisoned")
+            .get(&model_id)
+            .cloned())
+    }
+
+    async fn create_model_definition(
+        &self,
+        input: &CreateModelDefinitionInput,
+    ) -> Result<ModelDefinitionRecord> {
+        let model = ModelDefinitionRecord {
+            id: Uuid::now_v7(),
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            code: input.code.clone(),
+            title: input.title.clone(),
+            physical_table_name: format!("rtm_{}_{}", input.scope_kind.as_str(), input.code),
+            acl_namespace: format!("state_model.{}", input.code),
+            audit_namespace: format!("audit.state_model.{}", input.code),
+            fields: vec![],
+            availability_status: MetadataAvailabilityStatus::Available,
+        };
+        self.models
+            .lock()
+            .expect("model lock poisoned")
+            .insert(model.id, model.clone());
+        Ok(model)
+    }
+
+    async fn update_model_definition(
+        &self,
+        input: &UpdateModelDefinitionInput,
+    ) -> Result<ModelDefinitionRecord> {
+        let mut models = self.models.lock().expect("model lock poisoned");
+        let model = models
+            .get_mut(&input.model_id)
+            .expect("model should exist for test updates");
+        model.title = input.title.clone();
+        Ok(model.clone())
+    }
+
+    async fn add_model_field(&self, input: &AddModelFieldInput) -> Result<ModelFieldRecord> {
+        let mut models = self.models.lock().expect("model lock poisoned");
+        let model = models
+            .get_mut(&input.model_id)
+            .expect("model should exist for field inserts");
+        let field = ModelFieldRecord {
+            id: Uuid::now_v7(),
+            data_model_id: input.model_id,
+            code: input.code.clone(),
+            title: input.title.clone(),
+            physical_column_name: input.code.replace('-', "_"),
+            field_kind: input.field_kind,
+            is_required: input.is_required,
+            is_unique: input.is_unique,
+            default_value: input.default_value.clone(),
+            display_interface: input.display_interface.clone(),
+            display_options: input.display_options.clone(),
+            relation_target_model_id: input.relation_target_model_id,
+            relation_options: input.relation_options.clone(),
+            sort_order: model.fields.len() as i32,
+            availability_status: MetadataAvailabilityStatus::Available,
+        };
+        model.fields.push(field.clone());
+        Ok(field)
+    }
+
+    async fn update_model_field(&self, input: &UpdateModelFieldInput) -> Result<ModelFieldRecord> {
+        let mut models = self.models.lock().expect("model lock poisoned");
+        let model = models
+            .get_mut(&input.model_id)
+            .expect("model should exist for field updates");
+        let field = model
+            .fields
+            .iter_mut()
+            .find(|field| field.id == input.field_id)
+            .expect("field should exist for updates");
+        field.title = input.title.clone();
+        field.is_required = input.is_required;
+        field.is_unique = input.is_unique;
+        field.default_value = input.default_value.clone();
+        field.display_interface = input.display_interface.clone();
+        field.display_options = input.display_options.clone();
+        field.relation_options = input.relation_options.clone();
+        Ok(field.clone())
+    }
+
+    async fn delete_model_definition(&self, _actor_user_id: Uuid, model_id: Uuid) -> Result<()> {
+        self.models
+            .lock()
+            .expect("model lock poisoned")
+            .remove(&model_id);
+        Ok(())
+    }
+
+    async fn delete_model_field(
+        &self,
+        _actor_user_id: Uuid,
+        model_id: Uuid,
+        field_id: Uuid,
+    ) -> Result<()> {
+        let mut models = self.models.lock().expect("model lock poisoned");
+        if let Some(model) = models.get_mut(&model_id) {
+            model.fields.retain(|field| field.id != field_id);
+        }
+        Ok(())
+    }
+
+    async fn publish_model_definition(
+        &self,
+        _actor_user_id: Uuid,
+        model_id: Uuid,
+    ) -> Result<ModelDefinitionRecord> {
+        Ok(self
+            .models
+            .lock()
+            .expect("model lock poisoned")
+            .get(&model_id)
+            .expect("model should exist for publish")
+            .clone())
+    }
+
+    async fn append_audit_log(&self, _event: &AuditLogRecord) -> Result<()> {
         Ok(())
     }
 }

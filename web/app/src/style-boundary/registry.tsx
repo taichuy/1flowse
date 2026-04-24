@@ -253,8 +253,6 @@ function seedStyleBoundarySettingsFetch() {
           : String(input);
     const method =
       init?.method ?? (input instanceof Request ? input.method : 'GET');
-    const requestUrl = new URL(url, 'http://127.0.0.1:7800');
-
     if (url.includes('/api/console/docs/catalog')) {
       return new Response(
         JSON.stringify({

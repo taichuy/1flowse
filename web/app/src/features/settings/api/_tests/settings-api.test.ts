@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, expectTypeOf, test, vi } from 'vitest';
 import {
   modelProviderCatalogContract,
   modelProviderCatalogEntries
@@ -131,11 +131,13 @@ vi.mock('@1flowbase/api-client', () => ({
       configured_models: [
         {
           model_id: 'gpt-4o-mini',
-          enabled: true
+          enabled: true,
+          context_window_override_tokens: null
         },
         {
           model_id: 'gpt-4o',
-          enabled: false
+          enabled: false,
+          context_window_override_tokens: null
         }
       ],
       enabled_model_ids: ['gpt-4o-mini'],
@@ -174,6 +176,11 @@ vi.mock('@1flowbase/api-client', () => ({
   installConsoleOfficialPlugin: vi.fn().mockResolvedValue({
     installation: { id: 'installation-1' }
   }),
+  fetchConsoleFileStorages: vi.fn().mockResolvedValue([]),
+  createConsoleFileStorage: vi.fn().mockResolvedValue({ id: 'storage-1' }),
+  fetchConsoleFileTables: vi.fn().mockResolvedValue([]),
+  createConsoleFileTable: vi.fn().mockResolvedValue({ id: 'table-1' }),
+  updateConsoleFileTableBinding: vi.fn().mockResolvedValue({ id: 'table-1' }),
   uploadConsolePluginPackage: vi.fn().mockResolvedValue({
     installation: { id: 'installation-upload' }
   }),
@@ -224,6 +231,11 @@ import {
   listConsolePluginFamilies,
   listConsoleOfficialPluginCatalog,
   installConsoleOfficialPlugin,
+  fetchConsoleFileStorages,
+  createConsoleFileStorage,
+  fetchConsoleFileTables,
+  createConsoleFileTable,
+  updateConsoleFileTableBinding,
   uploadConsolePluginPackage,
   upgradeConsolePluginFamilyLatest,
   switchConsolePluginFamilyVersion,
@@ -231,10 +243,15 @@ import {
 } from '@1flowbase/api-client';
 import type { ConsoleModelProviderInstance } from '@1flowbase/api-client';
 
-type _IncludedInMainContract = ConsoleModelProviderInstance['included_in_main'];
-type _EnabledModelIdsContract = ConsoleModelProviderInstance['enabled_model_ids'];
-// @ts-expect-error validation_model_id should no longer exist on the instance DTO
-type _LegacyValidationModelIdContract = ConsoleModelProviderInstance['validation_model_id'];
+expectTypeOf<ConsoleModelProviderInstance>()
+  .toHaveProperty('included_in_main')
+  .toEqualTypeOf<boolean>();
+expectTypeOf<ConsoleModelProviderInstance>()
+  .toHaveProperty('enabled_model_ids')
+  .toEqualTypeOf<string[]>();
+expectTypeOf<ConsoleModelProviderInstance>().not.toHaveProperty(
+  'validation_model_id'
+);
 
 import {
   settingsApiDocsCatalogQueryKey,
@@ -303,6 +320,15 @@ import {
   switchSettingsPluginFamilyVersion,
   fetchSettingsPluginTask
 } from '../plugins';
+import {
+  settingsFileStoragesQueryKey,
+  settingsFileTablesQueryKey,
+  fetchSettingsFileStorages,
+  createSettingsFileStorage,
+  fetchSettingsFileTables,
+  createSettingsFileTable,
+  updateSettingsFileTableBinding
+} from '../file-management';
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -400,11 +426,13 @@ describe('settings api wrappers', () => {
       configured_models: [
         {
           model_id: 'gpt-4o-mini',
-          enabled: true
+          enabled: true,
+          context_window_override_tokens: null
         },
         {
           model_id: 'gpt-4o',
-          enabled: false
+          enabled: false,
+          context_window_override_tokens: null
         }
       ],
       preview_token: 'preview-1',
@@ -418,11 +446,13 @@ describe('settings api wrappers', () => {
       configured_models: [
         {
           model_id: 'gpt-4o',
-          enabled: true
+          enabled: true,
+          context_window_override_tokens: null
         },
         {
           model_id: 'gpt-4o-mini',
-          enabled: false
+          enabled: false,
+          context_window_override_tokens: null
         }
       ],
       preview_token: 'preview-2',
@@ -444,11 +474,13 @@ describe('settings api wrappers', () => {
       configured_models: [
         {
           model_id: 'gpt-4o-mini',
-          enabled: true
+          enabled: true,
+          context_window_override_tokens: null
         },
         {
           model_id: 'gpt-4o',
-          enabled: false
+          enabled: false,
+          context_window_override_tokens: null
         }
       ],
       enabled_model_ids: ['gpt-4o-mini'],
@@ -494,11 +526,13 @@ describe('settings api wrappers', () => {
         configured_models: [
           {
             model_id: 'gpt-4o-mini',
-            enabled: true
+            enabled: true,
+            context_window_override_tokens: null
           },
           {
             model_id: 'gpt-4o',
-            enabled: false
+            enabled: false,
+            context_window_override_tokens: null
           }
         ],
         enabled_model_ids: ['gpt-4o-mini']
@@ -587,11 +621,13 @@ describe('settings api wrappers', () => {
         configured_models: [
           {
             model_id: 'gpt-4o-mini',
-            enabled: true
+            enabled: true,
+            context_window_override_tokens: null
           },
           {
             model_id: 'gpt-4o',
-            enabled: false
+            enabled: false,
+            context_window_override_tokens: null
           }
         ],
         included_in_main: true,
@@ -829,5 +865,52 @@ describe('settings api wrappers', () => {
       'csrf-123'
     );
     expect(getConsolePluginTask).toHaveBeenCalledWith('task-1');
+  });
+
+  test('forwards file management query keys and request helpers', async () => {
+    const storageInput = {
+      code: 'local-default',
+      title: 'Local Default',
+      driver_type: 'local',
+      enabled: true,
+      is_default: true,
+      config_json: {
+        root_path: '/srv/files'
+      },
+      rule_json: {}
+    };
+    const tableInput = {
+      code: 'workspace_assets',
+      title: 'Workspace Assets'
+    };
+    const bindingInput = {
+      bound_storage_id: 'storage-2'
+    };
+
+    expect(settingsFileStoragesQueryKey).toEqual([
+      'settings',
+      'files',
+      'storages'
+    ]);
+    expect(settingsFileTablesQueryKey).toEqual(['settings', 'files', 'tables']);
+
+    await fetchSettingsFileStorages();
+    await createSettingsFileStorage(storageInput as never, 'csrf-123');
+    await fetchSettingsFileTables();
+    await createSettingsFileTable(tableInput as never, 'csrf-123');
+    await updateSettingsFileTableBinding('table-1', bindingInput, 'csrf-123');
+
+    expect(fetchConsoleFileStorages).toHaveBeenCalledTimes(1);
+    expect(createConsoleFileStorage).toHaveBeenCalledWith(
+      storageInput,
+      'csrf-123'
+    );
+    expect(fetchConsoleFileTables).toHaveBeenCalledTimes(1);
+    expect(createConsoleFileTable).toHaveBeenCalledWith(tableInput, 'csrf-123');
+    expect(updateConsoleFileTableBinding).toHaveBeenCalledWith(
+      'table-1',
+      bindingInput,
+      'csrf-123'
+    );
   });
 });

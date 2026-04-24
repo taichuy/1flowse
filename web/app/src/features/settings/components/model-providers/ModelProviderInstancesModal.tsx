@@ -23,6 +23,7 @@ type ModelGroup =
 export function ModelProviderInstancesModal({
   open,
   catalogEntry,
+  providerDisplayName,
   mainInstance,
   modelGroups,
   instances,
@@ -43,6 +44,7 @@ export function ModelProviderInstancesModal({
 }: {
   open: boolean;
   catalogEntry: SettingsModelProviderCatalogEntry | null;
+  providerDisplayName: string | null;
   mainInstance: SettingsModelProviderMainInstance | null;
   modelGroups: ModelGroup[];
   instances: SettingsModelProviderInstance[];
@@ -74,12 +76,15 @@ export function ModelProviderInstancesModal({
     (total, group) => total + group.models.length,
     0
   );
+  const displayName = catalogEntry?.display_name ?? providerDisplayName;
+  const title = displayName ? `${displayName} 实例` : '供应商实例';
 
   return (
     <Modal
       open={open}
       width={960}
-      title={catalogEntry ? `${catalogEntry.display_name} 实例` : '供应商实例'}
+      title={title}
+      aria-label={title}
       onCancel={onClose}
       footer={null}
       destroyOnHidden

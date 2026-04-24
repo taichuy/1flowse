@@ -1,7 +1,9 @@
 mod application;
 mod auth_routes;
 mod config_tests;
+mod data_sources_routes;
 mod docs_routes;
+mod file_management_routes;
 mod host_extension_loader_tests;
 mod me_routes;
 mod member_routes;

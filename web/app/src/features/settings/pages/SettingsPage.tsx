@@ -19,7 +19,7 @@ export function SettingsPage({
 }) {
   const actor = useAuthStore((state) => state.actor);
   const me = useAuthStore((state) => state.me);
-  const permissions = me?.permissions ?? [];
+  const permissions = useMemo(() => me?.permissions ?? [], [me?.permissions]);
   const permissionSet = useMemo(() => new Set(permissions), [permissions]);
   const isRoot = actor?.effective_display_role === 'root';
   const canManageMembers = isRoot || permissionSet.has('user.manage.all');
@@ -50,6 +50,8 @@ export function SettingsPage({
       {activeSection ? (
         <SettingsSectionBody
           sectionKey={activeSection.key}
+          isRoot={isRoot}
+          permissions={permissions}
           canManageMembers={canManageMembers}
           canManageRoles={canManageRoles}
           canManageModelProviders={canManageModelProviders}

@@ -25,8 +25,8 @@ use axum::{routing::get, Json, Router};
 use control_plane::bootstrap::{BootstrapConfig, BootstrapService};
 use rand_core::OsRng;
 use serde::Serialize;
-use storage_pg::{connect, run_migrations, PgControlPlaneStore};
-use storage_redis::RedisSessionStore;
+use storage_durable::build_main_durable_postgres;
+use storage_ephemeral::{EphemeralBackendKind, MemorySessionStore, RedisBackedSessionStore};
 use time::OffsetDateTime;
 use tokio::sync::RwLock;
 use tower_http::{
@@ -47,6 +47,7 @@ use crate::{
 };
 
 pub const DEFAULT_API_SERVER_ADDR: &str = "0.0.0.0:7800";
+const SESSION_STORE_NAMESPACE: &str = "flowbase:console:session";
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct HealthResponse {
@@ -126,6 +127,10 @@ fn console_router(state: Arc<ApiState>) -> Router {
         .nest("/api/console", routes::application_orchestration::router())
         .nest("/api/console", routes::application_runtime::router())
         .nest("/api/console", routes::docs::router())
+        .nest("/api/console", routes::data_sources::router())
+        .nest("/api/console", routes::files::router())
+        .nest("/api/console", routes::file_storages::router())
+        .nest("/api/console", routes::file_tables::router())
         .nest("/api/console", routes::me::router())
         .nest("/api/console", routes::workspace::router())
         .nest("/api/console", routes::members::router())
@@ -156,18 +161,28 @@ pub async fn app_from_env() -> Result<Router> {
 }
 
 pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
-    let pool = connect(&config.database_url).await?;
-    run_migrations(&pool).await?;
-
-    let store = PgControlPlaneStore::new(pool);
-    let session_store = RedisSessionStore::new(&config.redis_url).await?;
+    let durable = build_main_durable_postgres(&config.database_url).await?;
+    let store = durable.store.clone();
+    let session_store = match config.ephemeral_backend {
+        EphemeralBackendKind::Memory => {
+            SessionStoreHandle::Memory(MemorySessionStore::new(SESSION_STORE_NAMESPACE))
+        }
+        EphemeralBackendKind::Redis => SessionStoreHandle::Redis(Box::new(
+            RedisBackedSessionStore::new(
+                config.ephemeral_redis_url.as_deref().unwrap(),
+                SESSION_STORE_NAMESPACE,
+            )
+            .await?,
+        )),
+    };
     let salt = SaltString::generate(&mut OsRng);
     let root_password_hash = Argon2::default()
         .hash_password(config.bootstrap_root_password.as_bytes(), &salt)
         .map_err(|err| anyhow::anyhow!("failed to hash bootstrap root password: {err}"))?
         .to_string();
+    let file_storage_registry = Arc::new(storage_object::builtin_driver_registry());
 
-    BootstrapService::new(store.clone())
+    let bootstrap_result = BootstrapService::new(store.clone())
         .run(&BootstrapConfig {
             workspace_name: config.bootstrap_workspace_name.clone(),
             root_account: config.bootstrap_root_account.clone(),
@@ -176,6 +191,35 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
             root_name: config.bootstrap_root_name.clone(),
             root_nickname: config.bootstrap_root_nickname.clone(),
         })
+        .await?;
+    let default_storage = if let Some(existing) =
+        <storage_durable::MainDurableStore as control_plane::ports::FileManagementRepository>::get_default_file_storage(&store)
+            .await?
+    {
+        existing
+    } else {
+        control_plane::file_management::FileStorageService::new(store.clone())
+            .create_storage(control_plane::file_management::CreateFileStorageCommand {
+                actor_user_id: bootstrap_result.root_user_id,
+                code: "local_default".into(),
+                title: "Local".into(),
+                driver_type: "local".into(),
+                enabled: true,
+                is_default: true,
+                config_json: serde_json::json!({
+                    "root_path": config.business_file_local_root.clone(),
+                    "public_base_url": null
+                }),
+                rule_json: serde_json::json!({}),
+            })
+            .await?
+    };
+    control_plane::file_management::FileManagementBootstrapService::new(store.clone())
+        .ensure_builtin_attachments(
+            bootstrap_result.root_user_id,
+            default_storage.id,
+            "attachments",
+        )
         .await?;
     let runtime_registry = runtime_core::runtime_model_registry::RuntimeModelRegistry::default();
     runtime_registry.rebuild(store.list_runtime_model_metadata().await?);
@@ -192,6 +236,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
 
     let state = Arc::new(ApiState {
         store,
+        file_storage_registry,
         runtime_engine,
         provider_runtime: Arc::new(ApiRuntimeServices::new(
             Arc::new(RwLock::new(
@@ -199,6 +244,9 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
             )),
             Arc::new(RwLock::new(
                 plugin_runner::capability_host::CapabilityHost::default(),
+            )),
+            Arc::new(RwLock::new(
+                plugin_runner::data_source_host::DataSourceHost::default(),
             )),
         )),
         process_started_at,
@@ -215,7 +263,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
         host_extension_dropin_root: config.host_extension_dropin_root.clone(),
         allow_unverified_filesystem_dropins: config.allow_unverified_filesystem_dropins,
         allow_uploaded_host_extensions: config.allow_uploaded_host_extensions,
-        session_store: SessionStoreHandle::Redis(Box::new(session_store)),
+        session_store,
         api_docs,
         cookie_name: config.cookie_name.clone(),
         session_ttl_days: config.session_ttl_days,

@@ -11,7 +11,8 @@ import {
   settingsModelProviderCatalogQueryKey,
   settingsModelProviderInstancesQueryKey,
   settingsModelProviderOptionsQueryKey,
-  settingsModelProviderModelsQueryKey
+  settingsModelProviderModelsQueryKey,
+  type SettingsModelProviderOptions
 } from '../../../api/model-providers';
 import {
   fetchSettingsOfficialPluginCatalog,
@@ -61,6 +62,7 @@ export function useModelProviderData({
   const catalogEntries = catalogQuery.data ?? EMPTY_MODEL_PROVIDER_CATALOG;
   const families = familiesQuery.data ?? EMPTY_PLUGIN_FAMILIES;
   const officialCatalogEntries = officialCatalogQuery.data?.entries ?? [];
+  const providerOptions = optionsQuery.data?.providers;
   const officialSourceMeta = officialCatalogQuery.data
     ? {
         sourceKind: officialCatalogQuery.data.source_kind,
@@ -118,15 +120,15 @@ export function useModelProviderData({
   const providerOptionsByProviderCode = useMemo(() => {
     const grouped: Record<
       string,
-      NonNullable<(typeof optionsQuery.data)['providers']>[number]
+      SettingsModelProviderOptions['providers'][number]
     > = {};
 
-    for (const provider of optionsQuery.data?.providers ?? []) {
+    for (const provider of providerOptions ?? []) {
       grouped[provider.provider_code] = provider;
     }
 
     return grouped;
-  }, [optionsQuery.data]);
+  }, [providerOptions]);
 
   const instanceCounts = useMemo(() => {
     const counts: Record<string, number> = {};

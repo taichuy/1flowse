@@ -12,6 +12,42 @@ fn current_workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+fn base_env_without_ephemeral_backend() -> Vec<(&'static str, &'static str)> {
+    vec![
+        (
+            "API_DATABASE_URL",
+            "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
+        ),
+        ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
+        ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
+        ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
+        ("BOOTSTRAP_WORKSPACE_NAME", "1flowbase"),
+    ]
+}
+
+fn base_env_with_backend(backend: &'static str) -> Vec<(&'static str, &'static str)> {
+    let mut env = base_env_without_ephemeral_backend();
+    env.push(("API_EPHEMERAL_BACKEND", backend));
+    env
+}
+
+#[test]
+fn api_config_defaults_ephemeral_backend_to_memory() {
+    let env = base_env_without_ephemeral_backend();
+    let config = ApiConfig::from_env_map(&env).unwrap();
+
+    assert_eq!(config.ephemeral_backend.as_str(), "memory");
+    assert_eq!(config.ephemeral_redis_url, None);
+}
+
+#[test]
+fn api_config_requires_redis_url_when_ephemeral_backend_is_redis() {
+    let env = base_env_with_backend("redis");
+    let error = ApiConfig::from_env_map(&env).unwrap_err();
+
+    assert!(error.to_string().contains("API_EPHEMERAL_REDIS_URL"));
+}
+
 #[test]
 fn api_config_uses_expected_cookie_defaults() {
     let config = ApiConfig::from_env_map(&[
@@ -19,7 +55,7 @@ fn api_config_uses_expected_cookie_defaults() {
             "API_DATABASE_URL",
             "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
         ),
-        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_EPHEMERAL_BACKEND", "memory"),
         ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
         ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
         ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
@@ -38,7 +74,7 @@ fn api_config_defaults_to_development_and_unrestricted_cors() {
             "API_DATABASE_URL",
             "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
         ),
-        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_EPHEMERAL_BACKEND", "memory"),
         ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
         ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
         ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
@@ -57,7 +93,7 @@ fn api_config_defaults_provider_install_root_to_api_workspace_plugins_directory(
             "API_DATABASE_URL",
             "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
         ),
-        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_EPHEMERAL_BACKEND", "memory"),
         ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
         ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
         ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
@@ -74,13 +110,30 @@ fn api_config_defaults_provider_install_root_to_api_workspace_plugins_directory(
 }
 
 #[test]
+fn api_config_uses_api_storage_as_default_business_file_root() {
+    let config = ApiConfig::from_env_map(&[
+        (
+            "API_DATABASE_URL",
+            "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
+        ),
+        ("BOOTSTRAP_WORKSPACE_NAME", "System"),
+        ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
+        ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
+        ("BOOTSTRAP_ROOT_PASSWORD", "password"),
+    ])
+    .unwrap();
+
+    assert!(config.business_file_local_root.ends_with("api/storage"));
+}
+
+#[test]
 fn api_config_rejects_production_without_allowed_origins() {
     let error = ApiConfig::from_env_map(&[
         (
             "API_DATABASE_URL",
             "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
         ),
-        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_EPHEMERAL_BACKEND", "memory"),
         ("API_ENV", "production"),
         ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
         ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
@@ -99,7 +152,7 @@ fn api_config_accepts_production_with_explicit_allowed_origins() {
             "API_DATABASE_URL",
             "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
         ),
-        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_EPHEMERAL_BACKEND", "memory"),
         ("API_ENV", "production"),
         (
             "API_ALLOWED_ORIGINS",
@@ -138,7 +191,7 @@ fn api_config_reads_bootstrap_workspace_name() {
             "API_DATABASE_URL",
             "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
         ),
-        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_EPHEMERAL_BACKEND", "memory"),
         ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
         ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
         ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
@@ -156,7 +209,7 @@ fn api_config_defaults_host_extension_settings() {
             "API_DATABASE_URL",
             "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
         ),
-        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_EPHEMERAL_BACKEND", "memory"),
         ("API_PROVIDER_INSTALL_ROOT", "/srv/1flowbase/plugins"),
         ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
         ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
@@ -180,7 +233,7 @@ fn api_config_reads_host_extension_overrides() {
             "API_DATABASE_URL",
             "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
         ),
-        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_EPHEMERAL_BACKEND", "memory"),
         ("API_HOST_EXTENSION_DROPIN_ROOT", "/opt/host-dropins"),
         ("API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS", "false"),
         ("API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS", "true"),
@@ -203,7 +256,7 @@ fn api_config_reads_provider_secret_master_key() {
             "API_DATABASE_URL",
             "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
         ),
-        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_EPHEMERAL_BACKEND", "memory"),
         ("API_PROVIDER_SECRET_MASTER_KEY", "provider-secret-key"),
         ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
         ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
@@ -222,7 +275,7 @@ fn api_config_defaults_plugin_runner_internal_base_url() {
             "API_DATABASE_URL",
             "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
         ),
-        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_EPHEMERAL_BACKEND", "memory"),
         ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
         ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
         ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
@@ -243,7 +296,7 @@ fn api_config_reads_plugin_runner_internal_base_url() {
             "API_DATABASE_URL",
             "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
         ),
-        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_EPHEMERAL_BACKEND", "memory"),
         (
             "API_PLUGIN_RUNNER_INTERNAL_BASE_URL",
             "http://plugin-runner.internal:7801",
@@ -268,7 +321,7 @@ fn api_config_reads_official_plugin_repository_settings() {
             "API_DATABASE_URL",
             "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
         ),
-        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_EPHEMERAL_BACKEND", "memory"),
         (
             "API_OFFICIAL_PLUGIN_REPOSITORY",
             "taichuy/1flowbase-official-plugins",
@@ -293,7 +346,7 @@ fn api_config_prefers_mirror_registry_when_present() {
             "API_DATABASE_URL",
             "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
         ),
-        ("API_REDIS_URL", "redis://:1flowbase@127.0.0.1:36379"),
+        ("API_EPHEMERAL_BACKEND", "memory"),
         (
             "API_OFFICIAL_PLUGIN_DEFAULT_REGISTRY_URL",
             "https://official.example.com/official-registry.json",

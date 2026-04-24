@@ -223,7 +223,8 @@ export function SettingsModelProvidersSection({
               }
               onViewInstances={(entry) => {
                 setInstanceModalState({
-                  providerCode: entry.provider_code
+                  providerCode: entry.provider_code,
+                  displayName: entry.display_name
                 });
               }}
               onCreate={(entry) => {
@@ -389,6 +390,7 @@ export function SettingsModelProvidersSection({
       <ModelProviderInstancesModal
         open={instanceModalState !== null}
         catalogEntry={modalCatalogEntry}
+        providerDisplayName={instanceModalState?.displayName ?? null}
         mainInstance={
           mainInstanceQuery.data ??
           (modalProviderOption

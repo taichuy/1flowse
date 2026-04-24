@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   AutoComplete,
@@ -139,19 +139,7 @@ function shouldOmitDraftConfigValue(value: ModelProviderFormValue | undefined) {
   return typeof value === 'string' && value.length === 0;
 }
 
-export function ModelProviderInstanceDrawer({
-  open,
-  mode,
-  catalogEntry,
-  instance,
-  cachedModelCatalog,
-  defaultIncludedInMain,
-  submitting,
-  onClose,
-  onSubmit,
-  onPreviewModels,
-  onRevealSecret
-}: {
+type ModelProviderInstanceDrawerProps = {
   open: boolean;
   mode: DrawerMode;
   catalogEntry: SettingsModelProviderCatalogEntry | null;
@@ -173,7 +161,31 @@ export function ModelProviderInstanceDrawer({
   }) => Promise<void>;
   onPreviewModels: (config: Record<string, unknown>) => Promise<PreviewModelsResponse>;
   onRevealSecret: (fieldKey: string) => Promise<string>;
-}) {
+};
+
+export function ModelProviderInstanceDrawer(
+  props: ModelProviderInstanceDrawerProps
+) {
+  if (!props.open) {
+    return null;
+  }
+
+  return <ModelProviderInstanceDrawerContent {...props} />;
+}
+
+function ModelProviderInstanceDrawerContent({
+  open,
+  mode,
+  catalogEntry,
+  instance,
+  cachedModelCatalog,
+  defaultIncludedInMain,
+  submitting,
+  onClose,
+  onSubmit,
+  onPreviewModels,
+  onRevealSecret
+}: ModelProviderInstanceDrawerProps) {
   const [form] = Form.useForm<{
     display_name: string;
     included_in_main: boolean;
@@ -189,13 +201,13 @@ export function ModelProviderInstanceDrawer({
   const [previewToken, setPreviewToken] = useState<string | undefined>();
   const [previewingModels, setPreviewingModels] = useState(false);
 
-  function nextConfiguredModelKey() {
+  const nextConfiguredModelKey = useCallback(() => {
     const key = `configured-model-${configuredModelKeyRef.current}`;
     configuredModelKeyRef.current += 1;
     return key;
-  }
+  }, []);
 
-  function buildInitialConfiguredModels() {
+  const buildInitialConfiguredModels = useCallback(() => {
     const sourceModels =
       Array.isArray(instance?.configured_models) && instance.configured_models.length > 0
         ? instance.configured_models
@@ -215,7 +227,7 @@ export function ModelProviderInstanceDrawer({
       context_window_error: null,
       enabled: model.enabled
     }));
-  }
+  }, [instance, nextConfiguredModelKey]);
 
   useEffect(() => {
     if (!open) {
@@ -245,7 +257,15 @@ export function ModelProviderInstanceDrawer({
     setRevealingSecretKey(null);
     setPreviewToken(undefined);
     setPreviewingModels(false);
-  }, [catalogEntry, defaultIncludedInMain, form, instance, mode, open]);
+  }, [
+    buildInitialConfiguredModels,
+    catalogEntry,
+    defaultIncludedInMain,
+    form,
+    instance,
+    mode,
+    open
+  ]);
 
   useEffect(() => {
     if (!open || mode !== 'edit' || !cachedModelCatalog || previewModels.length > 0) {
@@ -557,10 +577,9 @@ export function ModelProviderInstanceDrawer({
       open={open}
       width={560}
       zIndex={1100}
-      forceRender
       title={title}
       onClose={onClose}
-      destroyOnClose
+      destroyOnHidden
       footer={
         <Space>
           <Button

@@ -77,10 +77,13 @@ const modelProvidersApi = vi.hoisted(() => ({
   ]),
   fetchSettingsModelProviderCatalog: vi.fn(),
   fetchSettingsModelProviderInstances: vi.fn(),
+  fetchSettingsModelProviderOptions: vi.fn(),
+  fetchSettingsModelProviderMainInstance: vi.fn(),
   fetchSettingsModelProviderModels: vi.fn(),
   previewSettingsModelProviderModels: vi.fn(),
   createSettingsModelProviderInstance: vi.fn(),
   updateSettingsModelProviderInstance: vi.fn(),
+  updateSettingsModelProviderMainInstance: vi.fn(),
   revealSettingsModelProviderSecret: vi.fn(),
   validateSettingsModelProviderInstance: vi.fn(),
   refreshSettingsModelProviderModels: vi.fn(),
@@ -104,6 +107,16 @@ const systemRuntimeApi = vi.hoisted(() => ({
   fetchSettingsSystemRuntimeProfile: vi.fn()
 }));
 
+const fileManagementApi = vi.hoisted(() => ({
+  settingsFileStoragesQueryKey: ['settings', 'files', 'storages'],
+  settingsFileTablesQueryKey: ['settings', 'files', 'tables'],
+  fetchSettingsFileStorages: vi.fn(),
+  createSettingsFileStorage: vi.fn(),
+  fetchSettingsFileTables: vi.fn(),
+  createSettingsFileTable: vi.fn(),
+  updateSettingsFileTableBinding: vi.fn()
+}));
+
 vi.mock('../api/members', () => membersApi);
 vi.mock('../api/roles', () => rolesApi);
 vi.mock('../api/permissions', () => permissionsApi);
@@ -111,6 +124,7 @@ vi.mock('../api/api-docs', () => docsApi);
 vi.mock('../api/model-providers', () => modelProvidersApi);
 vi.mock('../api/plugins', () => pluginsApi);
 vi.mock('../api/system-runtime', () => systemRuntimeApi);
+vi.mock('../api/file-management', () => fileManagementApi);
 vi.mock('@scalar/api-reference-react', () => ({
   ApiReferenceReact: () => <div data-testid="settings-page-scalar">Scalar</div>
 }));
@@ -200,6 +214,20 @@ describe('SettingsPage', () => {
     });
     modelProvidersApi.fetchSettingsModelProviderCatalog.mockResolvedValue([]);
     modelProvidersApi.fetchSettingsModelProviderInstances.mockResolvedValue([]);
+    modelProvidersApi.fetchSettingsModelProviderOptions.mockResolvedValue({
+      locale_meta: {
+        requested_locale: 'zh_Hans',
+        resolved_locale: 'zh_Hans',
+        fallback_locale: 'en_US',
+        supported_locales: ['zh_Hans', 'en_US']
+      },
+      i18n_catalog: {},
+      providers: []
+    });
+    modelProvidersApi.fetchSettingsModelProviderMainInstance.mockResolvedValue({
+      provider_code: 'openai_compatible',
+      auto_include_new_instances: true
+    });
     pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([]);
     pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
       source_kind: 'official_registry',
@@ -310,6 +338,37 @@ describe('SettingsPage', () => {
         }
       ]
     });
+    fileManagementApi.fetchSettingsFileStorages.mockResolvedValue([
+      {
+        id: 'storage-1',
+        code: 'local-default',
+        title: 'Local Default',
+        driver_type: 'local',
+        enabled: true,
+        is_default: true,
+        health_status: 'ready',
+        last_health_error: null,
+        config_json: {
+          root_path: '/srv/files'
+        },
+        rule_json: {}
+      }
+    ]);
+    fileManagementApi.fetchSettingsFileTables.mockResolvedValue([
+      {
+        id: 'table-1',
+        code: 'attachments',
+        title: 'Attachments',
+        scope_kind: 'workspace',
+        scope_id: 'workspace-1',
+        model_definition_id: 'model-1',
+        bound_storage_id: 'storage-1',
+        bound_storage_title: 'Local Default',
+        is_builtin: true,
+        is_default: true,
+        status: 'active'
+      }
+    ]);
   });
 
   test('shows API 文档 only for root or api_reference.view.all', async () => {
@@ -500,6 +559,22 @@ describe('SettingsPage', () => {
     expect(
       systemRuntimeApi.fetchSettingsSystemRuntimeProfile
     ).toHaveBeenCalled();
+  });
+
+  test('shows 文件管理 when file_table.view.own is the only visible settings section', async () => {
+    authenticateWithPermissions(['route_page.view.all', 'file_table.view.own']);
+
+    renderApp('/settings');
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/settings/files');
+    });
+    expect(
+      await screen.findByRole('heading', { name: '文件管理', level: 4 })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '文件表', level: 5 })
+    ).toBeInTheDocument();
   });
 
   test('renders the empty settings state when no section is visible', async () => {

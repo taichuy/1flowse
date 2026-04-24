@@ -22,6 +22,7 @@ use plugin_framework::{
     provider_package::ProviderConfigField,
 };
 use serde::{Deserialize, Serialize};
+use storage_durable::MainDurableStore;
 use time::format_description::well_known::Rfc3339;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
@@ -330,9 +331,7 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route("/model-providers/:id/models/refresh", post(refresh_models))
 }
 
-fn service(
-    state: &ApiState,
-) -> ModelProviderService<storage_pg::PgControlPlaneStore, ApiProviderRuntime> {
+fn service(state: &ApiState) -> ModelProviderService<MainDurableStore, ApiProviderRuntime> {
     ModelProviderService::new(
         state.store.clone(),
         ApiProviderRuntime::new(state.provider_runtime.clone()),

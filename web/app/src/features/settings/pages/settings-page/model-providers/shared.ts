@@ -13,6 +13,7 @@ export type ModelProviderDrawerState =
 
 export type ModelProviderInstanceModalState = {
   providerCode: string;
+  displayName: string;
 } | null;
 
 export type OfficialInstallState = {

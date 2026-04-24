@@ -87,6 +87,21 @@ async fn openapi_contains_runtime_and_model_detail_routes() {
 }
 
 #[tokio::test]
+async fn openapi_contains_file_management_routes() {
+    let paths = openapi_paths().await;
+
+    for route in [
+        "/api/console/file-storages",
+        "/api/console/file-tables",
+        "/api/console/file-tables/{id}/binding",
+        "/api/console/files/upload",
+        "/api/console/files/{file_table_id}/records/{record_id}/content",
+    ] {
+        assert!(paths.contains_key(route), "missing path {route}");
+    }
+}
+
+#[tokio::test]
 async fn openapi_contains_session_csrf_and_patch_me_routes() {
     let response = app()
         .oneshot(

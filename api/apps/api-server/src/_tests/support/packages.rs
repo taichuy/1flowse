@@ -55,11 +55,7 @@ runtime:
     .unwrap();
 }
 
-pub(crate) fn write_provider_runtime_script(
-    path: &Path,
-    model_id: &str,
-    model_label: &str,
-) {
+pub(crate) fn write_provider_runtime_script(path: &Path, model_id: &str, model_label: &str) {
     let script = format!(
         r#"#!/usr/bin/env node
 const fs = require('node:fs');
