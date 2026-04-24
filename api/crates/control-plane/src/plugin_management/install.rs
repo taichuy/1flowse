@@ -522,6 +522,7 @@ where
                 "help_url": installed_package.provider.help_url,
                 "default_base_url": installed_package.provider.default_base_url,
                 "model_discovery_mode": format!("{:?}", installed_package.provider.model_discovery_mode).to_ascii_lowercase(),
+                "icon": installed_package.manifest.icon,
                 "supported_model_types": ["llm"],
             });
             if let Some(install_kind) = detail_json.get("install_kind").cloned() {

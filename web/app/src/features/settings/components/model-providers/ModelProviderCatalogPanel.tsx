@@ -4,6 +4,8 @@ import type { SettingsPluginFamilyEntry } from '../../api/plugins';
 import type { SettingsModelProviderCatalogEntry } from '../../api/model-providers';
 import { formatPluginAvailabilityStatus } from './plugin-installation-status';
 
+const DEFAULT_PROVIDER_ICON_SRC = '/icon.svg';
+
 function getCatalogDescription(
   family: SettingsPluginFamilyEntry,
   currentCatalogEntry: SettingsModelProviderCatalogEntry | null | undefined
@@ -20,6 +22,10 @@ function compareVersions(left: string, right: string) {
     numeric: true,
     sensitivity: 'base'
   });
+}
+
+function getProviderIconSrc(entry: SettingsPluginFamilyEntry) {
+  return entry.icon?.trim() || DEFAULT_PROVIDER_ICON_SRC;
 }
 
 export function ModelProviderCatalogPanel({
@@ -175,7 +181,7 @@ export function ModelProviderCatalogPanel({
           {
             title: '版本',
             key: 'version',
-            width: 90,
+            width: 120,
             render: (_, entry) => {
               const versionOptions = [...entry.installed_versions]
                 .sort((left, right) =>
@@ -188,6 +194,20 @@ export function ModelProviderCatalogPanel({
 
               return (
                 <div className="model-provider-panel__catalog-version">
+                  <img
+                    className="model-provider-panel__provider-icon"
+                    src={getProviderIconSrc(entry)}
+                    alt=""
+                    aria-hidden="true"
+                    loading="lazy"
+                    onError={(event) => {
+                      const image = event.currentTarget;
+                      if (image.src.endsWith(DEFAULT_PROVIDER_ICON_SRC)) {
+                        return;
+                      }
+                      image.src = DEFAULT_PROVIDER_ICON_SRC;
+                    }}
+                  />
                   {canManage ? (
                     <Space size={8} wrap className="model-provider-panel__version-inline">
                       <Select

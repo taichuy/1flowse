@@ -123,6 +123,13 @@ describe('NodeDetailPanel', () => {
   beforeEach(() => {
     fetchModelProviderOptionsSpy.mockReset();
     fetchModelProviderOptionsSpy.mockResolvedValue({
+      locale_meta: {
+        requested_locale: 'zh-CN',
+        resolved_locale: 'zh-CN',
+        fallback_locale: 'en-US',
+        supported_locales: ['zh-CN', 'en-US']
+      },
+      i18n_catalog: {},
       providers: []
     });
     resolveAgentFlowNodeSchemaSpy.mockClear();

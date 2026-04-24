@@ -97,6 +97,7 @@ pub struct PluginFamilyView {
     pub label_key: String,
     pub description_key: Option<String>,
     pub provider_label_key: String,
+    pub icon: Option<String>,
     pub protocol: String,
     pub help_url: Option<String>,
     pub default_base_url: Option<String>,
@@ -212,6 +213,15 @@ fn provider_model_discovery_mode(
         .map(|package| format!("{:?}", package.provider.model_discovery_mode).to_ascii_lowercase())
         .or_else(|| metadata_string(&installation.metadata_json, "model_discovery_mode"))
         .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn provider_icon(
+    installation: &domain::PluginInstallationRecord,
+    package: Option<&ProviderPackage>,
+) -> Option<String> {
+    package
+        .and_then(|package| package.manifest.icon.clone())
+        .or_else(|| metadata_string(&installation.metadata_json, "icon"))
 }
 
 fn metadata_string(metadata: &serde_json::Value, key: &str) -> Option<String> {
@@ -447,6 +457,7 @@ where
                 help_url: provider_help_url(&current, package.as_ref()),
                 default_base_url: provider_default_base_url(&current, package.as_ref()),
                 model_discovery_mode: provider_model_discovery_mode(&current, package.as_ref()),
+                icon: provider_icon(&current, package.as_ref()),
                 current_installation_id: current.id,
                 current_version: current.plugin_version.clone(),
                 latest_version: latest_version.clone(),
