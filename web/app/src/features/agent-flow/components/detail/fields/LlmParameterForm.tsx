@@ -12,7 +12,7 @@ import {
   Tooltip,
   Typography
 } from 'antd';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { SchemaDynamicFormRendererProps } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 import {
@@ -150,7 +150,7 @@ function getSliderBounds(
   };
 }
 
-function renderNumericControl({
+function LlmNumericControl({
   field,
   value,
   contextWindow,
@@ -167,6 +167,15 @@ function renderNumericControl({
   const { min, max } = getSliderBounds(field, rawNumericValue, contextWindow);
   const numericValue = clampNumericValue(rawNumericValue, min, max);
   const step = field.step ?? (field.type === 'integer' ? 1 : 0.1);
+  const [draftValue, setDraftValue] = useState(numericValue);
+
+  useEffect(() => {
+    setDraftValue(numericValue);
+  }, [numericValue]);
+
+  function normalizeNextValue(nextValue: number) {
+    return clampNumericValue(nextValue, min, max);
+  }
 
   return (
     <div className="agent-flow-llm-parameter-form__numeric-control">
@@ -174,7 +183,7 @@ function renderNumericControl({
         min={min}
         max={max}
         step={step}
-        value={numericValue}
+        value={draftValue}
         styles={{
           track: { backgroundColor: LLM_PARAMETER_BLUE_LIGHT },
           tracks: { backgroundColor: LLM_PARAMETER_BLUE_LIGHT },
@@ -183,9 +192,16 @@ function renderNumericControl({
           },
           rail: { backgroundColor: LLM_PARAMETER_RAIL }
         }}
-        onChange={(next) =>
-          nextParameters(Array.isArray(next) ? (next[0] ?? min) : next)
-        }
+        onChange={(next) => {
+          const nextValue = Array.isArray(next) ? (next[0] ?? min) : next;
+
+          setDraftValue(normalizeNextValue(nextValue));
+        }}
+        onChangeComplete={(next) => {
+          const nextValue = Array.isArray(next) ? (next[0] ?? min) : next;
+
+          nextParameters(normalizeNextValue(nextValue));
+        }}
       />
       <div className="agent-flow-llm-parameter-form__number-actions">
         <InputNumber
@@ -194,14 +210,16 @@ function renderNumericControl({
           max={max}
           step={step}
           precision={field.precision}
-          value={numericValue}
-          onChange={(next) =>
-            nextParameters(
+          value={draftValue}
+          onChange={(next) => {
+            const nextValue =
               typeof next === 'number'
-                ? clampNumericValue(next, min, max)
-                : getNumericDefaultValue(field)
-            )
-          }
+                ? normalizeNextValue(next)
+                : getNumericDefaultValue(field);
+
+            setDraftValue(getNumericValue(field, nextValue));
+            nextParameters(nextValue);
+          }}
         />
         <Tooltip title="还原默认值">
           <Button
@@ -237,13 +255,15 @@ function renderFieldControl({
     field.type === 'number' ||
     field.control === 'number'
   ) {
-    return renderNumericControl({
-      field,
-      value,
-      contextWindow,
-      nextParameters,
-      restoreDefaultValue
-    });
+    return (
+      <LlmNumericControl
+        field={field}
+        value={value}
+        contextWindow={contextWindow}
+        nextParameters={nextParameters}
+        restoreDefaultValue={restoreDefaultValue}
+      />
+    );
   }
 
   if (field.control === 'switch' || field.type === 'boolean') {
