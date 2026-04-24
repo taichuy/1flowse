@@ -106,6 +106,16 @@ pub struct PluginManifestV1 {
     pub node_contributions: Vec<NodeContributionManifest>,
 }
 
+impl PluginManifestV1 {
+    pub fn plugin_code(&self) -> FrameworkResult<&str> {
+        plugin_code_from_identity(&self.plugin_id, &self.version)
+    }
+
+    pub fn versioned_plugin_id(&self) -> FrameworkResult<String> {
+        Ok(format!("{}@{}", self.plugin_code()?, self.version))
+    }
+}
+
 pub fn parse_plugin_manifest(raw: &str) -> FrameworkResult<PluginManifestV1> {
     let manifest: PluginManifestV1 = serde_yaml::from_str(raw)
         .map_err(|error| PluginFrameworkError::invalid_provider_package(error.to_string()))?;
@@ -127,6 +137,7 @@ fn validate_plugin_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> 
 
     validate_non_empty(&manifest.plugin_id, "plugin_id")?;
     validate_non_empty(&manifest.version, "version")?;
+    plugin_code_from_identity(&manifest.plugin_id, &manifest.version)?;
     validate_non_empty(&manifest.vendor, "vendor")?;
     validate_non_empty(&manifest.display_name, "display_name")?;
     validate_non_empty(&manifest.description, "description")?;
@@ -268,6 +279,30 @@ fn validate_non_empty(value: &str, field: &str) -> FrameworkResult<()> {
         )));
     }
     Ok(())
+}
+
+fn plugin_code_from_identity<'a>(plugin_id: &'a str, version: &str) -> FrameworkResult<&'a str> {
+    if let Some((plugin_code, plugin_version)) = plugin_id.split_once('@') {
+        if plugin_code.trim().is_empty() || plugin_version.trim().is_empty() {
+            return Err(PluginFrameworkError::invalid_provider_package(
+                "plugin_id must use a non-empty stable id",
+            ));
+        }
+        if plugin_version != version {
+            return Err(PluginFrameworkError::invalid_provider_package(
+                "plugin_id version suffix must match version",
+            ));
+        }
+        return Ok(plugin_code);
+    }
+
+    if plugin_id.trim().is_empty() {
+        return Err(PluginFrameworkError::invalid_provider_package(
+            "plugin_id must use a non-empty stable id",
+        ));
+    }
+
+    Ok(plugin_id)
 }
 
 fn validate_allowed(value: &str, field: &str, allowed: &[&str]) -> FrameworkResult<()> {

@@ -162,7 +162,9 @@ impl ProviderPackage {
     }
 
     pub fn identifier(&self) -> String {
-        self.manifest.plugin_id.clone()
+        self.manifest
+            .versioned_plugin_id()
+            .expect("provider package manifest identity is validated")
     }
 
     pub fn manifest_path(&self) -> PathBuf {
@@ -253,22 +255,7 @@ fn validate_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> {
 }
 
 fn provider_code_from_plugin_id(manifest: &PluginManifestV1) -> FrameworkResult<&str> {
-    let (provider_code, version) = manifest.plugin_id.split_once('@').ok_or_else(|| {
-        PluginFrameworkError::invalid_provider_package(
-            "manifest.plugin_id must use <provider_code>@<version>",
-        )
-    })?;
-    if provider_code.trim().is_empty() || version.trim().is_empty() {
-        return Err(PluginFrameworkError::invalid_provider_package(
-            "manifest.plugin_id must use <provider_code>@<version>",
-        ));
-    }
-    if version != manifest.version {
-        return Err(PluginFrameworkError::invalid_provider_package(
-            "manifest.plugin_id version must match manifest.version",
-        ));
-    }
-    Ok(provider_code)
+    manifest.plugin_code()
 }
 
 fn load_predefined_models(models_dir: &Path) -> FrameworkResult<Vec<ProviderModelDescriptor>> {

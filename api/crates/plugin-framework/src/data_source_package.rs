@@ -77,7 +77,9 @@ impl DataSourcePackage {
     }
 
     pub fn identifier(&self) -> String {
-        self.manifest.plugin_id.clone()
+        self.manifest
+            .versioned_plugin_id()
+            .expect("data source package manifest identity is validated")
     }
 
     pub fn manifest_path(&self) -> PathBuf {
@@ -137,22 +139,7 @@ fn validate_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> {
 }
 
 fn source_code_from_plugin_id(manifest: &PluginManifestV1) -> FrameworkResult<&str> {
-    let (source_code, version) = manifest.plugin_id.split_once('@').ok_or_else(|| {
-        PluginFrameworkError::invalid_provider_package(
-            "manifest.plugin_id must use <source_code>@<version>",
-        )
-    })?;
-    if source_code.trim().is_empty() || version.trim().is_empty() {
-        return Err(PluginFrameworkError::invalid_provider_package(
-            "manifest.plugin_id must use <source_code>@<version>",
-        ));
-    }
-    if version != manifest.version {
-        return Err(PluginFrameworkError::invalid_provider_package(
-            "manifest.plugin_id version must match manifest.version",
-        ));
-    }
-    Ok(source_code)
+    manifest.plugin_code()
 }
 
 fn load_yaml<T>(path: &Path) -> FrameworkResult<T>

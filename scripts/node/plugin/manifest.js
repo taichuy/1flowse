@@ -5,7 +5,7 @@ const { getPluginName, sanitizeCode } = require('./fs.js');
 
 function createManifestTemplate({ pluginCode, pluginName }) {
   return `manifest_version: 1
-plugin_id: ${pluginCode}@0.1.0
+plugin_id: ${pluginCode}
 version: 0.1.0
 vendor: 1flowbase
 display_name: ${pluginName}
@@ -157,9 +157,13 @@ function readPluginCode(pluginPath) {
   }
 
   const content = fs.readFileSync(manifestPath, 'utf8');
-  const pluginIdMatch = content.match(/^plugin_id:\s*([^@\s#]+)@([^\s#]+)\s*$/m);
+  const pluginIdMatch = content.match(/^plugin_id:\s*([^\s#]+)\s*$/m);
   if (pluginIdMatch) {
-    return sanitizeCode(pluginIdMatch[1]);
+    const rawPluginId = pluginIdMatch[1];
+    const pluginCode = rawPluginId.includes('@')
+      ? rawPluginId.slice(0, rawPluginId.indexOf('@'))
+      : rawPluginId;
+    return sanitizeCode(pluginCode);
   }
 
   return sanitizeCode(getPluginName(pluginPath));

@@ -43,7 +43,7 @@ fn loads_data_source_package_with_runtime_extension_contract() {
     fixture.write(
         "manifest.yaml",
         r#"manifest_version: 1
-plugin_id: acme_hubspot_source@0.1.0
+plugin_id: acme_hubspot_source
 version: 0.1.0
 vendor: acme
 display_name: Acme HubSpot Source
@@ -98,5 +98,6 @@ config_schema:
     );
 
     let package = DataSourcePackage::load_from_dir(fixture.path()).unwrap();
+    assert_eq!(package.identifier(), "acme_hubspot_source@0.1.0");
     assert_eq!(package.definition.source_code, "acme_hubspot_source");
 }

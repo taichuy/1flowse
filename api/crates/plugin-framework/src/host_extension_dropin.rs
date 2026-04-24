@@ -62,6 +62,8 @@ pub fn scan_host_extension_dropins_with_policy(
         let manifest = crate::parse_plugin_manifest(&manifest_raw)?;
         validate_host_extension_dropin_manifest(&manifest)?;
 
+        let package_id = manifest.versioned_plugin_id()?;
+
         if !policy.allow_unverified_filesystem_dropins && manifest.trust_level == "unverified" {
             return Err(PluginFrameworkError::invalid_provider_package(format!(
                 "filesystem_dropin package {} is unverified and policy disallows it",
@@ -79,7 +81,7 @@ pub fn scan_host_extension_dropins_with_policy(
         installations.push(DetectedHostExtensionInstallation {
             package_root: package_root.clone(),
             manifest_path,
-            plugin_id: manifest.plugin_id.clone(),
+            plugin_id: package_id,
             source_kind: manifest.source_kind.clone(),
             trust_level: manifest.trust_level.clone(),
             manifest,

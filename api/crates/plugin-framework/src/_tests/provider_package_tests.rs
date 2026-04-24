@@ -46,7 +46,7 @@ fn make_package_fixture() -> TempProviderPackage {
     fixture.write(
         "manifest.yaml",
         r#"manifest_version: 1
-plugin_id: acme_openai_compatible@1.2.3
+plugin_id: acme_openai_compatible
 version: 1.2.3
 vendor: taichuy
 display_name: Acme OpenAI Compatible
@@ -166,7 +166,7 @@ fn provider_package_loads_manifest_v1_runtime_entry_and_static_models() {
     let package = ProviderPackage::load_from_dir(fixture.path()).unwrap();
 
     assert_eq!(package.identifier(), "acme_openai_compatible@1.2.3");
-    assert_eq!(package.manifest.plugin_id, "acme_openai_compatible@1.2.3");
+    assert_eq!(package.manifest.plugin_id, "acme_openai_compatible");
     assert_eq!(
         package.manifest.consumption_kind,
         PluginConsumptionKind::RuntimeExtension

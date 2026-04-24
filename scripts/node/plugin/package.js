@@ -118,7 +118,7 @@ function createPluginPackage(pluginPath, outputDir, options = {}) {
   const manifestPluginId = readManifestField(
     resolvedPluginPath,
     'plugin_id',
-    `${pluginCode}@${version}`
+    pluginCode
   );
   const vendor = readManifestField(resolvedPluginPath, 'vendor', '1flowbase');
   const contractVersion = readManifestField(

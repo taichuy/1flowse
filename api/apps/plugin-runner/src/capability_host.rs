@@ -20,7 +20,7 @@ pub struct LoadedCapabilitySummary {
 impl LoadedCapabilitySummary {
     fn from_loaded(loaded: &LoadedCapabilityPackage) -> Self {
         Self {
-            plugin_id: loaded.manifest.plugin_id.clone(),
+            plugin_id: loaded.identifier(),
             plugin_version: loaded.manifest.version.clone(),
             execution_mode: loaded.manifest.execution_mode.as_str().to_string(),
             node_contribution_count: loaded.manifest.node_contributions.len(),

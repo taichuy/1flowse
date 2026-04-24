@@ -136,7 +136,9 @@ pub struct LoadedCapabilityPackage {
 
 impl LoadedCapabilityPackage {
     pub fn identifier(&self) -> String {
-        self.manifest.plugin_id.clone()
+        self.manifest
+            .versioned_plugin_id()
+            .expect("capability package manifest identity is validated")
     }
 }
 
