@@ -420,6 +420,34 @@
   text-align: left;
 }
 
+.agent-flow-model-settings__provider-head-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.agent-flow-model-settings__provider-copy {
+  min-width: 0;
+}
+
+.agent-flow-model-settings__provider-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.agent-flow-model-settings__provider-icon-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
 .agent-flow-model-settings__provider-caret {
   color: #738196;
   font-size: 12px;
@@ -673,8 +701,7 @@
   gap: 0;
 }
 
-.agent-flow-model-settings__panel
-  .agent-flow-llm-parameter-form__label-line {
+.agent-flow-model-settings__panel .agent-flow-llm-parameter-form__label-line {
   gap: 5px;
 }
 
@@ -685,8 +712,7 @@
   line-height: 18px;
 }
 
-.agent-flow-model-settings__panel
-  .agent-flow-llm-parameter-form__help-icon {
+.agent-flow-model-settings__panel .agent-flow-llm-parameter-form__help-icon {
   font-size: 12px;
 }
 
@@ -696,8 +722,7 @@
   gap: 6px;
 }
 
-.agent-flow-model-settings__panel
-  .agent-flow-llm-parameter-form__default-icon {
+.agent-flow-model-settings__panel .agent-flow-llm-parameter-form__default-icon {
   width: 24px;
   height: 24px;
   min-width: 24px;

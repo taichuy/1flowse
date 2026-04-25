@@ -1204,7 +1204,7 @@ async fn model_provider_routes_main_instance_settings_drive_inclusion_and_groupe
         .is_none());
     assert_eq!(
         options_payload["data"]["providers"][0]["icon"].as_str(),
-        Some("icon.svg")
+        Some("/api/console/model-providers/providers/fixture_provider/icon")
     );
     assert_eq!(
         options_payload["data"]["providers"][0]["main_instance"]["provider_code"].as_str(),

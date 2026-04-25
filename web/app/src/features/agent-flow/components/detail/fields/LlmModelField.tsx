@@ -13,9 +13,7 @@ import {
 import { createPortal } from 'react-dom';
 
 import type { SchemaFieldRendererProps } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
-import type {
-  SchemaDynamicFormBlock
-} from '../../../../../shared/schema-ui/contracts/canvas-node-schema';
+import type { SchemaDynamicFormBlock } from '../../../../../shared/schema-ui/contracts/canvas-node-schema';
 import {
   fetchModelProviderOptions,
   modelProviderOptionsQueryKey
@@ -79,11 +77,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function getNodeConfig(adapter: SchemaFieldRendererProps['adapter']) {
-  const node = adapter.getDerived('node') as { config?: Record<string, unknown> } | null | undefined;
+  const node = adapter.getDerived('node') as
+    | { config?: Record<string, unknown> }
+    | null
+    | undefined;
   return isRecord(node?.config) ? node.config : {};
 }
 
-function getModelSearchText(provider: LlmProviderOption, group: LlmModelGroup, model: LlmModelOption) {
+function getModelSearchText(
+  provider: LlmProviderOption,
+  group: LlmModelGroup,
+  model: LlmModelOption
+) {
   return [
     provider.label,
     provider.providerCode,
@@ -119,7 +124,9 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function resolveFloatingPanelBounds(container: HTMLElement | null): FloatingPanelBounds {
+function resolveFloatingPanelBounds(
+  container: HTMLElement | null
+): FloatingPanelBounds {
   if (container) {
     const rect = container.getBoundingClientRect();
 
@@ -216,11 +223,7 @@ function resolveInitialFloatingPanelPosition(
   );
 }
 
-function ContextMarker({
-  value
-}: {
-  value: number | null | undefined;
-}) {
+function ContextMarker({ value }: { value: number | null | undefined }) {
   const formattedValue = formatLlmTokenCount(value);
 
   if (!formattedValue) {
@@ -272,7 +275,9 @@ function ModelChip({
         <span className="agent-flow-model-chip__eyebrow">
           {providerLabel || '模型供应商'}
         </span>
-        <span className="agent-flow-model-chip__label">{modelLabel || placeholder}</span>
+        <span className="agent-flow-model-chip__label">
+          {modelLabel || placeholder}
+        </span>
         {visibleMetaItems.length > 0 ? (
           <span className="agent-flow-model-chip__meta">
             {visibleMetaItems.map((item, index) => (
@@ -295,12 +300,8 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
   const [panelContainer, setPanelContainer] = useState<HTMLElement | null>(
     null
   );
-  const [panelHeight, setPanelHeight] = useState(
-    FLOATING_PANEL_DEFAULT_HEIGHT
-  );
-  const [panelWidth, setPanelWidth] = useState(
-    FLOATING_PANEL_DEFAULT_WIDTH
-  );
+  const [panelHeight, setPanelHeight] = useState(FLOATING_PANEL_DEFAULT_HEIGHT);
+  const [panelWidth, setPanelWidth] = useState(FLOATING_PANEL_DEFAULT_WIDTH);
   const [panelPosition, setPanelPosition] = useState<FloatingPanelPosition>({
     left: FLOATING_PANEL_MARGIN,
     top: FLOATING_PANEL_MARGIN
@@ -323,7 +324,10 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
     () => listLlmProviderOptions(providerOptionsQuery.data),
     [providerOptionsQuery.data]
   );
-  const selectedProvider = findLlmProviderOption(providerOptionsQuery.data, providerCode);
+  const selectedProvider = findLlmProviderOption(
+    providerOptionsQuery.data,
+    providerCode
+  );
   const selectedModel = findLlmModelOption(
     providerOptionsQuery.data,
     providerCode,
@@ -332,14 +336,18 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
   );
   const selectedSourceInstanceLabel =
     selectedModel?.sourceInstanceLabel ??
-    selectedProvider?.modelGroups.find((group) => group.sourceInstanceId === sourceInstanceId)
-      ?.label ??
+    selectedProvider?.modelGroups.find(
+      (group) => group.sourceInstanceId === sourceInstanceId
+    )?.label ??
     (sourceInstanceId || null);
   const providerUnavailable = Boolean(
     providerCode && providerOptionsQuery.isSuccess && selectedProvider === null
   );
   const modelUnavailable = Boolean(
-    providerCode && modelValue && providerOptionsQuery.isSuccess && selectedModel === null
+    providerCode &&
+    modelValue &&
+    providerOptionsQuery.isSuccess &&
+    selectedModel === null
   );
   const filteredProviders = useMemo(() => {
     const normalizedSearch = searchText.trim().toLowerCase();
@@ -355,7 +363,9 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
           .map((group) => ({
             ...group,
             models: group.models.filter((model) =>
-              getModelSearchText(provider, group, model).includes(normalizedSearch)
+              getModelSearchText(provider, group, model).includes(
+                normalizedSearch
+              )
             )
           }))
           .filter((group) => group.models.length > 0)
@@ -415,11 +425,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
       setPanelContainer(nextContainer);
       setPanelHeight(nextHeight);
       setPanelPosition((current) => {
-        const nextWidth = clampFloatingPanelWidth(
-          panelWidth,
-          bounds,
-          current
-        );
+        const nextWidth = clampFloatingPanelWidth(panelWidth, bounds, current);
 
         setPanelWidth(nextWidth);
         return clampFloatingPanelPosition(
@@ -448,7 +454,9 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
 
   function selectModel(nextModel: LlmModelOption) {
     const nextProvider =
-      providerOptions.find((provider) => provider.providerCode === nextModel.providerCode) ?? null;
+      providerOptions.find(
+        (provider) => provider.providerCode === nextModel.providerCode
+      ) ?? null;
 
     adapter.setValue('config.model_provider', buildModelSelection(nextModel));
     adapter.setValue(
@@ -482,7 +490,9 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
 
     if (nextOpen) {
       setExpandedProviders((current) => {
-        const allProviderValues = providerOptions.map((provider) => provider.value);
+        const allProviderValues = providerOptions.map(
+          (provider) => provider.value
+        );
 
         if (searchText.trim().length > 0) {
           return filteredProviders.map((provider) => provider.value);
@@ -785,11 +795,29 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                             onMouseDown={keepDropdownFocus}
                             onClick={() => toggleProvider(provider.value)}
                           >
-                            <div>
-                              <Typography.Text strong>{provider.label}</Typography.Text>
-                              <div className="agent-flow-model-settings__provider-meta">
-                                主实例聚合 · {provider.modelGroups.length} 个来源实例 ·{' '}
-                                {provider.models.length} 个模型
+                            <div className="agent-flow-model-settings__provider-head-main">
+                              <span
+                                className="agent-flow-model-settings__provider-icon"
+                                aria-hidden="true"
+                              >
+                                {provider.icon ? (
+                                  <img
+                                    className="agent-flow-model-settings__provider-icon-image"
+                                    src={provider.icon}
+                                    alt=""
+                                  />
+                                ) : (
+                                  '◎'
+                                )}
+                              </span>
+                              <div className="agent-flow-model-settings__provider-copy">
+                                <Typography.Text strong>
+                                  {provider.label}
+                                </Typography.Text>
+                                <div className="agent-flow-model-settings__provider-meta">
+                                  主实例聚合 · {provider.modelGroups.length}{' '}
+                                  个来源实例 · {provider.models.length} 个模型
+                                </div>
                               </div>
                             </div>
                             <span
@@ -812,7 +840,8 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                                   <div className="agent-flow-model-settings__options">
                                     {group.models.map((option) => {
                                       const active =
-                                        option.sourceInstanceId === sourceInstanceId &&
+                                        option.sourceInstanceId ===
+                                          sourceInstanceId &&
                                         option.value === modelValue;
 
                                       return (
@@ -837,14 +866,22 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                                           <span className="agent-flow-model-settings__option-meta">
                                             <span>{option.value}</span>
                                             <ContextMarker
-                                              value={option.effectiveContextWindow}
+                                              value={
+                                                option.effectiveContextWindow
+                                              }
                                             />
-                                            {buildOutputLabel(option.maxOutputTokens) ? (
+                                            {buildOutputLabel(
+                                              option.maxOutputTokens
+                                            ) ? (
                                               <span>
-                                                {buildOutputLabel(option.maxOutputTokens)}
+                                                {buildOutputLabel(
+                                                  option.maxOutputTokens
+                                                )}
                                               </span>
                                             ) : null}
-                                            {option.tag ? <span>{option.tag}</span> : null}
+                                            {option.tag ? (
+                                              <span>{option.tag}</span>
+                                            ) : null}
                                           </span>
                                         </button>
                                       );
@@ -862,7 +899,9 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                   type="button"
                   className="agent-flow-model-settings__provider-link"
                   onMouseDown={keepDropdownFocus}
-                  onClick={() => window.location.assign('/settings/model-providers')}
+                  onClick={() =>
+                    window.location.assign('/settings/model-providers')
+                  }
                 >
                   模型供应商设置
                 </button>
@@ -896,7 +935,9 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
         ref={triggerRef}
       >
         <ModelChip
-          providerIcon={selectedModel?.providerIcon || selectedProvider?.icon || null}
+          providerIcon={
+            selectedModel?.providerIcon || selectedProvider?.icon || null
+          }
           providerLabel={
             modelProvider.provider_label?.trim() ||
             selectedModel?.providerLabel ||
@@ -904,13 +945,23 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
             providerCode ||
             null
           }
-          modelLabel={modelProvider.model_label?.trim() || selectedModel?.label || modelValue || null}
+          modelLabel={
+            modelProvider.model_label?.trim() ||
+            selectedModel?.label ||
+            modelValue ||
+            null
+          }
           metaItems={[
-            selectedSourceInstanceLabel ? <span>{selectedSourceInstanceLabel}</span> : null,
+            selectedSourceInstanceLabel ? (
+              <span>{selectedSourceInstanceLabel}</span>
+            ) : null,
             <ContextMarker value={selectedModel?.effectiveContextWindow} />
           ]}
         />
-        <span className="agent-flow-model-field__trigger-caret" aria-hidden="true">
+        <span
+          className="agent-flow-model-field__trigger-caret"
+          aria-hidden="true"
+        >
           ▾
         </span>
       </button>

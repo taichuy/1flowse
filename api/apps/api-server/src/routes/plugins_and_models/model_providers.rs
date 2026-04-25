@@ -1,8 +1,16 @@
-use std::sync::Arc;
+use std::{
+    path::{Component, Path as FsPath},
+    sync::Arc,
+};
 
 use axum::{
+    body::Body,
     extract::{Path, Query, State},
-    http::{header::ACCEPT_LANGUAGE, HeaderMap, StatusCode},
+    http::{
+        header::{ACCEPT_LANGUAGE, CONTENT_TYPE},
+        HeaderMap, StatusCode,
+    },
+    response::Response,
     routing::{get, patch, post},
     Json, Router,
 };
@@ -14,6 +22,7 @@ use control_plane::model_provider::{
     PreviewModelProviderModelsCommand, UpdateModelProviderInstanceCommand,
     UpdateModelProviderMainInstanceCommand, ValidateModelProviderResult,
 };
+use control_plane::ports::PluginRepository;
 use plugin_framework::{
     provider_contract::{
         PluginFormCondition, PluginFormFieldSchema, PluginFormOption, PluginFormSchema,
@@ -269,6 +278,7 @@ pub struct ModelProviderOptionResponse {
     pub description_key: Option<String>,
     pub protocol: String,
     pub display_name: String,
+    pub icon: Option<String>,
     pub parameter_form: Option<PluginFormSchemaResponse>,
     pub main_instance: ModelProviderMainInstanceSummaryResponse,
     pub model_groups: Vec<ModelProviderOptionGroupResponse>,
@@ -319,6 +329,10 @@ pub fn router() -> Router<Arc<ApiState>> {
             "/model-providers/providers/:provider_code/main-instance",
             get(get_main_instance).put(update_main_instance),
         )
+        .route(
+            "/model-providers/providers/:provider_code/icon",
+            get(read_provider_icon),
+        )
         .route("/model-providers/preview-models", post(preview_models))
         .route("/model-providers/options", get(list_options))
         .route(
@@ -350,6 +364,101 @@ fn format_optional_time(value: Option<time::OffsetDateTime>) -> Option<String> {
 fn parse_uuid(raw: &str, field: &'static str) -> Result<Uuid, ApiError> {
     Uuid::parse_str(raw)
         .map_err(|_| control_plane::errors::ControlPlaneError::InvalidInput(field).into())
+}
+
+fn normalize_provider_icon(provider_code: &str, icon: Option<String>) -> Option<String> {
+    let icon = icon?.trim().to_string();
+
+    if icon.is_empty() {
+        return None;
+    }
+
+    if icon.starts_with("http://")
+        || icon.starts_with("https://")
+        || icon.starts_with('/')
+        || icon.starts_with("data:")
+    {
+        return Some(icon);
+    }
+
+    Some(format!(
+        "/api/console/model-providers/providers/{provider_code}/icon"
+    ))
+}
+
+fn provider_icon_content_type(path: &FsPath) -> &'static str {
+    match path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("svg") => "image/svg+xml",
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        Some("gif") => "image/gif",
+        _ => "application/octet-stream",
+    }
+}
+
+fn resolve_provider_icon_path(
+    installed_path: &str,
+    icon_path: &str,
+) -> Result<std::path::PathBuf, ApiError> {
+    let icon_relative_path = FsPath::new(icon_path);
+
+    if icon_relative_path.is_absolute()
+        || icon_relative_path.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        })
+    {
+        return Err(control_plane::errors::ControlPlaneError::InvalidInput("icon").into());
+    }
+
+    let installed_root = FsPath::new(installed_path);
+    let resolved_path = installed_root.join(icon_relative_path);
+    if resolved_path.is_file() {
+        return Ok(resolved_path);
+    }
+
+    // 兼容官方 provider 安装产物：manifest 只给出文件名，实际图标位于 _assets/ 目录。
+    if icon_relative_path.components().count() == 1 {
+        let assets_path = installed_root.join("_assets").join(icon_relative_path);
+        if assets_path.is_file() {
+            return Ok(assets_path);
+        }
+    }
+
+    Ok(resolved_path)
+}
+
+fn installed_manifest_icon(installed_path: &str) -> Option<String> {
+    let manifest_path = FsPath::new(installed_path).join("manifest.yaml");
+    let manifest_raw = std::fs::read_to_string(manifest_path).ok()?;
+    let manifest = plugin_framework::parse_plugin_manifest(&manifest_raw).ok()?;
+    let icon = manifest.icon?;
+    let icon = icon.trim().to_string();
+    if icon.is_empty() {
+        return None;
+    }
+    Some(icon)
+}
+
+fn installation_icon_path(
+    installed_path: &str,
+    metadata_json: &serde_json::Value,
+) -> Option<String> {
+    metadata_json
+        .get("icon")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(|| installed_manifest_icon(installed_path))
 }
 
 fn to_config_field_response(field: ProviderConfigField) -> ModelProviderConfigFieldResponse {
@@ -604,6 +713,7 @@ fn to_model_catalog_response(
 
 fn to_option_response(option: ModelProviderOptionEntry) -> ModelProviderOptionResponse {
     ModelProviderOptionResponse {
+        icon: normalize_provider_icon(&option.provider_code, option.icon),
         provider_code: option.provider_code,
         plugin_type: option.plugin_type,
         namespace: option.namespace,
@@ -611,7 +721,6 @@ fn to_option_response(option: ModelProviderOptionEntry) -> ModelProviderOptionRe
         description_key: option.description_key,
         protocol: option.protocol,
         display_name: option.display_name,
-        icon: option.icon,
         parameter_form: option.parameter_form.map(to_plugin_form_schema_response),
         main_instance: ModelProviderMainInstanceSummaryResponse {
             provider_code: option.main_instance.provider_code,
@@ -673,6 +782,47 @@ fn resolve_locale_meta(
             .collect(),
     })
     .into()
+}
+
+pub async fn read_provider_icon(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(provider_code): Path<String>,
+) -> Result<Response, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let assignment = state
+        .store
+        .list_assignments(context.actor.current_workspace_id)
+        .await?
+        .into_iter()
+        .find(|assignment| assignment.provider_code == provider_code)
+        .ok_or(control_plane::errors::ControlPlaneError::NotFound(
+            "plugin_assignment",
+        ))?;
+    let installation = state
+        .store
+        .get_installation(assignment.installation_id)
+        .await?
+        .ok_or(control_plane::errors::ControlPlaneError::NotFound(
+            "plugin_installation",
+        ))?;
+    let icon_path =
+        installation_icon_path(&installation.installed_path, &installation.metadata_json).ok_or(
+            control_plane::errors::ControlPlaneError::NotFound("plugin_icon"),
+        )?;
+    let resolved_path = resolve_provider_icon_path(&installation.installed_path, &icon_path)?;
+    let content = std::fs::read(&resolved_path).map_err(|error| match error.kind() {
+        std::io::ErrorKind::NotFound => {
+            control_plane::errors::ControlPlaneError::NotFound("plugin_icon").into()
+        }
+        _ => ApiError::from(anyhow::Error::from(error)),
+    })?;
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, provider_icon_content_type(&resolved_path))
+        .body(Body::from(content))
+        .map_err(ApiError::from)
 }
 
 fn requested_locales(locale_meta: &LocaleMetaResponse) -> control_plane::i18n::RequestedLocales {

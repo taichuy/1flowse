@@ -7,6 +7,7 @@ mod file_management_routes;
 mod host_extension_loader_tests;
 mod me_routes;
 mod member_routes;
+mod model_provider_icon_routes;
 mod model_provider_routes;
 mod official_plugin_registry_tests;
 mod openapi_alignment;

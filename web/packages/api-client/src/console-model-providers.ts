@@ -188,6 +188,7 @@ export interface ConsoleModelProviderOption {
   description_key: string | null;
   protocol: string;
   display_name: string;
+  icon?: string | null;
   parameter_form: ConsolePluginFormSchema | null;
   main_instance: ConsoleModelProviderMainInstanceSummary;
   model_groups: ConsoleModelProviderOptionGroup[];
