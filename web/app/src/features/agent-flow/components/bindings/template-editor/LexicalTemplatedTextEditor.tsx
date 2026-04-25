@@ -62,6 +62,7 @@ export interface LexicalTemplatedTextEditorHandle {
 
 interface LexicalTemplatedTextEditorProps {
   ariaLabel: string;
+  placeholder?: string;
   options: FlowSelectorOption[];
   value: string;
   onChange: (value: string) => void;
@@ -224,7 +225,8 @@ export const LexicalTemplatedTextEditor = forwardRef<
     options,
     value,
     onChange,
-    onTriggerChange
+    onTriggerChange,
+    placeholder
   },
   ref
 ) {
@@ -424,7 +426,7 @@ export const LexicalTemplatedTextEditor = forwardRef<
           }
           placeholder={
             <div className="agent-flow-templated-text-field__placeholder">
-              输入模板内容，输入“/”或左花括号插入变量
+              {placeholder || '输入模板内容'}
             </div>
           }
           ErrorBoundary={LexicalErrorBoundary}

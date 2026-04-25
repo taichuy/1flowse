@@ -112,6 +112,7 @@ function TemplatedTextHarness() {
   return (
     <>
       <TemplatedTextField
+        label="User Prompt"
         ariaLabel="User Prompt"
         options={[startQueryOption, answerOption]}
         value={value}
@@ -188,6 +189,7 @@ describe('TemplatedTextField', () => {
   test('renders referenced variables inline inside the editor from stored template text', async () => {
     render(
       <TemplatedTextField
+        label="User Prompt"
         ariaLabel="User Prompt"
         options={[startQueryOption]}
         value="请基于 {{node-start.query}} 总结"

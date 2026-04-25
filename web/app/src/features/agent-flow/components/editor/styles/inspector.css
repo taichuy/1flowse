@@ -133,14 +133,13 @@
 
 .agent-flow-templated-text-field__toolbar {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  min-height: 24px;
 }
 
-.agent-flow-templated-text-field__hint.ant-typography {
-  font-size: 12px;
+.agent-flow-templated-text-field__label.ant-typography {
+  font-size: 13px;
 }
 
 .agent-flow-templated-text-field__editor-shell {

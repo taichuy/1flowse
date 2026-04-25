@@ -24,6 +24,10 @@ function isInlineFieldRenderer(renderer: string) {
   return renderer === 'text' || renderer === 'number' || renderer === 'selector';
 }
 
+function hasEmbeddedLabel(renderer: string) {
+  return renderer === 'templated_text';
+}
+
 function shouldRenderSectionTitle(title: string) {
   return title !== 'Inputs';
 }
@@ -129,12 +133,14 @@ export function NodeInspector({
                       data-field-key={childBlock.path}
                       data-testid={`inspector-field-${childBlock.path}`}
                     >
-                      <Typography.Text
-                        strong
-                        className="agent-flow-editor__inspector-field-label"
-                      >
-                        {childBlock.label}
-                      </Typography.Text>
+                      {!hasEmbeddedLabel(childBlock.renderer) && (
+                        <Typography.Text
+                          strong
+                          className="agent-flow-editor__inspector-field-label"
+                        >
+                          {childBlock.label}
+                        </Typography.Text>
+                      )}
                       <div className="agent-flow-editor__inspector-field-control">
                         <SchemaRenderer
                           adapter={activeAdapter}

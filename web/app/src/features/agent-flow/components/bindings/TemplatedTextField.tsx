@@ -1,4 +1,5 @@
 import { Button, Typography } from 'antd';
+import { CodeOutlined } from '@ant-design/icons';
 import { useRef } from 'react';
 
 import {
@@ -10,14 +11,18 @@ import {
 } from './template-editor/LexicalTemplatedTextEditor';
 
 interface TemplatedTextFieldProps {
+  label: string;
   ariaLabel: string;
+  placeholder?: string;
   options?: FlowSelectorOption[];
   value: string;
   onChange: (value: string) => void;
 }
 
 export function TemplatedTextField({
+  label,
   ariaLabel,
+  placeholder,
   options = [],
   value,
   onChange
@@ -27,26 +32,24 @@ export function TemplatedTextField({
   return (
     <div className="agent-flow-templated-text-field">
       <div className="agent-flow-templated-text-field__toolbar">
+        <Typography.Text strong className="agent-flow-templated-text-field__label">
+          {label}
+        </Typography.Text>
         <Button
           type="text"
           size="small"
+          icon={<CodeOutlined />}
           disabled={options.length === 0}
+          aria-label="插入变量"
           onClick={() => editorRef.current?.openVariablePicker()}
-        >
-          插入变量
-        </Button>
-        <Typography.Text
-          type="secondary"
-          className="agent-flow-templated-text-field__hint"
-        >
-          支持正文变量块，输入“/”或左花括号可快速引用
-        </Typography.Text>
+        />
       </div>
       <LexicalTemplatedTextEditor
         ref={editorRef}
         value={value}
         options={options}
         ariaLabel={ariaLabel}
+        placeholder={placeholder}
         onChange={onChange}
       />
     </div>
