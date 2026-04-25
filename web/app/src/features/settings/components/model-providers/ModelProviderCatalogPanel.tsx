@@ -194,20 +194,6 @@ export function ModelProviderCatalogPanel({
 
               return (
                 <div className="model-provider-panel__catalog-version">
-                  <img
-                    className="model-provider-panel__provider-icon"
-                    src={getProviderIconSrc(entry)}
-                    alt=""
-                    aria-hidden="true"
-                    loading="lazy"
-                    onError={(event) => {
-                      const image = event.currentTarget;
-                      if (image.src.endsWith(DEFAULT_PROVIDER_ICON_SRC)) {
-                        return;
-                      }
-                      image.src = DEFAULT_PROVIDER_ICON_SRC;
-                    }}
-                  />
                   {canManage ? (
                     <Space size={8} wrap className="model-provider-panel__version-inline">
                       <Select
