@@ -168,9 +168,19 @@ function LlmCardModelBadge({ node }: { node: NonNullable<ReturnType<typeof getNo
 
 function renderCardDescriptionView({ adapter }: SchemaViewRendererProps) {
   const node = getNode(adapter);
-  const description = node?.description?.trim();
 
-  return description ? <div className="agent-flow-node-card__description">{description}</div> : null;
+  if (!node || node.type === 'llm') {
+    return null;
+  }
+
+  const description = node.description?.trim();
+  const meta = adapter.getDerived('definitionMeta') as
+    | { summary?: string; helpHref?: string | null }
+    | null
+    | undefined;
+  const displayContent = description || meta?.summary || '节点配置将在这里展示';
+
+  return <div className="agent-flow-node-card__description">{displayContent}</div>;
 }
 
 function renderOutputContractView({ adapter, block }: SchemaViewRendererProps) {

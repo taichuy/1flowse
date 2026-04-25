@@ -6,6 +6,7 @@ import { CanvasHandle } from '../canvas/CanvasHandle';
 import { NodePickerPopover } from '../node-picker/NodePickerPopover';
 import type { AgentFlowCanvasNode } from '../canvas/node-types';
 import { agentFlowRendererRegistry } from '../../schema/agent-flow-renderer-registry';
+import { getNodeDefinitionMeta } from '../../lib/node-definitions';
 
 export function AgentFlowNodeCard({
   data,
@@ -46,6 +47,10 @@ export function AgentFlowNodeCard({
 
       if (key === 'typeLabel') {
         return data.typeLabel;
+      }
+
+      if (key === 'definitionMeta') {
+        return getNodeDefinitionMeta(data.nodeType);
       }
 
       return null;
