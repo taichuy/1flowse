@@ -1,159 +1,43 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
-  Table,
-  Tag,
-  Typography,
-  Space,
-  Spin,
+  Card,
+  Col,
+  Descriptions,
   Empty,
-  Flex,
-  Divider
+  Row,
+  Space,
+  Tag,
+  Typography
 } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import {
-  CheckCircleFilled,
-  CloseCircleFilled,
-  MinusCircleFilled,
-  InfoCircleOutlined,
-  EnvironmentOutlined,
-  GlobalOutlined,
-  CloudServerOutlined,
-  ClusterOutlined,
-  ExclamationCircleOutlined
-} from '@ant-design/icons';
 
 import {
   fetchSettingsSystemRuntimeProfile,
   settingsSystemRuntimeQueryKey
 } from '../api/system-runtime';
-import type { SettingsSystemRuntimeProfile } from '../api/system-runtime';
-
-/* ── helpers ────────────────────────────────────── */
 
 function getRelationshipLabel(relationship: string) {
   switch (relationship) {
     case 'same_host':
-      return { color: '#00d992' as const, label: '同机部署', icon: CloudServerOutlined };
+      return { color: 'green', label: '同机部署' };
     case 'split_host':
-      return { color: '#1677ff' as const, label: '分机部署', icon: ClusterOutlined };
+      return { color: 'blue', label: '分机部署' };
     case 'runner_unreachable':
-      return { color: '#ff4d4f' as const, label: 'Runner 不可达', icon: ExclamationCircleOutlined };
+      return { color: 'red', label: 'Runner 不可达' };
     default:
-      return { color: '#86909c' as const, label: relationship, icon: InfoCircleOutlined };
+      return { color: 'default', label: relationship };
   }
 }
 
-function getReachabilityMeta(reachable: boolean) {
+function getReachabilityLabel(reachable: boolean) {
   return reachable
-    ? { color: '#00d992' as const, label: '运行中', icon: CheckCircleFilled }
-    : { color: '#ff4d4f' as const, label: '不可达', icon: CloseCircleFilled };
+    ? { color: 'green', label: '可达' }
+    : { color: 'red', label: '不可达' };
 }
 
 function formatMemory(value: number) {
   return `${value.toFixed(1)} GB`;
 }
-
-/* ── data shapes for the host table ──────────────── */
-
-interface HostTableRow {
-  key: string;
-  fingerprint: string;
-  platform: string;
-  cpu: string;
-  memoryTotal: string;
-  memoryAvail: string;
-  memoryUsage: number; // 0-1 ratio
-  services: string[];
-}
-
-function buildHostRows(profile: SettingsSystemRuntimeProfile): HostTableRow[] {
-  return profile.hosts.map((h) => ({
-    key: h.host_fingerprint,
-    fingerprint: h.host_fingerprint,
-    platform: `${h.platform.os}/${h.platform.arch}${h.platform.libc ? `/${h.platform.libc}` : ''}`,
-    cpu: `${h.cpu.logical_count} 核`,
-    memoryTotal: formatMemory(h.memory.total_gb),
-    memoryAvail: formatMemory(h.memory.available_gb),
-    memoryUsage: h.memory.total_gb > 0
-      ? 1 - h.memory.available_gb / h.memory.total_gb
-      : 0,
-    services: h.services
-  }));
-}
-
-/* ── columns ────────────────────────────────────── */
-
-const hostColumns: ColumnsType<HostTableRow> = [
-  {
-    title: '指纹',
-    dataIndex: 'fingerprint',
-    key: 'fingerprint',
-    width: 140,
-    render: (v: string) => (
-      <Typography.Text code copyable style={{ fontSize: 12 }}>
-        {v.slice(0, 12)}…
-      </Typography.Text>
-    )
-  },
-  {
-    title: '平台',
-    dataIndex: 'platform',
-    key: 'platform',
-    width: 180
-  },
-  {
-    title: 'CPU',
-    dataIndex: 'cpu',
-    key: 'cpu',
-    width: 80
-  },
-  {
-    title: '内存',
-    key: 'memory',
-    width: 200,
-    render: (_: unknown, record: HostTableRow) => (
-      <Space size={12}>
-        <Flex vertical gap={2} style={{ minWidth: 80 }}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            总计 {record.memoryTotal}
-          </Typography.Text>
-          <Typography.Text style={{ fontSize: 12 }}>
-            可用 {record.memoryAvail}
-          </Typography.Text>
-        </Flex>
-        <div style={{ width: 60, height: 4, background: '#f0f0f0', borderRadius: 2, overflow: 'hidden' }}>
-          <div
-            style={{
-              width: `${Math.round(record.memoryUsage * 100)}%`,
-              height: '100%',
-              background: record.memoryUsage > 0.85 ? '#ff4d4f' : record.memoryUsage > 0.65 ? '#faad14' : '#00d992',
-              borderRadius: 2,
-              transition: 'width 0.3s'
-            }}
-          />
-        </div>
-      </Space>
-    )
-  },
-  {
-    title: '承载服务',
-    key: 'services',
-    width: 180,
-    render: (_: unknown, record: HostTableRow) => (
-      <Space size={4} wrap>
-        {record.services.map((s) => (
-          <Tag key={s} color="default" style={{ fontSize: 11 }}>{s}</Tag>
-        ))}
-        {record.services.length === 0 && (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>—</Typography.Text>
-        )}
-      </Space>
-    )
-  }
-];
-
-/* ── component ──────────────────────────────────── */
 
 export function SystemRuntimePanel() {
   const runtimeQuery = useQuery({
@@ -161,275 +45,132 @@ export function SystemRuntimePanel() {
     queryFn: fetchSettingsSystemRuntimeProfile
   });
 
-  const profile = runtimeQuery.data;
-  const relationshipMeta = profile ? getRelationshipLabel(profile.topology.relationship) : null;
+  const relationshipTag = runtimeQuery.data
+    ? getRelationshipLabel(runtimeQuery.data.topology.relationship)
+    : null;
 
-  /* ── loading ── */
-  if (runtimeQuery.isLoading) {
-    return (
-      <section>
-        <div style={{ marginBottom: 24 }}>
-          <Typography.Title level={4}>系统运行状态</Typography.Title>
-          <Typography.Text type="secondary">
-            查看 API Server 与 Plugin Runner 的部署关系、运行状态与宿主机信息。
-          </Typography.Text>
-        </div>
-        <Flex justify="center" style={{ padding: '64px 0' }}>
-          <Spin tip="正在读取系统运行信息…" />
-        </Flex>
-      </section>
-    );
-  }
-
-  /* ── error ── */
-  if (runtimeQuery.isError) {
-    return (
-      <section>
-        <div style={{ marginBottom: 24 }}>
-          <Typography.Title level={4}>系统运行状态</Typography.Title>
-          <Typography.Text type="secondary">
-            查看 API Server 与 Plugin Runner 的部署关系、运行状态与宿主机信息。
-          </Typography.Text>
-        </div>
-        <Alert
-          type="error"
-          showIcon
-          message="运行时信息加载失败"
-          description={
-            runtimeQuery.error instanceof Error
-              ? runtimeQuery.error.message
-              : '请稍后重试。'
-          }
-        />
-      </section>
-    );
-  }
-
-  /* ── no data ── */
-  if (!profile) {
-    return (
-      <section>
-        <div style={{ marginBottom: 24 }}>
-          <Typography.Title level={4}>系统运行状态</Typography.Title>
-          <Typography.Text type="secondary">
-            查看 API Server 与 Plugin Runner 的部署关系、运行状态与宿主机信息。
-          </Typography.Text>
-        </div>
-        <Empty description="暂无运行时数据" />
-      </section>
-    );
-  }
-
-  /* ── services ── */
-  const servicesToRender = [
-    { key: 'api_server', label: 'API Server', data: profile.services.api_server },
-    { key: 'plugin_runner', label: 'Plugin Runner', data: profile.services.plugin_runner }
-  ];
-
-  const hostRows = buildHostRows(profile);
-
-  /* ── render ── */
   return (
     <section>
-      {/* ── page header ── */}
-      <div style={{ marginBottom: 28 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          系统运行状态
-        </Typography.Title>
-        <Typography.Text type="secondary" style={{ marginTop: 4, display: 'block' }}>
-          查看 API Server 与 Plugin Runner 的部署关系、运行状态与宿主机信息。
-        </Typography.Text>
-      </div>
+      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <div>
+          <Typography.Title level={4}>系统运行</Typography.Title>
+          <Typography.Text type="secondary">
+            查看 API Server 与 Plugin Runner
+            的部署关系、宿主机信息和当前解析到的运行时环境。
+          </Typography.Text>
+        </div>
 
-      {/* ════════════════════════════════════════════════
-         部署概览
-         ════════════════════════════════════════════════ */}
-      <div style={{ marginBottom: 32 }}>
-        <Flex align="center" gap={8} style={{ marginBottom: 14 }}>
-          <InfoCircleOutlined style={{ color: '#00d992', fontSize: 15 }} />
-          <Typography.Text strong style={{ fontSize: 14 }}>部署概览</Typography.Text>
-        </Flex>
-
-        <Flex
-          wrap="wrap"
-          style={{
-            background: '#fafafa',
-            borderRadius: 8,
-            border: '1px solid #f0f0f0',
-            padding: '20px 24px'
-          }}
-        >
-          {/* 部署关系 */}
-          <Flex
-            align="flex-start"
-            gap={10}
-            style={{ minWidth: 160, paddingRight: 32, borderRight: '1px solid #f0f0f0' }}
-          >
-            <EnvironmentOutlined style={{ color: '#86909c', fontSize: 14, marginTop: 2 }} />
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                部署关系
-              </Typography.Text>
-              {relationshipMeta ? (
-                <Space size={6}>
-                  <relationshipMeta.icon style={{ color: relationshipMeta.color, fontSize: 13 }} />
-                  <Typography.Text style={{ fontSize: 13, color: relationshipMeta.color }}>
-                    {relationshipMeta.label}
-                  </Typography.Text>
-                </Space>
-              ) : (
-                <Typography.Text>—</Typography.Text>
-              )}
-            </div>
-          </Flex>
-
-          {/* 当前语言 */}
-          <Flex
-            align="flex-start"
-            gap={10}
-            style={{ minWidth: 140, padding: '0 32px', borderRight: '1px solid #f0f0f0' }}
-          >
-            <GlobalOutlined style={{ color: '#86909c', fontSize: 14, marginTop: 2 }} />
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                当前语言
-              </Typography.Text>
-              <Typography.Text style={{ fontSize: 13 }}>
-                {profile.locale_meta.resolved_locale}
-              </Typography.Text>
-            </div>
-          </Flex>
-
-          {/* 回退语言 */}
-          <Flex
-            align="flex-start"
-            gap={10}
-            style={{ minWidth: 120, padding: '0 32px', borderRight: '1px solid #f0f0f0' }}
-          >
-            <GlobalOutlined style={{ color: '#86909c', fontSize: 14, marginTop: 2 }} />
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                回退语言
-              </Typography.Text>
-              <Typography.Text style={{ fontSize: 13 }}>
-                {profile.locale_meta.fallback_locale}
-              </Typography.Text>
-            </div>
-          </Flex>
-
-          {/* 支持语言 */}
-          <Flex
-            align="flex-start"
-            gap={10}
-            style={{ minWidth: 180, paddingLeft: 32 }}
-          >
-            <GlobalOutlined style={{ color: '#86909c', fontSize: 14, marginTop: 2 }} />
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                支持语言
-              </Typography.Text>
-              <Typography.Text style={{ fontSize: 13 }}>
-                {profile.locale_meta.supported_locales.join(', ')}
-              </Typography.Text>
-            </div>
-          </Flex>
-        </Flex>
-      </div>
-
-      {/* ════════════════════════════════════════════════
-         服务状态
-         ════════════════════════════════════════════════ */}
-      <div style={{ marginBottom: 32 }}>
-        <Flex align="center" gap={8} style={{ marginBottom: 14 }}>
-          <CloudServerOutlined style={{ color: '#00d992', fontSize: 15 }} />
-          <Typography.Text strong style={{ fontSize: 14 }}>服务状态</Typography.Text>
-        </Flex>
-
-        <Flex gap={16} wrap="wrap">
-          {servicesToRender.map((svc) => {
-            const reachMeta = getReachabilityMeta(svc.data.reachable);
-            const leftBorder = svc.data.reachable ? '#00d992' : '#ff4d4f';
-            return (
-              <div
-                key={svc.key}
-                style={{
-                  flex: '1 1 300px',
-                  border: '1px solid #f0f0f0',
-                  borderRadius: 8,
-                  padding: '18px 20px',
-                  borderLeft: `3px solid ${leftBorder}`,
-                  background: '#fff'
-                }}
-              >
-                <Flex align="center" justify="space-between" style={{ marginBottom: 12 }}>
-                  <Typography.Text strong style={{ fontSize: 14 }}>
-                    {svc.label}
-                  </Typography.Text>
-                  <Space size={6}>
-                    <reachMeta.icon style={{ color: reachMeta.color, fontSize: 13 }} />
-                    <Typography.Text style={{ color: reachMeta.color, fontSize: 12 }}>
-                      {reachMeta.label}
-                    </Typography.Text>
-                  </Space>
-                </Flex>
-
-                <Flex gap={24} wrap="wrap">
-                  <div>
-                    <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 2 }}>
-                      版本
-                    </Typography.Text>
-                    <Typography.Text style={{ fontSize: 13 }}>
-                      {svc.data.version ?? '—'}
-                    </Typography.Text>
-                  </div>
-                  <div>
-                    <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 2 }}>
-                      状态
-                    </Typography.Text>
-                    <Typography.Text style={{ fontSize: 13 }}>
-                      {svc.data.status ?? '—'}
-                    </Typography.Text>
-                  </div>
-                  <div>
-                    <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 2 }}>
-                      宿主指纹
-                    </Typography.Text>
-                    <Typography.Text code style={{ fontSize: 12 }}>
-                      {svc.data.host_fingerprint?.slice(0, 16) ?? '未知'}
-                    </Typography.Text>
-                  </div>
-                </Flex>
-              </div>
-            );
-          })}
-        </Flex>
-      </div>
-
-      {/* ════════════════════════════════════════════════
-         宿主机
-         ════════════════════════════════════════════════ */}
-      <div>
-        <Flex align="center" gap={8} style={{ marginBottom: 14 }}>
-          <ClusterOutlined style={{ color: '#00d992', fontSize: 15 }} />
-          <Typography.Text strong style={{ fontSize: 14 }}>宿主机</Typography.Text>
-          <Tag style={{ marginLeft: 4, fontSize: 11, lineHeight: '20px' }}>
-            {hostRows.length}
-          </Tag>
-        </Flex>
-
-        {hostRows.length > 0 ? (
-          <Table<HostTableRow>
-            columns={hostColumns}
-            dataSource={hostRows}
-            pagination={false}
-            size="small"
-            bordered
-            style={{ fontSize: 13 }}
+        {runtimeQuery.isError ? (
+          <Alert
+            type="error"
+            showIcon
+            message="运行时信息加载失败"
+            description={
+              runtimeQuery.error instanceof Error
+                ? runtimeQuery.error.message
+                : '请稍后重试。'
+            }
           />
-        ) : (
-          <Empty description="当前没有可展示的宿主机信息" />
-        )}
-      </div>
+        ) : null}
+
+        {runtimeQuery.isLoading ? (
+          <Alert type="info" showIcon message="正在读取系统运行信息..." />
+        ) : null}
+
+        {runtimeQuery.data ? (
+          <>
+            <Card>
+              <Descriptions column={{ xs: 1, md: 2 }} layout="vertical">
+                <Descriptions.Item label="部署关系">
+                  {relationshipTag ? (
+                    <Tag color={relationshipTag.color}>
+                      {relationshipTag.label}
+                    </Tag>
+                  ) : null}
+                </Descriptions.Item>
+                <Descriptions.Item label="当前语言解析">
+                  {runtimeQuery.data.locale_meta.resolved_locale}
+                </Descriptions.Item>
+                <Descriptions.Item label="回退语言">
+                  {runtimeQuery.data.locale_meta.fallback_locale}
+                </Descriptions.Item>
+                <Descriptions.Item label="支持语言">
+                  {runtimeQuery.data.locale_meta.supported_locales.join(', ')}
+                </Descriptions.Item>
+                <Descriptions.Item label="插件安装根目录">
+                  {runtimeQuery.data.provider_install_root}
+                </Descriptions.Item>
+                <Descriptions.Item label="Host Extension Dropin 目录">
+                  {runtimeQuery.data.host_extension_dropin_root}
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
+
+            <Row gutter={[16, 16]}>
+              {[
+                runtimeQuery.data.services.api_server,
+                runtimeQuery.data.services.plugin_runner
+              ].map((service) => {
+                const reachability = getReachabilityLabel(service.reachable);
+
+                return (
+                  <Col xs={24} md={12} key={service.service}>
+                    <Card size="small" title={service.service}>
+                      <Space direction="vertical" size={8}>
+                        <Space wrap size={8}>
+                          <Tag color={reachability.color}>
+                            {reachability.label}
+                          </Tag>
+                          {service.status ? <Tag>{service.status}</Tag> : null}
+                          {service.version ? (
+                            <Tag>{service.version}</Tag>
+                          ) : null}
+                        </Space>
+                        <Typography.Text type="secondary">
+                          宿主指纹 {service.host_fingerprint ?? '未知'}
+                        </Typography.Text>
+                      </Space>
+                    </Card>
+                  </Col>
+                );
+              })}
+            </Row>
+
+            {runtimeQuery.data.hosts.length > 0 ? (
+              <Row gutter={[16, 16]}>
+                {runtimeQuery.data.hosts.map((host) => (
+                  <Col xs={24} lg={12} key={host.host_fingerprint}>
+                    <Card size="small" title={host.host_fingerprint}>
+                      <Descriptions column={1} size="small">
+                        <Descriptions.Item label="平台">
+                          {host.platform.os}/{host.platform.arch}
+                          {host.platform.libc ? `/${host.platform.libc}` : ''}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Rust Target">
+                          {host.platform.rust_target_triple}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="CPU">
+                          {host.cpu.logical_count} 逻辑核
+                        </Descriptions.Item>
+                        <Descriptions.Item label="内存">
+                          总计 {formatMemory(host.memory.total_gb)}，可用{' '}
+                          {formatMemory(host.memory.available_gb)}，当前进程{' '}
+                          {formatMemory(host.memory.process_gb)}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="服务">
+                          {host.services.join(', ')}
+                        </Descriptions.Item>
+                      </Descriptions>
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            ) : (
+              <Empty description="当前没有可展示的宿主机信息" />
+            )}
+          </>
+        ) : null}
+      </Space>
     </section>
   );
 }
