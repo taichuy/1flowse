@@ -286,6 +286,22 @@ describe('TemplatedTextField', () => {
     );
   });
 
+  test('does not insert twice when Enter bubbles from the searchbox', async () => {
+    render(<TemplatedTextHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '插入变量' }));
+    const searchbox = await screen.findByRole('searchbox', { name: '搜索变量' });
+
+    fireEvent.keyDown(searchbox, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('listbox', { name: '变量建议' })).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId('templated-text-value')).toHaveTextContent(
+      '请基于 {{node-start.query}}'
+    );
+  });
+
   test('positions the picker near the editor caret when opened from typing', async () => {
     const selectionSpy = mockSelectionRect({
       left: 168,

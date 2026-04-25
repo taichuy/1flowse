@@ -45,7 +45,7 @@ export function TemplateVariableTypeaheadPlugin({
       role="listbox"
       aria-label="变量建议"
       style={popupStyle}
-      onKeyDownCapture={onKeyDown}
+      onKeyDown={onKeyDown}
       onMouseDown={(event) => event.preventDefault()}
     >
       <div className="agent-flow-templated-text-field__typeahead-search">
@@ -56,7 +56,6 @@ export function TemplateVariableTypeaheadPlugin({
           autoFocus
           value={query}
           placeholder="搜索节点或字段"
-          onKeyDownCapture={onKeyDown}
           onChange={(event) => onQueryChange(event.target.value)}
         />
       </div>
