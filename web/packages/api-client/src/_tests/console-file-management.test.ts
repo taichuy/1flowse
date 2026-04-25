@@ -1,18 +1,26 @@
 import { describe, expect, test, vi } from 'vitest';
-
-vi.mock('../transport', () => ({
-  apiFetch: vi.fn(async (input) => input)
-}));
+import * as transport from '../transport';
 
 import {
   createConsoleFileStorage,
   createConsoleFileTable,
+  deleteConsoleFileStorage,
+  deleteConsoleFileTable,
   fetchConsoleFileStorages,
   fetchConsoleFileTables,
+  updateConsoleFileStorage,
   updateConsoleFileTableBinding
 } from '../console-file-management';
 
 describe('console-file-management client', () => {
+  const apiFetchSpy = vi
+    .spyOn(transport, 'apiFetch')
+    .mockImplementation(async (input) => input as never);
+
+  test('transport spy is active', () => {
+    expect(apiFetchSpy).toBeDefined();
+  });
+
   test('fetchConsoleFileStorages points at the storage collection route', async () => {
     await expect(fetchConsoleFileStorages()).resolves.toMatchObject({
       path: '/api/console/file-storages'
@@ -72,6 +80,43 @@ describe('console-file-management client', () => {
     ).resolves.toMatchObject({
       path: '/api/console/file-tables',
       method: 'POST',
+      csrfToken: 'csrf-123'
+    });
+  });
+
+  test('updateConsoleFileStorage puts to the storage detail route', async () => {
+    await expect(
+      updateConsoleFileStorage(
+        'storage-1',
+        {
+          title: 'Archive Local',
+          enabled: false
+        },
+        'csrf-123'
+      )
+    ).resolves.toMatchObject({
+      path: '/api/console/file-storages/storage-1',
+      method: 'PUT',
+      csrfToken: 'csrf-123'
+    });
+  });
+
+  test('deleteConsoleFileStorage deletes the storage detail route', async () => {
+    await expect(
+      deleteConsoleFileStorage('storage-1', 'csrf-123')
+    ).resolves.toMatchObject({
+      path: '/api/console/file-storages/storage-1',
+      method: 'DELETE',
+      csrfToken: 'csrf-123'
+    });
+  });
+
+  test('deleteConsoleFileTable deletes the table detail route', async () => {
+    await expect(
+      deleteConsoleFileTable('table-1', 'csrf-123')
+    ).resolves.toMatchObject({
+      path: '/api/console/file-tables/table-1',
+      method: 'DELETE',
       csrfToken: 'csrf-123'
     });
   });

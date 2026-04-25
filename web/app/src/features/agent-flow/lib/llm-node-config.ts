@@ -42,7 +42,7 @@ function asString(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
 
-function defaultValueByField(field: ConsolePluginFormFieldSchema): unknown {
+export function getLlmParameterDefaultValue(field: ConsolePluginFormFieldSchema): unknown {
   if (field.default_value !== undefined) {
     return field.default_value;
   }
@@ -80,7 +80,7 @@ export function buildLlmParameterState(
           field.key,
           {
             enabled,
-            value: defaultValueByField(field)
+            value: getLlmParameterDefaultValue(field)
           } satisfies LlmParameterItem
         ];
       })

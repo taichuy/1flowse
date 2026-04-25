@@ -13,7 +13,7 @@ test('readPluginCode prefers plugin_id from manifest', () => {
   const pluginPath = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-plugin-manifest-'));
   fs.writeFileSync(
     path.join(pluginPath, 'manifest.yaml'),
-    'plugin_id: acme_provider@0.2.0\nversion: 0.2.0\n',
+    'plugin_id: acme_provider\nversion: 0.2.0\n',
     'utf8'
   );
 
@@ -37,7 +37,7 @@ test('readPluginCode ignores legacy plugin_code fallback once plugin_id is the o
 
 test('createArtifactRoot excludes requested top-level entries', () => {
   const pluginPath = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-plugin-artifact-'));
-  fs.writeFileSync(path.join(pluginPath, 'manifest.yaml'), 'plugin_id: acme_provider@0.1.0\n', 'utf8');
+  fs.writeFileSync(path.join(pluginPath, 'manifest.yaml'), 'plugin_id: acme_provider\n', 'utf8');
   fs.mkdirSync(path.join(pluginPath, 'demo'), { recursive: true });
   fs.writeFileSync(path.join(pluginPath, 'demo', 'index.html'), '<h1>demo</h1>', 'utf8');
   fs.mkdirSync(path.join(pluginPath, 'provider'), { recursive: true });

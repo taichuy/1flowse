@@ -4,6 +4,8 @@ import type { SettingsPluginFamilyEntry } from '../../api/plugins';
 import type { SettingsModelProviderCatalogEntry } from '../../api/model-providers';
 import { formatPluginAvailabilityStatus } from './plugin-installation-status';
 
+const DEFAULT_PROVIDER_ICON_SRC = '/icon.svg';
+
 function getCatalogDescription(
   family: SettingsPluginFamilyEntry,
   currentCatalogEntry: SettingsModelProviderCatalogEntry | null | undefined
@@ -20,6 +22,10 @@ function compareVersions(left: string, right: string) {
     numeric: true,
     sensitivity: 'base'
   });
+}
+
+function getProviderIconSrc(entry: SettingsPluginFamilyEntry) {
+  return entry.icon?.trim() || DEFAULT_PROVIDER_ICON_SRC;
 }
 
 export function ModelProviderCatalogPanel({
@@ -127,24 +133,6 @@ export function ModelProviderCatalogPanel({
             render: (_, entry) => (
               <div className="model-provider-panel__catalog-name">
                 <Typography.Text strong>{entry.display_name}</Typography.Text>
-                <Typography.Text
-                  type="secondary"
-                  className="model-provider-panel__catalog-meta"
-                >
-                  实例：{instanceCounts[entry.provider_code] ?? 0} 个
-                </Typography.Text>
-                <Typography.Text
-                  type="secondary"
-                  className="model-provider-panel__catalog-meta"
-                >
-                  主实例：聚合视图
-                </Typography.Text>
-                <Typography.Text
-                  type="secondary"
-                  className="model-provider-panel__catalog-meta"
-                >
-                  已接入：{includedInstanceCounts[entry.provider_code] ?? 0} 个实例
-                </Typography.Text>
               </div>
             )
           },
@@ -175,7 +163,7 @@ export function ModelProviderCatalogPanel({
           {
             title: '版本',
             key: 'version',
-            width: 90,
+            width: 120,
             render: (_, entry) => {
               const versionOptions = [...entry.installed_versions]
                 .sort((left, right) =>

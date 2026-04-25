@@ -1,15 +1,20 @@
+import { QuestionCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
+  Button,
+  ConfigProvider,
   Empty,
   Input,
   InputNumber,
   Select,
   Slider,
   Switch,
+  Tooltip,
   Typography
 } from 'antd';
-import { useMemo } from 'react';
+import type { InputNumberProps, ThemeConfig } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { SchemaDynamicFormRendererProps } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 import {
@@ -18,6 +23,7 @@ import {
 } from '../../../api/model-provider-options';
 import {
   DEFAULT_LLM_PARAMETERS,
+  getLlmParameterDefaultValue,
   getLlmModelProvider,
   getLlmParameters,
   type LlmNodeParameters
@@ -26,6 +32,32 @@ import {
   findLlmModelOption,
   findLlmProviderOption
 } from '../../../lib/model-options';
+
+type LlmParameterField = NonNullable<
+  NonNullable<ReturnType<typeof findLlmProviderOption>>['parameterForm']
+>['fields'][number];
+
+const DEFAULT_CONTEXT_WINDOW_TOKENS = 16_000;
+const NUMERIC_CONTROL_THEME: ThemeConfig = {
+  token: {
+    colorPrimary: '#1677ff',
+    colorInfo: '#1677ff'
+  },
+  components: {
+    Slider: {
+      trackBg: '#91caff',
+      trackHoverBg: '#69b1ff',
+      handleColor: '#1677ff',
+      handleActiveColor: '#0958d9',
+      handleActiveOutlineColor: 'rgba(5, 145, 255, 0.12)'
+    },
+    InputNumber: {
+      hoverBorderColor: '#4096ff',
+      activeBorderColor: '#1677ff',
+      activeShadow: '0 0 0 2px rgba(5, 145, 255, 0.1)'
+    }
+  }
+};
 
 function getNodeConfig(adapter: SchemaDynamicFormRendererProps['adapter']) {
   const node = adapter.getDerived('node') as
@@ -54,32 +86,190 @@ function updateParameters(
   adapter.setValue('config.llm_parameters', nextParameters);
 }
 
+function getNumericDefaultValue(field: LlmParameterField) {
+  const defaultValue = getLlmParameterDefaultValue(field);
+
+  return typeof defaultValue === 'number' && Number.isFinite(defaultValue)
+    ? defaultValue
+    : 0;
+}
+
+function getNumericValue(field: LlmParameterField, value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : getNumericDefaultValue(field);
+}
+
+function clampNumericValue(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function formatNumericInputValue(value: unknown) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(value) : '';
+  }
+
+  if (typeof value === 'string') {
+    return value.endsWith('.') ? value.slice(0, -1) : value;
+  }
+
+  return '';
+}
+
+function isMaxTokenField(field: LlmParameterField) {
+  const normalizedKey = field.key.toLowerCase();
+
+  return normalizedKey.includes('max') && normalizedKey.includes('token');
+}
+
+function getContextBoundedMax(
+  field: LlmParameterField,
+  contextWindow: number | null | undefined
+) {
+  if (!isMaxTokenField(field)) {
+    return null;
+  }
+
+  const contextMax =
+    typeof contextWindow === 'number' && Number.isFinite(contextWindow)
+      ? contextWindow
+      : DEFAULT_CONTEXT_WINDOW_TOKENS;
+
+  return typeof field.max === 'number'
+    ? Math.min(field.max, contextMax)
+    : contextMax;
+}
+
+function getSliderBounds(
+  field: LlmParameterField,
+  currentValue: number,
+  contextWindow: number | null | undefined
+) {
+  const min = typeof field.min === 'number' ? field.min : 0;
+  const contextBoundedMax = getContextBoundedMax(field, contextWindow);
+  const inferredMax =
+    field.type === 'integer'
+      ? Math.max(1, currentValue, getNumericDefaultValue(field), 4096)
+      : Math.max(1, currentValue, getNumericDefaultValue(field));
+  const max =
+    contextBoundedMax ??
+    (typeof field.max === 'number' ? field.max : inferredMax);
+
+  return {
+    min,
+    max: max > min ? max : min + 1
+  };
+}
+
+function LlmNumericControl({
+  field,
+  value,
+  contextWindow,
+  nextParameters,
+  restoreDefaultValue
+}: {
+  field: LlmParameterField;
+  value: unknown;
+  contextWindow: number | null | undefined;
+  nextParameters: (nextValue: unknown) => void;
+  restoreDefaultValue: () => void;
+}) {
+  const rawNumericValue = getNumericValue(field, value);
+  const { min, max } = getSliderBounds(field, rawNumericValue, contextWindow);
+  const numericValue = clampNumericValue(rawNumericValue, min, max);
+  const step = field.step ?? (field.type === 'integer' ? 1 : 0.1);
+  const [draftValue, setDraftValue] = useState(numericValue);
+
+  useEffect(() => {
+    setDraftValue(numericValue);
+  }, [numericValue]);
+
+  function normalizeNextValue(nextValue: number) {
+    return clampNumericValue(nextValue, min, max);
+  }
+
+  const onChange: InputNumberProps['onChange'] = (next) => {
+    if (typeof next !== 'number' || Number.isNaN(next)) {
+      return;
+    }
+
+    setDraftValue(normalizeNextValue(next));
+  };
+
+  return (
+    <ConfigProvider theme={NUMERIC_CONTROL_THEME}>
+      <div className="agent-flow-llm-parameter-form__numeric-control">
+        <Slider
+          min={min}
+          max={max}
+          step={step}
+          value={typeof draftValue === 'number' ? draftValue : 0}
+          onChange={onChange}
+          onChangeComplete={(next) => {
+            const nextValue = Array.isArray(next) ? (next[0] ?? min) : next;
+
+            nextParameters(normalizeNextValue(nextValue));
+          }}
+        />
+        <div className="agent-flow-llm-parameter-form__number-actions">
+          <InputNumber
+            aria-label={`${field.label} 当前值`}
+            min={min}
+            max={max}
+            step={step}
+            precision={field.precision}
+            value={draftValue}
+            formatter={(next) => formatNumericInputValue(next)}
+            onChange={onChange}
+            onBlur={() => {
+              nextParameters(draftValue);
+            }}
+            onPressEnter={() => {
+              nextParameters(draftValue);
+            }}
+          />
+          <Tooltip title="还原默认值">
+            <Button
+              type="text"
+              size="small"
+              aria-label={`${field.label} 还原默认值`}
+              className="agent-flow-llm-parameter-form__default-icon"
+              icon={<ReloadOutlined />}
+              onClick={restoreDefaultValue}
+            />
+          </Tooltip>
+        </div>
+      </div>
+    </ConfigProvider>
+  );
+}
+
 function renderFieldControl({
   field,
-  enabled,
   value,
-  nextParameters
+  contextWindow,
+  nextParameters,
+  restoreDefaultValue
 }: {
-  field: NonNullable<
-    NonNullable<ReturnType<typeof findLlmProviderOption>>['parameterForm']
-  >['fields'][number];
-  enabled: boolean;
+  field: LlmParameterField;
   value: unknown;
+  contextWindow: number | null | undefined;
   nextParameters: (nextValue: unknown) => void;
+  restoreDefaultValue: () => void;
 }) {
-  if (field.control === 'slider') {
+  if (
+    field.control === 'slider' ||
+    field.type === 'integer' ||
+    field.type === 'number' ||
+    field.control === 'number'
+  ) {
     return (
-      <Slider
-        disabled={!enabled}
-        min={field.min ?? 0}
-        max={field.max ?? 1}
-        step={field.step ?? 0.1}
-        value={
-          typeof value === 'number' ? value : Number(field.default_value ?? 0)
-        }
-        onChange={(next) =>
-          nextParameters(Array.isArray(next) ? (next[0] ?? 0) : next)
-        }
+      <LlmNumericControl
+        field={field}
+        value={value}
+        contextWindow={contextWindow}
+        nextParameters={nextParameters}
+        restoreDefaultValue={restoreDefaultValue}
       />
     );
   }
@@ -88,7 +278,6 @@ function renderFieldControl({
     return (
       <Switch
         checked={Boolean(value)}
-        disabled={!enabled}
         onChange={(checked) => nextParameters(checked)}
       />
     );
@@ -98,7 +287,6 @@ function renderFieldControl({
     return (
       <Select
         style={{ width: '100%' }}
-        disabled={!enabled}
         value={value as string | number | boolean | undefined}
         options={(field.options ?? []).map((option) => ({
           label: option.label,
@@ -113,7 +301,6 @@ function renderFieldControl({
     return (
       <Input.TextArea
         rows={4}
-        disabled={!enabled}
         value={typeof value === 'string' ? value : String(value ?? '')}
         placeholder={field.placeholder}
         onChange={(event) => nextParameters(event.target.value)}
@@ -125,7 +312,6 @@ function renderFieldControl({
     return (
       <Input.TextArea
         rows={6}
-        disabled={!enabled}
         value={
           typeof value === 'string'
             ? value
@@ -137,28 +323,8 @@ function renderFieldControl({
     );
   }
 
-  if (
-    field.type === 'integer' ||
-    field.type === 'number' ||
-    field.control === 'number'
-  ) {
-    return (
-      <InputNumber
-        style={{ width: '100%' }}
-        disabled={!enabled}
-        min={field.min}
-        max={field.max}
-        step={field.step ?? (field.type === 'integer' ? 1 : 0.1)}
-        precision={field.precision}
-        value={typeof value === 'number' ? value : undefined}
-        onChange={(next) => nextParameters(next)}
-      />
-    );
-  }
-
   return (
     <Input
-      disabled={!enabled}
       value={typeof value === 'string' ? value : String(value ?? '')}
       placeholder={field.placeholder}
       onChange={(event) => nextParameters(event.target.value)}
@@ -189,6 +355,7 @@ export function LlmParameterForm({
     modelProvider.model_id
   );
   const parameterForm = selectedProvider?.parameterForm ?? null;
+  const contextWindow = selectedModel?.effectiveContextWindow ?? null;
 
   const groupedFields = useMemo(() => {
     if (!parameterForm) {
@@ -279,6 +446,7 @@ export function LlmParameterForm({
                 alwaysEnabled
               );
               const value = getFieldValue(parameters, field.key);
+              const defaultValue = getLlmParameterDefaultValue(field);
               const nextParameters = (
                 nextValue: unknown,
                 nextEnabled = enabled
@@ -299,46 +467,51 @@ export function LlmParameterForm({
                   key={field.key}
                   className="agent-flow-llm-parameter-form__row"
                 >
-                  <div className="agent-flow-llm-parameter-form__row-label">
-                    <Typography.Text strong>{field.label}</Typography.Text>
-                    {field.description ? (
-                      <Typography.Text
-                        type="secondary"
-                        className="agent-flow-llm-parameter-form__row-description"
-                      >
-                        {field.description}
-                      </Typography.Text>
-                    ) : null}
+                  <div className="agent-flow-llm-parameter-form__row-head">
+                    <div className="agent-flow-llm-parameter-form__row-label">
+                      <span className="agent-flow-llm-parameter-form__label-line">
+                        <Typography.Text strong>{field.label}</Typography.Text>
+                        {field.description ? (
+                          <Tooltip title={field.description}>
+                            <QuestionCircleOutlined
+                              className="agent-flow-llm-parameter-form__help-icon"
+                              aria-label={`${field.label} 字段说明`}
+                            />
+                          </Tooltip>
+                        ) : null}
+                      </span>
+                    </div>
+                    <div className="agent-flow-llm-parameter-form__row-toggle">
+                      {!alwaysEnabled ? (
+                        <Switch
+                          checked={enabled}
+                          onChange={(checked) =>
+                            nextParameters(
+                              parameters.items[field.key]?.value ??
+                                value ??
+                                defaultValue,
+                              checked
+                            )
+                          }
+                        />
+                      ) : (
+                        <Typography.Text
+                          type="secondary"
+                          className="agent-flow-llm-parameter-form__row-fixed"
+                        >
+                          始终开启
+                        </Typography.Text>
+                      )}
+                    </div>
                   </div>
                   <div className="agent-flow-llm-parameter-form__row-control">
                     {renderFieldControl({
                       field,
-                      enabled,
                       value,
-                      nextParameters: (nextValue) => nextParameters(nextValue)
+                      contextWindow,
+                      nextParameters: (nextValue) => nextParameters(nextValue),
+                      restoreDefaultValue: () => nextParameters(defaultValue)
                     })}
-                  </div>
-                  <div className="agent-flow-llm-parameter-form__row-toggle">
-                    {!alwaysEnabled ? (
-                      <Switch
-                        checked={enabled}
-                        onChange={(checked) =>
-                          nextParameters(
-                            parameters.items[field.key]?.value ??
-                              value ??
-                              field.default_value,
-                            checked
-                          )
-                        }
-                      />
-                    ) : (
-                      <Typography.Text
-                        type="secondary"
-                        className="agent-flow-llm-parameter-form__row-fixed"
-                      >
-                        始终开启
-                      </Typography.Text>
-                    )}
                   </div>
                 </div>
               );

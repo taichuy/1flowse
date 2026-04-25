@@ -1,14 +1,18 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::{HeaderMap, StatusCode},
     routing::get,
     Json, Router,
 };
-use control_plane::file_management::{CreateFileStorageCommand, FileStorageService};
+use control_plane::file_management::{
+    CreateFileStorageCommand, DeleteFileStorageCommand, FileStorageService,
+    UpdateFileStorageCommand,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 use crate::{
     app_state::ApiState,
@@ -22,6 +26,17 @@ pub struct CreateFileStorageBody {
     pub code: String,
     pub title: String,
     pub driver_type: String,
+    pub enabled: bool,
+    pub is_default: bool,
+    #[schema(value_type = Object)]
+    pub config_json: serde_json::Value,
+    #[schema(value_type = Object)]
+    pub rule_json: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateFileStorageBody {
+    pub title: String,
     pub enabled: bool,
     pub is_default: bool,
     #[schema(value_type = Object)]
@@ -46,6 +61,11 @@ pub struct FileStorageResponse {
     pub last_health_error: Option<String>,
 }
 
+fn parse_uuid(raw: &str, field: &'static str) -> Result<Uuid, ApiError> {
+    Uuid::parse_str(raw)
+        .map_err(|_| control_plane::errors::ControlPlaneError::InvalidInput(field).into())
+}
+
 fn to_response(record: domain::FileStorageRecord) -> FileStorageResponse {
     FileStorageResponse {
         id: record.id.to_string(),
@@ -66,10 +86,15 @@ fn to_response(record: domain::FileStorageRecord) -> FileStorageResponse {
 }
 
 pub fn router() -> Router<Arc<ApiState>> {
-    Router::new().route(
-        "/file-storages",
-        get(list_file_storages).post(create_file_storage),
-    )
+    Router::new()
+        .route(
+            "/file-storages",
+            get(list_file_storages).post(create_file_storage),
+        )
+        .route(
+            "/file-storages/:id",
+            axum::routing::put(update_file_storage).delete(delete_file_storage),
+        )
 }
 
 #[utoipa::path(
@@ -122,4 +147,59 @@ pub async fn create_file_storage(
         StatusCode::CREATED,
         Json(ApiSuccess::new(to_response(created))),
     ))
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/console/file-storages/{id}",
+    request_body = UpdateFileStorageBody,
+    params(("id" = String, Path, description = "File storage id")),
+    responses((status = 200, body = FileStorageResponse), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn update_file_storage(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(file_storage_id): Path<String>,
+    Json(body): Json<UpdateFileStorageBody>,
+) -> Result<Json<ApiSuccess<FileStorageResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+
+    let updated = FileStorageService::new(state.store.clone())
+        .update_storage(UpdateFileStorageCommand {
+            actor_user_id: context.user.id,
+            file_storage_id: parse_uuid(&file_storage_id, "file_storage_id")?,
+            title: body.title,
+            enabled: body.enabled,
+            is_default: body.is_default,
+            config_json: body.config_json,
+            rule_json: body.rule_json,
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_response(updated))))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/console/file-storages/{id}",
+    params(("id" = String, Path, description = "File storage id")),
+    responses((status = 204), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn delete_file_storage(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(file_storage_id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+
+    FileStorageService::new(state.store.clone())
+        .delete_storage(DeleteFileStorageCommand {
+            actor_user_id: context.user.id,
+            file_storage_id: parse_uuid(&file_storage_id, "file_storage_id")?,
+        })
+        .await?;
+
+    Ok(StatusCode::NO_CONTENT)
 }

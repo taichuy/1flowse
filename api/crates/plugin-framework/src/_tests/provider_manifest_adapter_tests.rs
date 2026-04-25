@@ -186,7 +186,7 @@ node_contributions: []
 
     assert!(error
         .to_string()
-        .contains("manifest.plugin_id version must match manifest.version"));
+        .contains("plugin_id version suffix must match version"));
 }
 
 #[test]

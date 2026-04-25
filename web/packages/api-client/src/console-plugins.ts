@@ -73,6 +73,7 @@ export interface ConsoleOfficialPluginCatalogEntry {
   label_key: string;
   description_key: string | null;
   provider_label_key: string;
+  icon?: string | null;
   protocol: string;
   latest_version: string;
   selected_artifact: ConsoleOfficialPluginArtifact;
@@ -108,6 +109,7 @@ export interface ConsolePluginFamilyEntry {
   label_key: string;
   description_key: string | null;
   provider_label_key: string;
+  icon?: string | null;
   protocol: string;
   help_url: string | null;
   default_base_url: string | null;

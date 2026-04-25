@@ -448,17 +448,7 @@ fn validate_release_identity(
 }
 
 fn plugin_code_from_plugin_id(manifest: &PluginManifestV1) -> Result<&str, PluginFrameworkError> {
-    let (plugin_code, version) = manifest.plugin_id.split_once('@').ok_or_else(|| {
-        PluginFrameworkError::invalid_provider_package(
-            "manifest.plugin_id must use <plugin_code>@<version>",
-        )
-    })?;
-    if plugin_code.trim().is_empty() || version.trim().is_empty() || version != manifest.version {
-        return Err(PluginFrameworkError::invalid_provider_package(
-            "manifest.plugin_id must use <plugin_code>@<version>",
-        ));
-    }
-    Ok(plugin_code)
+    manifest.plugin_code()
 }
 
 fn parse_signature(bytes: &[u8]) -> Result<Signature, PluginFrameworkError> {

@@ -3,11 +3,11 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
-    routing::{get, put},
+    routing::{delete, get, put},
     Json, Router,
 };
 use control_plane::file_management::{
-    BindFileTableStorageCommand, CreateFileTableCommand, FileTableService,
+    BindFileTableStorageCommand, CreateFileTableCommand, DeleteFileTableCommand, FileTableService,
 };
 use control_plane::ports::{FileManagementRepository, RuntimeRegistrySync};
 use serde::{Deserialize, Serialize};
@@ -89,6 +89,7 @@ pub fn router() -> Router<Arc<ApiState>> {
             "/file-tables",
             get(list_file_tables).post(create_file_table),
         )
+        .route("/file-tables/:id", delete(delete_file_table))
         .route("/file-tables/:id/binding", put(bind_file_table_storage))
 }
 
@@ -172,4 +173,31 @@ pub async fn bind_file_table_storage(
     Ok(Json(ApiSuccess::new(
         to_response(&state.store, updated).await?,
     )))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/console/file-tables/{id}",
+    params(("id" = String, Path, description = "File table id")),
+    responses((status = 204), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn delete_file_table(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(file_table_id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+
+    FileTableService::new(state.store.clone())
+        .delete_table(DeleteFileTableCommand {
+            actor_user_id: context.user.id,
+            file_table_id: parse_uuid(&file_table_id, "file_table_id")?,
+        })
+        .await?;
+    ApiRuntimeRegistrySync::new(state.store.clone(), state.runtime_engine.registry().clone())
+        .rebuild()
+        .await?;
+
+    Ok(StatusCode::NO_CONTENT)
 }

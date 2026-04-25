@@ -46,6 +46,18 @@ export interface UpdateConsoleFileTableBindingInput {
   bound_storage_id: string;
 }
 
+export interface UpdateConsoleFileStorageInput {
+  title?: string;
+  enabled?: boolean;
+  is_default?: boolean;
+  config_json?: Record<string, unknown>;
+  rule_json?: Record<string, unknown>;
+}
+
+export interface UpdateConsoleFileTableInput {
+  title?: string;
+}
+
 export function fetchConsoleFileStorages(baseUrl?: string) {
   return apiFetch<ConsoleFileStorage[]>({
     path: '/api/console/file-storages',
@@ -98,6 +110,47 @@ export function updateConsoleFileTableBinding(
     path: `/api/console/file-tables/${fileTableId}/binding`,
     method: 'PUT',
     body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function updateConsoleFileStorage(
+  fileStorageId: string,
+  input: UpdateConsoleFileStorageInput,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleFileStorage>({
+    path: `/api/console/file-storages/${fileStorageId}`,
+    method: 'PUT',
+    body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function deleteConsoleFileStorage(
+  fileStorageId: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<void>({
+    path: `/api/console/file-storages/${fileStorageId}`,
+    method: 'DELETE',
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function deleteConsoleFileTable(
+  fileTableId: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<void>({
+    path: `/api/console/file-tables/${fileTableId}`,
+    method: 'DELETE',
     csrfToken,
     baseUrl
   });

@@ -427,6 +427,7 @@ where
         let installation_result = async {
             let manifest = load_plugin_manifest(&command.package_root)?;
             let plugin_code = plugin_code_from_plugin_id(&manifest.plugin_id)?;
+            let package_id = manifest.versioned_plugin_id().map_err(map_framework_error)?;
             let install_path = self
                 .install_root
                 .join("installed")
@@ -436,7 +437,7 @@ where
                 .install_root
                 .join("packages")
                 .join(&plugin_code)
-                .join(format!("{}.1flowbasepkg", manifest.plugin_id));
+                .join(format!("{package_id}.1flowbasepkg"));
             if let Some(package_bytes) = source_metadata.package_bytes.as_ref() {
                 if let Some(parent) = package_archive_path.parent() {
                     fs::create_dir_all(parent).with_context(|| {
@@ -469,7 +470,7 @@ where
                     .upsert_installation(&UpsertPluginInstallationInput {
                         installation_id: Uuid::now_v7(),
                         provider_code: plugin_code.clone(),
-                        plugin_id: manifest.plugin_id.clone(),
+                        plugin_id: package_id.clone(),
                         plugin_version: manifest.version.clone(),
                         contract_version: manifest.contract_version.clone(),
                         protocol: manifest.runtime.protocol.clone(),
@@ -521,6 +522,7 @@ where
                 "help_url": installed_package.provider.help_url,
                 "default_base_url": installed_package.provider.default_base_url,
                 "model_discovery_mode": format!("{:?}", installed_package.provider.model_discovery_mode).to_ascii_lowercase(),
+                "icon": installed_package.manifest.icon,
                 "supported_model_types": ["llm"],
             });
             if let Some(install_kind) = detail_json.get("install_kind").cloned() {

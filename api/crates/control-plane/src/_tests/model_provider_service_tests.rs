@@ -1339,6 +1339,7 @@ async fn model_provider_service_options_group_models_by_source_instance_and_keep
         .unwrap();
 
     assert_eq!(options.providers.len(), 1);
+    assert_eq!(options.providers[0].icon.as_deref(), Some("icon.svg"));
     assert_eq!(
         options.providers[0].main_instance.provider_code,
         "fixture_provider"

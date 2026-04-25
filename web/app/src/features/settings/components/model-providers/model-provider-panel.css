@@ -245,10 +245,24 @@
 }
 
 .model-provider-panel__catalog-name,
-.model-provider-panel__catalog-description,
-.model-provider-panel__catalog-version {
+.model-provider-panel__catalog-description {
   display: grid;
   gap: 4px;
+}
+
+.model-provider-panel__catalog-version {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.model-provider-panel__provider-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+  flex: none;
+  object-fit: contain;
 }
 
 .model-provider-panel__catalog-meta {
@@ -257,7 +271,7 @@
 }
 
 .model-provider-panel__version-select {
-  width: 60%;
+  width: 68px;
   min-width: max-content;
 }
 

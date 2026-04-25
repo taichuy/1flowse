@@ -21,6 +21,29 @@ pub struct UpdateFileStorageBindingInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpdateFileStorageInput {
+    pub actor_user_id: Uuid,
+    pub file_storage_id: Uuid,
+    pub title: String,
+    pub enabled: bool,
+    pub is_default: bool,
+    pub config_json: serde_json::Value,
+    pub rule_json: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct DeleteFileStorageInput {
+    pub actor_user_id: Uuid,
+    pub file_storage_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct DeleteFileTableInput {
+    pub actor_user_id: Uuid,
+    pub file_table_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
 pub struct CreateFileTableRegistrationInput {
     pub file_table_id: Uuid,
     pub actor_user_id: Uuid,
@@ -70,4 +93,19 @@ pub trait FileManagementRepository: Send + Sync {
         &self,
         input: &UpdateFileStorageBindingInput,
     ) -> anyhow::Result<domain::FileTableRecord>;
+    async fn update_file_storage(
+        &self,
+        input: &UpdateFileStorageInput,
+    ) -> anyhow::Result<domain::FileStorageRecord> {
+        let _ = input;
+        anyhow::bail!("update_file_storage not implemented")
+    }
+    async fn delete_file_storage(&self, input: &DeleteFileStorageInput) -> anyhow::Result<()> {
+        let _ = input;
+        anyhow::bail!("delete_file_storage not implemented")
+    }
+    async fn delete_file_table(&self, input: &DeleteFileTableInput) -> anyhow::Result<()> {
+        let _ = input;
+        anyhow::bail!("delete_file_table not implemented")
+    }
 }

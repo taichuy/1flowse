@@ -24,10 +24,11 @@ pub fn ensure_uploaded_host_extensions_enabled(enabled: bool) -> Result<(), Cont
 }
 
 pub fn plugin_code_from_plugin_id(plugin_id: &str) -> Result<String, ControlPlaneError> {
-    let (plugin_code, version) = plugin_id
+    let plugin_code = plugin_id
         .split_once('@')
-        .ok_or(ControlPlaneError::InvalidInput("plugin_id"))?;
-    if plugin_code.trim().is_empty() || version.trim().is_empty() {
+        .map(|(plugin_code, _version)| plugin_code)
+        .unwrap_or(plugin_id);
+    if plugin_code.trim().is_empty() {
         return Err(ControlPlaneError::InvalidInput("plugin_id"));
     }
     Ok(plugin_code.to_string())

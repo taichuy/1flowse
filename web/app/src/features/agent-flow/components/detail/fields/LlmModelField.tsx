@@ -1,7 +1,16 @@
-import { CloseOutlined } from '@ant-design/icons';
+import { CloseOutlined, HolderOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Button, Divider, Empty, Modal, Select, Typography } from 'antd';
-import { useMemo, useState, type ReactNode } from 'react';
+import { Alert, Button, Divider, Empty, Select, Typography } from 'antd';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode
+} from 'react';
+import { createPortal } from 'react-dom';
 
 import type { SchemaFieldRendererProps } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 import type {
@@ -45,6 +54,26 @@ const LLM_PARAMETERS_BLOCK: SchemaDynamicFormBlock = {
   empty_text: '请先选择模型，随后再调整参数。'
 };
 
+const FLOATING_PANEL_DEFAULT_WIDTH = 320;
+const FLOATING_PANEL_MIN_WIDTH = 320;
+const FLOATING_PANEL_GAP = 24;
+const FLOATING_PANEL_MARGIN = 16;
+const FLOATING_PANEL_DEFAULT_HEIGHT = 360;
+
+interface FloatingPanelBounds {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+interface FloatingPanelPosition {
+  left: number;
+  top: number;
+}
+
+type FloatingPanelResizeEdge = 'left' | 'right';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -86,6 +115,107 @@ function buildOutputLabel(value: number | null | undefined) {
   return formattedValue ? `输出 ${formattedValue}` : null;
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function resolveFloatingPanelBounds(container: HTMLElement | null): FloatingPanelBounds {
+  if (container) {
+    const rect = container.getBoundingClientRect();
+
+    return {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width || container.clientWidth,
+      height: rect.height || container.clientHeight
+    };
+  }
+
+  return {
+    left: 0,
+    top: 0,
+    width: window.innerWidth,
+    height: window.innerHeight
+  };
+}
+
+function resolveFloatingPanelHeight(bounds: FloatingPanelBounds) {
+  if (bounds.height <= 0) {
+    return FLOATING_PANEL_DEFAULT_HEIGHT;
+  }
+
+  return Math.round(bounds.height / 2);
+}
+
+function clampFloatingPanelPosition(
+  position: FloatingPanelPosition,
+  bounds: FloatingPanelBounds,
+  panelHeight: number,
+  panelWidth: number
+) {
+  const maxLeft = Math.max(
+    FLOATING_PANEL_MARGIN,
+    bounds.width - panelWidth - FLOATING_PANEL_MARGIN
+  );
+  const maxTop = Math.max(
+    FLOATING_PANEL_MARGIN,
+    bounds.height - panelHeight - FLOATING_PANEL_MARGIN
+  );
+
+  return {
+    left: clamp(position.left, FLOATING_PANEL_MARGIN, maxLeft),
+    top: clamp(position.top, FLOATING_PANEL_MARGIN, maxTop)
+  };
+}
+
+function clampFloatingPanelWidth(
+  width: number,
+  bounds: FloatingPanelBounds,
+  position: FloatingPanelPosition
+) {
+  const maxWidth = Math.max(
+    FLOATING_PANEL_MIN_WIDTH,
+    bounds.width - position.left - FLOATING_PANEL_MARGIN
+  );
+
+  return clamp(width, FLOATING_PANEL_MIN_WIDTH, maxWidth);
+}
+
+function resolveInitialFloatingPanelPosition(
+  trigger: HTMLElement | null,
+  bounds: FloatingPanelBounds,
+  panelHeight: number,
+  panelWidth: number
+) {
+  if (!trigger) {
+    return clampFloatingPanelPosition(
+      {
+        left: bounds.width - panelWidth - FLOATING_PANEL_MARGIN,
+        top: FLOATING_PANEL_MARGIN
+      },
+      bounds,
+      panelHeight,
+      panelWidth
+    );
+  }
+
+  const triggerRect = trigger.getBoundingClientRect();
+  const preferredLeft =
+    triggerRect.left - bounds.left - panelWidth - FLOATING_PANEL_GAP;
+  const fallbackLeft = triggerRect.right - bounds.left + FLOATING_PANEL_GAP;
+
+  return clampFloatingPanelPosition(
+    {
+      left:
+        preferredLeft >= FLOATING_PANEL_MARGIN ? preferredLeft : fallbackLeft,
+      top: triggerRect.top - bounds.top
+    },
+    bounds,
+    panelHeight,
+    panelWidth
+  );
+}
+
 function ContextMarker({
   value
 }: {
@@ -111,11 +241,13 @@ function ContextMarker({
 function ModelChip({
   providerLabel,
   modelLabel,
+  providerIcon,
   metaItems = [],
   placeholder = '选择供应商和模型'
 }: {
   providerLabel?: string | null;
   modelLabel?: string | null;
+  providerIcon?: string | null;
   metaItems?: ReactNode[];
   placeholder?: string;
 }) {
@@ -126,7 +258,15 @@ function ModelChip({
       className={`agent-flow-model-chip${modelLabel ? '' : ' agent-flow-model-chip--empty'}`}
     >
       <span className="agent-flow-model-chip__provider" aria-hidden="true">
-        ◎
+        {providerIcon ? (
+          <img
+            className="agent-flow-model-chip__provider-image"
+            src={providerIcon}
+            alt=""
+          />
+        ) : (
+          '◎'
+        )}
       </span>
       <span className="agent-flow-model-chip__content">
         <span className="agent-flow-model-chip__eyebrow">
@@ -152,6 +292,22 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [expandedProviders, setExpandedProviders] = useState<string[]>([]);
+  const [panelContainer, setPanelContainer] = useState<HTMLElement | null>(
+    null
+  );
+  const [panelHeight, setPanelHeight] = useState(
+    FLOATING_PANEL_DEFAULT_HEIGHT
+  );
+  const [panelWidth, setPanelWidth] = useState(
+    FLOATING_PANEL_DEFAULT_WIDTH
+  );
+  const [panelPosition, setPanelPosition] = useState<FloatingPanelPosition>({
+    left: FLOATING_PANEL_MARGIN,
+    top: FLOATING_PANEL_MARGIN
+  });
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  const titleId = useId();
   const providerOptionsQuery = useQuery({
     queryKey: modelProviderOptionsQueryKey,
     queryFn: fetchModelProviderOptions,
@@ -219,6 +375,72 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
     [providerOptions]
   );
 
+  useEffect(() => {
+    if (open) {
+      return;
+    }
+
+    dragCleanupRef.current?.();
+    setDropdownOpen(false);
+    setSearchText('');
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handleResize = () => {
+      const nextContainer =
+        triggerRef.current?.closest<HTMLElement>('.agent-flow-editor__body') ??
+        null;
+      const bounds = resolveFloatingPanelBounds(nextContainer);
+      const nextHeight = resolveFloatingPanelHeight(bounds);
+
+      setPanelContainer(nextContainer);
+      setPanelHeight(nextHeight);
+      setPanelPosition((current) => {
+        const nextWidth = clampFloatingPanelWidth(
+          panelWidth,
+          bounds,
+          current
+        );
+
+        setPanelWidth(nextWidth);
+        return clampFloatingPanelPosition(
+          current,
+          bounds,
+          nextHeight,
+          nextWidth
+        );
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [open, panelWidth]);
+
+  useEffect(() => {
+    return () => {
+      dragCleanupRef.current?.();
+    };
+  }, []);
+
   function clearSelection() {
     adapter.setValue('config.model_provider', EMPTY_MODEL_PROVIDER);
     adapter.setValue('config.llm_parameters', buildLlmParameterState(null));
@@ -251,6 +473,10 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
     );
   }
 
+  function keepDropdownFocus(event: ReactMouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+  }
+
   function handleDropdownOpenChange(nextOpen: boolean) {
     setDropdownOpen(nextOpen);
 
@@ -274,46 +500,204 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
     setSearchText('');
   }
 
-  return (
-    <>
-      <button
-        type="button"
-        aria-label={block.label}
-        className="agent-flow-model-field__trigger"
-        onClick={() => setOpen(true)}
-      >
-        <ModelChip
-          providerLabel={
-            modelProvider.provider_label?.trim() ||
-            selectedModel?.providerLabel ||
-            selectedProvider?.label ||
-            providerCode ||
-            null
-          }
-          modelLabel={modelProvider.model_label?.trim() || selectedModel?.label || modelValue || null}
-          metaItems={[
-            selectedSourceInstanceLabel ? <span>{selectedSourceInstanceLabel}</span> : null,
-            <ContextMarker value={selectedModel?.effectiveContextWindow} />
-          ]}
-        />
-        <span className="agent-flow-model-field__trigger-caret" aria-hidden="true">
-          ▾
-        </span>
-      </button>
+  function openFloatingPanel() {
+    const nextContainer =
+      triggerRef.current?.closest<HTMLElement>('.agent-flow-editor__body') ??
+      null;
+    const bounds = resolveFloatingPanelBounds(nextContainer);
+    const nextHeight = resolveFloatingPanelHeight(bounds);
+    const nextWidth = clampFloatingPanelWidth(
+      FLOATING_PANEL_DEFAULT_WIDTH,
+      bounds,
+      {
+        left: FLOATING_PANEL_MARGIN,
+        top: FLOATING_PANEL_MARGIN
+      }
+    );
 
-      <Modal
-        open={open}
-        footer={null}
-        width={720}
-        title={
-          <Typography.Title level={4} className="agent-flow-model-settings__modal-title">
+    setPanelContainer(nextContainer);
+    setPanelHeight(nextHeight);
+    setPanelWidth(nextWidth);
+    setPanelPosition(
+      resolveInitialFloatingPanelPosition(
+        triggerRef.current,
+        bounds,
+        nextHeight,
+        nextWidth
+      )
+    );
+    setOpen(true);
+  }
+
+  function handleDragStart(event: ReactMouseEvent<HTMLDivElement>) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const bounds = resolveFloatingPanelBounds(panelContainer);
+    const offsetX = event.clientX - bounds.left - panelPosition.left;
+    const offsetY = event.clientY - bounds.top - panelPosition.top;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    dragCleanupRef.current?.();
+    document.body.style.cursor = 'move';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      setPanelPosition(
+        clampFloatingPanelPosition(
+          {
+            left: moveEvent.clientX - bounds.left - offsetX,
+            top: moveEvent.clientY - bounds.top - offsetY
+          },
+          bounds,
+          panelHeight,
+          panelWidth
+        )
+      );
+    };
+
+    const cleanup = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', cleanup);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      dragCleanupRef.current = null;
+    };
+
+    dragCleanupRef.current = cleanup;
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', cleanup);
+  }
+
+  function handleResizeStart(
+    event: ReactMouseEvent<HTMLDivElement>,
+    edge: FloatingPanelResizeEdge
+  ) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const bounds = resolveFloatingPanelBounds(panelContainer);
+    const startX = event.clientX;
+    const startWidth = panelWidth;
+    const startLeft = panelPosition.left;
+    const startRight = startLeft + startWidth;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    dragCleanupRef.current?.();
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (edge === 'right') {
+        setPanelWidth(
+          clampFloatingPanelWidth(
+            startWidth + moveEvent.clientX - startX,
+            bounds,
+            panelPosition
+          )
+        );
+        return;
+      }
+
+      const maxWidth = Math.max(
+        FLOATING_PANEL_MIN_WIDTH,
+        startRight - FLOATING_PANEL_MARGIN
+      );
+      const nextWidth = clamp(
+        startRight - (moveEvent.clientX - bounds.left),
+        FLOATING_PANEL_MIN_WIDTH,
+        maxWidth
+      );
+
+      setPanelWidth(nextWidth);
+      setPanelPosition((current) => ({
+        ...current,
+        left: startRight - nextWidth
+      }));
+    };
+
+    const cleanup = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', cleanup);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      dragCleanupRef.current = null;
+    };
+
+    dragCleanupRef.current = cleanup;
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', cleanup);
+  }
+
+  const floatingPanel = open ? (
+    <div
+      aria-labelledby={titleId}
+      aria-modal="false"
+      className="agent-flow-model-settings__panel"
+      role="dialog"
+      style={{
+        position: panelContainer ? 'absolute' : 'fixed',
+        width: `${panelWidth}px`,
+        height: `${panelHeight}px`,
+        left: `${panelPosition.left}px`,
+        top: `${panelPosition.top}px`
+      }}
+    >
+      <div className="agent-flow-model-settings__panel-header">
+        <div
+          className="agent-flow-model-settings__drag-handle"
+          data-testid="agent-flow-model-settings-drag-handle"
+          onMouseDown={handleDragStart}
+        >
+          <HolderOutlined
+            aria-hidden="true"
+            className="agent-flow-model-settings__drag-icon"
+          />
+          <Typography.Title
+            id={titleId}
+            level={4}
+            className="agent-flow-model-settings__panel-title"
+          >
             模型设置
           </Typography.Title>
-        }
-        closeIcon={<CloseOutlined />}
-        onCancel={() => setOpen(false)}
-        className="agent-flow-model-settings"
-      >
+        </div>
+        <button
+          aria-label="关闭模型设置"
+          className="agent-flow-model-settings__close"
+          onClick={() => setOpen(false)}
+          type="button"
+        >
+          <CloseOutlined />
+        </button>
+      </div>
+
+      <div
+        aria-label="从左侧调整模型设置宽度"
+        aria-orientation="vertical"
+        className="agent-flow-model-settings__resize-handle agent-flow-model-settings__resize-handle--left"
+        data-testid="agent-flow-model-settings-resize-handle-left"
+        onMouseDown={(event) => handleResizeStart(event, 'left')}
+        role="separator"
+      />
+
+      <div
+        aria-label="从右侧调整模型设置宽度"
+        aria-orientation="vertical"
+        className="agent-flow-model-settings__resize-handle agent-flow-model-settings__resize-handle--right"
+        data-testid="agent-flow-model-settings-resize-handle"
+        onMouseDown={(event) => handleResizeStart(event, 'right')}
+        role="separator"
+      />
+
+      <div className="agent-flow-model-settings__panel-body">
         {providerOptionsQuery.isError ? (
           <Alert
             className="agent-flow-model-settings__notice"
@@ -341,7 +725,10 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
 
         <div className="agent-flow-model-settings__section">
           <div className="agent-flow-model-settings__header">
-            <Typography.Title level={5} className="agent-flow-model-settings__section-title">
+            <Typography.Title
+              level={5}
+              className="agent-flow-model-settings__section-title"
+            >
               模型
             </Typography.Title>
             {providerCode || modelValue ? (
@@ -358,12 +745,12 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
             className="agent-flow-model-settings__select"
             placeholder="选择供应商和模型"
             value={selectedModel?.selectionValue}
+            open={dropdownOpen}
             options={selectOptions}
             showSearch
             allowClear={false}
             filterOption={false}
             popupMatchSelectWidth
-            open={dropdownOpen}
             onOpenChange={handleDropdownOpenChange}
             onSearch={setSearchText}
             popupRender={() => (
@@ -373,7 +760,9 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                     <Empty
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
                       description={
-                        searchText.trim().length > 0 ? '没有匹配的模型结果' : '当前还没有可选模型'
+                        searchText.trim().length > 0
+                          ? '没有匹配的模型结果'
+                          : '当前还没有可选模型'
                       }
                     />
                   </div>
@@ -381,7 +770,8 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                   <div className="agent-flow-model-settings__provider-sections">
                     {filteredProviders.map((provider) => {
                       const providerExpanded =
-                        searchText.trim().length > 0 || expandedProviders.includes(provider.value);
+                        searchText.trim().length > 0 ||
+                        expandedProviders.includes(provider.value);
 
                       return (
                         <section
@@ -392,6 +782,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                             type="button"
                             className="agent-flow-model-settings__provider-head"
                             aria-expanded={providerExpanded}
+                            onMouseDown={keepDropdownFocus}
                             onClick={() => toggleProvider(provider.value)}
                           >
                             <div>
@@ -401,7 +792,10 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                                 {provider.models.length} 个模型
                               </div>
                             </div>
-                            <span className="agent-flow-model-settings__provider-caret" aria-hidden="true">
+                            <span
+                              className="agent-flow-model-settings__provider-caret"
+                              aria-hidden="true"
+                            >
                               {providerExpanded ? '▾' : '▸'}
                             </span>
                           </button>
@@ -434,6 +828,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                                           ]
                                             .filter(Boolean)
                                             .join(' ')}
+                                          onMouseDown={keepDropdownFocus}
                                           onClick={() => selectModel(option)}
                                         >
                                           <span className="agent-flow-model-settings__option-main">
@@ -441,9 +836,13 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                                           </span>
                                           <span className="agent-flow-model-settings__option-meta">
                                             <span>{option.value}</span>
-                                            <ContextMarker value={option.effectiveContextWindow} />
+                                            <ContextMarker
+                                              value={option.effectiveContextWindow}
+                                            />
                                             {buildOutputLabel(option.maxOutputTokens) ? (
-                                              <span>{buildOutputLabel(option.maxOutputTokens)}</span>
+                                              <span>
+                                                {buildOutputLabel(option.maxOutputTokens)}
+                                              </span>
                                             ) : null}
                                             {option.tag ? <span>{option.tag}</span> : null}
                                           </span>
@@ -462,6 +861,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                 <button
                   type="button"
                   className="agent-flow-model-settings__provider-link"
+                  onMouseDown={keepDropdownFocus}
                   onClick={() => window.location.assign('/settings/model-providers')}
                 >
                   模型供应商设置
@@ -474,12 +874,49 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
         <Divider />
 
         <div className="agent-flow-model-settings__section">
-          <Typography.Title level={5} className="agent-flow-model-settings__section-title">
+          <Typography.Title
+            level={5}
+            className="agent-flow-model-settings__section-title"
+          >
             参数
           </Typography.Title>
           <LlmParameterForm adapter={adapter} block={LLM_PARAMETERS_BLOCK} />
         </div>
-      </Modal>
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={block.label}
+        className="agent-flow-model-field__trigger"
+        onClick={openFloatingPanel}
+        ref={triggerRef}
+      >
+        <ModelChip
+          providerIcon={selectedModel?.providerIcon || selectedProvider?.icon || null}
+          providerLabel={
+            modelProvider.provider_label?.trim() ||
+            selectedModel?.providerLabel ||
+            selectedProvider?.label ||
+            providerCode ||
+            null
+          }
+          modelLabel={modelProvider.model_label?.trim() || selectedModel?.label || modelValue || null}
+          metaItems={[
+            selectedSourceInstanceLabel ? <span>{selectedSourceInstanceLabel}</span> : null,
+            <ContextMarker value={selectedModel?.effectiveContextWindow} />
+          ]}
+        />
+        <span className="agent-flow-model-field__trigger-caret" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {floatingPanel
+        ? createPortal(floatingPanel, panelContainer ?? document.body)
+        : null}
     </>
   );
 }

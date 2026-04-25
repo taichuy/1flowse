@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Grid } from 'antd';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -112,9 +112,12 @@ const fileManagementApi = vi.hoisted(() => ({
   settingsFileTablesQueryKey: ['settings', 'files', 'tables'],
   fetchSettingsFileStorages: vi.fn(),
   createSettingsFileStorage: vi.fn(),
+  updateSettingsFileStorage: vi.fn(),
+  deleteSettingsFileStorage: vi.fn(),
   fetchSettingsFileTables: vi.fn(),
   createSettingsFileTable: vi.fn(),
-  updateSettingsFileTableBinding: vi.fn()
+  updateSettingsFileTableBinding: vi.fn(),
+  deleteSettingsFileTable: vi.fn()
 }));
 
 vi.mock('../api/members', () => membersApi);
@@ -233,124 +236,90 @@ describe('File management settings page', () => {
       topology: { relationship: 'same_host' },
       hosts: []
     });
-    fileManagementApi.fetchSettingsFileStorages.mockResolvedValue([
-      {
-        id: 'storage-1',
-        code: 'local-default',
-        title: 'Primary Local',
-        driver_type: 'local',
-        enabled: true,
-        is_default: true,
-        health_status: 'ready',
-        last_health_error: null,
-        config_json: {
-          root_path: '/srv/files'
-        },
-        rule_json: {}
-      },
-      {
-        id: 'storage-2',
-        code: 'archive-rustfs',
-        title: 'Archive RustFS',
-        driver_type: 'rustfs',
-        enabled: true,
-        is_default: false,
-        health_status: 'unknown',
-        last_health_error: null,
-        config_json: {
-          endpoint: 'http://127.0.0.1:39000',
-          bucket: 'archive'
-        },
-        rule_json: {}
-      }
-    ]);
-    fileManagementApi.fetchSettingsFileTables.mockResolvedValue([
-      {
-        id: 'table-1',
-        code: 'attachments',
-        title: 'Attachments',
-        scope_kind: 'system',
-        scope_id: 'system-1',
-        model_definition_id: 'model-1',
-        bound_storage_id: 'storage-1',
-        bound_storage_title: 'Primary Local',
-        is_builtin: true,
-        is_default: true,
-        status: 'active'
-      },
-      {
-        id: 'table-2',
-        code: 'workspace_assets',
-        title: 'Workspace Assets',
-        scope_kind: 'workspace',
-        scope_id: 'workspace-1',
-        model_definition_id: 'model-2',
-        bound_storage_id: 'storage-2',
-        bound_storage_title: 'Archive RustFS',
-        is_builtin: false,
-        is_default: false,
-        status: 'active'
-      }
-    ]);
+    fileManagementApi.fetchSettingsFileStorages.mockResolvedValue([]);
+    fileManagementApi.fetchSettingsFileTables.mockResolvedValue([]);
+    fileManagementApi.createSettingsFileStorage.mockResolvedValue({});
+    fileManagementApi.createSettingsFileTable.mockResolvedValue({});
   });
 
-  test('root mode shows storage creation and binding controls', async () => {
+  test('root mode shows table management layout and creation entries', async () => {
     authenticateWithPermissions([], 'root');
 
     renderApp('/settings/files');
 
     expect(
-      await screen.findByRole('heading', { name: '文件管理', level: 4 })
+      await screen.findByRole('heading', { name: '文件管理', level: 2 })
     ).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '存储配置', level: 5 })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '文件表', level: 5 })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '创建存储' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '创建文件表' })).toBeInTheDocument();
-    expect(fileManagementApi.fetchSettingsFileStorages).toHaveBeenCalled();
-    expect(fileManagementApi.fetchSettingsFileTables).toHaveBeenCalled();
-    await waitFor(() => {
-      expect(
-        screen.getAllByRole('button', { name: '保存绑定' }).length
-      ).toBeGreaterThan(0);
-    });
+    expect(screen.getByRole('tab', { name: '存储配置' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '文件表' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /新增/ })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('搜索存储...')).toBeInTheDocument();
   });
 
-  test('workspace mode hides storage creation while keeping table storage references read only', async () => {
+  test('workspace mode only shows file table tab when table view is allowed', async () => {
     authenticateWithPermissions(['route_page.view.all', 'file_table.view.own']);
 
     renderApp('/settings/files');
 
     expect(
-      await screen.findByRole('heading', { name: '文件管理', level: 4 })
+      await screen.findByRole('heading', { name: '文件管理', level: 2 })
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('heading', { name: '存储配置', level: 5 })
+      screen.queryByRole('tab', { name: '存储配置' })
     ).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '文件表' })).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: '创建存储' })
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '文件表', level: 5 })).toBeInTheDocument();
-
-    const attachmentsRow = await screen.findByRole('row', { name: /Attachments/ });
-    expect(within(attachmentsRow).getByText('Primary Local')).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: '保存绑定' })
+      screen.queryByRole('button', { name: /新增/ })
     ).not.toBeInTheDocument();
   });
 
-  test('create-only workspace mode skips the table list fetch and keeps the create entry visible', async () => {
-    authenticateWithPermissions(['route_page.view.all', 'file_table.create.all']);
+  test('create-only workspace mode hides file table tab and keeps create entry visible', async () => {
+    authenticateWithPermissions([
+      'route_page.view.all',
+      'file_table.create.all'
+    ]);
     fileManagementApi.fetchSettingsFileTables.mockClear();
 
     renderApp('/settings/files');
 
     expect(
-      await screen.findByRole('heading', { name: '文件管理', level: 4 })
+      await screen.findByRole('heading', { name: '文件管理', level: 2 })
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '创建文件表' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('tab', { name: '文件表' })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /新增/ })).toBeInTheDocument();
     expect(fileManagementApi.fetchSettingsFileTables).not.toHaveBeenCalled();
     expect(
-      screen.getByText('当前角色可创建文件表，但没有文件表列表查看权限。')
+      screen.getByText('暂无权限查看文件表列表，您可以创建一个新文件表。')
     ).toBeInTheDocument();
+  });
+
+  test('root mode opens the storage create drawer', async () => {
+    authenticateWithPermissions([], 'root');
+
+    renderApp('/settings/files');
+
+    fireEvent.click(
+      (await screen.findAllByRole('button', { name: /新增/ }))[0]
+    );
+    expect(await screen.findByText('新增存储配置')).toBeInTheDocument();
+
+    fireEvent.click(document.body);
+    await waitFor(() => {
+      expect(screen.getByText('新增存储配置')).toBeInTheDocument();
+    });
+  });
+
+  test('root mode opens the file table create drawer', async () => {
+    authenticateWithPermissions([], 'root');
+
+    renderApp('/settings/files');
+
+    fireEvent.click(await screen.findByRole('tab', { name: '文件表' }));
+    fireEvent.click(
+      (await screen.findAllByRole('button', { name: /新增/ }))[0]
+    );
+    expect(await screen.findByText('新增文件表')).toBeInTheDocument();
   });
 });

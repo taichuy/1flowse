@@ -1,13 +1,17 @@
 import {
   createConsoleFileStorage,
   createConsoleFileTable,
+  deleteConsoleFileStorage,
+  deleteConsoleFileTable,
   fetchConsoleFileStorages,
   fetchConsoleFileTables,
+  updateConsoleFileStorage,
   updateConsoleFileTableBinding,
   type ConsoleFileStorage,
   type ConsoleFileTable,
   type CreateConsoleFileStorageInput,
   type CreateConsoleFileTableInput,
+  type UpdateConsoleFileStorageInput,
   type UpdateConsoleFileTableBindingInput
 } from '@1flowbase/api-client';
 
@@ -17,6 +21,8 @@ export type CreateSettingsFileStorageInput = CreateConsoleFileStorageInput;
 export type CreateSettingsFileTableInput = CreateConsoleFileTableInput;
 export type UpdateSettingsFileTableBindingInput =
   UpdateConsoleFileTableBindingInput;
+
+export type UpdateSettingsFileStorageInput = UpdateConsoleFileStorageInput;
 
 export const settingsFileStoragesQueryKey = [
   'settings',
@@ -58,4 +64,26 @@ export function updateSettingsFileTableBinding(
   csrfToken: string
 ) {
   return updateConsoleFileTableBinding(fileTableId, input, csrfToken);
+}
+
+export function updateSettingsFileStorage(
+  fileStorageId: string,
+  input: UpdateSettingsFileStorageInput,
+  csrfToken: string
+) {
+  return updateConsoleFileStorage(fileStorageId, input, csrfToken);
+}
+
+export function deleteSettingsFileStorage(
+  fileStorageId: string,
+  csrfToken: string
+) {
+  return deleteConsoleFileStorage(fileStorageId, csrfToken);
+}
+
+export function deleteSettingsFileTable(
+  fileTableId: string,
+  csrfToken: string
+) {
+  return deleteConsoleFileTable(fileTableId, csrfToken);
 }
