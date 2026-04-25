@@ -4,7 +4,10 @@ use uuid::Uuid;
 use crate::{
     errors::ControlPlaneError,
     file_management::{CreateWorkspaceFileTableCommand, FileTableProvisioningService},
-    ports::{FileManagementRepository, ModelDefinitionRepository, UpdateFileStorageBindingInput},
+    ports::{
+        DeleteFileTableInput, FileManagementRepository, ModelDefinitionRepository,
+        UpdateFileStorageBindingInput,
+    },
 };
 
 pub struct BindFileTableStorageCommand {
@@ -17,6 +20,11 @@ pub struct CreateFileTableCommand {
     pub actor_user_id: Uuid,
     pub code: String,
     pub title: String,
+}
+
+pub struct DeleteFileTableCommand {
+    pub actor_user_id: Uuid,
+    pub file_table_id: Uuid,
 }
 
 pub struct FileTableService<R> {
@@ -66,6 +74,24 @@ where
                 actor_user_id: command.actor_user_id,
                 file_table_id: command.file_table_id,
                 bound_storage_id: command.bound_storage_id,
+            })
+            .await
+    }
+
+    pub async fn delete_table(&self, command: DeleteFileTableCommand) -> Result<()> {
+        let actor = FileManagementRepository::load_actor_context_for_user(
+            &self.repository,
+            command.actor_user_id,
+        )
+        .await?;
+        if !actor.is_root {
+            return Err(ControlPlaneError::PermissionDenied("permission_denied").into());
+        }
+
+        self.repository
+            .delete_file_table(&DeleteFileTableInput {
+                actor_user_id: command.actor_user_id,
+                file_table_id: command.file_table_id,
             })
             .await
     }

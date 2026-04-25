@@ -2,7 +2,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use control_plane::ports::{
     AuthRepository, CreateFileStorageInput, CreateFileTableRegistrationInput,
-    FileManagementRepository, UpdateFileStorageBindingInput,
+    DeleteFileStorageInput, DeleteFileTableInput, FileManagementRepository,
+    UpdateFileStorageBindingInput, UpdateFileStorageInput,
 };
 use sqlx::Row;
 use uuid::Uuid;
@@ -349,5 +350,91 @@ impl FileManagementRepository for PgControlPlaneStore {
         .await?;
 
         map_file_table(row)
+    }
+
+    async fn update_file_storage(
+        &self,
+        input: &UpdateFileStorageInput,
+    ) -> Result<domain::FileStorageRecord> {
+        let mut tx = self.pool().begin().await?;
+
+        if input.is_default {
+            sqlx::query(
+                r#"
+                update file_storages
+                set
+                    is_default = false,
+                    updated_by = $1,
+                    updated_at = now()
+                where id <> $2
+                  and is_default = true
+                "#,
+            )
+            .bind(input.actor_user_id)
+            .bind(input.file_storage_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        let row = sqlx::query(
+            r#"
+            update file_storages
+            set
+                title = $3,
+                enabled = $4,
+                is_default = $5,
+                config_json = $6,
+                rule_json = $7,
+                updated_by = $1,
+                updated_at = now()
+            where id = $2
+            returning
+                id,
+                code,
+                title,
+                driver_type,
+                enabled,
+                is_default,
+                config_json,
+                rule_json,
+                health_status,
+                last_health_error,
+                created_by,
+                updated_by,
+                created_at,
+                updated_at
+            "#,
+        )
+        .bind(input.actor_user_id)
+        .bind(input.file_storage_id)
+        .bind(&input.title)
+        .bind(input.enabled)
+        .bind(input.is_default)
+        .bind(&input.config_json)
+        .bind(&input.rule_json)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        map_file_storage(row)
+    }
+
+    async fn delete_file_storage(&self, input: &DeleteFileStorageInput) -> Result<()> {
+        sqlx::query("delete from file_storages where id = $1")
+            .bind(input.file_storage_id)
+            .execute(self.pool())
+            .await?;
+
+        Ok(())
+    }
+
+    async fn delete_file_table(&self, input: &DeleteFileTableInput) -> Result<()> {
+        sqlx::query("delete from file_tables where id = $1")
+            .bind(input.file_table_id)
+            .execute(self.pool())
+            .await?;
+
+        Ok(())
     }
 }
