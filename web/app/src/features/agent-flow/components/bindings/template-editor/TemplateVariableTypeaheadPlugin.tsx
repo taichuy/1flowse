@@ -46,6 +46,7 @@ export function TemplateVariableTypeaheadPlugin({
       aria-label="变量建议"
       style={popupStyle}
       onKeyDownCapture={onKeyDown}
+      onMouseDown={(event) => event.preventDefault()}
     >
       <div className="agent-flow-templated-text-field__typeahead-search">
         <input
@@ -64,14 +65,14 @@ export function TemplateVariableTypeaheadPlugin({
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription} />
         </div>
       ) : (
-        options.map((option) => (
+        options.map((option, optionIndex) => (
           <button
             key={option.value.join('.')}
             type="button"
             role="option"
-            aria-selected={activeIndex === options.indexOf(option)}
+            aria-selected={activeIndex === optionIndex}
             className={
-              activeIndex === options.indexOf(option)
+              activeIndex === optionIndex
                 ? 'agent-flow-templated-text-field__typeahead-option agent-flow-templated-text-field__typeahead-option--active'
                 : 'agent-flow-templated-text-field__typeahead-option'
             }

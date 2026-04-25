@@ -1,5 +1,5 @@
 import type { LexicalEditor } from 'lexical';
-import type { FocusEvent, FormEvent, KeyboardEvent, MutableRefObject, Ref } from 'react';
+import type { FocusEvent, KeyboardEvent, MutableRefObject, Ref } from 'react';
 import type { FlowSelectorOption } from '../../../lib/selector-options';
 
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
@@ -35,15 +35,18 @@ import {
 import { TemplateVariableTypeaheadPlugin } from './TemplateVariableTypeaheadPlugin';
 import {
   editorStateToText,
-  removeTrailingTriggerCharacter,
+  getTriggerContext,
+  removeTriggerQueryBeforeSelection,
   textToEditorState,
 } from './template-editor-utils';
 
 const TRIGGER_CHARACTERS = new Set(['/', '{']);
 const TYPEAHEAD_OFFSET = 8;
+const TYPEAHEAD_MIN_LEFT = 8;
+const TYPEAHEAD_MIN_TOP = 8;
 const DEFAULT_TYPEAHEAD_POSITION = {
-  left: 0,
-  top: 140
+  left: 8,
+  top: 36
 };
 
 interface TypeaheadPosition {
@@ -109,24 +112,52 @@ function insertSelectorNode(
       $getRoot().selectEnd();
     }
 
-    removeTrailingTriggerCharacter(TRIGGER_CHARACTERS);
+    removeTriggerQueryBeforeSelection(TRIGGER_CHARACTERS);
     $insertNodes([$createTemplateVariableNode(selector, label)]);
   });
 }
 
-function getTypeaheadPosition(
-  anchorElement: HTMLElement | null,
-  anchorRect?: DOMRect | null
-): TypeaheadPosition {
-  if (!anchorElement || !anchorRect) {
+function getRangeRect(range: Range) {
+  if (typeof range.getBoundingClientRect !== 'function') {
+    return null;
+  }
+
+  const rangeRect = range.getBoundingClientRect();
+
+  if (rangeRect.width > 0 || rangeRect.height > 0) {
+    return rangeRect;
+  }
+
+  if (typeof range.getClientRects !== 'function') {
+    return null;
+  }
+
+  const clientRects = range.getClientRects();
+
+  return clientRects.length > 0 ? clientRects[0] : null;
+}
+
+function calculateTypeaheadPosition(container: HTMLElement) {
+  const selection = window.getSelection();
+
+  if (!selection || selection.rangeCount === 0) {
     return DEFAULT_TYPEAHEAD_POSITION;
   }
 
-  const anchorElementRect = anchorElement.getBoundingClientRect();
+  const sourceRange = selection.getRangeAt(0);
+  const range = typeof sourceRange.cloneRange === 'function'
+    ? sourceRange.cloneRange()
+    : sourceRange;
+  const rangeRect = getRangeRect(range);
+  const containerRect = container.getBoundingClientRect();
+
+  if (!rangeRect) {
+    return DEFAULT_TYPEAHEAD_POSITION;
+  }
 
   return {
-    left: Math.max(anchorRect.left - anchorElementRect.left, 0),
-    top: Math.max(anchorRect.bottom - anchorElementRect.top + TYPEAHEAD_OFFSET, 48)
+    left: Math.max(TYPEAHEAD_MIN_LEFT, rangeRect.left - containerRect.left),
+    top: Math.max(TYPEAHEAD_MIN_TOP, rangeRect.bottom - containerRect.top + TYPEAHEAD_OFFSET)
   };
 }
 
@@ -256,28 +287,21 @@ export const LexicalTemplatedTextEditor = forwardRef<
     onTriggerChange?.(true);
   }
 
+  function openTypeaheadAtSelection(nextQuery = '') {
+    openTypeahead(
+      nextQuery,
+      shellRef.current
+        ? calculateTypeaheadPosition(shellRef.current)
+        : DEFAULT_TYPEAHEAD_POSITION
+    );
+  }
+
   function closeTypeahead() {
     setQuery('');
     setActiveIndex(0);
     setTypeaheadPosition(DEFAULT_TYPEAHEAD_POSITION);
     setTypeaheadOpen(false);
     onTriggerChange?.(false);
-  }
-
-  function handleInput(event: FormEvent<HTMLDivElement>) {
-    const text = event.currentTarget.textContent ?? '';
-
-    if (text.length > 0 && TRIGGER_CHARACTERS.has(text[text.length - 1])) {
-      const domSelection = document.getSelection();
-      const range = domSelection && domSelection.rangeCount > 0
-        ? domSelection.getRangeAt(0)
-        : null;
-      const anchorRect = range && typeof range.getBoundingClientRect === 'function'
-        ? range.getBoundingClientRect()
-        : event.currentTarget.getBoundingClientRect();
-
-      openTypeahead('', getTypeaheadPosition(event.currentTarget, anchorRect));
-    }
   }
 
   function handleBlur(event: FocusEvent<HTMLDivElement>) {
@@ -294,7 +318,30 @@ export const LexicalTemplatedTextEditor = forwardRef<
 
   function handleOpenVariablePicker() {
     editorRef.current?.focus();
-    openTypeahead();
+    openTypeaheadAtSelection();
+  }
+
+  function handleEditorKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (!typeaheadOpen && event.key.length === 1 && TRIGGER_CHARACTERS.has(event.key)) {
+      openTypeaheadAtSelection();
+      return;
+    }
+
+    if (typeaheadOpen && event.key.length === 1) {
+      window.setTimeout(() => {
+        editorRef.current?.getEditorState().read(() => {
+          const triggerContext = getTriggerContext(TRIGGER_CHARACTERS);
+          const nextQuery = triggerContext?.query ?? '';
+
+          setQuery(nextQuery);
+          if (triggerContext) {
+            openTypeaheadAtSelection(nextQuery);
+          }
+        });
+      }, 0);
+    }
+
+    handleTypeaheadKeyDown(event);
   }
 
   function handleTypeaheadKeyDown(
@@ -334,7 +381,7 @@ export const LexicalTemplatedTextEditor = forwardRef<
       return;
     }
 
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' || event.key === 'Tab') {
       const activeOption = filteredOptions[activeIndex];
 
       if (!activeOption) {
@@ -372,7 +419,7 @@ export const LexicalTemplatedTextEditor = forwardRef<
               role="textbox"
               aria-multiline="true"
               className="agent-flow-templated-text-field__editor"
-              onInputCapture={handleInput}
+              onKeyDown={handleEditorKeyDown}
             />
           }
           placeholder={

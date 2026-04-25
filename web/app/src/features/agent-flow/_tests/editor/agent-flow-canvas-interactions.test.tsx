@@ -446,16 +446,10 @@ describe('AgentFlowCanvas interactions', () => {
     );
   });
 
-  test('clears node selection when clicking the pane', () => {
+  test('keeps node detail open when clicking the pane', () => {
     const { getState } = renderCanvas();
 
     expect(getState().selectedNodeId).toBe('node-llm');
-    expect(latestReactFlowProps?.onPaneClick).toBeTypeOf('function');
-
-    act(() => {
-      latestReactFlowProps?.onPaneClick?.();
-    });
-
-    expect(getState().selectedNodeId).toBe(null);
+    expect(latestReactFlowProps?.onPaneClick).not.toBeDefined();
   });
 });

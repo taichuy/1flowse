@@ -119,4 +119,45 @@ describe('useEditorShortcuts', () => {
       ])
     );
   });
+
+  test('does not close node detail when Escape comes from editable content', () => {
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        {children}
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const { result } = renderHook(
+      () => {
+        useEditorShortcuts();
+
+        return {
+          selectedNodeId: useAgentFlowEditorStore((state) => state.selectedNodeId),
+          setSelection: useAgentFlowEditorStore((state) => state.setSelection)
+        };
+      },
+      { wrapper }
+    );
+
+    const editable = document.createElement('div');
+    editable.setAttribute('contenteditable', 'true');
+    document.body.appendChild(editable);
+
+    act(() => {
+      result.current.setSelection({
+        selectedNodeId: 'node-llm',
+        selectedNodeIds: ['node-llm'],
+        selectedEdgeId: null
+      });
+    });
+
+    act(() => {
+      editable.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+      );
+    });
+
+    expect(result.current.selectedNodeId).toBe('node-llm');
+    editable.remove();
+  });
 });

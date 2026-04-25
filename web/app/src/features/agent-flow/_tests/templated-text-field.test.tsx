@@ -131,10 +131,27 @@ function triggerEditorInput(editor: HTMLElement, value: string, data: string) {
   }
 
   editor.textContent = value;
+  const textNode = editor.firstChild ?? editor;
+  const selection = window.getSelection();
+
   fireEvent.input(editor, {
     data,
     inputType: 'insertText'
   });
+
+  if (
+    selection
+    && typeof selection.removeAllRanges === 'function'
+    && typeof selection.addRange === 'function'
+  ) {
+    const range = document.createRange();
+    const latestTextNode = editor.firstChild ?? textNode;
+    const latestTextLength = latestTextNode.textContent?.length ?? 0;
+    range.setStart(latestTextNode, latestTextNode.nodeType === Node.TEXT_NODE ? latestTextLength : 0);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
 }
 function mockSelectionRect(rect: {
   left: number;
@@ -146,6 +163,9 @@ function mockSelectionRect(rect: {
   return vi.spyOn(document, 'getSelection').mockReturnValue({
     rangeCount: 1,
     getRangeAt: () => ({
+      cloneRange() {
+        return this;
+      },
       getBoundingClientRect: () => ({
         x: rect.left,
         y: rect.top,
@@ -191,7 +211,22 @@ describe('TemplatedTextField', () => {
     const editor = screen.getByLabelText('User Prompt');
 
     fireEvent.focus(editor);
+    fireEvent.keyDown(editor, { key: '{' });
     triggerEditorInput(editor, '{', '{');
+
+    expect(
+      await screen.findByRole('option', { name: 'Start / 用户输入' })
+    ).toBeInTheDocument();
+  });
+
+  test('opens variable suggestions after a single slash trigger', async () => {
+    render(<TemplatedTextHarness />);
+
+    const editor = screen.getByLabelText('User Prompt');
+
+    fireEvent.focus(editor);
+    fireEvent.keyDown(editor, { key: '/' });
+    triggerEditorInput(editor, '请基于 /', '/');
 
     expect(
       await screen.findByRole('option', { name: 'Start / 用户输入' })
@@ -263,9 +298,13 @@ describe('TemplatedTextField', () => {
     render(<TemplatedTextHarness />);
 
     const editor = screen.getByLabelText('User Prompt');
-    const originalGetBoundingClientRect = editor.getBoundingClientRect.bind(editor);
+    const originalGetBoundingClientRect = editor.parentElement?.getBoundingClientRect.bind(editor.parentElement);
 
-    editor.getBoundingClientRect = () =>
+    if (!editor.parentElement || !originalGetBoundingClientRect) {
+      throw new Error('missing templated text shell');
+    }
+
+    editor.parentElement.getBoundingClientRect = () =>
       ({
         x: 40,
         y: 120,
@@ -281,6 +320,7 @@ describe('TemplatedTextField', () => {
       }) as DOMRect;
 
     fireEvent.focus(editor);
+    fireEvent.keyDown(editor, { key: '/' });
     triggerEditorInput(editor, '请基于 /', '/');
 
     const listbox = await screen.findByRole('listbox', { name: '变量建议' });
@@ -290,7 +330,7 @@ describe('TemplatedTextField', () => {
       top: '132px'
     });
 
-    editor.getBoundingClientRect = originalGetBoundingClientRect;
+    editor.parentElement.getBoundingClientRect = originalGetBoundingClientRect;
     selectionSpy.mockRestore();
   });
 
@@ -326,6 +366,7 @@ describe('TemplatedTextField', () => {
 
     fireEvent.focus(editor);
     triggerEditorInput(editor, '请基于 /', '/');
+    fireEvent.keyDown(editor, { key: '/' });
     fireEvent.click(await screen.findByRole('option', { name: 'Start / 用户输入' }));
 
     await waitFor(() => {

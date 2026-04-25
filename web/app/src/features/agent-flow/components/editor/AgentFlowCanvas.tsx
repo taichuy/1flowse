@@ -266,7 +266,6 @@ function AgentFlowCanvasInner({
           selectionInteractions.selectEdge(edge.id);
         }}
         isValidConnection={edgeInteractions.isValidConnection}
-        onPaneClick={selectionInteractions.clearSelection}
       >
         <Background gap={20} size={1} />
         <PendingLocateNodeEffect />

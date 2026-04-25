@@ -148,15 +148,24 @@
 }
 
 .agent-flow-templated-text-field__editor {
-  min-height: 132px;
+  min-height: 104px;
   max-height: 320px;
   overflow-y: auto;
-  padding: 12px 14px;
+  padding: 8px 12px;
   border: 1px solid #d9e3dc;
-  border-radius: 14px;
+  border-radius: 12px;
   background: #fff;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 20px;
   outline: none;
+}
+
+.agent-flow-templated-text-field__editor p {
+  margin: 0;
+}
+
+.agent-flow-templated-text-field__editor p + p {
+  margin-top: 4px;
 }
 
 .agent-flow-templated-text-field__editor:focus {
@@ -166,9 +175,11 @@
 
 .agent-flow-templated-text-field__placeholder {
   position: absolute;
-  top: 12px;
-  left: 14px;
+  top: 8px;
+  left: 12px;
   color: #97a39b;
+  font-size: 13px;
+  line-height: 20px;
   pointer-events: none;
 }
 
@@ -181,7 +192,7 @@
   display: inline-flex;
   align-items: center;
   margin: 0 2px;
-  padding: 2px 10px;
+  padding: 1px 8px;
   border: 1px solid #d5e4d2;
   border-radius: 999px;
   color: #24513b;
@@ -200,7 +211,7 @@
   top: calc(100% + 8px);
   left: 0;
   z-index: 10;
-  width: min(320px, 100%);
+  width: min(320px, calc(100% - 16px));
   max-height: 240px;
   overflow-y: auto;
   padding: 6px;

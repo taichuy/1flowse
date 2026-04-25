@@ -24,10 +24,13 @@ export function useEditorShortcuts() {
         return false;
       }
 
+      const isContentEditable = target.isContentEditable
+        || target.getAttribute('contenteditable') === 'true';
+
       return (
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
-        target.isContentEditable
+        isContentEditable
       );
     }
 
@@ -62,6 +65,10 @@ export function useEditorShortcuts() {
       }
 
       if (event.key !== 'Escape') {
+        return;
+      }
+
+      if (isEditableTarget(event.target)) {
         return;
       }
 
