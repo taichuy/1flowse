@@ -61,11 +61,6 @@ export function buildNodeCardBlocks(nodeType: FlowNodeType): SchemaBlock[] {
       renderer: 'card_eyebrow',
       key: `${nodeType}-eyebrow`
     },
-    {
-      kind: 'view',
-      renderer: 'card_title',
-      key: `${nodeType}-title`
-    },
     ...(nodeType === 'llm'
       ? [
           {

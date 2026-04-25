@@ -49,7 +49,7 @@ function getNode(adapter: SchemaViewRendererProps['adapter']) {
 }
 
 /** 节点类型 → 图标映射 */
-const NODE_TYPE_ICONS: Record<string, React.ReactNode> = {
+const NODE_TYPE_ICONS: Record<string, ReactNode> = {
   start: <PlaySquareOutlined />,
   llm: <ThunderboltOutlined />,
   template_transform: <FileTextOutlined />,
@@ -98,7 +98,6 @@ function renderSummaryView({ adapter, block }: SchemaViewRendererProps) {
 
 function renderCardEyebrowView({ adapter }: SchemaViewRendererProps) {
   const node = getNode(adapter);
-  const typeLabel = String(adapter.getDerived('typeLabel') ?? node?.type ?? 'Node');
   const issueCount = Number(adapter.getDerived('issueCount') ?? 0);
 
   if (!node) {
@@ -106,23 +105,16 @@ function renderCardEyebrowView({ adapter }: SchemaViewRendererProps) {
   }
 
   const typeIcon = NODE_TYPE_ICONS[node.type];
-  const displayLabel = node.alias === typeLabel ? 'Node' : typeLabel;
 
   return (
-    <div className="agent-flow-node-card__eyebrow">
-      <span className="agent-flow-node-card__eyebrow-left">
+    <div className="agent-flow-node-card__header">
+      <span className="agent-flow-node-card__header-main">
         {typeIcon ? <span className="agent-flow-node-card__type-icon">{typeIcon}</span> : null}
-        <span className="agent-flow-node-card__type-label">{displayLabel}</span>
+        <span className="agent-flow-node-card__title">{node.alias}</span>
       </span>
       {issueCount > 0 ? <span className="agent-flow-node-card__badge">{issueCount}</span> : null}
     </div>
   );
-}
-
-function renderCardTitleView({ adapter }: SchemaViewRendererProps) {
-  const node = getNode(adapter);
-
-  return node ? <div className="agent-flow-node-card__title">{node.alias}</div> : null;
 }
 
 function renderCardModelView({ adapter }: SchemaViewRendererProps) {
@@ -391,7 +383,6 @@ function renderRuntimeMetadataView({ adapter, block }: SchemaViewRendererProps) 
 
 export const agentFlowViewRenderers = {
   card_eyebrow: renderCardEyebrowView,
-  card_title: renderCardTitleView,
   card_model: renderCardModelView,
   card_description: renderCardDescriptionView,
   summary: renderSummaryView,
