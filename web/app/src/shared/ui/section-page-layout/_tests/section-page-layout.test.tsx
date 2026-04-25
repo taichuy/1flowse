@@ -123,6 +123,19 @@ describe('SectionPageLayout', () => {
     expect(sectionLayoutCss).not.toContain('position: fixed;');
   });
 
+  test('does not force the desktop rail to viewport height on short pages', () => {
+    const sectionLayoutCss = fs.readFileSync(
+      path.resolve(import.meta.dirname, '../section-page-layout.css'),
+      'utf8'
+    );
+    const desktopRailBlock = sectionLayoutCss.match(
+      /\.section-page-layout__rail\s*\{[\s\S]*?\n\}/
+    )?.[0];
+
+    expect(desktopRailBlock).toBeTruthy();
+    expect(desktopRailBlock).not.toContain('min-height: calc(100vh - 56px);');
+  });
+
   test('renders empty state instead of broken navigation when navItems is empty', async () => {
     renderInRouter(
       <SectionPageLayout
