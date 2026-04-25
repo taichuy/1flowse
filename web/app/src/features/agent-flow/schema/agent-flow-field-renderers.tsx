@@ -14,11 +14,17 @@ import { TemplatedTextField } from '../components/bindings/TemplatedTextField';
 import { OutputContractDefinitionField } from '../components/detail/fields/OutputContractDefinitionField';
 import { LlmModelField } from '../components/detail/fields/LlmModelField';
 import { LlmResponseFormatField } from '../components/detail/fields/LlmResponseFormatField';
+import { StartInputFieldsField } from '../components/detail/fields/StartInputFieldsField';
 import type { FlowSelectorOption } from '../lib/selector-options';
 import { createTemplateSelectorToken } from '../lib/template-binding';
 
 function getSelectorOptions(adapter: SchemaFieldRendererProps['adapter']) {
-  return (adapter.getDerived('selectorOptions') as FlowSelectorOption[] | null | undefined) ?? [];
+  return (
+    (adapter.getDerived('selectorOptions') as
+      | FlowSelectorOption[]
+      | null
+      | undefined) ?? []
+  );
 }
 
 function hasBindingKind(
@@ -73,7 +79,10 @@ function renderSelectorField({ adapter, block }: SchemaFieldRendererProps) {
       options={getSelectorOptions(adapter)}
       value={binding}
       onChange={(nextValue) =>
-        adapter.setValue(block.path, { kind: 'selector', value: nextValue as string[] })
+        adapter.setValue(block.path, {
+          kind: 'selector',
+          value: nextValue as string[]
+        })
       }
     />
   );
@@ -99,7 +108,10 @@ function renderSelectorListField({ adapter, block }: SchemaFieldRendererProps) {
   );
 }
 
-function renderTemplatedTextField({ adapter, block }: SchemaFieldRendererProps) {
+function renderTemplatedTextField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
   const value = adapter.getValue(block.path);
   const selectorOptions = getSelectorOptions(adapter);
   const isBindingPath = block.path.startsWith('bindings.');
@@ -107,28 +119,37 @@ function renderTemplatedTextField({ adapter, block }: SchemaFieldRendererProps) 
     ? hasBindingKind(value, 'templated_text')
       ? getBindingValue<string>(value, 'templated_text', '')
       : hasBindingKind(value, 'selector')
-          ? createTemplateSelectorToken(getBindingValue<string[]>(value, 'selector', []))
-          : ''
+        ? createTemplateSelectorToken(
+            getBindingValue<string[]>(value, 'selector', [])
+          )
+        : ''
     : typeof value === 'string'
       ? value
       : '';
 
   return (
     <TemplatedTextField
+      label={block.label}
       ariaLabel={block.label}
+      placeholder={'支持正文变量块，输入"/"或左花括号可快速引用'}
       options={selectorOptions}
       value={stringValue}
       onChange={(nextValue) =>
         adapter.setValue(
           block.path,
-          isBindingPath ? { kind: 'templated_text', value: nextValue } : nextValue
+          isBindingPath
+            ? { kind: 'templated_text', value: nextValue }
+            : nextValue
         )
       }
     />
   );
 }
 
-function renderNamedBindingsField({ adapter, block }: SchemaFieldRendererProps) {
+function renderNamedBindingsField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
   const value = adapter.getValue(block.path);
   const binding = getBindingValue<Array<{ name: string; selector: string[] }>>(
     value,
@@ -151,13 +172,15 @@ function renderNamedBindingsField({ adapter, block }: SchemaFieldRendererProps) 
   );
 }
 
-function renderConditionGroupField({ adapter, block }: SchemaFieldRendererProps) {
+function renderConditionGroupField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
   const value = adapter.getValue(block.path);
-  const binding = getBindingValue<{ operator: 'and' | 'or'; conditions: Array<unknown> }>(
-    value,
-    'condition_group',
-    { operator: 'and', conditions: [] }
-  );
+  const binding = getBindingValue<{
+    operator: 'and' | 'or';
+    conditions: Array<unknown>;
+  }>(value, 'condition_group', { operator: 'and', conditions: [] });
 
   return (
     <ConditionGroupField
@@ -176,11 +199,9 @@ function renderConditionGroupField({ adapter, block }: SchemaFieldRendererProps)
 
 function renderStateWriteField({ adapter, block }: SchemaFieldRendererProps) {
   const value = adapter.getValue(block.path);
-  const binding = getBindingValue<Array<{ path: string[]; operator: string; source: string[] | null }>>(
-    value,
-    'state_write',
-    []
-  );
+  const binding = getBindingValue<
+    Array<{ path: string[]; operator: string; source: string[] | null }>
+  >(value, 'state_write', []);
 
   return (
     <StateWriteField
@@ -197,13 +218,30 @@ function renderStateWriteField({ adapter, block }: SchemaFieldRendererProps) {
   );
 }
 
-function renderOutputContractDefinitionField({ adapter, block }: SchemaFieldRendererProps) {
+function renderOutputContractDefinitionField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
   const value = adapter.getValue(block.path);
-  const outputs = Array.isArray(value) ? (value as FlowNodeDocument['outputs']) : [];
+  const outputs = Array.isArray(value)
+    ? (value as FlowNodeDocument['outputs'])
+    : [];
 
   return (
     <OutputContractDefinitionField
       value={outputs}
+      onChange={(nextValue) => adapter.setValue(block.path, nextValue)}
+    />
+  );
+}
+
+function renderStartInputFieldsField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
+  return (
+    <StartInputFieldsField
+      value={adapter.getValue(block.path)}
       onChange={(nextValue) => adapter.setValue(block.path, nextValue)}
     />
   );
@@ -221,6 +259,7 @@ export const agentFlowFieldRenderers = {
   condition_group: renderConditionGroupField,
   state_write: renderStateWriteField,
   output_contract_definition: renderOutputContractDefinitionField,
+  start_input_fields: renderStartInputFieldsField,
   header_alias: ({ adapter, block }) => {
     const value = adapter.getValue(block.path);
 

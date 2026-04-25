@@ -14,6 +14,10 @@ import {
 } from '@1flowbase/api-client';
 
 import { getApplicationsApiBaseUrl } from '../../applications/api/applications';
+import {
+  getNodeVariableOutputs,
+  getStartInputFields
+} from '../lib/start-node-variables';
 
 export type NodeLastRun = ConsoleNodeLastRun;
 export type FlowDebugRunDetail = ConsoleApplicationRunDetail;
@@ -75,7 +79,14 @@ export interface AgentFlowRunContext {
 }
 
 export const nodeLastRunQueryKey = (applicationId: string, nodeId: string) =>
-  ['applications', applicationId, 'runtime', 'nodes', nodeId, 'last-run'] as const;
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'nodes',
+    nodeId,
+    'last-run'
+  ] as const;
 
 export function fetchNodeLastRun(applicationId: string, nodeId: string) {
   return getConsoleNodeLastRun(
@@ -107,9 +118,23 @@ export function buildFlowDebugRunInput(
   const startNode = document.graph.nodes.find((node) => node.type === 'start');
   const startPayload: Record<string, unknown> = {};
 
-  for (const output of startNode?.outputs ?? []) {
+  const explicitInputKeys = new Set(Object.keys(inputValues ?? {}));
+  const customInputKeys = new Set(
+    getStartInputFields(startNode).map((field) => field.key)
+  );
+
+  for (const output of startNode ? getNodeVariableOutputs(startNode) : []) {
+    if (
+      output.key === 'files' &&
+      !explicitInputKeys.has('files') &&
+      !customInputKeys.has('files')
+    ) {
+      continue;
+    }
+
     startPayload[output.key] =
-      inputValues && Object.prototype.hasOwnProperty.call(inputValues, output.key)
+      inputValues &&
+      Object.prototype.hasOwnProperty.call(inputValues, output.key)
         ? inputValues[output.key]
         : buildPreviewValue(startNode, output.key);
   }
@@ -134,7 +159,10 @@ export function startFlowDebugRun(
   );
 }
 
-export function fetchApplicationRunDetail(applicationId: string, runId: string) {
+export function fetchApplicationRunDetail(
+  applicationId: string,
+  runId: string
+) {
   return getConsoleApplicationRunDetail(
     applicationId,
     runId,
@@ -178,7 +206,9 @@ function extractTemplateSelectors(template: string) {
   return selectors;
 }
 
-function extractSelectors(binding: FlowBinding): Array<readonly [string, string]> {
+function extractSelectors(
+  binding: FlowBinding
+): Array<readonly [string, string]> {
   switch (binding.kind) {
     case 'selector': {
       const selector = normalizeSelectorPath(binding.value);
@@ -206,7 +236,10 @@ function extractSelectors(binding: FlowBinding): Array<readonly [string, string]
   }
 }
 
-function buildStringPreviewValue(node: FlowNodeDocument | undefined, outputKey: string) {
+function buildStringPreviewValue(
+  node: FlowNodeDocument | undefined,
+  outputKey: string
+) {
   if (outputKey === 'query') {
     return '总结退款政策';
   }
@@ -218,8 +251,13 @@ function buildStringPreviewValue(node: FlowNodeDocument | undefined, outputKey: 
   return `${node?.alias ?? '节点'} ${outputKey} 调试值`;
 }
 
-function buildPreviewValue(node: FlowNodeDocument | undefined, outputKey: string) {
-  const output = node?.outputs.find((entry) => entry.key === outputKey);
+function buildPreviewValue(
+  node: FlowNodeDocument | undefined,
+  outputKey: string
+) {
+  const output = node
+    ? getNodeVariableOutputs(node).find((entry) => entry.key === outputKey)
+    : undefined;
 
   switch (output?.valueType) {
     case 'number':
@@ -253,10 +291,15 @@ export function buildNodeDebugPreviewInput(
   );
 
   for (const [sourceNodeId, outputKey] of selectors) {
-    const sourceNode = document.graph.nodes.find((entry) => entry.id === sourceNodeId);
+    const sourceNode = document.graph.nodes.find(
+      (entry) => entry.id === sourceNodeId
+    );
 
     inputPayload[sourceNodeId] ??= {};
-    inputPayload[sourceNodeId][outputKey] = buildPreviewValue(sourceNode, outputKey);
+    inputPayload[sourceNodeId][outputKey] = buildPreviewValue(
+      sourceNode,
+      outputKey
+    );
   }
 
   return { input_payload: inputPayload };

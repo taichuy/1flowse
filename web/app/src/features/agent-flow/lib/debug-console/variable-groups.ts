@@ -7,6 +7,7 @@ import {
   type AgentFlowVariableItem,
   type FlowDebugRunDetail
 } from '../../api/runtime';
+import { getNodeVariableOutputs } from '../start-node-variables';
 
 function flattenValue(
   labelPrefix: string,
@@ -59,7 +60,7 @@ export function buildRunContextFromDocument(
   return {
     environmentLabel: 'draft',
     remembered: Boolean(rememberedInputs && Object.keys(rememberedInputs).length > 0),
-    fields: (startNode?.outputs ?? []).map((output) => ({
+    fields: (startNode ? getNodeVariableOutputs(startNode) : []).map((output) => ({
       nodeId: startNode?.id ?? 'node-start',
       key: output.key,
       title: output.title,

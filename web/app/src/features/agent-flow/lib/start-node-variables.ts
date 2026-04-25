@@ -1,0 +1,123 @@
+import type {
+  FlowNodeDocument,
+  FlowNodeOutputDocument,
+  FlowStartInputField,
+  FlowStartInputType
+} from '@1flowbase/flow-schema';
+
+export const startInputTypeOptions = [
+  { value: 'text', label: '文本', valueType: 'string' },
+  { value: 'paragraph', label: '段落', valueType: 'string' },
+  { value: 'select', label: '下拉选项', valueType: 'string' },
+  { value: 'number', label: '数字', valueType: 'number' },
+  { value: 'checkbox', label: '复选框', valueType: 'boolean' },
+  { value: 'file', label: '文件', valueType: 'json' },
+  { value: 'file_list', label: '文件列表', valueType: 'array' },
+  { value: 'url', label: 'URL', valueType: 'string' }
+] satisfies Array<{
+  value: FlowStartInputType;
+  label: string;
+  valueType: FlowNodeOutputDocument['valueType'];
+}>;
+
+export const startSystemVariables = [
+  {
+    key: 'query',
+    title: 'userinput.query',
+    valueType: 'string'
+  },
+  {
+    key: 'files',
+    title: 'userinput.files',
+    valueType: 'array'
+  }
+] satisfies FlowNodeOutputDocument[];
+
+function isStartInputType(value: unknown): value is FlowStartInputType {
+  return startInputTypeOptions.some((option) => option.value === value);
+}
+
+export function getStartInputValueType(inputType: FlowStartInputType) {
+  return (
+    startInputTypeOptions.find((option) => option.value === inputType)
+      ?.valueType ?? 'string'
+  );
+}
+
+function normalizeString(value: unknown, fallback: string) {
+  return typeof value === 'string' && value.trim().length > 0
+    ? value
+    : fallback;
+}
+
+export function normalizeStartInputField(
+  value: unknown,
+  index: number
+): FlowStartInputField {
+  const source =
+    typeof value === 'object' && value !== null
+      ? (value as Record<string, unknown>)
+      : {};
+  const inputType = isStartInputType(source.inputType)
+    ? source.inputType
+    : 'text';
+  const key = normalizeString(source.key, `input_${index + 1}`);
+
+  return {
+    key,
+    label: normalizeString(source.label, key),
+    inputType,
+    valueType: getStartInputValueType(inputType),
+    required: Boolean(source.required),
+    placeholder:
+      typeof source.placeholder === 'string' ? source.placeholder : undefined,
+    options: Array.isArray(source.options)
+      ? source.options.filter(
+          (option): option is string => typeof option === 'string'
+        )
+      : undefined
+  };
+}
+
+export function getStartInputFields(
+  node: Pick<FlowNodeDocument, 'config'> | null | undefined
+) {
+  const rawFields = node?.config.input_fields;
+
+  return Array.isArray(rawFields)
+    ? rawFields.map((field, index) => normalizeStartInputField(field, index))
+    : [];
+}
+
+export function getStartNodeVariableOutputs(
+  node: Pick<FlowNodeDocument, 'config' | 'outputs'>
+): FlowNodeOutputDocument[] {
+  const fields = getStartInputFields(node).map((field) => ({
+    key: field.key,
+    title: field.label,
+    valueType: field.valueType
+  }));
+  const usedKeys = new Set(fields.map((field) => field.key));
+  // 兼容早期草稿：旧版开始节点把输入字段直接写在 outputs 上。
+  const legacyOutputs = node.outputs.filter(
+    (output) => !usedKeys.has(output.key)
+  );
+
+  for (const output of legacyOutputs) {
+    usedKeys.add(output.key);
+  }
+
+  return [
+    ...fields,
+    ...legacyOutputs,
+    ...startSystemVariables.filter((variable) => !usedKeys.has(variable.key))
+  ];
+}
+
+export function getNodeVariableOutputs(
+  node: FlowNodeDocument
+): FlowNodeOutputDocument[] {
+  return node.type === 'start'
+    ? getStartNodeVariableOutputs(node)
+    : node.outputs;
+}

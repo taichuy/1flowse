@@ -19,6 +19,32 @@ export type BuiltinFlowNodeType =
 
 export type FlowNodeType = BuiltinFlowNodeType | 'plugin_node';
 
+export type FlowStartInputType =
+  | 'text'
+  | 'paragraph'
+  | 'select'
+  | 'number'
+  | 'checkbox'
+  | 'file'
+  | 'file_list'
+  | 'url';
+
+export interface FlowStartInputField {
+  key: string;
+  label: string;
+  inputType: FlowStartInputType;
+  valueType: string;
+  required: boolean;
+  placeholder?: string;
+  options?: string[];
+}
+
+export interface FlowNodeOutputDocument {
+  key: string;
+  title: string;
+  valueType: string;
+}
+
 export interface FlowPluginContributionRef {
   plugin_id: string;
   plugin_version: string;
@@ -70,7 +96,7 @@ export interface FlowNodeDocument {
   configVersion: number;
   config: Record<string, unknown>;
   bindings: Record<string, FlowBinding>;
-  outputs: Array<{ key: string; title: string; valueType: string }>;
+  outputs: FlowNodeOutputDocument[];
 }
 
 export interface FlowEdgeDocument {
@@ -132,9 +158,9 @@ export function createDefaultAgentFlowDocument({
           containerId: null,
           position: { x: 80, y: 220 },
           configVersion: 1,
-          config: {},
+          config: { input_fields: [] },
           bindings: {},
-          outputs: [{ key: 'query', title: '用户输入', valueType: 'string' }]
+          outputs: []
         },
         {
           id: 'node-llm',
@@ -237,7 +263,8 @@ export function classifyDocumentChange(
   before: FlowAuthoringDocument,
   after: FlowAuthoringDocument
 ): 'layout' | 'logical' {
-  return JSON.stringify(stripLayout(before)) === JSON.stringify(stripLayout(after))
+  return JSON.stringify(stripLayout(before)) ===
+    JSON.stringify(stripLayout(after))
     ? 'layout'
     : 'logical';
 }

@@ -30,7 +30,7 @@ function defaultOutputs(
 ): FlowNodeDocument['outputs'] {
   switch (nodeType) {
     case 'start':
-      return [{ key: 'query', title: '用户输入', valueType: 'string' }];
+      return [];
     case 'llm':
       return [{ key: 'text', title: '模型输出', valueType: 'string' }];
     case 'answer':
@@ -63,6 +63,8 @@ function defaultOutputs(
 
 function defaultConfig(nodeType: BuiltinFlowNodeType): Record<string, unknown> {
   switch (nodeType) {
+    case 'start':
+      return { input_fields: [] };
     case 'llm':
       return {
         model_provider: {

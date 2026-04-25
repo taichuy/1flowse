@@ -441,6 +441,50 @@
   justify-content: space-between;
 }
 
+.agent-flow-start-input-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.agent-flow-start-input-fields__header,
+.agent-flow-start-input-fields__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agent-flow-start-input-fields__list,
+.agent-flow-start-input-fields__system {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-flow-start-input-fields__item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e4eadf;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.agent-flow-start-input-fields__item-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 132px 82px;
+  gap: 8px;
+  align-items: center;
+}
+
+.agent-flow-start-input-fields__system-title {
+  color: #55645d;
+  font-size: 13px;
+}
+
 .agent-flow-node-detail__policies .ant-select {
   width: 100%;
 }
@@ -459,12 +503,17 @@
     flex-wrap: nowrap;
   }
 
-  .agent-flow-node-detail__policy-row--stacked .agent-flow-node-detail__policy-control {
+  .agent-flow-node-detail__policy-row--stacked
+    .agent-flow-node-detail__policy-control {
     margin-left: 0;
   }
 }
 
 @media (max-width: 640px) {
+  .agent-flow-start-input-fields__item-grid {
+    grid-template-columns: 1fr;
+  }
+
   .agent-flow-node-detail__policy-select-shell--compact {
     width: 100%;
     margin-left: 0;

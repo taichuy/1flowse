@@ -42,9 +42,37 @@ describe('agent-flow node schema registry', () => {
     expect(agentFlowRendererRegistry.fields.output_contract_definition).toBeTypeOf(
       'function'
     );
+    expect(agentFlowRendererRegistry.fields.start_input_fields).toBeTypeOf(
+      'function'
+    );
     expect(agentFlowRendererRegistry.dynamicForms.llm_parameters).toBeTypeOf('function');
     expect(agentFlowRendererRegistry.views.summary).toBeTypeOf('function');
     expect(agentFlowRendererRegistry.views.relations).toBeTypeOf('function');
+  });
+
+  test('renders start input fields before the relations section', () => {
+    const schema = resolveAgentFlowNodeSchema('start');
+
+    expect(schema.detail.tabs.config.blocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'section',
+          title: '输入字段',
+          blocks: [
+            expect.objectContaining({
+              kind: 'field',
+              path: 'config.input_fields',
+              renderer: 'start_input_fields'
+            })
+          ]
+        }),
+        expect.objectContaining({
+          kind: 'view',
+          renderer: 'relations',
+          title: '下一步'
+        })
+      ])
+    );
   });
 
   test('reads relative node values and preserves output contract writes on the document', () => {

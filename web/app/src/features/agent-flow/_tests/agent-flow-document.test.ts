@@ -73,4 +73,12 @@ describe('agent flow document helpers', () => {
     ]);
     expect(createNextNodeId(document, 'llm')).toBe('node-llm-1');
   });
+
+  test('models the start node as configurable input fields with Dify-compatible system variables', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const startNode = document.graph.nodes.find((node) => node.type === 'start');
+
+    expect(startNode?.config.input_fields).toEqual([]);
+    expect(startNode?.outputs).toEqual([]);
+  });
 });

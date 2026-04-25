@@ -22,7 +22,8 @@ const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
   named_bindings: 'named_bindings',
   condition_group: 'condition_group',
   state_write: 'state_write',
-  output_contract_definition: 'output_contract_definition'
+  output_contract_definition: 'output_contract_definition',
+  start_input_fields: 'start_input_fields'
 };
 
 function createFieldBlock(field: NodeDefinitionField): SchemaFieldBlock {

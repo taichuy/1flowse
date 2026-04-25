@@ -18,7 +18,8 @@ export type NodeEditorKind =
   | 'named_bindings'
   | 'condition_group'
   | 'state_write'
-  | 'output_contract_definition';
+  | 'output_contract_definition'
+  | 'start_input_fields';
 
 export interface NodeDefinitionField {
   key: string;
