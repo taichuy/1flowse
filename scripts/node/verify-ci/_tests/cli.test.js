@@ -13,13 +13,13 @@ test('buildCommands composes repo full gate and coverage gate', () => {
     {
       label: 'ci-verify-repo',
       command: process.execPath,
-      args: [path.join(repoRoot, 'scripts', 'node', 'verify'), 'repo'],
+      args: [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'repo'],
       cwd: repoRoot,
     },
     {
       label: 'ci-verify-coverage',
       command: process.execPath,
-      args: [path.join(repoRoot, 'scripts', 'node', 'verify'), 'coverage', 'all'],
+      args: [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'coverage', 'all'],
       cwd: repoRoot,
     },
   ]);
@@ -50,8 +50,8 @@ test('main runs repo and coverage gates in order and captures advisory output', 
   assert.deepEqual(
     calls.map((call) => call.args),
     [
-      [path.join(repoRoot, 'scripts', 'node', 'verify'), 'repo'],
-      [path.join(repoRoot, 'scripts', 'node', 'verify'), 'coverage', 'all'],
+      [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'repo'],
+      [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'coverage', 'all'],
     ]
   );
 

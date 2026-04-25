@@ -6,6 +6,7 @@ const {
   createProbeUrl,
   formatBoundaryFailure,
   formatRelationshipFailure,
+  isStyleBoundaryFrontendReady,
   parseCliArgs,
   resolveSceneIds
 } = require('../core.js');
@@ -70,6 +71,46 @@ test('resolveSceneIds expands explicit file mappings and errors on missing cover
 test('createProbeUrl targets the dedicated Vite entry', () => {
   assert.equal(
     createProbeUrl('http://127.0.0.1:3100', 'page.home'),
+    'http://127.0.0.1:3100/style-boundary.html?scene=page.home'
+  );
+});
+
+test('isStyleBoundaryFrontendReady reuses an already running style-boundary host', async () => {
+  const calls = [];
+  const page = {
+    async goto(url, options) {
+      calls.push({ type: 'goto', url, options });
+    },
+    async waitForFunction(predicate, options) {
+      calls.push({
+        type: 'waitForFunction',
+        predicateSource: predicate.toString(),
+        options,
+      });
+    },
+    async close() {
+      calls.push({ type: 'close' });
+    },
+  };
+
+  const ready = await isStyleBoundaryFrontendReady(
+    {
+      async newPage() {
+        calls.push({ type: 'newPage' });
+        return page;
+      },
+    },
+    'http://127.0.0.1:3100',
+    'page.home'
+  );
+
+  assert.equal(ready, true);
+  assert.deepEqual(
+    calls.map((entry) => entry.type),
+    ['newPage', 'goto', 'waitForFunction', 'close']
+  );
+  assert.equal(
+    calls[1].url,
     'http://127.0.0.1:3100/style-boundary.html?scene=page.home'
   );
 });

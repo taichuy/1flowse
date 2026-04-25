@@ -12,7 +12,7 @@ const {
   collectBackendCoverageFailures,
   ensureCargoLlvmCovInstalled,
   runCoverage,
-} = require('./verify');
+} = require('./verify/index.js');
 const {
   getRepoRoot,
   resolveOutputDir,

@@ -109,6 +109,25 @@ async function ensureFrontendHost(repoRoot) {
   });
 }
 
+async function isStyleBoundaryFrontendReady(browser, baseUrl, sceneId) {
+  const page = await browser.newPage();
+
+  try {
+    await page.goto(createProbeUrl(baseUrl, sceneId), {
+      waitUntil: 'domcontentloaded',
+      timeout: 5000,
+    });
+    await page.waitForFunction(() => window.__STYLE_BOUNDARY__?.ready === true, {
+      timeout: 5000,
+    });
+    return true;
+  } catch (_error) {
+    return false;
+  } finally {
+    await page.close();
+  }
+}
+
 function loadPlaywright(repoRoot) {
   const webRequire = createRequire(path.join(repoRoot, 'web', 'package.json'));
   return webRequire('playwright');
@@ -533,8 +552,7 @@ async function main(argv) {
   const manifest = loadManifest(repoRoot);
   const sceneIds = resolveSceneIds(manifest, options);
   const uploadsDir = ensureUploadsDir(repoRoot);
-
-  await ensureFrontendHost(repoRoot);
+  const baseUrl = 'http://127.0.0.1:3100';
 
   const { chromium } = loadPlaywright(repoRoot);
   const browser = await chromium.launch({
@@ -543,6 +561,12 @@ async function main(argv) {
   });
 
   try {
+    const frontendReady = await isStyleBoundaryFrontendReady(browser, baseUrl, sceneIds[0]);
+
+    if (!frontendReady) {
+      await ensureFrontendHost(repoRoot);
+    }
+
     for (const sceneId of sceneIds) {
       const scene = manifest.find((entry) => entry.id === sceneId);
 
@@ -550,7 +574,7 @@ async function main(argv) {
         throw new Error(`Unknown style boundary scene: ${sceneId}`);
       }
 
-      const result = await runScene(browser, 'http://127.0.0.1:3100', scene);
+      const result = await runScene(browser, baseUrl, scene);
 
       if (
         result.violations.length > 0 ||
@@ -586,6 +610,7 @@ module.exports = {
   createProbeUrl,
   formatBoundaryFailure,
   formatRelationshipFailure,
+  isStyleBoundaryFrontendReady,
   main,
   parseCliArgs,
   resolveSceneIds

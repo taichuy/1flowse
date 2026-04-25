@@ -2,6 +2,7 @@
 
 const { spawnSync } = require('node:child_process');
 
+const { buildNodePreferredEnv } = require('./testing/node-runtime.js');
 const { getRepoRoot } = require('./testing/warning-capture.js');
 const { loadVerifyRuntimeConfig } = require('./testing/verify-runtime.js');
 
@@ -40,10 +41,11 @@ function main(argv = [], deps = {}) {
     runtimeConfig,
     passThroughArgs: normalizePassThroughArgs(argv),
   });
+  const { env: commandEnv } = buildNodePreferredEnv(env);
 
   const result = spawnSyncImpl(command.command, command.args, {
     cwd: repoRoot,
-    env,
+    env: commandEnv,
     stdio: 'inherit',
   });
 

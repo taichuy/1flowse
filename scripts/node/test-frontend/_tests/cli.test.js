@@ -38,7 +38,7 @@ test('buildCommands maps full layer to lint, test, build and style-boundary', ()
     {
       label: 'frontend-style-boundary',
       command: process.execPath,
-      args: [path.join(repoRoot, 'scripts', 'node', 'tooling'), 'check-style-boundary', 'all-pages'],
+      args: [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'check-style-boundary', 'all-pages'],
       cwd: repoRoot,
     },
   ]);

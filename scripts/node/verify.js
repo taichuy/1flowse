@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { buildBackendCommands: buildCommands, runBackend: main } = require('./test/index.js');
+const { main } = require('./verify/index.js');
 
 if (require.main === module) {
   Promise.resolve()
@@ -9,12 +9,11 @@ if (require.main === module) {
       process.exitCode = status;
     })
     .catch((error) => {
-      process.stderr.write(`[1flowbase-test-backend] ${error.message}\n`);
+      process.stderr.write(`[1flowbase-verify] ${error.message}\n`);
       process.exitCode = 1;
     });
 }
 
 module.exports = {
-  buildCommands,
   main,
 };

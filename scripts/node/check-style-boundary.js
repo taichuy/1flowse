@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { main: toolingMain } = require('./tooling');
+const { main: toolingMain } = require('./tooling/index.js');
 const main = (argv = []) => toolingMain(['check-style-boundary', ...argv]);
 
 main(process.argv.slice(2)).catch((error) => {

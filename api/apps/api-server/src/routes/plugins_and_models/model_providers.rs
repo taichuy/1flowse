@@ -269,6 +269,7 @@ pub struct ModelProviderOptionResponse {
     pub description_key: Option<String>,
     pub protocol: String,
     pub display_name: String,
+    pub icon: Option<String>,
     pub parameter_form: Option<PluginFormSchemaResponse>,
     pub main_instance: ModelProviderMainInstanceSummaryResponse,
     pub model_groups: Vec<ModelProviderOptionGroupResponse>,

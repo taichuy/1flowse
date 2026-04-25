@@ -7,7 +7,7 @@ const {
   parseFrontendCliArgs: parseCliArgs,
   buildFrontendCommands: buildCommands,
   runFrontend,
-} = require('./test');
+} = require('./test/index.js');
 const {
   getRepoRoot,
   resolveOutputDir,

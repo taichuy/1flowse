@@ -28,14 +28,17 @@ interface FileStorageDrawerProps {
   onSuccess: () => void;
 }
 
+type StorageFormScalar = string | number | boolean | undefined;
+type StorageFormObject = Record<string, StorageFormScalar>;
+
 interface StorageFormValues {
   code: string;
   title: string;
   driver_type: string;
   enabled: boolean;
   is_default: boolean;
-  config_json: Record<string, unknown>;
-  rule_json: Record<string, unknown>;
+  config_json: StorageFormObject;
+  rule_json: StorageFormObject;
 }
 
 const DRIVER_TYPE_OPTIONS = [
@@ -82,6 +85,12 @@ const DRIVER_FIELDS: Record<string, { key: string; label: string; type: 'string'
   ]
 };
 
+function toStorageFormObject(
+  value: Record<string, unknown> | null | undefined
+): StorageFormObject {
+  return (value ?? {}) as StorageFormObject;
+}
+
 export function FileStorageDrawer({
   open,
   mode,
@@ -103,8 +112,8 @@ export function FileStorageDrawer({
           driver_type: record.driver_type,
           enabled: record.enabled,
           is_default: record.is_default,
-          config_json: record.config_json ?? {},
-          rule_json: record.rule_json ?? {}
+          config_json: toStorageFormObject(record.config_json),
+          rule_json: toStorageFormObject(record.rule_json)
         });
       } else {
         form.resetFields();

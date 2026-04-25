@@ -409,7 +409,8 @@ async fn file_management_settings_routes_enforce_root_only_storage_and_binding_r
 }
 
 #[tokio::test]
-async fn file_management_settings_routes_allow_root_to_update_and_delete_storage_and_delete_table() {
+async fn file_management_settings_routes_allow_root_to_update_and_delete_storage_and_delete_table()
+{
     let app = test_app().await;
     let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
 
@@ -558,7 +559,10 @@ async fn file_management_settings_routes_allow_root_to_update_and_delete_storage
         .unwrap();
     assert_eq!(list_tables_response.status(), StatusCode::OK);
     let list_tables_payload = response_json(list_tables_response).await;
-    let table_records = list_tables_payload["data"].as_array().cloned().unwrap_or_default();
+    let table_records = list_tables_payload["data"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     assert!(table_records
         .iter()
         .all(|record| record["id"].as_str() != Some(file_table_id.as_str())));

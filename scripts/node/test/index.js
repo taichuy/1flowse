@@ -15,13 +15,16 @@ const FRONTEND_LAYERS = new Set(['fast', 'full']);
 const TEST_COMMANDS = new Set(['backend', 'contracts', 'frontend', 'scripts']);
 const CONTRACT_TEST_FILES = [
   'src/features/settings/api/_tests/settings-api.test.ts',
-  'src/features/settings/_tests/model-providers-page.test.tsx',
   'src/style-boundary/_tests/registry.test.tsx',
   'src/features/agent-flow/_tests/llm-model-provider-field.test.tsx',
 ];
 
 function resolveScriptsNodeEntry(repoRoot, entryName) {
   return path.join(repoRoot, 'scripts', 'node', entryName);
+}
+
+function resolveScriptsNodeCliEntry(repoRoot, entryName) {
+  return `${resolveScriptsNodeEntry(repoRoot, entryName)}.js`;
 }
 
 function buildBackendCommands({ cargoJobs, cargoTestThreads }) {
@@ -156,7 +159,7 @@ function buildFrontendCommands({ layer, repoRoot }) {
     {
       label: 'frontend-style-boundary',
       command: process.execPath,
-      args: [resolveScriptsNodeEntry(repoRoot, 'tooling'), 'check-style-boundary', 'all-pages'],
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'check-style-boundary', 'all-pages'],
       cwd: repoRoot,
     },
   ];

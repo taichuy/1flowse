@@ -3,7 +3,7 @@
 const {
   buildRuntimeGateCommand: buildCommand,
   runRuntimeGate: main,
-} = require('./tooling');
+} = require('./tooling/index.js');
 
 if (require.main === module) {
   try {

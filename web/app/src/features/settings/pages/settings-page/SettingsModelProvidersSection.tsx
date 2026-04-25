@@ -117,8 +117,6 @@ export function SettingsModelProvidersSection({
     officialSourceMeta,
     currentCatalogEntriesByProviderCode,
     familiesByProviderCode,
-    instanceCounts,
-    includedInstanceCounts,
     editingInstance,
     editingModelCatalog,
     drawerCatalogEntry,
@@ -200,8 +198,6 @@ export function SettingsModelProvidersSection({
             <ModelProviderCatalogPanel
               entries={families}
               currentCatalogEntries={currentCatalogEntriesByProviderCode}
-              instanceCounts={instanceCounts}
-              includedInstanceCounts={includedInstanceCounts}
               loading={catalogQuery.isLoading || familiesQuery.isLoading}
               canManage={canManage}
               deletingProviderCode={

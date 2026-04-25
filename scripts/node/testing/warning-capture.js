@@ -6,6 +6,7 @@ const {
   loadVerifyRuntimeConfig,
   withHeavyVerifyLock,
 } = require('./verify-runtime.js');
+const { buildNodePreferredEnv } = require('./node-runtime.js');
 
 const RUN_COMMAND_SEQUENCE_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
 
@@ -99,12 +100,16 @@ function runCommandSequence({
   clearWarningCapture(repoRoot, env, scope);
 
   for (const command of commands) {
+    const mergedEnv = {
+      ...env,
+      ...(command.env ?? {}),
+    };
+    const commandEnv = command.command === 'pnpm'
+      ? buildNodePreferredEnv(mergedEnv).env
+      : mergedEnv;
     const result = spawnSyncImpl(command.command, command.args, {
       cwd: resolveCwd(repoRoot, command.cwd),
-      env: {
-        ...env,
-        ...(command.env ?? {}),
-      },
+      env: commandEnv,
       encoding: 'utf8',
       maxBuffer: RUN_COMMAND_SEQUENCE_MAX_BUFFER_BYTES,
       stdio: ['inherit', 'pipe', 'pipe'],

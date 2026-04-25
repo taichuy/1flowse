@@ -1,3 +1,6 @@
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -102,4 +105,36 @@ test('main loads runtime config and spawns vitest wrapper command', () => {
     'src/example.test.ts',
   ]);
   assert.equal(captured.options.cwd, '/repo-root');
+});
+
+test('main prepends pnpm sibling node binary to PATH before spawning vitest', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-run-frontend-vitest-'));
+  const binDir = path.join(tempDir, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.writeFileSync(path.join(binDir, 'pnpm'), '', 'utf8');
+  fs.writeFileSync(path.join(binDir, 'node'), '', 'utf8');
+
+  let captured = null;
+  const status = main(['run'], {
+    repoRoot: '/repo-root',
+    env: {
+      PATH: binDir,
+    },
+    runtimeConfig: {
+      frontend: {
+        vitestMaxWorkers: 1,
+        vitestMinWorkers: 1,
+      },
+    },
+    spawnSyncImpl(command, args, options) {
+      captured = { command, args, options };
+      return { status: 0 };
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.equal(captured.options.env.PATH.split(path.delimiter)[0], binDir);
+  assert.equal(captured.options.env.npm_execpath, path.join(binDir, 'pnpm'));
+  assert.equal(captured.options.env.npm_node_execpath, path.join(binDir, 'node'));
+  assert.equal(captured.options.env.NODE, path.join(binDir, 'node'));
 });

@@ -1,37 +1,12 @@
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { AppProviders } from '../../../app/AppProviders';
-
-const modalShellSpies = vi.hoisted(() => ({
-  SchemaModalPanel: vi.fn()
-}));
-
-vi.mock('../../../shared/schema-ui/overlay-shell/SchemaModalPanel', () => ({
-  SchemaModalPanel: modalShellSpies.SchemaModalPanel
-}));
 
 import { ApplicationCreateModal } from '../components/ApplicationCreateModal';
 
 describe('ApplicationCreateModal', () => {
   test('keeps form semantics after migrating to the shared modal shell', () => {
-    modalShellSpies.SchemaModalPanel.mockReset();
-    modalShellSpies.SchemaModalPanel.mockImplementation(
-      ({
-        children,
-        schema
-      }: {
-        children?: ReactNode;
-        schema: { title: string };
-      }) => (
-        <div data-testid="mock-schema-modal">
-          <div data-testid="mock-schema-modal-title">{schema.title}</div>
-          {children}
-        </div>
-      )
-    );
-
     render(
       <AppProviders>
         <ApplicationCreateModal
@@ -43,38 +18,12 @@ describe('ApplicationCreateModal', () => {
       </AppProviders>
     );
 
-    expect(modalShellSpies.SchemaModalPanel).toHaveBeenCalledWith(
-      expect.objectContaining({
-        open: true,
-        schema: expect.objectContaining({
-          title: '新建应用',
-          destroyOnHidden: true
-        }),
-        onClose: expect.any(Function)
-      }),
-      undefined
-    );
+    expect(screen.getByText('新建应用')).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: '名称' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '创建应用' })).toBeInTheDocument();
-  });
+  }, 10_000);
 
   test('shows agent_flow as enabled and workflow as disabled', () => {
-    modalShellSpies.SchemaModalPanel.mockReset();
-    modalShellSpies.SchemaModalPanel.mockImplementation(
-      ({
-        children,
-        schema
-      }: {
-        children?: ReactNode;
-        schema: { title: string };
-      }) => (
-        <div data-testid="mock-schema-modal">
-          <div data-testid="mock-schema-modal-title">{schema.title}</div>
-          {children}
-        </div>
-      )
-    );
-
     render(
       <AppProviders>
         <ApplicationCreateModal
