@@ -122,7 +122,7 @@ describe('debug console shell', () => {
     expect(
       screen.getByRole('complementary', { name: '调试控制台' })
     ).toBeInTheDocument();
-    expect(screen.getByText('Conversation')).toBeInTheDocument();
+    expect(screen.getByText('Input')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '设置' })).toBeInTheDocument();
   }, 20_000);
 });

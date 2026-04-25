@@ -1,9 +1,4 @@
-import {
-  ClearOutlined,
-  CloseOutlined,
-  PauseCircleOutlined,
-  ReloadOutlined
-} from '@ant-design/icons';
+import { CloseOutlined, PauseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Button, Space, Tag, Typography } from 'antd';
 
 import type { AgentFlowDebugSessionStatus } from '../../hooks/runtime/useAgentFlowDebugSession';
@@ -61,9 +56,18 @@ export function DebugConsoleHeader({
       </Space>
       <Space size={4} wrap>
         <Button
+          disabled={clearDisabled}
+          size="small"
+          type="text"
+          onClick={onClear}
+        >
+          清空
+        </Button>
+        <Button
           disabled={rerunDisabled}
           icon={<ReloadOutlined />}
           size="small"
+          type="text"
           onClick={onRerun}
         >
           重新运行
@@ -72,17 +76,10 @@ export function DebugConsoleHeader({
           disabled={stopDisabled}
           icon={<PauseCircleOutlined />}
           size="small"
+          type="text"
           onClick={onStop}
         >
           停止运行
-        </Button>
-        <Button
-          disabled={clearDisabled}
-          icon={<ClearOutlined />}
-          size="small"
-          onClick={onClear}
-        >
-          清空
         </Button>
         <Button
           aria-label="关闭调试控制台"

@@ -21,6 +21,7 @@ export function DebugConsoleTabs({
   return (
     <Tabs
       activeKey={activeKey}
+      centered
       className="agent-flow-editor__debug-console-tabs"
       items={items}
       onChange={(key) => onChange(key as DebugConsoleTabKey)}

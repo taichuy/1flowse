@@ -147,7 +147,7 @@ function renderEditor(ui: ReactNode) {
 
 async function openConsoleAndRun() {
   fireEvent.click(await screen.findByRole('button', { name: '调试整流' }));
-  fireEvent.change(screen.getByPlaceholderText('输入调试消息...'), {
+  fireEvent.change(screen.getByPlaceholderText('输入内容...'), {
     target: { value: '请总结退款政策' }
   });
   fireEvent.click(screen.getByRole('button', { name: '发送调试消息' }));

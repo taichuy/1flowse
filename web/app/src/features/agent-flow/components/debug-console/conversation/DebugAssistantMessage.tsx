@@ -88,53 +88,56 @@ export function DebugAssistantMessage({
 
   return (
     <article className="agent-flow-editor__debug-message agent-flow-editor__debug-message--assistant">
-      <div className="agent-flow-editor__debug-message-header">
-        <Typography.Text strong>Assistant</Typography.Text>
-        <Tag color={statusColor(message.status)}>{statusLabel(message.status)}</Tag>
-      </div>
-      <DebugTraceSummary
-        items={message.traceSummary}
-        onSelectNode={(nodeId) => {
-          onViewTrace();
-          onSelectTraceNode(nodeId);
-        }}
-      />
-      <Typography.Paragraph className="agent-flow-editor__debug-message-content">
-        {message.content || fallbackContent(message)}
-      </Typography.Paragraph>
-      <Space size={8} wrap>
-        <Button
-          disabled={!message.content}
-          icon={<CopyOutlined />}
-          size="small"
-          onClick={() => {
-            void handleCopyOutput();
+      <div className="agent-flow-editor__debug-message-avatar">AI</div>
+      <div className="agent-flow-editor__debug-message-main">
+        <div className="agent-flow-editor__debug-message-header">
+          <Typography.Text strong>Assistant</Typography.Text>
+          <Tag color={statusColor(message.status)}>{statusLabel(message.status)}</Tag>
+        </div>
+        <DebugTraceSummary
+          items={message.traceSummary}
+          onSelectNode={(nodeId) => {
+            onViewTrace();
+            onSelectTraceNode(nodeId);
           }}
-        >
-          复制输出
-        </Button>
-        <Button
-          disabled={message.traceSummary.length === 0}
-          icon={<PartitionOutlined />}
-          size="small"
-          onClick={onViewTrace}
-        >
-          查看 Trace
-        </Button>
-        <Button
-          disabled={!message.rawOutput}
-          icon={<EyeOutlined />}
-          size="small"
-          onClick={() => setShowRawOutput((current) => !current)}
-        >
-          查看 Raw Output
-        </Button>
-      </Space>
-      {showRawOutput && message.rawOutput ? (
-        <pre className="agent-flow-editor__debug-raw-output">
-          {JSON.stringify(message.rawOutput, null, 2)}
-        </pre>
-      ) : null}
+        />
+        <Typography.Paragraph className="agent-flow-editor__debug-message-content">
+          {message.content || fallbackContent(message)}
+        </Typography.Paragraph>
+        <Space size={8} wrap>
+          <Button
+            disabled={!message.content}
+            icon={<CopyOutlined />}
+            size="small"
+            onClick={() => {
+              void handleCopyOutput();
+            }}
+          >
+            复制输出
+          </Button>
+          <Button
+            disabled={message.traceSummary.length === 0}
+            icon={<PartitionOutlined />}
+            size="small"
+            onClick={onViewTrace}
+          >
+            查看 Trace
+          </Button>
+          <Button
+            disabled={!message.rawOutput}
+            icon={<EyeOutlined />}
+            size="small"
+            onClick={() => setShowRawOutput((current) => !current)}
+          >
+            查看 Raw Output
+          </Button>
+        </Space>
+        {showRawOutput && message.rawOutput ? (
+          <pre className="agent-flow-editor__debug-raw-output">
+            {JSON.stringify(message.rawOutput, null, 2)}
+          </pre>
+        ) : null}
+      </div>
     </article>
   );
 }

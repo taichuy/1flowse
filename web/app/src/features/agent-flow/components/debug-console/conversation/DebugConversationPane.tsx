@@ -55,12 +55,14 @@ export function DebugConversationPane({
                 key={message.id}
                 className="agent-flow-editor__debug-message agent-flow-editor__debug-message--user"
               >
-                <div className="agent-flow-editor__debug-message-header">
-                  <Typography.Text strong>User</Typography.Text>
+                <div className="agent-flow-editor__debug-message-main">
+                  <div className="agent-flow-editor__debug-message-header">
+                    <Typography.Text strong>User</Typography.Text>
+                  </div>
+                  <Typography.Paragraph className="agent-flow-editor__debug-message-content">
+                    {message.content}
+                  </Typography.Paragraph>
                 </div>
-                <Typography.Paragraph className="agent-flow-editor__debug-message-content">
-                  {message.content}
-                </Typography.Paragraph>
               </article>
             )
           )

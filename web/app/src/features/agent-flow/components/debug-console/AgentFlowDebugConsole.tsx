@@ -12,7 +12,6 @@ import {
   DebugConsoleTabs,
   type DebugConsoleTabKey
 } from './DebugConsoleTabs';
-import { RunContextPanel } from './RunContextPanel';
 import { DebugTracePane } from './trace/DebugTracePane';
 import { DebugVariablesPane } from './variables/DebugVariablesPane';
 
@@ -74,16 +73,12 @@ export function AgentFlowDebugConsole({
         onRerun={onRerunLast}
         onStop={onStopRun}
       />
-      <RunContextPanel
-        runContext={runContext}
-        onChangeValue={onChangeRunContextValue}
-      />
       <DebugConsoleTabs
         activeKey={activeTab}
         items={[
           {
             key: 'conversation',
-            label: 'Conversation',
+            label: 'Input',
             children: (
               <DebugConversationPane
                 messages={messages}
