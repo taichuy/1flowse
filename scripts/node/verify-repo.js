@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { buildRepoCommands: buildCommands, runRepo: main } = require('./verify');
+const { buildRepoCommands: buildCommands, runRepo: main } = require('./verify/index.js');
 
 if (require.main === module) {
   Promise.resolve()

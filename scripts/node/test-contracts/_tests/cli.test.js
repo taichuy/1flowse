@@ -8,7 +8,6 @@ const { buildCommands, main } = require('../../test-contracts.js');
 
 const CONTRACT_TEST_FILES = [
   'src/features/settings/api/_tests/settings-api.test.ts',
-  'src/features/settings/_tests/model-providers-page.test.tsx',
   'src/style-boundary/_tests/registry.test.tsx',
   'src/features/agent-flow/_tests/llm-model-provider-field.test.tsx',
 ];

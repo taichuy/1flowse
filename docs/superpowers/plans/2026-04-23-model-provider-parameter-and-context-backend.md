@@ -1,5 +1,7 @@
 # Model Provider Parameter And Context Backend Implementation Plan
 
+> **历史执行记录 / 当前路径口径：** 本计划已经在 `storage-pg` 重命名与目录收纳前执行完成。后续不要复制本文中的 `api/crates/storage-pg` 路径或 `cargo test -p storage-pg` 命令；当前 PostgreSQL 主存储实现路径是 `api/crates/storage-durable/postgres`，crate 名是 `storage-postgres`，宿主消费边界优先走 `storage-durable`。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Move `parameter_form` to the provider-level options contract, persist model-level `context_window_override_tokens` inside `configured_models`, and align backend/API fixtures so settings and Agent Flow both read one stable contract.

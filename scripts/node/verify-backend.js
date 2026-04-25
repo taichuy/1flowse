@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { buildBackendCommands: buildCommands, runBackend: main } = require('./verify');
+const { buildBackendCommands: buildCommands, runBackend: main } = require('./verify/index.js');
 
 if (require.main === module) {
   Promise.resolve()

@@ -20,7 +20,7 @@ last_verified_at: 无
 decision_policy: direct_reference
 scope:
   - api/crates/storage-durable
-  - api/crates/storage-postgres
+  - api/crates/storage-durable/postgres
   - api/crates/control-plane
   - api/crates/plugin-framework
 ---
@@ -58,6 +58,5 @@ scope:
 推荐长期结构：
 
 - `storage-durable`：平台主存储边界
-- `storage-postgres`：当前唯一官方实现
+- `storage-postgres`：当前唯一官方实现，物理路径为 `api/crates/storage-durable/postgres`
 - `data-source-platform`：外部数据源平台边界
-

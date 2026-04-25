@@ -28,7 +28,7 @@ async fn start_node_debug_preview_creates_run_node_run_and_events() {
 }
 
 #[tokio::test]
-async fn start_node_debug_preview_uses_primary_routed_provider_instance() {
+async fn start_node_debug_preview_uses_selected_source_provider_instance() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service
         .seed_application_with_multi_instance_provider_flow("Support Agent")
@@ -48,7 +48,7 @@ async fn start_node_debug_preview_uses_primary_routed_provider_instance() {
 
     assert_eq!(
         outcome.preview_payload["metrics_payload"]["provider_instance_id"],
-        serde_json::json!(seeded.primary_provider_instance_id.to_string())
+        serde_json::json!(seeded.source_provider_instance_id.to_string())
     );
 }
 

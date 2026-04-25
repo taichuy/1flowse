@@ -105,6 +105,47 @@ test('runCommandSequence does not create a warning log for stdout-only success o
   assert.equal(fs.existsSync(warningLogPath), false);
 });
 
+test('runCommandSequence injects the pnpm-adjacent real node env for pnpm commands', () => {
+  const calls = [];
+
+  const status = runCommandSequence({
+    repoRoot: '/repo-root',
+    scope: 'pnpm-node-env',
+    env: {
+      PATH: [
+        '/tmp/bun-node-wrapper',
+        '/home/taichu/.nvm/versions/node/v22.12.0/bin',
+      ].join(path.delimiter),
+    },
+    commands: [
+      {
+        label: 'pnpm-test',
+        command: 'pnpm',
+        args: ['--version'],
+      },
+    ],
+    spawnSyncImpl(command, args, options) {
+      calls.push({ command, args, options });
+      return { status: 0, stdout: '', stderr: '' };
+    },
+    writeStdout() {},
+    writeStderr() {},
+  });
+
+  assert.equal(status, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, 'pnpm');
+  assert.equal(calls[0].options.env.NODE, '/home/taichu/.nvm/versions/node/v22.12.0/bin/node');
+  assert.equal(
+    calls[0].options.env.npm_node_execpath,
+    '/home/taichu/.nvm/versions/node/v22.12.0/bin/node'
+  );
+  assert.match(
+    calls[0].options.env.PATH,
+    /^\/home\/taichu\/\.nvm\/versions\/node\/v22\.12\.0\/bin/
+  );
+});
+
 test('runCommandSequence resets the warning log before a new run', () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-warning-capture-'));
   const warningLogPath = path.join(repoRoot, 'tmp', 'test-governance', 'reset.warnings.log');

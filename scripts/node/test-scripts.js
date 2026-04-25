@@ -6,7 +6,7 @@ const {
   selectTestFiles,
   buildScriptTestCommand: buildCommand,
   runScripts: main,
-} = require('./test');
+} = require('./test/index.js');
 
 if (require.main === module) {
   try {

@@ -23,11 +23,15 @@ function resolveScriptsNodeEntry(repoRoot, entryName) {
   return path.join(repoRoot, 'scripts', 'node', entryName);
 }
 
+function resolveScriptsNodeCliEntry(repoRoot, entryName) {
+  return `${resolveScriptsNodeEntry(repoRoot, entryName)}.js`;
+}
+
 function buildRuntimeGateCommand({ argv, repoRoot }) {
   return {
     label: 'runtime-page-debug',
     command: process.execPath,
-    args: [resolveScriptsNodeEntry(repoRoot, 'tooling'), 'page-debug', ...argv],
+    args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'page-debug', ...argv],
     cwd: repoRoot,
   };
 }

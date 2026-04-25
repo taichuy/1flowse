@@ -26,6 +26,10 @@ function resolveScriptsNodeEntry(repoRoot, entryName) {
   return path.join(repoRoot, 'scripts', 'node', entryName);
 }
 
+function resolveScriptsNodeCliEntry(repoRoot, entryName) {
+  return `${resolveScriptsNodeEntry(repoRoot, entryName)}.js`;
+}
+
 function buildBackendCommands({ cargoJobs, cargoTestThreads }) {
   return [
     {
@@ -87,13 +91,13 @@ function buildCiCommands({ repoRoot }) {
     {
       label: 'ci-verify-repo',
       command: process.execPath,
-      args: [resolveScriptsNodeEntry(repoRoot, 'verify'), 'repo'],
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'verify'), 'repo'],
       cwd: repoRoot,
     },
     {
       label: 'ci-verify-coverage',
       command: process.execPath,
-      args: [resolveScriptsNodeEntry(repoRoot, 'verify'), 'coverage', 'all'],
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'verify'), 'coverage', 'all'],
       cwd: repoRoot,
     },
   ];
@@ -492,25 +496,25 @@ function buildRepoCommands({ repoRoot }) {
     {
       label: 'repo-script-tests',
       command: process.execPath,
-      args: [resolveScriptsNodeEntry(repoRoot, 'test'), 'scripts'],
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'test'), 'scripts'],
       cwd: repoRoot,
     },
     {
       label: 'repo-contract-tests',
       command: process.execPath,
-      args: [resolveScriptsNodeEntry(repoRoot, 'test'), 'contracts'],
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'test'), 'contracts'],
       cwd: repoRoot,
     },
     {
       label: 'repo-frontend-full',
       command: process.execPath,
-      args: [resolveScriptsNodeEntry(repoRoot, 'test'), 'frontend', 'full'],
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'test'), 'frontend', 'full'],
       cwd: repoRoot,
     },
     {
       label: 'repo-backend-full',
       command: process.execPath,
-      args: [resolveScriptsNodeEntry(repoRoot, 'verify'), 'backend'],
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'verify'), 'backend'],
       cwd: repoRoot,
     },
   ];

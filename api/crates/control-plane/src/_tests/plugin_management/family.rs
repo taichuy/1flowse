@@ -191,6 +191,7 @@ async fn plugin_management_service_upgrades_to_latest_without_redownloading_when
                     namespace: "plugin.fixture_provider".into(),
                     protocol: "openai_compatible".into(),
                     latest_version: "0.2.0".into(),
+                    icon: None,
                     selected_artifact: super::support::sample_artifact(
                         "linux",
                         "amd64",

@@ -4,7 +4,7 @@ const {
   CONTRACT_TEST_FILES,
   buildContractsCommands: buildCommands,
   runContracts: main,
-} = require('./test');
+} = require('./test/index.js');
 
 if (require.main === module) {
   Promise.resolve()

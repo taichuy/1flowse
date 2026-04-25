@@ -1,5 +1,7 @@
 # 1flowbase CI And Coverage Design
 
+> **历史覆盖率设计 / 当前路径口径：** 本文生成于 `storage-pg` 重命名前，后端覆盖率对象中的 `storage-pg` 应按当前 crate 名理解为 `storage-postgres`，物理路径为 `api/crates/storage-durable/postgres`。后续调整 coverage gate 时以现行脚本和 AGENTS 规则为准，不直接复制旧 crate 名。
+
 ## 背景
 
 截至 `2026-04-19`，仓库已经完成测试分层第一阶段和第二阶段：

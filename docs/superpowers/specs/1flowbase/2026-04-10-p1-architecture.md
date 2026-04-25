@@ -1,5 +1,7 @@
 # 1flowbase P1 架构文档
 
+> **历史架构草案 / Historical：** 本文是 2026-04-10 的 P1 首轮架构草案，部分模块名、crate 名和运行时方向已被后续实现与规则覆盖。当前代码事实优先看根目录 `AGENTS.md`、`api/AGENTS.md`、`api/README.md`、`web/AGENTS.md` 以及各模块 README；本文中的 `storage-pg`、`storage-redis`、`page-service`、`embedded-runtime`、`runner_wasm` 等名称不再默认代表当前实现真相。
+
 日期：2026-04-10
 状态：已完成初稿，待用户审阅
 关联文档：

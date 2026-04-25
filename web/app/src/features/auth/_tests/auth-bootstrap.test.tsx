@@ -12,19 +12,14 @@ vi.mock('../api/session', () => ({
 }));
 
 import { AppProviders } from '../../../app/AppProviders';
-import { useAuthStore } from '../../../state/auth-store';
+import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
 import { AuthBootstrap } from '../components/AuthBootstrap';
 
 describe('AuthBootstrap', () => {
   beforeEach(() => {
     fetchCurrentSession.mockReset();
     fetchCurrentMe.mockReset();
-    useAuthStore.setState({
-      sessionStatus: 'unknown',
-      csrfToken: null,
-      actor: null,
-      me: null
-    });
+    resetAuthStore();
   });
 
   test('hydrates actor and me when session restore succeeds', async () => {

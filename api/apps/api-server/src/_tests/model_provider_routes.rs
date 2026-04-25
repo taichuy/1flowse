@@ -940,10 +940,6 @@ async fn model_provider_routes_main_instance_settings_drive_inclusion_and_groupe
         .as_str()
         .and_then(|value| value.split('/').next_back())
         .expect("main-instance request schema ref");
-    let response_schema_name = schema_ref_name(
-        &main_instance_operation["responses"]["200"]["content"]["application/json"]["schema"],
-    )
-    .expect("main-instance response schema ref");
     let schemas = openapi["components"]["schemas"].as_object().unwrap();
     assert_eq!(
         schemas[request_schema_name]["properties"]["auto_include_new_instances"]["type"].as_str(),
@@ -960,10 +956,6 @@ async fn model_provider_routes_main_instance_settings_drive_inclusion_and_groupe
     assert!(schemas["ModelProviderInstanceResponse"]
         .get("properties")
         .and_then(|properties| properties.get("is_primary"))
-        .is_none());
-    assert!(schemas[&response_schema_name]
-        .get("properties")
-        .and_then(|properties| properties.get("primary_instance_id"))
         .is_none());
     assert_eq!(
         schemas["ModelProviderOptionResponse"]["properties"]["main_instance"]["$ref"]
@@ -1271,13 +1263,7 @@ async fn model_provider_routes_main_instance_settings_drive_inclusion_and_groupe
                 .header("cookie", &cookie)
                 .header("x-csrf-token", &csrf)
                 .header("content-type", "application/json")
-                .body(Body::from(
-                    json!({
-                        "routing_mode": "manual_primary",
-                        "primary_instance_id": alpha_id
-                    })
-                    .to_string(),
-                ))
+                .body(Body::from(json!({}).to_string()))
                 .unwrap(),
         )
         .await

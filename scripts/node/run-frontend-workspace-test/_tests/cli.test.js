@@ -1,3 +1,6 @@
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -93,4 +96,35 @@ test('main strips leading passthrough separator before spawning turbo', () => {
     '--concurrency=1',
     '--help',
   ]);
+});
+
+test('main prepends pnpm sibling node binary to PATH before spawning turbo', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-run-frontend-workspace-'));
+  const binDir = path.join(tempDir, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.writeFileSync(path.join(binDir, 'pnpm'), '', 'utf8');
+  fs.writeFileSync(path.join(binDir, 'node'), '', 'utf8');
+
+  let captured = null;
+  const status = main([], {
+    repoRoot: '/repo-root',
+    env: {
+      PATH: binDir,
+    },
+    runtimeConfig: {
+      frontend: {
+        turboConcurrency: 1,
+      },
+    },
+    spawnSyncImpl(command, args, options) {
+      captured = { command, args, options };
+      return { status: 0 };
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.equal(captured.options.env.PATH.split(path.delimiter)[0], binDir);
+  assert.equal(captured.options.env.npm_execpath, path.join(binDir, 'pnpm'));
+  assert.equal(captured.options.env.npm_node_execpath, path.join(binDir, 'node'));
+  assert.equal(captured.options.env.NODE, path.join(binDir, 'node'));
 });

@@ -166,6 +166,7 @@ impl OfficialPluginSourcePort for MemoryOfficialPluginSource {
                 namespace: "plugin.openai_compatible".to_string(),
                 protocol: "openai_compatible".to_string(),
                 latest_version: "0.1.0".to_string(),
+                icon: None,
                 selected_artifact: OfficialPluginArtifact {
                     checksum: format!("sha256:{:x}", Sha256::digest(&package_bytes)),
                     ..sample_artifact("linux", "amd64", Some("musl"))

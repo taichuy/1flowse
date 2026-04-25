@@ -1,34 +1,10 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { Grid } from 'antd';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-
-const orchestrationApi = vi.hoisted(() => ({
-  orchestrationQueryKey: (applicationId: string) =>
-    ['applications', applicationId, 'orchestration'] as const,
-  fetchOrchestrationState: vi.fn()
-}));
-
-const runtimeApi = vi.hoisted(() => ({
-  nodeLastRunQueryKey: (applicationId: string, nodeId: string) =>
-    ['applications', applicationId, 'runtime', 'nodes', nodeId, 'last-run'] as const,
-  fetchNodeLastRun: vi.fn(),
-  startNodeDebugPreview: vi.fn(),
-  buildNodeDebugPreviewInput: vi.fn()
-}));
-
-const nodeContributionsApi = vi.hoisted(() => ({
-  nodeContributionsQueryKey: (applicationId: string) =>
-    ['applications', applicationId, 'node-contributions'] as const,
-  fetchNodeContributions: vi.fn()
-}));
-
-vi.mock('../api/orchestration', () => orchestrationApi);
-vi.mock('../api/runtime', () => runtimeApi);
-vi.mock('../api/node-contributions', () => nodeContributionsApi);
 
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
-import { AgentFlowEditorPage } from '../pages/AgentFlowEditorPage';
+import * as runtimeApi from '../api/runtime';
+import { AgentFlowEditorShell } from '../components/editor/AgentFlowEditorShell';
 import { renderReactFlowScene } from '../../../test/renderers/render-react-flow-scene';
 
 function createInitialState() {
@@ -144,23 +120,16 @@ function authenticate() {
 
 describe('node last run runtime', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     resetAuthStore();
     authenticate();
-    vi.spyOn(Grid, 'useBreakpoint').mockReturnValue({ lg: true } as never);
 
-    orchestrationApi.fetchOrchestrationState.mockReset();
-    runtimeApi.fetchNodeLastRun.mockReset();
-    runtimeApi.startNodeDebugPreview.mockReset();
-    runtimeApi.buildNodeDebugPreviewInput.mockReset();
-    nodeContributionsApi.fetchNodeContributions.mockReset();
-
-    orchestrationApi.fetchOrchestrationState.mockResolvedValue(createInitialState());
-    nodeContributionsApi.fetchNodeContributions.mockResolvedValue([]);
-    runtimeApi.fetchNodeLastRun.mockResolvedValueOnce(null).mockResolvedValue(
-      sampleNodeLastRun()
-    );
-    runtimeApi.startNodeDebugPreview.mockResolvedValue(sampleNodeLastRun());
-    runtimeApi.buildNodeDebugPreviewInput.mockReturnValue({
+    vi
+      .spyOn(runtimeApi, 'fetchNodeLastRun')
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(sampleNodeLastRun());
+    vi.spyOn(runtimeApi, 'startNodeDebugPreview').mockResolvedValue(sampleNodeLastRun());
+    vi.spyOn(runtimeApi, 'buildNodeDebugPreviewInput').mockReturnValue({
       input_payload: {
         'node-start': {
           query: '总结退款政策'
@@ -171,9 +140,10 @@ describe('node last run runtime', () => {
 
   test('runs node preview and refreshes last-run cards', async () => {
     renderReactFlowScene(
-      <AgentFlowEditorPage
+      <AgentFlowEditorShell
         applicationId="app-1"
         applicationName="Support Agent"
+        initialState={createInitialState()}
       />
     );
 

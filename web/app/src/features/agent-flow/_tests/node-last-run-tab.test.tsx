@@ -1,24 +1,17 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-const runtimeApi = vi.hoisted(() => ({
-  nodeLastRunQueryKey: (applicationId: string, nodeId: string) =>
-    ['applications', applicationId, 'runtime', 'nodes', nodeId, 'last-run'] as const,
-  fetchNodeLastRun: vi.fn()
-}));
-
-vi.mock('../api/runtime', () => runtimeApi);
-
 import { AppProviders } from '../../../app/AppProviders';
+import * as runtimeApi from '../api/runtime';
 import { NodeLastRunTab } from '../components/detail/tabs/NodeLastRunTab';
 
 describe('NodeLastRunTab', () => {
   beforeEach(() => {
-    runtimeApi.fetchNodeLastRun.mockReset();
+    vi.clearAllMocks();
   });
 
   test('renders empty state when the selected node has not run yet', async () => {
-    runtimeApi.fetchNodeLastRun.mockResolvedValueOnce(null);
+    vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue(null);
 
     render(
       <AppProviders>
@@ -30,7 +23,7 @@ describe('NodeLastRunTab', () => {
   });
 
   test('renders runtime-backed summary, io and metadata cards', async () => {
-    runtimeApi.fetchNodeLastRun.mockResolvedValueOnce({
+    vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue({
       flow_run: {
         id: 'run-1',
         application_id: 'app-1',
@@ -98,7 +91,9 @@ describe('NodeLastRunTab', () => {
   });
 
   test('renders warning state when runtime payload is malformed', async () => {
-    runtimeApi.fetchNodeLastRun.mockResolvedValueOnce({ node_run: null } as never);
+    vi
+      .spyOn(runtimeApi, 'fetchNodeLastRun')
+      .mockResolvedValue({ node_run: null } as never);
 
     render(
       <AppProviders>

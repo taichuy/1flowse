@@ -27,7 +27,7 @@ scope:
   - api/apps/api-server/src/routes/plugins_and_models/model_providers.rs
   - api/crates/control-plane/src/model_provider.rs
   - api/crates/domain/src/model_provider.rs
-  - api/crates/storage-pg
+  - api/crates/storage-durable/postgres
   - web/app/src/features/settings/components/model-providers
   - web/app/src/features/agent-flow
   - docs/superpowers/specs
@@ -66,3 +66,4 @@ scope:
 
 - 这是一条仓库级分层规则，不是单次界面偏好。
 - 如果未来需要更多模型级人工元信息字段，应优先继续挂到模型配置行，而不是重新回到供应商凭据层。
+- 旧文档中的 `storage-pg` 是历史 crate 名；当前 PostgreSQL 主存储实现路径为 `api/crates/storage-durable/postgres`。

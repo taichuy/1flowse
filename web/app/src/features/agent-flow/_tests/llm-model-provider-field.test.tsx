@@ -168,17 +168,14 @@ describe('LlmModelField', () => {
 
     const trigger = await screen.findByRole('button', { name: '模型' });
 
-    await waitFor(() => {
-      const providerIcon = trigger.querySelector(
-        '.agent-flow-model-chip__provider-image'
-      );
-
-      expect(providerIcon).toBeInstanceOf(HTMLImageElement);
-      expect(providerIcon).toHaveAttribute(
+    await waitFor(() =>
+      expect(
+        trigger.querySelector('.agent-flow-model-chip__provider-image')
+      ).toHaveAttribute(
         'src',
         'https://cdn.example.com/openai-compatible.svg'
-      );
-    });
+      )
+    );
   });
 
   test('localizes provider parameter form fields and reasoning effort options from i18n catalog', () => {

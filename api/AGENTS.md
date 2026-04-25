@@ -65,6 +65,9 @@
 - 新增后端功能的 QA 结论必须覆盖 service 测试与 route 测试。
 - 同一工作区内 `cargo` 验证命令默认串行执行，不并发抢锁。
 - 修改 `storage-durable/postgres/migrations` 下历史 migration 文件后，数据库测试优先使用独立 schema，避免 `sqlx` migration checksum 污染共享 schema。
+- `storage-durable/postgres/migrations` 是顺序追加的历史迁移链，允许超过单目录 15 文件规则；不要为满足目录数量规则拆分或移动历史 migration。
+- `storage-durable/postgres/src` 与 `src/_tests` 当前已接近/超过目录压力线；新增 repository 或大块测试时必须优先收纳子目录，不继续扩大根层平铺。
+- `apps/api-server/src/_tests` 当前已超过目录压力线；新增 route 级测试优先按资源域收纳子目录。
 
 ## 新增资源最低模板
 - 新增关键写资源至少包含：

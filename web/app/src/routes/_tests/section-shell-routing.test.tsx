@@ -250,6 +250,6 @@ describe('section shell routing', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/files');
     });
-    expect(await screen.findByRole('heading', { name: '文件管理', level: 4 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '文件管理', level: 2 })).toBeInTheDocument();
   });
 });

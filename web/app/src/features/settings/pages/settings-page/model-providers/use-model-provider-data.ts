@@ -130,31 +130,6 @@ export function useModelProviderData({
     return grouped;
   }, [providerOptions]);
 
-  const instanceCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-
-    for (const [providerCode, providerInstances] of Object.entries(
-      instancesByProviderCode
-    )) {
-      counts[providerCode] = providerInstances.length;
-    }
-
-    return counts;
-  }, [instancesByProviderCode]);
-
-  const includedInstanceCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-
-    for (const [providerCode, providerInstances] of Object.entries(
-      instancesByProviderCode
-    )) {
-      counts[providerCode] = providerInstances.filter(
-        (instance) => instance.included_in_main
-      ).length;
-    }
-
-    return counts;
-  }, [instancesByProviderCode]);
 
   const editingInstance =
     drawerState?.mode === 'edit'
@@ -244,8 +219,6 @@ export function useModelProviderData({
     familiesByProviderCode,
     instancesByProviderCode,
     providerOptionsByProviderCode,
-    instanceCounts,
-    includedInstanceCounts,
     editingInstance,
     editingModelCatalog: editingModelsQuery.data ?? null,
     drawerCatalogEntry,

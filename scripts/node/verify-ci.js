@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { buildCiCommands: buildCommands, runCi: main } = require('./verify');
+const { buildCiCommands: buildCommands, runCi: main } = require('./verify/index.js');
 
 if (require.main === module) {
   Promise.resolve()

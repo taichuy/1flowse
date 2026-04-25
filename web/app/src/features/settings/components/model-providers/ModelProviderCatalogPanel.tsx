@@ -4,7 +4,6 @@ import type { SettingsPluginFamilyEntry } from '../../api/plugins';
 import type { SettingsModelProviderCatalogEntry } from '../../api/model-providers';
 import { formatPluginAvailabilityStatus } from './plugin-installation-status';
 
-const DEFAULT_PROVIDER_ICON_SRC = '/icon.svg';
 
 function getCatalogDescription(
   family: SettingsPluginFamilyEntry,
@@ -24,15 +23,10 @@ function compareVersions(left: string, right: string) {
   });
 }
 
-function getProviderIconSrc(entry: SettingsPluginFamilyEntry) {
-  return entry.icon?.trim() || DEFAULT_PROVIDER_ICON_SRC;
-}
 
 export function ModelProviderCatalogPanel({
   entries,
   currentCatalogEntries,
-  instanceCounts,
-  includedInstanceCounts,
   loading,
   canManage,
   deletingProviderCode,
@@ -49,8 +43,6 @@ export function ModelProviderCatalogPanel({
     string,
     SettingsModelProviderCatalogEntry | null
   >;
-  instanceCounts: Record<string, number>;
-  includedInstanceCounts: Record<string, number>;
   loading?: boolean;
   canManage: boolean;
   deletingProviderCode?: string | null;

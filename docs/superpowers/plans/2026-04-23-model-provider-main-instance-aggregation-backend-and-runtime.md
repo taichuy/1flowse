@@ -1,5 +1,7 @@
 # Model Provider Main Instance Aggregation Backend And Runtime Implementation Plan
 
+> **历史执行记录 / 当前路径口径：** 本计划已经在 `storage-pg` 重命名与目录收纳前执行完成。后续不要复制本文中的 `api/crates/storage-pg` 路径或 `cargo test -p storage-pg` 命令；当前 PostgreSQL 主存储实现路径是 `api/crates/storage-durable/postgres`，crate 名是 `storage-postgres`。旧 `manual_primary / primary_instance_id` 只作为被替换的历史语义出现，不应继续作为产品真相。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the old manual-primary routing contract with provider-level main-instance aggregation settings, make child-instance inclusion explicit, and make runtime resolve real child instances from node config instead of a single provider-wide primary instance.

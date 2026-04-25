@@ -714,7 +714,7 @@ mod tests {
     ) {
         let repository =
             test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
-        let (primary_instance_id, _) = repository.seed_primary_and_backup_provider_instances();
+        let (alpha_instance_id, _) = repository.seed_included_provider_instances();
         let invoker = RuntimeProviderInvoker {
             repository,
             runtime: test_support::InMemoryProviderRuntime,
@@ -736,7 +736,7 @@ mod tests {
             error.downcast_ref::<ControlPlaneError>(),
             Some(ControlPlaneError::InvalidInput("source_instance_id"))
         ));
-        assert_ne!(primary_instance_id, Uuid::nil());
+        assert_ne!(alpha_instance_id, Uuid::nil());
     }
 
     #[tokio::test]
@@ -744,7 +744,7 @@ mod tests {
     ) {
         let repository =
             test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
-        let (_, backup_instance_id) = repository.seed_primary_and_backup_provider_instances();
+        let (_, backup_instance_id) = repository.seed_included_provider_instances();
         repository.set_instance_status(
             backup_instance_id,
             domain::ModelProviderInstanceStatus::Disabled,
@@ -777,7 +777,7 @@ mod tests {
     ) {
         let repository =
             test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
-        let (_, backup_instance_id) = repository.seed_primary_and_backup_provider_instances();
+        let (_, backup_instance_id) = repository.seed_included_provider_instances();
         repository.set_instance_enabled_models(backup_instance_id, vec!["gpt-5.4-mini"]);
         let invoker = RuntimeProviderInvoker {
             repository: repository.clone(),

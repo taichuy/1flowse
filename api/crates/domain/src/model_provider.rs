@@ -309,37 +309,11 @@ impl ModelProviderCatalogSource {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ModelProviderRoutingMode {
-    ManualPrimary,
-}
-
-impl ModelProviderRoutingMode {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::ManualPrimary => "manual_primary",
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelProviderConfiguredModel {
     pub model_id: String,
     pub enabled: bool,
     pub context_window_override_tokens: Option<u64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ModelProviderRoutingRecord {
-    pub workspace_id: Uuid,
-    pub provider_code: String,
-    pub routing_mode: ModelProviderRoutingMode,
-    pub primary_instance_id: Uuid,
-    pub created_by: Uuid,
-    pub updated_by: Uuid,
-    pub created_at: OffsetDateTime,
-    pub updated_at: OffsetDateTime,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

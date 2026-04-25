@@ -52,3 +52,4 @@
 3.测试文件统一放到对应子目录下的_tests
 4.如果对应子目录下有AGENTS.md，需要先介绍阅读再做处理
 5.所有AGENTS.md，目标是提供短、硬、稳定的本地执行规则，尽可能精准，清晰，简短，最多不得超过200行。
+6.`docs/superpowers/plans` 和早期 `docs/superpowers/specs` 属于历史计划/规格归档，允许按时间保留旧文件；引用前必须优先核对最新 AGENTS、README 和 superseded 标记。

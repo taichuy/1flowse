@@ -47,31 +47,29 @@ function renderPanel(entry: SettingsOfficialPluginCatalogEntry) {
     />
   );
 
-  const card = screen.getByText(entry.display_name).closest('article');
-  expect(card).not.toBeNull();
-  return card!;
+  expect(screen.getByText(entry.display_name)).toBeInTheDocument();
 }
 
 describe('OfficialPluginInstallPanel', () => {
   test('uses the official catalog icon url when provided', () => {
-    const card = renderPanel({
+    renderPanel({
       ...baseEntry,
       icon: 'https://cdn.example.com/openai-compatible.svg'
     });
 
     expect(
-      card.querySelector('.model-provider-panel__provider-icon')
+      screen.getByAltText('')
     ).toHaveAttribute('src', 'https://cdn.example.com/openai-compatible.svg');
   });
 
   test('falls back to the default icon when the catalog entry has no icon', () => {
-    const card = renderPanel({
+    renderPanel({
       ...baseEntry,
       icon: null
     });
 
     expect(
-      card.querySelector('.model-provider-panel__provider-icon')
+      screen.getByAltText('')
     ).toHaveAttribute('src', '/icon.svg');
   });
 });
