@@ -190,6 +190,82 @@ describe('useDraftSync', () => {
     });
   });
 
+  test('save sync keeps the current editor surface unchanged', async () => {
+    const saveDraftOverride = vi.fn(async (input) => ({
+      ...createInitialState(input.document),
+      draft: {
+        ...createInitialState(input.document).draft,
+        id: 'draft-2',
+        updated_at: '2026-04-16T10:10:00Z',
+        document: input.document
+      }
+    }));
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        {children}
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const { result } = renderHook(
+      () => {
+        const draftSync = useDraftSync({
+          applicationId: 'app-1',
+          saveDraftOverride
+        });
+
+        return {
+          draftSync,
+          selectedNodeId: useAgentFlowEditorStore((state) => state.selectedNodeId),
+          focusedFieldKey: useAgentFlowEditorStore(
+            (state) => state.focusedFieldKey
+          ),
+          historyOpen: useAgentFlowEditorStore((state) => state.historyOpen),
+          debugConsoleOpen: useAgentFlowEditorStore(
+            (state) => state.debugConsoleOpen
+          ),
+          nodeDetailTab: useAgentFlowEditorStore((state) => state.nodeDetailTab),
+          activeContainerPath: useAgentFlowEditorStore(
+            (state) => state.activeContainerPath
+          ),
+          setSelection: useAgentFlowEditorStore((state) => state.setSelection),
+          setPanelState: useAgentFlowEditorStore((state) => state.setPanelState),
+          setInteractionState: useAgentFlowEditorStore(
+            (state) => state.setInteractionState
+          )
+        };
+      },
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.setSelection({
+        selectedNodeId: 'node-answer',
+        selectedNodeIds: ['node-answer'],
+        focusedFieldKey: 'bindings.answer_template'
+      });
+      result.current.setPanelState({
+        historyOpen: true,
+        debugConsoleOpen: true,
+        nodeDetailTab: 'lastRun'
+      });
+      result.current.setInteractionState({
+        activeContainerPath: ['node-iteration-1']
+      });
+    });
+
+    await act(async () => {
+      await result.current.draftSync.saveNow();
+    });
+
+    expect(result.current.selectedNodeId).toBe('node-answer');
+    expect(result.current.focusedFieldKey).toBe('bindings.answer_template');
+    expect(result.current.historyOpen).toBe(true);
+    expect(result.current.debugConsoleOpen).toBe(true);
+    expect(result.current.nodeDetailTab).toBe('lastRun');
+    expect(result.current.activeContainerPath).toEqual(['node-iteration-1']);
+  });
+
   test('autosaves layout changes on interval and preserves layout classification', async () => {
     vi.useFakeTimers();
     const layoutChangedDocument = {

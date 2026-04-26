@@ -44,6 +44,9 @@ export function useDraftSync({
     (state) => state.setAutosaveStatus
   );
   const setSyncState = useAgentFlowEditorStore((state) => state.setSyncState);
+  const syncSavedServerState = useAgentFlowEditorStore(
+    (state) => state.syncSavedServerState
+  );
   const replaceFromServerState = useAgentFlowEditorStore(
     (state) => state.replaceFromServerState
   );
@@ -82,11 +85,16 @@ export function useDraftSync({
       const nextState = saveDraftOverride
         ? await saveDraftOverride(input)
         : await saveDraft(applicationId, input, csrfToken!);
+      const latestWorkingDocument = getCurrentDocument
+        ? getCurrentDocument()
+        : currentDocument;
 
-      replaceFromServerState(nextState);
+      syncSavedServerState(nextState, latestWorkingDocument);
       setSyncState({
         autosaveStatus: 'saved',
-        isDirty: false,
+        isDirty:
+          JSON.stringify(latestWorkingDocument) !==
+          JSON.stringify(nextState.draft.document),
         lastChangeKind: input.change_kind,
         lastChangeSummary: input.summary
       });

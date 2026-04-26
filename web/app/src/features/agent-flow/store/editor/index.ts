@@ -75,6 +75,10 @@ export interface AgentFlowEditorState
     sectionKey: SelectionSlice['openInspectorSectionKey'];
     fieldKey: string | null;
   }) => void;
+  syncSavedServerState: (
+    state: ConsoleApplicationOrchestrationState,
+    workingDocument?: FlowAuthoringDocument
+  ) => void;
   replaceFromServerState: (state: ConsoleApplicationOrchestrationState) => void;
   resetTransientInteractionState: () => void;
 }
@@ -218,6 +222,30 @@ export function createAgentFlowEditorStore(
         focusedFieldKey: fieldKey,
         issuesOpen: false
       }),
+    syncSavedServerState: (nextState, workingDocument) => {
+      set((current) => {
+        const nextWorkingDocument = workingDocument ?? current.workingDocument;
+
+        return {
+          workingDocument: nextWorkingDocument,
+          lastSavedDocument: nextState.draft.document,
+          draftMeta: {
+            draftId: nextState.draft.id,
+            flowId: nextState.flow_id,
+            updatedAt: nextState.draft.updated_at
+          },
+          versions: nextState.versions,
+          viewport: workingDocument
+            ? nextWorkingDocument.editor.viewport
+            : current.viewport,
+          isDirty: hasDocumentChanged(
+            nextWorkingDocument,
+            nextState.draft.document
+          ),
+          autosaveIntervalMs: nextState.autosave_interval_seconds * 1000
+        };
+      });
+    },
     replaceFromServerState: (nextState) => {
       const nextSelectedNodeId = getDefaultSelectedNodeId(nextState);
 

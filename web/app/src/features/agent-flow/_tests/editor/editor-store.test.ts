@@ -82,6 +82,83 @@ describe('agent flow editor store', () => {
     expect(store.getState().highlightedIssueId).toBe(null);
   });
 
+  test('syncs saved server state without changing current editor surface', () => {
+    const initialDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const savedDocument = {
+      ...initialDocument,
+      meta: {
+        ...initialDocument.meta,
+        name: 'Saved flow'
+      },
+      editor: {
+        ...initialDocument.editor,
+        viewport: { x: 240, y: 120, zoom: 0.72 }
+      }
+    };
+    const store = createAgentFlowEditorStore({
+      flow_id: 'flow-1',
+      draft: {
+        id: 'draft-1',
+        flow_id: 'flow-1',
+        updated_at: '2026-04-16T10:00:00Z',
+        document: initialDocument
+      },
+      autosave_interval_seconds: 30,
+      versions: []
+    });
+
+    store.getState().setSelection({
+      selectedNodeId: 'node-answer',
+      selectedNodeIds: ['node-answer'],
+      focusedFieldKey: 'bindings.answer_template',
+      openInspectorSectionKey: 'outputs'
+    });
+    store.getState().setPanelState({
+      historyOpen: true,
+      debugConsoleOpen: true,
+      debugConsoleActiveTab: 'trace',
+      nodeDetailTab: 'lastRun'
+    });
+    store.getState().setInteractionState({
+      activeContainerPath: ['node-iteration-1'],
+      highlightedIssueId: 'issue-1'
+    });
+    store.getState().setViewportState({
+      viewport: { x: 12, y: 24, zoom: 1.1 }
+    });
+
+    store.getState().syncSavedServerState({
+      flow_id: 'flow-1',
+      draft: {
+        id: 'draft-2',
+        flow_id: 'flow-1',
+        updated_at: '2026-04-16T10:05:00Z',
+        document: savedDocument
+      },
+      autosave_interval_seconds: 45,
+      versions: []
+    });
+
+    expect(store.getState().workingDocument).toBe(initialDocument);
+    expect(store.getState().lastSavedDocument).toBe(savedDocument);
+    expect(store.getState().draftMeta).toEqual({
+      draftId: 'draft-2',
+      flowId: 'flow-1',
+      updatedAt: '2026-04-16T10:05:00Z'
+    });
+    expect(store.getState().autosaveIntervalMs).toBe(45_000);
+    expect(store.getState().selectedNodeId).toBe('node-answer');
+    expect(store.getState().focusedFieldKey).toBe('bindings.answer_template');
+    expect(store.getState().openInspectorSectionKey).toBe('outputs');
+    expect(store.getState().historyOpen).toBe(true);
+    expect(store.getState().debugConsoleOpen).toBe(true);
+    expect(store.getState().debugConsoleActiveTab).toBe('trace');
+    expect(store.getState().nodeDetailTab).toBe('lastRun');
+    expect(store.getState().activeContainerPath).toEqual(['node-iteration-1']);
+    expect(store.getState().highlightedIssueId).toBe('issue-1');
+    expect(store.getState().viewport).toEqual({ x: 12, y: 24, zoom: 1.1 });
+  });
+
   test('tracks node detail tab and width in panel state', () => {
     const store = createAgentFlowEditorStore({
       flow_id: 'flow-1',
