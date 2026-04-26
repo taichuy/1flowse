@@ -21,6 +21,7 @@
 
 /* ===== 节点类型主题色（统一蓝色） ===== */
 .agent-flow-node-card--type-start,
+.agent-flow-node-card--type-answer,
 .agent-flow-node-card--type-llm,
 .agent-flow-node-card--type-template_transform,
 .agent-flow-node-card--type-knowledge_retrieval,

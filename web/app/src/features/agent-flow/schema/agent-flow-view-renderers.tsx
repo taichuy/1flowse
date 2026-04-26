@@ -8,6 +8,7 @@ import {
   EditOutlined,
   FileTextOutlined,
   HomeOutlined,
+  MessageOutlined,
   PlaySquareOutlined,
   PlusOutlined,
   QuestionCircleOutlined,
@@ -51,6 +52,7 @@ function getNode(adapter: SchemaViewRendererProps['adapter']) {
 /** 节点类型 → 图标映射 */
 const NODE_TYPE_ICONS: Record<string, ReactNode> = {
   start: <PlaySquareOutlined />,
+  answer: <MessageOutlined />,
   llm: <ThunderboltOutlined />,
   template_transform: <FileTextOutlined />,
   knowledge_retrieval: <SearchOutlined />,

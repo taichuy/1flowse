@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -37,6 +39,51 @@ vi.mock('@xyflow/react', () => ({
 }));
 
 describe('AgentFlowNodeCard', () => {
+  test('keeps the answer node on the unified blue node-card theme with a header icon', () => {
+    const canvasStyles = readFileSync(
+      'src/features/agent-flow/components/editor/styles/canvas.css',
+      'utf8'
+    );
+
+    expect(canvasStyles).toContain('.agent-flow-node-card--type-answer');
+
+    render(
+      <AppProviders>
+        <AgentFlowNodeCard
+          {...({
+            data: {
+              nodeId: 'node-answer',
+              nodeType: 'answer',
+              nodeSchema: resolveAgentFlowNodeSchema('answer'),
+              typeLabel: 'Answer',
+              alias: 'Answer',
+              description: '向最终用户输出本轮工作流的回复结果。',
+              config: {},
+              issueCount: 0,
+              canEnterContainer: false,
+              pickerOpen: false,
+              showTargetHandle: true,
+              showSourceHandle: true,
+              isContainer: false,
+              onOpenPicker: vi.fn(),
+              onClosePicker: vi.fn(),
+              onOpenContainer: vi.fn(),
+              onSelectNode: vi.fn(),
+              onInsertNode: vi.fn()
+            },
+            id: 'node-answer',
+            selected: false
+          } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+        />
+      </AppProviders>
+    );
+
+    expect(screen.getByText('Answer').closest('.agent-flow-node-card')).toHaveClass(
+      'agent-flow-node-card--type-answer'
+    );
+    expect(document.querySelector('.agent-flow-node-card__type-icon')).toBeInTheDocument();
+  });
+
   test('uses the source handle itself as the add-node trigger instead of nesting a separate button', () => {
     const onOpenPicker = vi.fn();
 
