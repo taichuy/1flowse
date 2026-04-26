@@ -22,6 +22,7 @@ import { useNodeDetailActions } from '../../hooks/interactions/use-node-detail-a
 import { useAgentFlowDebugSession } from '../../hooks/runtime/useAgentFlowDebugSession';
 import {
   buildNodeDebugPreviewPlan,
+  extractNodePreviewVariableOutput,
   nodeLastRunQueryKey,
   startNodeDebugPreview,
   type NodeDebugPreviewPlan
@@ -205,6 +206,9 @@ export function AgentFlowCanvasFrame({
       );
     },
     onSuccess: async (lastRun, variables) => {
+      debugSession.rememberNodePreviewVariables({
+        [variables.nodeId]: extractNodePreviewVariableOutput(lastRun)
+      });
       queryClient.setQueryData(
         nodeLastRunQueryKey(applicationId, variables.nodeId),
         lastRun

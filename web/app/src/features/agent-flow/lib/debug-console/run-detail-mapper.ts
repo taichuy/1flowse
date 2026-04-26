@@ -43,6 +43,34 @@ function summarizePayload(payload: Record<string, unknown> | null | undefined) {
   return JSON.stringify(payload, null, 2);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function findPreferredOutputText(payload: unknown): string | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  for (const key of ['answer', 'text', 'content', 'message']) {
+    const value = payload[key];
+
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value;
+    }
+  }
+
+  if (isRecord(payload.error)) {
+    const message = payload.error.message;
+
+    if (typeof message === 'string' && message.trim().length > 0) {
+      return message;
+    }
+  }
+
+  return null;
+}
+
 function mapMessageStatus(status: string): AgentFlowDebugMessageStatus {
   switch (status) {
     case 'succeeded':
@@ -91,7 +119,9 @@ export function extractAssistantOutputText(detail: FlowDebugRunDetail): string {
     return '';
   }
 
-  const outputPayloadText = findFirstString(detail.flow_run.output_payload);
+  const outputPayloadText =
+    findPreferredOutputText(detail.flow_run.output_payload) ??
+    findFirstString(detail.flow_run.output_payload);
 
   if (outputPayloadText) {
     return outputPayloadText;

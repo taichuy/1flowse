@@ -133,6 +133,22 @@ export function startNodeDebugPreview(
   );
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+export function extractNodePreviewVariableOutput(
+  lastRun: ConsoleNodeLastRun
+): Record<string, unknown> {
+  const outputPayload = lastRun.node_run.output_payload;
+
+  if (isRecord(outputPayload) && isRecord(outputPayload.node_output)) {
+    return outputPayload.node_output;
+  }
+
+  return isRecord(outputPayload) ? outputPayload : {};
+}
+
 export function buildFlowDebugRunInput(
   document: FlowAuthoringDocument,
   inputValues?: Record<string, unknown>
