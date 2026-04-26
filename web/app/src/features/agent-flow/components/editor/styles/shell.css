@@ -570,7 +570,7 @@
   overflow: hidden;
   border: 1px solid rgba(18, 52, 34, 0.06);
   border-radius: 6px;
-  background: #f8faf9;
+  background: transparent;
 }
 
 .agent-flow-editor__debug-variables-detail-label {
@@ -602,7 +602,19 @@
   word-break: break-word;
   overflow: auto;
   resize: none;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
 }
+
+
+
+.agent-flow-editor__debug-variables-detail-value:hover,
+.agent-flow-editor__debug-variables-detail-value:focus {
+  background-color: transparent;
+  box-shadow: none;
+}
+
 
 .agent-flow-editor__debug-variables-detail-empty {
   display: flex;
