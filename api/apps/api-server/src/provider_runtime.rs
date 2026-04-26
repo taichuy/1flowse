@@ -81,7 +81,7 @@ impl ProviderRuntimePort for ApiProviderRuntime {
         host.validate(&installation.plugin_id, provider_config)
             .await
             .map(|output| output.output)
-            .map_err(|error| map_framework_error(error, "provider_runtime"))
+            .map_err(map_provider_framework_error)
     }
 
     async fn list_models(
@@ -94,7 +94,7 @@ impl ProviderRuntimePort for ApiProviderRuntime {
         host.list_models(&installation.plugin_id, provider_config)
             .await
             .map(|output| output.models)
-            .map_err(|error| map_framework_error(error, "provider_runtime"))
+            .map_err(map_provider_framework_error)
     }
 
     async fn invoke_stream(
@@ -110,7 +110,7 @@ impl ProviderRuntimePort for ApiProviderRuntime {
                 events: output.events,
                 result: output.result,
             })
-            .map_err(|error| map_framework_error(error, "provider_runtime"))
+            .map_err(map_provider_framework_error)
     }
 }
 
@@ -311,6 +311,13 @@ impl ApiProviderRuntime {
     }
 }
 
+fn map_provider_framework_error(error: PluginFrameworkError) -> anyhow::Error {
+    match error {
+        runtime_error @ PluginFrameworkError::RuntimeContract { .. } => runtime_error.into(),
+        other => map_framework_error(other, "provider_runtime"),
+    }
+}
+
 fn map_framework_error(error: PluginFrameworkError, service_name: &'static str) -> anyhow::Error {
     match error {
         PluginFrameworkError::InvalidAssignment { .. }
@@ -321,6 +328,213 @@ fn map_framework_error(error: PluginFrameworkError, service_name: &'static str) 
         }
         PluginFrameworkError::Io { .. } | PluginFrameworkError::RuntimeContract { .. } => {
             ControlPlaneError::UpstreamUnavailable(service_name).into()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        sync::Arc,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    use control_plane::ports::ProviderRuntimePort;
+    use domain::{
+        PluginArtifactStatus, PluginAvailabilityStatus, PluginDesiredState,
+        PluginInstallationRecord, PluginRuntimeStatus, PluginVerificationStatus,
+    };
+    use plugin_framework::{
+        error::PluginFrameworkError,
+        provider_contract::{ProviderInvocationInput, ProviderRuntimeErrorKind},
+    };
+    use plugin_runner::{
+        capability_host::CapabilityHost, data_source_host::DataSourceHost,
+        provider_host::ProviderHost,
+    };
+    use serde_json::json;
+    use time::OffsetDateTime;
+    use tokio::sync::RwLock;
+    use uuid::Uuid;
+
+    use super::{ApiProviderRuntime, ApiRuntimeServices};
+
+    struct TempProviderPackage {
+        root: PathBuf,
+    }
+
+    impl TempProviderPackage {
+        fn new() -> Self {
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let root = std::env::temp_dir().join(format!("api-provider-runtime-test-{nonce}"));
+            fs::create_dir_all(&root).unwrap();
+            Self { root }
+        }
+
+        fn path(&self) -> &Path {
+            &self.root
+        }
+
+        fn write(&self, relative_path: &str, content: &str) {
+            let path = self.root.join(relative_path);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).unwrap();
+            }
+            fs::write(path, content).unwrap();
+        }
+    }
+
+    impl Drop for TempProviderPackage {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn write_failing_provider_package(package: &TempProviderPackage) {
+        package.write(
+            "manifest.yaml",
+            r#"manifest_version: 1
+plugin_id: fixture_provider
+version: 0.1.0
+vendor: 1flowbase
+display_name: Fixture Provider
+description: Fixture provider
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: runtime_extension
+execution_mode: process_per_call
+slot_codes:
+  - model_provider
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.provider/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: provider_instance_only
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/fixture_provider
+  limits:
+    timeout_ms: 30000
+node_contributions: []
+"#,
+        );
+        package.write(
+            "provider/fixture_provider.yaml",
+            r#"provider_code: fixture_provider
+display_name: Fixture Provider
+protocol: openai_compatible
+model_discovery: static
+config_schema:
+  - key: base_url
+    type: string
+    required: true
+  - key: api_key
+    type: secret
+    required: true
+"#,
+        );
+        package.write(
+            "i18n/en_US.json",
+            r#"{ "plugin": { "label": "Fixture Provider" } }"#,
+        );
+        package.write(
+            "bin/fixture_provider",
+            r#"#!/usr/bin/env bash
+printf '%s' '{"ok":false,"error":{"kind":"auth_failed","message":"invalid api_key","provider_summary":null}}'
+"#,
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let path = package.path().join("bin/fixture_provider");
+            let mut permissions = fs::metadata(&path).unwrap().permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(path, permissions).unwrap();
+        }
+    }
+
+    fn fixture_installation(package: &TempProviderPackage) -> PluginInstallationRecord {
+        let now = OffsetDateTime::now_utc();
+        PluginInstallationRecord {
+            id: Uuid::now_v7(),
+            provider_code: "fixture_provider".to_string(),
+            plugin_id: "fixture_provider@0.1.0".to_string(),
+            plugin_version: "0.1.0".to_string(),
+            contract_version: "1flowbase.provider/v1".to_string(),
+            protocol: "openai_compatible".to_string(),
+            display_name: "Fixture Provider".to_string(),
+            source_kind: "uploaded".to_string(),
+            trust_level: "checksum_only".to_string(),
+            verification_status: PluginVerificationStatus::Valid,
+            desired_state: PluginDesiredState::ActiveRequested,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: PluginRuntimeStatus::Active,
+            availability_status: PluginAvailabilityStatus::Available,
+            package_path: None,
+            installed_path: package.path().display().to_string(),
+            checksum: None,
+            manifest_fingerprint: None,
+            signature_status: None,
+            signature_algorithm: None,
+            signing_key_id: None,
+            last_load_error: None,
+            metadata_json: json!({}),
+            created_by: Uuid::now_v7(),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[tokio::test]
+    async fn provider_runtime_preserves_contract_error_for_llm_invocation() {
+        let package = TempProviderPackage::new();
+        write_failing_provider_package(&package);
+        let runtime = ApiProviderRuntime::new(Arc::new(ApiRuntimeServices::new(
+            Arc::new(RwLock::new(ProviderHost::default())),
+            Arc::new(RwLock::new(CapabilityHost::default())),
+            Arc::new(RwLock::new(DataSourceHost::default())),
+        )));
+
+        let error = runtime
+            .invoke_stream(
+                &fixture_installation(&package),
+                ProviderInvocationInput {
+                    provider_instance_id: "provider-1".to_string(),
+                    provider_code: "fixture_provider".to_string(),
+                    protocol: "openai_compatible".to_string(),
+                    model: "fixture_chat".to_string(),
+                    provider_config: json!({
+                        "base_url": "https://api.example.test",
+                        "api_key": "bad-key"
+                    }),
+                    ..ProviderInvocationInput::default()
+                },
+            )
+            .await
+            .expect_err("runtime contract errors should propagate to orchestration");
+
+        let framework_error = error
+            .downcast_ref::<PluginFrameworkError>()
+            .expect("provider runtime error should keep framework error type");
+        match framework_error {
+            PluginFrameworkError::RuntimeContract { error } => {
+                assert_eq!(error.kind, ProviderRuntimeErrorKind::AuthFailed);
+                assert_eq!(error.message, "invalid api_key");
+            }
+            other => panic!("expected runtime contract error, got {other:?}"),
         }
     }
 }

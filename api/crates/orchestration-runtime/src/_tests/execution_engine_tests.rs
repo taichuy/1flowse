@@ -5,11 +5,14 @@ use std::{
 
 use anyhow::Result;
 use async_trait::async_trait;
-use plugin_framework::provider_contract::{
-    ProviderFinishReason, ProviderInvocationInput, ProviderInvocationResult, ProviderRuntimeError,
-    ProviderRuntimeErrorKind, ProviderStreamEvent, ProviderUsage,
+use plugin_framework::{
+    error::PluginFrameworkError,
+    provider_contract::{
+        ProviderFinishReason, ProviderInvocationInput, ProviderInvocationResult,
+        ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderStreamEvent, ProviderUsage,
+    },
 };
-use serde_json::json;
+use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::{
@@ -103,6 +106,36 @@ impl CapabilityInvoker for StubProviderInvoker {
                 "answer": input_payload["query"].clone(),
             }),
         })
+    }
+}
+
+struct RuntimeContractErrorInvoker;
+
+#[async_trait]
+impl ProviderInvoker for RuntimeContractErrorInvoker {
+    async fn invoke_llm(
+        &self,
+        _runtime: &CompiledLlmRuntime,
+        _input: ProviderInvocationInput,
+    ) -> Result<ProviderInvocationOutput> {
+        Err(PluginFrameworkError::runtime(ProviderRuntimeError {
+            kind: ProviderRuntimeErrorKind::ProviderInvalidResponse,
+            message: "401 401 Unauthorized: Incorrect API key provided".to_string(),
+            provider_summary: None,
+        })
+        .into())
+    }
+}
+
+#[async_trait]
+impl CapabilityInvoker for RuntimeContractErrorInvoker {
+    async fn invoke_capability_node(
+        &self,
+        _runtime: &CompiledPluginRuntime,
+        _config_payload: serde_json::Value,
+        _input_payload: serde_json::Value,
+    ) -> Result<CapabilityInvocationOutput> {
+        unreachable!("base plan does not execute capability nodes")
     }
 }
 
@@ -440,6 +473,34 @@ async fn provider_error_marks_flow_failed_and_redacts_summary() {
                 .as_str()
                 .unwrap()
                 .contains("[REDACTED]"));
+        }
+        other => panic!("expected failed stop reason, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn provider_runtime_contract_error_is_renormalized_for_llm_output() {
+    let outcome = start_flow_debug_run(
+        &base_plan(),
+        &json!({ "node-start": { "query": "退款政策" } }),
+        &RuntimeContractErrorInvoker,
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(ref failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(failure.error_payload["error_kind"], json!("auth_failed"));
+            assert_eq!(
+                failure.error_payload["message"],
+                json!("401 401 Unauthorized: Incorrect API key provided")
+            );
+            assert_eq!(
+                outcome.node_traces[1].output_payload["error"]["error_kind"],
+                json!("auth_failed")
+            );
+            assert_eq!(outcome.node_traces[1].output_payload["text"], Value::Null);
         }
         other => panic!("expected failed stop reason, got {other:?}"),
     }

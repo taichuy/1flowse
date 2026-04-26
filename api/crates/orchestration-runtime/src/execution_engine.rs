@@ -6,7 +6,8 @@ use plugin_framework::{
     error::PluginFrameworkError,
     provider_contract::{
         ProviderFinishReason, ProviderInvocationInput, ProviderInvocationResult, ProviderMessage,
-        ProviderMessageRole, ProviderRuntimeError, ProviderStreamEvent, ProviderUsage,
+        ProviderMessageRole, ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderStreamEvent,
+        ProviderUsage,
     },
 };
 use serde_json::{json, Map, Value};
@@ -675,10 +676,27 @@ fn provider_runtime_error_from_anyhow(error: &anyhow::Error) -> ProviderRuntimeE
     if let Some(PluginFrameworkError::RuntimeContract { error }) =
         error.downcast_ref::<PluginFrameworkError>()
     {
-        return error.clone();
+        return normalize_runtime_contract_error(error);
     }
 
     ProviderRuntimeError::normalize("invoke", error.to_string(), None)
+}
+
+fn normalize_runtime_contract_error(error: &ProviderRuntimeError) -> ProviderRuntimeError {
+    if error.kind != ProviderRuntimeErrorKind::ProviderInvalidResponse {
+        return error.clone();
+    }
+
+    let normalized = ProviderRuntimeError::normalize(
+        "invoke",
+        &error.message,
+        error.provider_summary.as_deref(),
+    );
+    if normalized.kind == ProviderRuntimeErrorKind::ProviderInvalidResponse {
+        error.clone()
+    } else {
+        normalized
+    }
 }
 
 fn sanitize_diagnostic_text(text: &str) -> String {
