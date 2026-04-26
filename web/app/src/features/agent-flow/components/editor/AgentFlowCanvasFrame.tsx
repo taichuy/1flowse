@@ -165,7 +165,10 @@ export function AgentFlowCanvasFrame({
       return startNodeDebugPreview(
         applicationId,
         nodeId,
-        buildNodeDebugPreviewInput(documentRef.current, nodeId),
+        {
+          ...buildNodeDebugPreviewInput(documentRef.current, nodeId),
+          document: getDocumentWithLatestViewport(documentRef.current)
+        },
         csrfToken
       );
     },

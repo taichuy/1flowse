@@ -272,6 +272,7 @@ esac
 pub struct SeededPreviewApplication {
     pub actor_user_id: Uuid,
     pub application_id: Uuid,
+    pub flow_id: Uuid,
     pub source_provider_instance_id: Uuid,
 }
 
@@ -341,6 +342,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         SeededPreviewApplication {
             actor_user_id,
             application_id: application.id,
+            flow_id: editor_state.flow.id,
             source_provider_instance_id: self.repository.default_provider_instance_id(),
         }
     }
@@ -449,6 +451,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         SeededPreviewApplication {
             actor_user_id: seeded.actor_user_id,
             application_id: seeded.application_id,
+            flow_id: editor_state.flow.id,
             source_provider_instance_id,
         }
     }

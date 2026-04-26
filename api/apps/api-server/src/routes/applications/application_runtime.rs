@@ -34,6 +34,7 @@ use crate::{
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct StartNodeDebugPreviewBody {
     pub input_payload: serde_json::Value,
+    pub document: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -442,7 +443,9 @@ pub async fn cancel_flow_run(
     })
     .await?;
 
-    Ok(Json(ApiSuccess::new(to_application_run_detail_response(detail))))
+    Ok(Json(ApiSuccess::new(to_application_run_detail_response(
+        detail,
+    ))))
 }
 
 #[utoipa::path(
@@ -569,6 +572,7 @@ pub async fn start_node_debug_preview(
         application_id: id,
         node_id,
         input_payload: body.input_payload,
+        document_snapshot: body.document,
     })
     .await?;
 

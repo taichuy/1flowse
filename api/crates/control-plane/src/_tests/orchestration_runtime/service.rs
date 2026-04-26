@@ -17,6 +17,7 @@ async fn start_node_debug_preview_creates_run_node_run_and_events() {
             input_payload: serde_json::json!({
                 "node-start": { "query": "请总结退款政策" }
             }),
+            document_snapshot: None,
         })
         .await
         .unwrap();
@@ -44,6 +45,7 @@ async fn start_node_debug_preview_uses_selected_source_provider_instance() {
             input_payload: serde_json::json!({
                 "node-start": { "query": "请总结退款政策" }
             }),
+            document_snapshot: None,
         })
         .await
         .unwrap();
@@ -51,6 +53,90 @@ async fn start_node_debug_preview_uses_selected_source_provider_instance() {
     assert_eq!(
         outcome.preview_payload["metrics_payload"]["provider_instance_id"],
         serde_json::json!(seeded.source_provider_instance_id.to_string())
+    );
+}
+
+#[tokio::test]
+async fn start_node_debug_preview_uses_request_document_snapshot() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+
+    let outcome = service
+        .start_node_debug_preview(StartNodeDebugPreviewCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            node_id: "node-llm".to_string(),
+            input_payload: serde_json::json!({
+                "node-start": { "query": "draft prompt" }
+            }),
+            document_snapshot: Some(serde_json::json!({
+                "schemaVersion": "1flowbase.flow/v1",
+                "meta": {
+                    "flowId": seeded.flow_id.to_string(),
+                    "name": "Support Agent",
+                    "description": "",
+                    "tags": []
+                },
+                "graph": {
+                    "nodes": [
+                        {
+                            "id": "node-start",
+                            "type": "start",
+                            "alias": "Start",
+                            "description": "",
+                            "containerId": null,
+                            "position": { "x": 0, "y": 0 },
+                            "configVersion": 1,
+                            "config": {},
+                            "bindings": {},
+                            "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                        },
+                        {
+                            "id": "node-llm",
+                            "type": "llm",
+                            "alias": "LLM",
+                            "description": "",
+                            "containerId": null,
+                            "position": { "x": 240, "y": 0 },
+                            "configVersion": 1,
+                            "config": {
+                                "model_provider": {
+                                    "provider_code": "fixture_provider",
+                                    "source_instance_id": seeded.source_provider_instance_id.to_string(),
+                                    "model_id": "gpt-5.4-mini"
+                                }
+                            },
+                            "bindings": {
+                                "user_prompt": { "kind": "templated_text", "value": "snapshot {{node-start.query}}" }
+                            },
+                            "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
+                        }
+                    ],
+                    "edges": [
+                        {
+                            "id": "edge-start-llm",
+                            "source": "node-start",
+                            "target": "node-llm",
+                            "sourceHandle": null,
+                            "targetHandle": null,
+                            "containerId": null,
+                            "points": []
+                        }
+                    ]
+                },
+                "editor": {
+                    "viewport": { "x": 0, "y": 0, "zoom": 1 },
+                    "annotations": [],
+                    "activeContainerPath": []
+                }
+            })),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        outcome.preview_payload["node_output"]["text"],
+        serde_json::json!("echo:gpt-5.4-mini:snapshot draft prompt")
     );
 }
 

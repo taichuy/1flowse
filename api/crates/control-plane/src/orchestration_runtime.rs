@@ -14,9 +14,9 @@ use crate::{
     flow::FlowService,
     plugin_lifecycle::reconcile_installation_snapshot,
     ports::{
-        ApplicationRepository, CompleteCallbackTaskInput, FlowRepository,
-        ModelProviderRepository, NodeContributionRepository, OrchestrationRuntimeRepository,
-        PluginRepository, ProviderRuntimePort,
+        ApplicationRepository, CompleteCallbackTaskInput, FlowRepository, ModelProviderRepository,
+        NodeContributionRepository, OrchestrationRuntimeRepository, PluginRepository,
+        ProviderRuntimePort,
     },
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
@@ -44,6 +44,7 @@ pub struct StartNodeDebugPreviewCommand {
     pub application_id: Uuid,
     pub node_id: String,
     pub input_payload: serde_json::Value,
+    pub document_snapshot: Option<serde_json::Value>,
 }
 
 pub struct StartFlowDebugRunCommand {
@@ -146,10 +147,15 @@ where
             .ok_or(ControlPlaneError::NotFound("application"))?;
         let compile_context = self.build_compile_context(application.workspace_id).await?;
 
+        let preview_document = command
+            .document_snapshot
+            .as_ref()
+            .unwrap_or(&editor_state.draft.document);
+
         let compiled_plan = orchestration_runtime::compiler::FlowCompiler::compile(
             editor_state.flow.id,
             &editor_state.draft.id.to_string(),
-            &editor_state.draft.document,
+            preview_document,
             &compile_context,
         )?;
         ensure_compiled_plan_runnable(&compiled_plan)?;

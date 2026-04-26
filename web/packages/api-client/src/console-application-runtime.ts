@@ -1,3 +1,5 @@
+import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
+
 import { apiFetch } from './transport';
 
 export type ConsoleFlowRunMode = 'debug_node_preview' | 'debug_flow_run';
@@ -97,7 +99,10 @@ export interface ConsoleNodeLastRun {
 export function startConsoleNodeDebugPreview(
   applicationId: string,
   nodeId: string,
-  input: { input_payload: Record<string, unknown> },
+  input: {
+    input_payload: Record<string, unknown>;
+    document?: FlowAuthoringDocument;
+  },
   csrfToken: string,
   baseUrl?: string
 ) {

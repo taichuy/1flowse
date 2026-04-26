@@ -158,7 +158,10 @@ describe('node last run runtime', () => {
             'node-start': {
               query: '总结退款政策'
             }
-          }
+          },
+          document: expect.objectContaining({
+            schemaVersion: '1flowbase.flow/v1'
+          })
         },
         'csrf-123'
       );

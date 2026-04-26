@@ -99,7 +99,10 @@ export function fetchNodeLastRun(applicationId: string, nodeId: string) {
 export function startNodeDebugPreview(
   applicationId: string,
   nodeId: string,
-  input: { input_payload: Record<string, Record<string, unknown>> },
+  input: {
+    input_payload: Record<string, Record<string, unknown>>;
+    document?: FlowAuthoringDocument;
+  },
   csrfToken: string
 ) {
   return startConsoleNodeDebugPreview(
