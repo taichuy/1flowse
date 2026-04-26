@@ -159,6 +159,7 @@ async function openConsoleAndRun() {
       'csrf-123'
     );
   });
+  expect(screen.queryByRole('tab', { name: 'Variables' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('tab', { name: 'Trace' }));
 }
 

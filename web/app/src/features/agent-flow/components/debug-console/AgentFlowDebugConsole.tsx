@@ -2,8 +2,7 @@ import { SchemaDockPanel } from '../../../../shared/schema-ui/overlay-shell/Sche
 import type {
   AgentFlowDebugMessage,
   AgentFlowRunContext,
-  AgentFlowTraceItem,
-  AgentFlowVariableGroup
+  AgentFlowTraceItem
 } from '../../api/runtime';
 import type { AgentFlowDebugSessionStatus } from '../../hooks/runtime/useAgentFlowDebugSession';
 import { DebugConversationPane } from './conversation/DebugConversationPane';
@@ -13,7 +12,6 @@ import {
   type DebugConsoleTabKey
 } from './DebugConsoleTabs';
 import { DebugTracePane } from './trace/DebugTracePane';
-import { DebugVariablesPane } from './variables/DebugVariablesPane';
 
 const debugConsoleShellSchema = {
   schemaVersion: '1.0.0',
@@ -28,7 +26,6 @@ export function AgentFlowDebugConsole({
   runContext,
   status,
   traceItems,
-  variableGroups,
   onChangeRunContextValue,
   onChangeTab,
   onClearSession,
@@ -44,7 +41,6 @@ export function AgentFlowDebugConsole({
   runContext: AgentFlowRunContext;
   status: AgentFlowDebugSessionStatus;
   traceItems: AgentFlowTraceItem[];
-  variableGroups: AgentFlowVariableGroup[];
   onChangeRunContextValue: (nodeId: string, key: string, value: unknown) => void;
   onChangeTab: (key: DebugConsoleTabKey) => void;
   onClearSession: () => void;
@@ -114,11 +110,6 @@ export function AgentFlowDebugConsole({
                 onSelectNode={onLocateTraceNode}
               />
             )
-          },
-          {
-            key: 'variables',
-            label: 'Variables',
-            children: <DebugVariablesPane groups={variableGroups} />
           }
         ]}
         onChange={onChangeTab}

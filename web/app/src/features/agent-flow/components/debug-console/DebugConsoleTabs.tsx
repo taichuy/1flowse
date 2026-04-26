@@ -1,7 +1,7 @@
 import { Tabs } from 'antd';
 import type { ReactNode } from 'react';
 
-export type DebugConsoleTabKey = 'conversation' | 'trace' | 'variables';
+export type DebugConsoleTabKey = 'conversation' | 'trace';
 
 export interface DebugConsoleTabItem {
   key: DebugConsoleTabKey;

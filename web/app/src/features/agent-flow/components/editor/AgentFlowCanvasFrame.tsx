@@ -5,7 +5,7 @@ import type {
   SaveConsoleApplicationDraftInput
 } from '@1flowbase/api-client';
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
-import { CloseOutlined, EyeOutlined } from '@ant-design/icons';
+import { CloseOutlined } from '@ant-design/icons';
 import { Button, Typography } from 'antd';
 import {
   useEffect,
@@ -299,6 +299,18 @@ export function AgentFlowCanvasFrame({
     detailContainerWidth
   );
   const nodeDetailLayout = getNodeDetailLayout(boundedNodeDetailWidth);
+  const nodeDetailOccupiedWidth = selectedNodeId
+    ? boundedNodeDetailWidth + DEBUG_CONSOLE_GAP
+    : 0;
+  const debugConsoleOccupiedWidth = debugConsoleOpen
+    ? boundedDebugConsoleWidth + DEBUG_CONSOLE_GAP
+    : 0;
+  const variableCacheRightOffset =
+    16 + nodeDetailOccupiedWidth + debugConsoleOccupiedWidth;
+  const variableCacheCenterLeft = Math.max(
+    120,
+    (canvasFrameWidth - variableCacheRightOffset) / 2
+  );
 
   function handleNodeDetailResizeStart(event: ReactMouseEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -536,9 +548,9 @@ export function AgentFlowCanvasFrame({
         />
         <Button
           className="agent-flow-editor__variable-cache-trigger"
-          icon={<EyeOutlined />}
           size="small"
-          type="primary"
+          type="link"
+          style={{ left: variableCacheCenterLeft }}
           onClick={() => setVariableCacheOpen(true)}
         >
           查看缓存
@@ -575,6 +587,7 @@ export function AgentFlowCanvasFrame({
           <section
             aria-label="变量缓存"
             className="agent-flow-editor__variable-cache-panel"
+            style={{ right: variableCacheRightOffset }}
           >
             <header className="agent-flow-editor__variable-cache-header">
               <div className="agent-flow-editor__variable-cache-title">
@@ -616,7 +629,6 @@ export function AgentFlowCanvasFrame({
               runContext={debugSession.runContext}
               status={debugSession.status}
               traceItems={debugSession.traceItems}
-              variableGroups={debugSession.variableGroups}
               onChangeRunContextValue={debugSession.setRunContextValue}
               onChangeTab={(key) =>
                 setPanelState({ debugConsoleActiveTab: key })

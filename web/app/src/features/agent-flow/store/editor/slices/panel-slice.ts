@@ -4,7 +4,7 @@ export interface PanelSlice {
   publishConfigOpen: boolean;
   debugConsoleOpen: boolean;
   debugConsoleWidth: number;
-  debugConsoleActiveTab: 'conversation' | 'trace' | 'variables';
+  debugConsoleActiveTab: 'conversation' | 'trace';
   nodeDetailTab: 'config' | 'lastRun';
   nodeDetailWidth: number;
   nodePickerState: {
