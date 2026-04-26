@@ -41,12 +41,51 @@ describe('start node variables', () => {
       }))
     ).toEqual(
       expect.arrayContaining([
-        { value: ['node-start', 'customer_name'], label: 'Start / 客户姓名' },
-        { value: ['node-start', 'attachments'], label: 'Start / 附件' },
+        {
+          value: ['node-start', 'customer_name'],
+          label: 'Start / userinput.customer_name'
+        },
+        {
+          value: ['node-start', 'attachments'],
+          label: 'Start / userinput.attachments'
+        },
         { value: ['node-start', 'query'], label: 'Start / userinput.query' },
         { value: ['node-start', 'files'], label: 'Start / userinput.files' }
       ])
     );
+  });
+
+  test('normalizes legacy start system output titles to canonical userinput labels', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const startNode = document.graph.nodes.find(
+      (node) => node.id === 'node-start'
+    );
+
+    if (!startNode) {
+      throw new Error('expected start node');
+    }
+
+    startNode.outputs = [
+      { key: 'query', title: '用户输入', valueType: 'string' },
+      { key: 'files', title: '文件', valueType: 'array' }
+    ];
+
+    expect(
+      listVisibleSelectorOptions(document, 'node-llm').map((option) => ({
+        value: option.value,
+        label: option.displayLabel
+      }))
+    ).toEqual(
+      expect.arrayContaining([
+        { value: ['node-start', 'query'], label: 'Start / userinput.query' },
+        { value: ['node-start', 'files'], label: 'Start / userinput.files' }
+      ])
+    );
+    expect(
+      listVisibleSelectorOptions(document, 'node-llm').map(
+        (option) => option.displayLabel
+      )
+    ).not.toContain('Start / 用户输入');
   });
 
   test('builds flow debug input from start input field value types', () => {

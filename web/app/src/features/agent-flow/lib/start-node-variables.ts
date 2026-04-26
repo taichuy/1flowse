@@ -56,10 +56,7 @@ function normalizeOptionalString(value: unknown) {
     : undefined;
 }
 
-function normalizeDefaultValue(
-  value: unknown,
-  inputType: FlowStartInputType
-) {
+function normalizeDefaultValue(value: unknown, inputType: FlowStartInputType) {
   switch (inputType) {
     case 'number':
       return typeof value === 'number' && Number.isFinite(value)
@@ -74,9 +71,7 @@ function normalizeDefaultValue(
     case 'paragraph':
     case 'select':
     case 'url':
-      return typeof value === 'string' && value.length > 0
-        ? value
-        : undefined;
+      return typeof value === 'string' && value.length > 0 ? value : undefined;
   }
 }
 
@@ -137,14 +132,20 @@ export function getStartNodeVariableOutputs(
 ): FlowNodeOutputDocument[] {
   const fields = getStartInputFields(node).map((field) => ({
     key: field.key,
-    title: field.label,
+    title: `userinput.${field.key}`,
     valueType: field.valueType
   }));
   const usedKeys = new Set(fields.map((field) => field.key));
+  const systemKeys = new Set(startSystemVariables.map((field) => field.key));
   // 兼容早期草稿：旧版开始节点把输入字段直接写在 outputs 上。
-  const legacyOutputs = node.outputs.filter(
-    (output) => !usedKeys.has(output.key)
-  );
+  const legacyOutputs = node.outputs
+    .filter(
+      (output) => !usedKeys.has(output.key) && !systemKeys.has(output.key)
+    )
+    .map((output) => ({
+      ...output,
+      title: `userinput.${output.key}`
+    }));
 
   for (const output of legacyOutputs) {
     usedKeys.add(output.key);
