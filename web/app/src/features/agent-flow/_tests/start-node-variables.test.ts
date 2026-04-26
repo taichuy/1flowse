@@ -3,10 +3,46 @@ import { describe, expect, test } from 'vitest';
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 
 import { buildFlowDebugRunInput } from '../api/runtime';
+import { createNodeDocument } from '../lib/document/node-factory';
 import { listVisibleSelectorOptions } from '../lib/selector-options';
 import { getStartInputFields } from '../lib/start-node-variables';
 
 describe('start node variables', () => {
+  test('does not expose if else branch decisions as downstream selector values', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const ifElseNode = createNodeDocument('if_else', 'node-if-else-1');
+
+    document.graph.nodes.push({
+      ...ifElseNode,
+      outputs: [{ key: 'result', title: '条件结果', valueType: 'boolean' }]
+    });
+    document.graph.edges.push(
+      {
+        id: 'edge-start-if-else',
+        source: 'node-start',
+        target: 'node-if-else-1',
+        sourceHandle: null,
+        targetHandle: null,
+        containerId: null,
+        points: []
+      },
+      {
+        id: 'edge-if-else-llm',
+        source: 'node-if-else-1',
+        target: 'node-llm',
+        sourceHandle: null,
+        targetHandle: null,
+        containerId: null,
+        points: []
+      }
+    );
+
+    expect(ifElseNode.outputs).toEqual([]);
+    expect(
+      listVisibleSelectorOptions(document, 'node-llm').map((option) => option.value)
+    ).not.toContainEqual(['node-if-else-1', 'result']);
+  });
+
   test('exposes custom input fields and readonly system variables to downstream selectors', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const startNode = document.graph.nodes.find(

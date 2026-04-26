@@ -24,7 +24,7 @@ export const ifElseNodeDefinition: NodeDefinition = {
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.result', label: '条件结果', editor: 'text', required: true }]
+      fields: []
     }
   ]
 };

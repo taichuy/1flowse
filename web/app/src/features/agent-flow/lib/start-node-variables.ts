@@ -150,7 +150,13 @@ export function getStartNodeVariableOutputs(
 export function getNodeVariableOutputs(
   node: FlowNodeDocument
 ): FlowNodeOutputDocument[] {
-  return node.type === 'start'
-    ? getStartNodeVariableOutputs(node)
-    : node.outputs;
+  if (node.type === 'start') {
+    return getStartNodeVariableOutputs(node);
+  }
+
+  if (node.type === 'if_else') {
+    return [];
+  }
+
+  return node.outputs;
 }

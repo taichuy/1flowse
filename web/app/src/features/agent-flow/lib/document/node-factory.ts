@@ -42,7 +42,7 @@ function defaultOutputs(
     case 'question_classifier':
       return [{ key: 'label', title: '分类标签', valueType: 'string' }];
     case 'if_else':
-      return [{ key: 'result', title: '条件结果', valueType: 'boolean' }];
+      return [];
     case 'code':
       return [{ key: 'result', title: '代码结果', valueType: 'unknown' }];
     case 'http_request':
