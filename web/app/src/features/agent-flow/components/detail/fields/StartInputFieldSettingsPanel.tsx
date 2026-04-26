@@ -145,17 +145,6 @@ export function StartInputFieldSettingsPanel({
             onChange={(event) => onChange({ label: event.target.value })}
           />
         </label>
-        <label className="agent-flow-start-input-fields__form-row">
-          <span>占位提示</span>
-          <Input
-            aria-label="输入字段占位提示"
-            value={field.placeholder ?? ''}
-            onChange={(event) =>
-              onChange({ placeholder: event.target.value || undefined })
-            }
-          />
-        </label>
-
         {shouldShowMaxLength(field.inputType) ? (
           <label className="agent-flow-start-input-fields__form-row">
             <span>最大长度</span>

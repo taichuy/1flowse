@@ -88,6 +88,7 @@ describe('start input fields', () => {
     expect(
       screen.getByRole('separator', { name: '从右侧调整新增输入字段宽度' })
     ).toBeInTheDocument();
+    expect(screen.queryByLabelText('输入字段占位提示')).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('输入字段变量名'), {
       target: { value: 'customer_name' }
@@ -147,9 +148,6 @@ describe('start input fields', () => {
     fireEvent.change(screen.getByLabelText('输入字段显示名'), {
       target: { value: '优先级' }
     });
-    fireEvent.change(screen.getByLabelText('输入字段占位提示'), {
-      target: { value: '请选择优先级' }
-    });
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '输入字段类型' }));
     fireEvent.click(await screen.findByTitle('下拉选项'));
 
@@ -177,7 +175,6 @@ describe('start input fields', () => {
         label: '优先级',
         inputType: 'select',
         valueType: 'string',
-        placeholder: '请选择优先级',
         options: ['高', '低'],
         defaultValue: '低',
         hidden: true
