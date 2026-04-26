@@ -2,10 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Button,
   Checkbox,
-  Menu,
   Empty,
   Flex,
   Input,
+  Menu,
+  message,
   Result,
   Select,
   Space,
@@ -17,6 +18,8 @@ import {
   AppstoreAddOutlined,
   AppstoreOutlined,
   BlockOutlined,
+  CopyOutlined,
+  DeleteOutlined,
   EditOutlined,
   FileTextOutlined,
   ImportOutlined,
@@ -32,6 +35,7 @@ import { useAuthStore } from '../../../state/auth-store';
 import {
   applicationCatalogQueryKey,
   applicationsQueryKey,
+  createApplication,
   createApplicationTag,
   fetchApplicationCatalog,
   fetchApplications,
@@ -76,6 +80,10 @@ function mergeTagCatalog(
   return Array.from(merged.values()).sort((left, right) => left.name.localeCompare(right.name));
 }
 
+function buildCopiedApplicationName(name: string) {
+  return `${name} 副本`;
+}
+
 function toApplicationTypeTabs(
   types: Array<{ value: Application['application_type']; label: string }>
 ): ApplicationTypeTab[] {
@@ -94,6 +102,7 @@ export function ApplicationListPage() {
   const me = useAuthStore((state) => state.me);
   const csrfToken = useAuthStore((state) => state.csrfToken);
   const queryClient = useQueryClient();
+  const [messageApi, messageContextHolder] = message.useMessage();
 
   const [keyword, setKeyword] = useState('');
   const [typeFilter, setTypeFilter] = useState<ApplicationTypeFilter>('all');
@@ -112,6 +121,28 @@ export function ApplicationListPage() {
   const applicationCatalogQuery = useQuery({
     queryKey: applicationCatalogQueryKey,
     queryFn: fetchApplicationCatalog
+  });
+
+  const duplicateApplicationMutation = useMutation({
+    mutationFn: (application: Application) =>
+      createApplication(
+        {
+          application_type: application.application_type,
+          name: buildCopiedApplicationName(application.name),
+          description: application.description,
+          icon: application.icon,
+          icon_type: application.icon_type,
+          icon_background: application.icon_background
+        },
+        csrfToken ?? ''
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: applicationsQueryKey });
+      messageApi.success('已复制应用');
+    },
+    onError: () => {
+      messageApi.error('复制应用失败');
+    }
   });
 
   const updateApplicationMutation = useMutation({
@@ -195,6 +226,7 @@ export function ApplicationListPage() {
 
   return (
     <div style={{ padding: '24px 0', width: '100%', maxWidth: 1240, margin: '0 auto' }}>
+      {messageContextHolder}
       <Flex justify="space-between" align="center" wrap="wrap" gap={16} style={{ marginBottom: 24 }}>
         <Space size="small" wrap>
           {typeTabs.map((tab) => (
@@ -290,10 +322,23 @@ export function ApplicationListPage() {
           const applicationHref = `/applications/${application.id}/orchestration`;
           const actionItems: MenuProps['items'] = [
             {
+              key: 'copy',
+              icon: <CopyOutlined />,
+              label: '复制',
+              disabled: !canCreate || duplicateApplicationMutation.isPending
+            },
+            {
               key: 'edit',
               icon: <EditOutlined />,
               label: '编辑信息',
               disabled: !canEdit
+            },
+            {
+              key: 'delete',
+              icon: <DeleteOutlined />,
+              label: '删除',
+              danger: true,
+              disabled: true
             }
           ];
 
@@ -416,7 +461,7 @@ export function ApplicationListPage() {
                       width: 40,
                       height: 40,
                       borderRadius: 8,
-                      background: '#f1f5f9'
+                      background: 'transparent'
                     }}
                   />
                   {openActionApplicationId === application.id ? (
@@ -438,6 +483,9 @@ export function ApplicationListPage() {
                         selectable={false}
                         items={actionItems}
                         onClick={({ key }) => {
+                          if (key === 'copy' && canCreate) {
+                            duplicateApplicationMutation.mutate(application);
+                          }
                           if (key === 'edit' && canEdit) {
                             setEditingApplicationId(application.id);
                           }

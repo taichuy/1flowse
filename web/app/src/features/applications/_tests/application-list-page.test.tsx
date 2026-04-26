@@ -200,4 +200,34 @@ describe('ApplicationListPage', () => {
     );
     expect(screen.getByRole('button', { name: '更多操作-客服助手' })).toBeInTheDocument();
   }, 15_000);
+
+  test('copies application metadata from the card action and keeps delete disabled', async () => {
+    renderPage();
+
+    expect(await screen.findByText('客服助手', {}, { timeout: 10_000 })).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole('button', { name: '更多操作-客服助手' }));
+
+    expect((await screen.findByText('删除')).closest('.ant-menu-item')).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    fireEvent.click(screen.getByText('复制'));
+
+    await waitFor(
+      () => {
+        expect(applicationsApi.createApplication).toHaveBeenCalledWith(
+          {
+            application_type: 'agent_flow',
+            name: '客服助手 副本',
+            description: '处理客服',
+            icon: null,
+            icon_type: null,
+            icon_background: null
+          },
+          'csrf-123'
+        );
+      },
+      { timeout: 10_000 }
+    );
+  }, 15_000);
 });
