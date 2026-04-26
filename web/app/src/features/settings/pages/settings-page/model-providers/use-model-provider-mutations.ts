@@ -168,7 +168,7 @@ export function useModelProviderMutations({
           display_name: input.instance.display_name,
           included_in_main: input.included_in_main,
           configured_models: input.instance.configured_models,
-          config: input.instance.config_json
+          config: {}
         },
         csrfToken
       );
