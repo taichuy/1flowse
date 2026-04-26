@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const { buildCommands, main } = require('../../verify-repo.js');
 
-test('buildCommands composes script tests, contract tests, frontend full gate and backend verify gate', () => {
+test('buildCommands composes script tests, contract tests, frontend full gate, backend verify gate and coverage gate', () => {
   const repoRoot = '/repo-root';
 
   assert.deepEqual(buildCommands({ repoRoot }), [
@@ -34,6 +34,12 @@ test('buildCommands composes script tests, contract tests, frontend full gate an
       args: [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'backend'],
       cwd: repoRoot,
     },
+    {
+      label: 'repo-coverage-all',
+      command: process.execPath,
+      args: [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'coverage', 'all'],
+      cwd: repoRoot,
+    },
   ]);
 });
 
@@ -58,7 +64,7 @@ test('main runs repository full gate in order and captures advisory output', asy
   });
 
   assert.equal(status, 0);
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 5);
   assert.deepEqual(
     calls.map((call) => call.args),
     [
@@ -66,6 +72,7 @@ test('main runs repository full gate in order and captures advisory output', asy
       [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'contracts'],
       [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'frontend', 'full'],
       [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'backend'],
+      [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'coverage', 'all'],
     ]
   );
 
@@ -76,6 +83,7 @@ test('main runs repository full gate in order and captures advisory output', asy
   assert.match(warningLog, /warning: .*test\.js\/contracts advisory/u);
   assert.match(warningLog, /warning: .*test\.js\/frontend advisory/u);
   assert.match(warningLog, /warning: .*verify\.js\/backend advisory/u);
+  assert.match(warningLog, /warning: .*verify\.js\/coverage advisory/u);
 });
 
 test('main passes the inherited lock token through every repository gate command', async () => {
@@ -94,11 +102,12 @@ test('main passes the inherited lock token through every repository gate command
   });
 
   assert.equal(status, 0);
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 5);
   assert.equal(calls[0].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
   assert.equal(calls[1].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
   assert.equal(calls[2].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
   assert.equal(calls[3].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
+  assert.equal(calls[4].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
 });
 
 test('main routes the repository gate through the heavy managed runner', async () => {
