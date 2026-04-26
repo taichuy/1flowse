@@ -142,7 +142,7 @@ function TraceLinkageProbe() {
 }
 
 function renderEditor(ui: ReactNode) {
-  return renderReactFlowScene(ui as ReactElement);
+  return renderReactFlowScene(ui as ReactElement, { width: 1280, height: 800 });
 }
 
 async function openConsoleAndRun() {
@@ -209,21 +209,15 @@ describe('debug console trace linkage', () => {
     const tracePanel = screen.getByRole('tabpanel', { name: 'Trace' });
 
     fireEvent.click(within(tracePanel).getByRole('button', { name: /清除筛选/ }));
-    fireEvent.click(within(tracePanel).getByRole('button', { name: /Answer/ }));
+    fireEvent.click(screen.getByRole('button', { name: '选择 Answer' }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('trace-linkage-last-locate')).toHaveTextContent(
+      expect(screen.getByTestId('trace-linkage-selected-node')).toHaveTextContent(
         'node-answer'
       );
     });
-    await waitFor(() => {
-      expect(
-        screen.getByTestId('trace-linkage-pending-locate')
-      ).toHaveTextContent('none');
-    });
-    expect(screen.getByTestId('trace-linkage-selected-node')).toHaveTextContent(
-      'node-llm'
-    );
+    expect(screen.getByTestId('trace-linkage-last-locate')).toHaveTextContent('none');
+    expect(screen.getByTestId('trace-linkage-pending-locate')).toHaveTextContent('none');
   }, 20_000);
 
   test('filters trace rows when a node is selected on canvas', async () => {

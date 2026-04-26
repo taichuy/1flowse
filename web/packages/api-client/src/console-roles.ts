@@ -3,6 +3,7 @@ import { apiFetch, apiFetchVoid } from './transport';
 export interface ConsoleRole {
   code: string;
   name: string;
+  introduction: string;
   scope_kind: 'system' | 'workspace';
   is_builtin: boolean;
   is_editable: boolean;

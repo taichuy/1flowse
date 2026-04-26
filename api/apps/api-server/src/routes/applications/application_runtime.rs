@@ -442,7 +442,9 @@ pub async fn cancel_flow_run(
     })
     .await?;
 
-    Ok(Json(ApiSuccess::new(to_application_run_detail_response(detail))))
+    Ok(Json(ApiSuccess::new(to_application_run_detail_response(
+        detail,
+    ))))
 }
 
 #[utoipa::path(

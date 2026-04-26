@@ -209,11 +209,16 @@ export function AgentFlowCanvasFrame({
         return;
       }
 
-      setBodyWidth(entry.contentRect.width);
+      if (Number.isFinite(entry.contentRect.width) && entry.contentRect.width > 0) {
+        setBodyWidth(entry.contentRect.width);
+      }
     });
 
     resizeObserver.observe(element);
-    setBodyWidth(element.getBoundingClientRect().width);
+    const initialBodyWidth = element.getBoundingClientRect().width;
+    if (Number.isFinite(initialBodyWidth) && initialBodyWidth > 0) {
+      setBodyWidth(initialBodyWidth);
+    }
 
     return () => resizeObserver.disconnect();
   }, []);
@@ -243,12 +248,14 @@ export function AgentFlowCanvasFrame({
 
   useEffect(() => {
     debugSession.syncSelectedNode(selectedNodeId);
-  }, [selectedNodeId]);
+  }, [debugSession, selectedNodeId]);
 
   useEditorShortcuts();
 
   const canvasFrameWidth =
-    bodyWidth || NODE_DETAIL_DEFAULT_WIDTH + NODE_DETAIL_MIN_CANVAS_WIDTH;
+    Number.isFinite(bodyWidth) && bodyWidth > 0
+      ? bodyWidth
+      : NODE_DETAIL_DEFAULT_WIDTH + NODE_DETAIL_MIN_CANVAS_WIDTH;
   const maxDebugConsoleWidth = Math.max(
     canvasFrameWidth -
       (selectedNodeId ? nodeDetailWidth : 0) -
@@ -259,13 +266,21 @@ export function AgentFlowCanvasFrame({
     Math.max(debugConsoleWidth, DEBUG_CONSOLE_MIN_WIDTH),
     maxDebugConsoleWidth
   );
-  const detailContainerWidth =
-    canvasFrameWidth - (debugConsoleOpen ? boundedDebugConsoleWidth : 0);
+  const safeBoundedDebugConsoleWidth = Number.isFinite(boundedDebugConsoleWidth)
+    ? boundedDebugConsoleWidth
+    : DEBUG_CONSOLE_MIN_WIDTH;
+  const detailContainerWidth = Math.max(
+    canvasFrameWidth - (debugConsoleOpen ? safeBoundedDebugConsoleWidth : 0),
+    NODE_DETAIL_MIN_CANVAS_WIDTH
+  );
   const boundedNodeDetailWidth = clampNodeDetailWidth(
     nodeDetailWidth,
     detailContainerWidth
   );
-  const nodeDetailLayout = getNodeDetailLayout(boundedNodeDetailWidth);
+  const safeBoundedNodeDetailWidth = Number.isFinite(boundedNodeDetailWidth)
+    ? boundedNodeDetailWidth
+    : NODE_DETAIL_DEFAULT_WIDTH;
+  const nodeDetailLayout = getNodeDetailLayout(safeBoundedNodeDetailWidth);
 
   function handleNodeDetailResizeStart(
     event: ReactMouseEvent<HTMLDivElement>
@@ -273,7 +288,7 @@ export function AgentFlowCanvasFrame({
     event.preventDefault();
 
     const startX = event.clientX;
-    const startWidth = boundedNodeDetailWidth;
+    const startWidth = safeBoundedNodeDetailWidth;
     const containerWidth = detailContainerWidth;
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
@@ -312,7 +327,7 @@ export function AgentFlowCanvasFrame({
     event.preventDefault();
 
     const startX = event.clientX;
-    const startWidth = boundedDebugConsoleWidth;
+    const startWidth = safeBoundedDebugConsoleWidth;
     const containerWidth = canvasFrameWidth;
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
@@ -458,9 +473,9 @@ export function AgentFlowCanvasFrame({
             data-resizing={isResizingNodeDetail ? 'true' : 'false'}
             style={{
               right: debugConsoleOpen
-                ? `${boundedDebugConsoleWidth + DEBUG_CONSOLE_GAP + 16}px`
+                ? `${safeBoundedDebugConsoleWidth + DEBUG_CONSOLE_GAP + 16}px`
                 : undefined,
-              width: `${boundedNodeDetailWidth}px`
+              width: `${safeBoundedNodeDetailWidth}px`
             }}
           >
             <div
@@ -483,7 +498,7 @@ export function AgentFlowCanvasFrame({
             className="agent-flow-editor__debug-console-dock"
             data-testid="agent-flow-editor-debug-console-dock"
             data-resizing={isResizingDebugConsole ? 'true' : 'false'}
-            style={{ width: `${boundedDebugConsoleWidth}px` }}
+            style={{ width: `${safeBoundedDebugConsoleWidth}px` }}
           >
             <div
               aria-label="调整调试控制台宽度"

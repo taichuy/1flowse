@@ -343,6 +343,7 @@ impl RoleRepository for MemoryRoleRepository {
         roles.push(RoleTemplate {
             code: input.code.clone(),
             name: input.name.clone(),
+            introduction: input.introduction.clone(),
             scope_kind: RoleScopeKind::Workspace,
             is_builtin: false,
             is_editable: true,
@@ -384,6 +385,7 @@ impl RoleRepository for MemoryRoleRepository {
 
         if let Some(role) = role_index.and_then(|index| roles.get_mut(index)) {
             role.name = input.name.clone();
+            role.introduction = input.introduction.clone();
             if let Some(value) = input.auto_grant_new_permissions {
                 role.auto_grant_new_permissions = value;
             }

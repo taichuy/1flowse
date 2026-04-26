@@ -297,7 +297,6 @@ export function RolePermissionPanel({
     setEditingRole(role);
     editForm.setFieldsValue({
       name: role.name,
-      // @ts-expect-error type
       introduction: role.introduction ?? '',
       auto_grant_new_permissions: role.auto_grant_new_permissions,
       is_default_member_role: role.is_default_member_role
@@ -474,7 +473,6 @@ export function RolePermissionPanel({
                     <Space size="large" style={{ color: '#595959' }}>
                       <span>编码：{selectedRole.code}</span>
                       <span>作用域：{selectedRole.scope_kind}</span>
-                      {/* @ts-expect-error type */}
                       {selectedRole.introduction && (
                         <span>说明：{selectedRole.introduction}</span>
                       )}

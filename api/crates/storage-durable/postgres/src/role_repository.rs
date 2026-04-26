@@ -32,6 +32,7 @@ impl RoleRepository for PgControlPlaneStore {
               id,
               code,
               name,
+              introduction,
               scope_kind,
               is_builtin,
               is_editable,

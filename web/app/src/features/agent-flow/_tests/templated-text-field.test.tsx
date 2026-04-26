@@ -131,7 +131,6 @@ function triggerEditorInput(editor: HTMLElement, value: string, data: string) {
   }
 
   editor.textContent = value;
-  const textNode = editor.firstChild ?? editor;
   const selection = window.getSelection();
 
   fireEvent.input(editor, {
@@ -145,10 +144,8 @@ function triggerEditorInput(editor: HTMLElement, value: string, data: string) {
     && typeof selection.addRange === 'function'
   ) {
     const range = document.createRange();
-    const latestTextNode = editor.firstChild ?? textNode;
-    const latestTextLength = latestTextNode.textContent?.length ?? 0;
-    range.setStart(latestTextNode, latestTextNode.nodeType === Node.TEXT_NODE ? latestTextLength : 0);
-    range.collapse(true);
+    range.selectNodeContents(editor);
+    range.collapse(false);
     selection.removeAllRanges();
     selection.addRange(range);
   }
@@ -314,13 +311,10 @@ describe('TemplatedTextField', () => {
     render(<TemplatedTextHarness />);
 
     const editor = screen.getByLabelText('User Prompt');
-    const originalGetBoundingClientRect = editor.parentElement?.getBoundingClientRect.bind(editor.parentElement);
+    const shell = screen.getByTestId('templated-text-editor-shell');
+    const originalGetBoundingClientRect = shell.getBoundingClientRect.bind(shell);
 
-    if (!editor.parentElement || !originalGetBoundingClientRect) {
-      throw new Error('missing templated text shell');
-    }
-
-    editor.parentElement.getBoundingClientRect = () =>
+    shell.getBoundingClientRect = () =>
       ({
         x: 40,
         y: 120,
@@ -346,7 +340,7 @@ describe('TemplatedTextField', () => {
       top: '132px'
     });
 
-    editor.parentElement.getBoundingClientRect = originalGetBoundingClientRect;
+    shell.getBoundingClientRect = originalGetBoundingClientRect;
     selectionSpy.mockRestore();
   });
 

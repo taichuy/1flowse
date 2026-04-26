@@ -88,6 +88,10 @@ function ensureReactFlowTestLayoutMetrics() {
   layoutMetricsPatched = true;
 }
 
+function resolveSceneDimension(value: number | undefined, fallback: number) {
+  return Number.isFinite(value) && value !== undefined ? value : fallback;
+}
+
 export function renderReactFlowScene(
   ui: ReactElement,
   {
@@ -100,6 +104,9 @@ export function renderReactFlowScene(
   ensureReactFlowTestStyles();
   ensureReactFlowTestLayoutMetrics();
 
+  const sceneWidth = resolveSceneDimension(width, DEFAULT_SCENE_WIDTH);
+  const sceneHeight = resolveSceneDimension(height, DEFAULT_SCENE_HEIGHT);
+
   const frame = (
     <div
       ref={(node) => {
@@ -111,19 +118,19 @@ export function renderReactFlowScene(
           ({
             x: 0,
             y: 0,
-            width,
-            height,
+            width: sceneWidth,
+            height: sceneHeight,
             top: 0,
-            right: width,
-            bottom: height,
+            right: sceneWidth,
+            bottom: sceneHeight,
             left: 0,
             toJSON: () => ({})
           }) as DOMRect;
       }}
       className="react-flow-test-scene"
-      data-react-flow-test-width={width}
-      data-react-flow-test-height={height}
-      style={{ width, height }}
+      data-react-flow-test-width={sceneWidth}
+      data-react-flow-test-height={sceneHeight}
+      style={{ width: sceneWidth, height: sceneHeight }}
     >
       {ui}
     </div>

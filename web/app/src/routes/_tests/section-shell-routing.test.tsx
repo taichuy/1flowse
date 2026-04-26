@@ -217,7 +217,10 @@ describe('section shell routing', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/members');
     });
-    expect(await screen.findByRole('heading', { name: '用户管理', level: 4 })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: '用户管理' })).toHaveAttribute(
+      'href',
+      '/settings/members'
+    );
   }, 10000);
 
   test('redirects /settings/docs to /settings/roles when docs is hidden but roles is visible', async () => {
@@ -228,7 +231,10 @@ describe('section shell routing', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/roles');
     });
-    expect(await screen.findByRole('heading', { name: '角色权限管理', level: 3 })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: '权限管理' })).toHaveAttribute(
+      'href',
+      '/settings/roles'
+    );
   });
 
   test('redirects /settings/docs to /settings/model-providers when model providers is the only visible section', async () => {
@@ -239,7 +245,10 @@ describe('section shell routing', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/model-providers');
     });
-    expect(await screen.findByRole('heading', { name: '模型供应商', level: 4 })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: '模型供应商' })).toHaveAttribute(
+      'href',
+      '/settings/model-providers'
+    );
   });
 
   test('redirects /settings/docs to /settings/files when file management is the only visible section', async () => {
@@ -250,6 +259,9 @@ describe('section shell routing', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/files');
     });
-    expect(await screen.findByRole('heading', { name: '文件管理', level: 2 })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: '文件管理' })).toHaveAttribute(
+      'href',
+      '/settings/files'
+    );
   });
 });

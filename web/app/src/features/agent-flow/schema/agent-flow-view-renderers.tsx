@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 
-import { useQuery } from '@tanstack/react-query';
 import {
   ApiOutlined,
   BlockOutlined,
@@ -27,12 +26,8 @@ import type {
 import { NodeRunIOCard } from '../components/detail/last-run/NodeRunIOCard';
 import { NodeRunMetadataCard } from '../components/detail/last-run/NodeRunMetadataCard';
 import { NodeRunSummaryCard } from '../components/detail/last-run/NodeRunSummaryCard';
+import { LlmCardModelBadge } from './LlmCardModelBadge';
 import type { NodeLastRun } from '../api/runtime';
-import { getLlmModelProvider } from '../lib/llm-node-config';
-import {
-  fetchModelProviderOptions,
-  modelProviderOptionsQueryKey
-} from '../api/model-provider-options';
 
 function getNode(adapter: SchemaViewRendererProps['adapter']) {
   return adapter.getDerived('node') as
@@ -125,45 +120,6 @@ function renderCardModelView({ adapter }: SchemaViewRendererProps) {
   }
 
   return <LlmCardModelBadge node={node} />;
-}
-
-/** LLM 节点卡片模型徽章 —— 从缓存查询获取供应商图标 */
-function LlmCardModelBadge({ node }: { node: NonNullable<ReturnType<typeof getNode>> }) {
-  const modelProvider = getLlmModelProvider(node.config);
-  const providerCode = modelProvider.provider_code.trim();
-  const model = modelProvider.model_id.trim();
-
-  const { data: providerOptions } = useQuery({
-    queryKey: modelProviderOptionsQueryKey,
-    queryFn: fetchModelProviderOptions,
-    staleTime: 60_000
-  });
-
-  const providerIcon = providerOptions?.providers?.find(
-    (p) => p.provider_code === providerCode
-  )?.icon || null;
-
-  return (
-    <div className="agent-flow-node-card__model agent-flow-node-card__model--llm">
-      <span className="agent-flow-node-card__model-provider" aria-hidden="true">
-        {providerIcon ? (
-          <img
-            className="agent-flow-node-card__model-provider-image"
-            src={providerIcon}
-            alt=""
-          />
-        ) : null}
-      </span>
-      <span className="agent-flow-node-card__model-content">
-        <span className="agent-flow-node-card__model-provider-label">
-          {modelProvider.provider_label || providerCode || '模型供应商未选择'}
-        </span>
-        <span className="agent-flow-node-card__model-label">
-          {modelProvider.model_label || model || '选择模型'}
-        </span>
-      </span>
-    </div>
-  );
 }
 
 function renderCardDescriptionView({ adapter }: SchemaViewRendererProps) {
@@ -391,7 +347,7 @@ function renderRuntimeMetadataView({ adapter, block }: SchemaViewRendererProps) 
   );
 }
 
-export const agentFlowViewRenderers = {
+const agentFlowViewRenderers = {
   card_eyebrow: renderCardEyebrowView,
   card_model: renderCardModelView,
   card_description: renderCardDescriptionView,
@@ -403,3 +359,5 @@ export const agentFlowViewRenderers = {
   runtime_io: renderRuntimeIoView,
   runtime_metadata: renderRuntimeMetadataView
 } satisfies Record<string, SchemaViewRenderer>;
+
+export default agentFlowViewRenderers;

@@ -192,6 +192,7 @@ pub fn builtin_role_templates() -> Vec<RoleTemplate> {
         RoleTemplate {
             code: "root".to_string(),
             name: "Root".to_string(),
+            introduction: "系统最高权限角色".to_string(),
             scope_kind: RoleScopeKind::System,
             is_builtin: true,
             is_editable: false,
@@ -202,6 +203,7 @@ pub fn builtin_role_templates() -> Vec<RoleTemplate> {
         RoleTemplate {
             code: "admin".to_string(),
             name: "Admin".to_string(),
+            introduction: "工作区管理员角色".to_string(),
             scope_kind: RoleScopeKind::Workspace,
             is_builtin: true,
             is_editable: true,
@@ -212,6 +214,7 @@ pub fn builtin_role_templates() -> Vec<RoleTemplate> {
         RoleTemplate {
             code: "manager".to_string(),
             name: "Manager".to_string(),
+            introduction: "工作区成员默认管理角色".to_string(),
             scope_kind: RoleScopeKind::Workspace,
             is_builtin: true,
             is_editable: true,

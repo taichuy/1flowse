@@ -145,6 +145,7 @@ pub struct PermissionDefinition {
 pub struct RoleTemplate {
     pub code: String,
     pub name: String,
+    pub introduction: String,
     pub scope_kind: RoleScopeKind,
     pub is_builtin: bool,
     pub is_editable: bool,

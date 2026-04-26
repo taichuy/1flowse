@@ -14,9 +14,9 @@ use crate::{
     flow::FlowService,
     plugin_lifecycle::reconcile_installation_snapshot,
     ports::{
-        ApplicationRepository, CompleteCallbackTaskInput, FlowRepository,
-        ModelProviderRepository, NodeContributionRepository, OrchestrationRuntimeRepository,
-        PluginRepository, ProviderRuntimePort,
+        ApplicationRepository, CompleteCallbackTaskInput, FlowRepository, ModelProviderRepository,
+        NodeContributionRepository, OrchestrationRuntimeRepository, PluginRepository,
+        ProviderRuntimePort,
     },
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };

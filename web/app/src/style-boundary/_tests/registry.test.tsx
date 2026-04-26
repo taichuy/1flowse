@@ -139,11 +139,7 @@ describe('style boundary registry', () => {
       );
 
       expect(
-        await screen.findByRole(
-          'heading',
-          { name: '模型供应商', level: 4 },
-          { timeout: 5000 }
-        )
+        await screen.findByRole('heading', { name: '模型供应商', level: 5 }, { timeout: 5000 })
       ).toBeInTheDocument();
       expect(
         await screen.findByRole('heading', { name: '已安装供应商', level: 5 }, { timeout: 5000 })
@@ -172,11 +168,7 @@ describe('style boundary registry', () => {
       );
 
       expect(
-        await screen.findByRole(
-          'heading',
-          { name: '模型供应商', level: 4 },
-          { timeout: 5000 }
-        )
+        await screen.findByRole('heading', { name: '模型供应商', level: 5 }, { timeout: 5000 })
       ).toBeInTheDocument();
 
       const response = await fetch('http://127.0.0.1:7800/api/console/model-providers');

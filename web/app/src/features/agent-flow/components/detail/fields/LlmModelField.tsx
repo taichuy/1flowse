@@ -124,6 +124,22 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function resolveFiniteDimension(
+  primary: number,
+  fallback: number,
+  defaultValue: number
+) {
+  if (Number.isFinite(primary) && primary > 0) {
+    return primary;
+  }
+
+  if (Number.isFinite(fallback) && fallback > 0) {
+    return fallback;
+  }
+
+  return defaultValue;
+}
+
 function resolveFloatingPanelBounds(
   container: HTMLElement | null
 ): FloatingPanelBounds {
@@ -133,16 +149,32 @@ function resolveFloatingPanelBounds(
     return {
       left: rect.left,
       top: rect.top,
-      width: rect.width || container.clientWidth,
-      height: rect.height || container.clientHeight
+      width: resolveFiniteDimension(
+        rect.width,
+        container.clientWidth,
+        FLOATING_PANEL_DEFAULT_WIDTH
+      ),
+      height: resolveFiniteDimension(
+        rect.height,
+        container.clientHeight,
+        FLOATING_PANEL_DEFAULT_HEIGHT * 2
+      )
     };
   }
 
   return {
     left: 0,
     top: 0,
-    width: window.innerWidth,
-    height: window.innerHeight
+    width: resolveFiniteDimension(
+      window.innerWidth,
+      document.documentElement.clientWidth,
+      FLOATING_PANEL_DEFAULT_WIDTH
+    ),
+    height: resolveFiniteDimension(
+      window.innerHeight,
+      document.documentElement.clientHeight,
+      FLOATING_PANEL_DEFAULT_HEIGHT * 2
+    )
   };
 }
 
@@ -151,7 +183,7 @@ function resolveFloatingPanelHeight(bounds: FloatingPanelBounds) {
     return FLOATING_PANEL_DEFAULT_HEIGHT;
   }
 
-  return Math.round(bounds.height / 2);
+  return Math.round((bounds.height || FLOATING_PANEL_DEFAULT_HEIGHT) / 2);
 }
 
 function clampFloatingPanelPosition(
@@ -221,6 +253,11 @@ function resolveInitialFloatingPanelPosition(
     panelHeight,
     panelWidth
   );
+}
+
+function toPixelValue(value: number, fallback: number) {
+  const resolved = Number.isFinite(value) ? value : fallback;
+  return `${resolved}px`;
 }
 
 function ContextMarker({ value }: { value: number | null | undefined }) {
@@ -655,10 +692,10 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
       role="dialog"
       style={{
         position: panelContainer ? 'absolute' : 'fixed',
-        width: `${panelWidth}px`,
-        height: `${panelHeight}px`,
-        left: `${panelPosition.left}px`,
-        top: `${panelPosition.top}px`
+        width: toPixelValue(panelWidth, FLOATING_PANEL_DEFAULT_WIDTH),
+        height: toPixelValue(panelHeight, FLOATING_PANEL_DEFAULT_HEIGHT),
+        left: toPixelValue(panelPosition.left, FLOATING_PANEL_MARGIN),
+        top: toPixelValue(panelPosition.top, FLOATING_PANEL_MARGIN)
       }}
     >
       <div className="agent-flow-model-settings__panel-header">

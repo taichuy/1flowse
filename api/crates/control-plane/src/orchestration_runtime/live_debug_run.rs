@@ -15,8 +15,7 @@ use crate::{
 };
 
 use super::{
-    compile_context::ensure_compiled_plan_runnable,
-    inputs::build_compiled_plan_input,
+    compile_context::ensure_compiled_plan_runnable, inputs::build_compiled_plan_input,
     CancelFlowRunCommand, ContinueFlowDebugRunCommand, OrchestrationRuntimeService,
     StartFlowDebugRunCommand,
 };
@@ -33,7 +32,9 @@ where
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
         + Clone,
-    H: crate::ports::ProviderRuntimePort + crate::capability_plugin_runtime::CapabilityPluginRuntimePort + Clone,
+    H: crate::ports::ProviderRuntimePort
+        + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
+        + Clone,
 {
     let actor = service
         .repository
@@ -47,7 +48,9 @@ where
         .get_application(actor.current_workspace_id, command.application_id)
         .await?
         .ok_or(ControlPlaneError::NotFound("application"))?;
-    let compile_context = service.build_compile_context(application.workspace_id).await?;
+    let compile_context = service
+        .build_compile_context(application.workspace_id)
+        .await?;
     let compiled_plan = orchestration_runtime::compiler::FlowCompiler::compile(
         editor_state.flow.id,
         &editor_state.draft.id.to_string(),
@@ -107,7 +110,9 @@ where
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
         + Clone,
-    H: crate::ports::ProviderRuntimePort + crate::capability_plugin_runtime::CapabilityPluginRuntimePort + Clone,
+    H: crate::ports::ProviderRuntimePort
+        + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
+        + Clone,
 {
     let result = continue_flow_debug_run_inner(service, &command).await;
 
@@ -131,7 +136,9 @@ where
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
         + Clone,
-    H: crate::ports::ProviderRuntimePort + crate::capability_plugin_runtime::CapabilityPluginRuntimePort + Clone,
+    H: crate::ports::ProviderRuntimePort
+        + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
+        + Clone,
 {
     let actor = service
         .repository
@@ -147,7 +154,11 @@ where
         .get_flow_run(command.application_id, command.flow_run_id)
         .await?
         .ok_or_else(|| anyhow!("flow run not found"))?;
-    ensure_flow_run_transition(flow_run.status, domain::FlowRunStatus::Cancelled, "cancel_flow_run")?;
+    ensure_flow_run_transition(
+        flow_run.status,
+        domain::FlowRunStatus::Cancelled,
+        "cancel_flow_run",
+    )?;
     service
         .repository
         .update_flow_run(&UpdateFlowRunInput {
@@ -185,7 +196,9 @@ where
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
         + Clone,
-    H: crate::ports::ProviderRuntimePort + crate::capability_plugin_runtime::CapabilityPluginRuntimePort + Clone,
+    H: crate::ports::ProviderRuntimePort
+        + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
+        + Clone,
 {
     let flow_run = service
         .repository
@@ -226,8 +239,10 @@ where
             .ok_or_else(|| anyhow!("compiled node missing: {node_id}"))?;
         let resolved_inputs =
             orchestration_runtime::binding_runtime::resolve_node_inputs(node, &variable_pool)?;
-        let rendered_templates =
-            orchestration_runtime::binding_runtime::render_templated_bindings(node, &resolved_inputs);
+        let rendered_templates = orchestration_runtime::binding_runtime::render_templated_bindings(
+            node,
+            &resolved_inputs,
+        );
         let node_run = service
             .repository
             .create_node_run(&CreateNodeRunInput {
@@ -298,9 +313,15 @@ where
                 )
                 .await?;
 
-                if is_run_cancelled(&service.repository, command.application_id, flow_run.id).await? {
-                    return load_run_detail(&service.repository, command.application_id, flow_run.id)
-                        .await;
+                if is_run_cancelled(&service.repository, command.application_id, flow_run.id)
+                    .await?
+                {
+                    return load_run_detail(
+                        &service.repository,
+                        command.application_id,
+                        flow_run.id,
+                    )
+                    .await;
                 }
 
                 if let Some(error_payload) = execution.error_payload {
@@ -328,8 +349,12 @@ where
                             payload: error_payload,
                         })
                         .await?;
-                    return load_run_detail(&service.repository, command.application_id, flow_run.id)
-                        .await;
+                    return load_run_detail(
+                        &service.repository,
+                        command.application_id,
+                        flow_run.id,
+                    )
+                    .await;
                 }
 
                 variable_pool.insert(node.node_id.clone(), execution.output_payload);
@@ -366,9 +391,15 @@ where
                     })
                     .await?;
 
-                if is_run_cancelled(&service.repository, command.application_id, flow_run.id).await? {
-                    return load_run_detail(&service.repository, command.application_id, flow_run.id)
-                        .await;
+                if is_run_cancelled(&service.repository, command.application_id, flow_run.id)
+                    .await?
+                {
+                    return load_run_detail(
+                        &service.repository,
+                        command.application_id,
+                        flow_run.id,
+                    )
+                    .await;
                 }
 
                 if let Some(error_payload) = execution.error_payload {
@@ -396,25 +427,30 @@ where
                             payload: error_payload,
                         })
                         .await?;
-                    return load_run_detail(&service.repository, command.application_id, flow_run.id)
-                        .await;
+                    return load_run_detail(
+                        &service.repository,
+                        command.application_id,
+                        flow_run.id,
+                    )
+                    .await;
                 }
 
                 variable_pool.insert(node.node_id.clone(), execution.output_payload);
             }
             "template_transform" | "answer" => {
                 let output_key = first_output_key(node);
-                let output_value = rendered_templates
-                    .values()
-                    .next()
-                    .cloned()
-                    .unwrap_or_else(|| {
-                        resolved_inputs
-                            .values()
-                            .next()
-                            .cloned()
-                            .unwrap_or(Value::Null)
-                    });
+                let output_value =
+                    rendered_templates
+                        .values()
+                        .next()
+                        .cloned()
+                        .unwrap_or_else(|| {
+                            resolved_inputs
+                                .values()
+                                .next()
+                                .cloned()
+                                .unwrap_or(Value::Null)
+                        });
                 let output_payload = json!({ output_key: output_value });
                 last_output_payload = output_payload.clone();
                 variable_pool.insert(node.node_id.clone(), output_payload.clone());
@@ -443,9 +479,15 @@ where
                     })
                     .await?;
 
-                if is_run_cancelled(&service.repository, command.application_id, flow_run.id).await? {
-                    return load_run_detail(&service.repository, command.application_id, flow_run.id)
-                        .await;
+                if is_run_cancelled(&service.repository, command.application_id, flow_run.id)
+                    .await?
+                {
+                    return load_run_detail(
+                        &service.repository,
+                        command.application_id,
+                        flow_run.id,
+                    )
+                    .await;
                 }
 
                 let prompt = rendered_templates
@@ -482,7 +524,8 @@ where
                         finished_at: None,
                     })
                     .await?;
-                return load_run_detail(&service.repository, command.application_id, flow_run.id).await;
+                return load_run_detail(&service.repository, command.application_id, flow_run.id)
+                    .await;
             }
             "tool" | "http_request" => {
                 let request_payload = Value::Object(resolved_inputs.clone());
@@ -498,9 +541,15 @@ where
                     })
                     .await?;
 
-                if is_run_cancelled(&service.repository, command.application_id, flow_run.id).await? {
-                    return load_run_detail(&service.repository, command.application_id, flow_run.id)
-                        .await;
+                if is_run_cancelled(&service.repository, command.application_id, flow_run.id)
+                    .await?
+                {
+                    return load_run_detail(
+                        &service.repository,
+                        command.application_id,
+                        flow_run.id,
+                    )
+                    .await;
                 }
 
                 ensure_flow_run_transition(
@@ -543,7 +592,8 @@ where
                         finished_at: None,
                     })
                     .await?;
-                return load_run_detail(&service.repository, command.application_id, flow_run.id).await;
+                return load_run_detail(&service.repository, command.application_id, flow_run.id)
+                    .await;
             }
             other => return Err(anyhow!("unsupported debug node type: {other}")),
         }
@@ -609,12 +659,15 @@ where
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
         + Clone,
-    H: crate::ports::ProviderRuntimePort + crate::capability_plugin_runtime::CapabilityPluginRuntimePort + Clone,
+    H: crate::ports::ProviderRuntimePort
+        + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
+        + Clone,
 {
     let Some(flow_run) = service
         .repository
         .get_flow_run(application_id, flow_run_id)
-        .await? else {
+        .await?
+    else {
         return Err(anyhow!("flow run not found"));
     };
     if matches!(
@@ -625,7 +678,11 @@ where
     ) {
         return load_run_detail(&service.repository, application_id, flow_run_id).await;
     }
-    ensure_flow_run_transition(flow_run.status, domain::FlowRunStatus::Failed, "fail_flow_run")?;
+    ensure_flow_run_transition(
+        flow_run.status,
+        domain::FlowRunStatus::Failed,
+        "fail_flow_run",
+    )?;
     let error_payload = json!({ "message": error.to_string() });
     service
         .repository
