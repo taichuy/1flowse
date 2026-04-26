@@ -186,7 +186,10 @@ describe('node last run runtime', () => {
     expect(screen.getByRole('region', { name: '变量缓存' })).toHaveStyle({
       height: '264px'
     });
-    expect(screen.getByText('node-start.query')).toBeInTheDocument();
+    const variableSidebar = screen.getByTestId(
+      'agent-flow-editor-variable-cache-sidebar'
+    );
+    expect(within(variableSidebar).getByText('node-start.query')).toBeInTheDocument();
     expect(screen.getByText('总结退款政策')).toBeInTheDocument();
   }, 30_000);
 

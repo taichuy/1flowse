@@ -560,6 +560,15 @@ export function useAgentFlowDebugSession({
     setActiveNodeFilter(nodeId);
   }
 
+  function resetVariableCache() {
+    stopPolling();
+    setStatus('idle');
+    setLastDetail(null);
+    setActiveNodeFilter(null);
+    setNodePreviewVariableCache({});
+    setRunContext(buildRunContextFromDocument(document, null));
+  }
+
   return {
     status,
     runContext,
@@ -574,6 +583,7 @@ export function useAgentFlowDebugSession({
     setRunContextValue,
     getNodePreviewVariableCache,
     rememberNodePreviewVariables,
+    resetVariableCache,
     selectTraceNode,
     syncSelectedNode
   };

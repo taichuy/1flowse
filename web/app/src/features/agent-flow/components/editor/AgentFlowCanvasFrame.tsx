@@ -5,8 +5,8 @@ import type {
   SaveConsoleApplicationDraftInput
 } from '@1flowbase/api-client';
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
-import { CloseOutlined } from '@ant-design/icons';
-import { Button, Typography } from 'antd';
+import { CloseOutlined, CopyOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { Button, Tooltip, Typography, message } from 'antd';
 import {
   useEffect,
   useMemo,
@@ -50,7 +50,7 @@ import {
   selectWorkingDocument
 } from '../../store/editor/selectors';
 import { AgentFlowDebugConsole } from '../debug-console/AgentFlowDebugConsole';
-import { DebugVariablesPane } from '../debug-console/variables/DebugVariablesPane';
+import { DebugVariablesPane, type SelectedVariableInfo } from '../debug-console/variables/DebugVariablesPane';
 import { NodeDetailPanel } from '../detail/NodeDetailPanel';
 import { NodePreviewVariablesModal } from '../detail/NodePreviewVariablesModal';
 import { VersionHistoryDrawer } from '../history/VersionHistoryDrawer';
@@ -65,6 +65,9 @@ const VARIABLE_CACHE_DEFAULT_HEIGHT = 330;
 const VARIABLE_CACHE_MIN_HEIGHT = 180;
 const VARIABLE_CACHE_BOTTOM_GAP = 16;
 const VARIABLE_CACHE_MAX_TOP_GAP = 96;
+const VARIABLE_CACHE_DEFAULT_SIDEBAR_WIDTH = 270;
+const VARIABLE_CACHE_MIN_SIDEBAR_WIDTH = 140;
+const VARIABLE_CACHE_MIN_DETAIL_WIDTH = 220;
 
 interface AgentFlowCanvasFrameProps {
   applicationId: string;
@@ -128,6 +131,7 @@ export function AgentFlowCanvasFrame({
   const stopNodeDetailResizeRef = useRef<(() => void) | null>(null);
   const stopDebugConsoleResizeRef = useRef<(() => void) | null>(null);
   const stopVariableCacheResizeRef = useRef<(() => void) | null>(null);
+  const stopVariableCacheSidebarResizeRef = useRef<(() => void) | null>(null);
   const [bodyWidth, setBodyWidth] = useState(0);
   const [bodyHeight, setBodyHeight] = useState(0);
   const [isResizingNodeDetail, setIsResizingNodeDetail] = useState(false);
@@ -137,10 +141,13 @@ export function AgentFlowCanvasFrame({
     plan: NodeDebugPreviewPlan;
   } | null>(null);
   const [variableCacheOpen, setVariableCacheOpen] = useState(false);
+  const [selectedVariable, setSelectedVariable] = useState<SelectedVariableInfo | null>(null);
   const [variableCacheHeight, setVariableCacheHeight] = useState(
     VARIABLE_CACHE_DEFAULT_HEIGHT
   );
   const [isResizingVariableCache, setIsResizingVariableCache] = useState(false);
+  const [variableCacheSidebarWidth, setVariableCacheSidebarWidth] = useState(VARIABLE_CACHE_DEFAULT_SIDEBAR_WIDTH);
+  const [isResizingVariableCacheSidebar, setIsResizingVariableCacheSidebar] = useState(false);
   const modelProviderOptionsQuery = useQuery({
     queryKey: modelProviderOptionsQueryKey,
     queryFn: fetchModelProviderOptions
@@ -269,6 +276,7 @@ export function AgentFlowCanvasFrame({
       stopNodeDetailResizeRef.current?.();
       stopDebugConsoleResizeRef.current?.();
       stopVariableCacheResizeRef.current?.();
+      stopVariableCacheSidebarResizeRef.current?.();
     };
   }, []);
 
@@ -294,6 +302,14 @@ export function AgentFlowCanvasFrame({
     }
 
     stopVariableCacheResizeRef.current?.();
+  }, [variableCacheOpen]);
+
+  useEffect(() => {
+    if (variableCacheOpen) {
+      return;
+    }
+
+    stopVariableCacheSidebarResizeRef.current?.();
   }, [variableCacheOpen]);
 
   useEffect(() => {
@@ -342,6 +358,18 @@ export function AgentFlowCanvasFrame({
   const boundedVariableCacheHeight = Math.min(
     Math.max(variableCacheHeight, VARIABLE_CACHE_MIN_HEIGHT),
     variableCacheMaxHeight
+  );
+  const variableCachePanelInnerWidth = Math.max(
+    canvasFrameWidth - variableCacheRightOffset - 32,
+    VARIABLE_CACHE_MIN_DETAIL_WIDTH + VARIABLE_CACHE_MIN_SIDEBAR_WIDTH
+  );
+  const variableCacheSidebarMaxWidth = Math.max(
+    variableCachePanelInnerWidth - VARIABLE_CACHE_MIN_DETAIL_WIDTH,
+    VARIABLE_CACHE_MIN_SIDEBAR_WIDTH
+  );
+  const boundedVariableCacheSidebarWidth = Math.max(
+    VARIABLE_CACHE_MIN_SIDEBAR_WIDTH,
+    Math.min(variableCacheSidebarWidth, variableCacheSidebarMaxWidth)
   );
 
   function handleNodeDetailResizeStart(event: ReactMouseEvent<HTMLDivElement>) {
@@ -428,7 +456,7 @@ export function AgentFlowCanvasFrame({
     window.addEventListener('mouseup', cleanup);
   }
 
-  function handleVariableCacheResizeStart(
+   function handleVariableCacheResizeStart(
     event: ReactMouseEvent<HTMLDivElement>
   ) {
     event.preventDefault();
@@ -468,6 +496,55 @@ export function AgentFlowCanvasFrame({
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', cleanup);
   }
+
+  function handleVariableCacheSidebarResizeStart(
+    event: ReactMouseEvent<HTMLDivElement>
+  ) {
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startWidth = boundedVariableCacheSidebarWidth;
+    const minWidth = VARIABLE_CACHE_MIN_SIDEBAR_WIDTH;
+    const maxWidth = variableCacheSidebarMaxWidth;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    stopVariableCacheSidebarResizeRef.current?.();
+    setIsResizingVariableCacheSidebar(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const cleanup = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', cleanup);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      setIsResizingVariableCacheSidebar(false);
+      stopVariableCacheSidebarResizeRef.current = null;
+    };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const nextWidth = Math.min(
+        Math.max(
+          startWidth + moveEvent.clientX - startX,
+          minWidth
+        ),
+        maxWidth
+      );
+
+      setVariableCacheSidebarWidth(nextWidth);
+    };
+
+    stopVariableCacheSidebarResizeRef.current = cleanup;
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', cleanup);
+  }
+  function handleResetVariableCache() {
+    debugSession.resetVariableCache();
+    setSelectedVariable(null);
+    message.success('已重置变量缓存');
+  }
+
 
   function getDocumentWithLatestViewport(
     currentDocument: FlowAuthoringDocument
@@ -661,6 +738,7 @@ export function AgentFlowCanvasFrame({
             aria-label="变量缓存"
             className="agent-flow-editor__variable-cache-panel"
             data-resizing={isResizingVariableCache ? 'true' : 'false'}
+            data-sidebar-resizing={isResizingVariableCacheSidebar ? 'true' : 'false'}
             style={{
               right: variableCacheRightOffset,
               height: boundedVariableCacheHeight
@@ -674,21 +752,66 @@ export function AgentFlowCanvasFrame({
               role="separator"
             />
             <header className="agent-flow-editor__variable-cache-header">
-              <div className="agent-flow-editor__variable-cache-title">
+              <div className="agent-flow-editor__variable-cache-title-line">
                 <Typography.Text strong>变量缓存</Typography.Text>
-                <Typography.Text type="secondary">
-                  当前编排页内存中的试运行变量。
-                </Typography.Text>
+                <Tooltip title="当前编排页内存中的试运行变量。">
+                  <QuestionCircleOutlined
+                    aria-label="变量缓存说明"
+                    className="agent-flow-editor__variable-cache-help-icon"
+                  />
+                </Tooltip>
               </div>
-              <Button
-                aria-label="关闭变量缓存"
-                icon={<CloseOutlined />}
-                type="text"
-                onClick={() => setVariableCacheOpen(false)}
-              />
+              <div className="agent-flow-editor__variable-cache-header-right">
+                {selectedVariable && (
+                  <div className="agent-flow-editor__variable-cache-header-center">
+                    <Typography.Text className="agent-flow-editor__variable-cache-header-variable-name">
+                      {selectedVariable.label}
+                    </Typography.Text>
+                    <Button
+                      aria-label="复制变量值"
+                      icon={<CopyOutlined />}
+                      size="small"
+                      type="text"
+                      onClick={() => {
+                        const text =
+                          typeof selectedVariable.value === 'string'
+                            ? selectedVariable.value
+                            : JSON.stringify(selectedVariable.value, null, 2);
+                        navigator.clipboard.writeText(text).then(
+                          () => message.success('已复制'),
+                          () => message.error('复制失败')
+                        );
+                      }}
+                    >
+                      复制
+                    </Button>
+                  </div>
+                )}
+                <Button
+                  aria-label="重置所有变量缓存"
+                  size="small"
+                  type="text"
+                  onClick={handleResetVariableCache}
+                >
+                  重置所有
+                </Button>
+                <Button
+                  aria-label="关闭变量缓存"
+                  icon={<CloseOutlined />}
+                  type="text"
+                  onClick={() => setVariableCacheOpen(false)}
+                />
+              </div>
             </header>
             <div className="agent-flow-editor__variable-cache-body">
-              <DebugVariablesPane groups={debugSession.variableGroups} />
+              <DebugVariablesPane
+                groups={debugSession.variableGroups}
+                onSelectedChange={setSelectedVariable}
+                sidebarWidth={boundedVariableCacheSidebarWidth}
+                sidebarMinWidth={VARIABLE_CACHE_MIN_SIDEBAR_WIDTH}
+                sidebarMaxWidth={variableCacheSidebarMaxWidth}
+                onSidebarResizeStart={handleVariableCacheSidebarResizeStart}
+              />
             </div>
           </section>
         ) : null}
