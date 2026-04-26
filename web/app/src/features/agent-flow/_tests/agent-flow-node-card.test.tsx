@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { AppProviders } from '../../../app/AppProviders';
@@ -213,5 +213,79 @@ describe('AgentFlowNodeCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tool 更多操作' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: /删除节点/ }));
     expect(onDeleteNode).toHaveBeenCalledWith('node-tool');
+  });
+
+  test('keeps hover quick actions visible for one second after leaving the node', () => {
+    vi.useFakeTimers();
+
+    try {
+      render(
+        <AppProviders>
+          <AgentFlowNodeCard
+            {...({
+              data: {
+                nodeId: 'node-delay',
+                nodeType: 'tool',
+                nodeSchema: resolveAgentFlowNodeSchema('tool'),
+                typeLabel: 'Tool',
+                alias: 'Tool',
+                description: '调用外部工具能力并返回工具执行结果。',
+                config: {},
+                issueCount: 0,
+                canEnterContainer: false,
+                pickerOpen: false,
+                showTargetHandle: true,
+                showSourceHandle: true,
+                isContainer: false,
+                nodePickerOptions: [],
+                onOpenPicker: vi.fn(),
+                onClosePicker: vi.fn(),
+                onOpenContainer: vi.fn(),
+                onSelectNode: vi.fn(),
+                onInsertNode: vi.fn(),
+                onRunNode: vi.fn(),
+                onReplaceNode: vi.fn(),
+                onDeleteNode: vi.fn()
+              },
+              id: 'node-delay',
+              selected: false
+            } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+          />
+        </AppProviders>
+      );
+
+      const quickActions = screen.getByTestId(
+        'agent-flow-node-quick-actions-node-delay'
+      );
+      const card = screen.getByRole('button', {
+        name: /调用外部工具能力/
+      });
+
+      expect(quickActions).not.toHaveClass(
+        'agent-flow-node-card__quick-actions--visible'
+      );
+
+      fireEvent.mouseEnter(card as HTMLElement);
+      expect(quickActions).toHaveClass(
+        'agent-flow-node-card__quick-actions--visible'
+      );
+
+      fireEvent.mouseLeave(card as HTMLElement);
+      act(() => {
+        vi.advanceTimersByTime(999);
+      });
+      expect(quickActions).toHaveClass(
+        'agent-flow-node-card__quick-actions--visible'
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(quickActions).not.toHaveClass(
+        'agent-flow-node-card__quick-actions--visible'
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

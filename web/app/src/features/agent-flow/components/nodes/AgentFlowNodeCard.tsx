@@ -6,7 +6,12 @@ import {
 } from '@ant-design/icons';
 import { Button, Dropdown, Tooltip, type MenuProps } from 'antd';
 import { Position, type NodeProps } from '@xyflow/react';
-import type { MouseEvent as ReactMouseEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent
+} from 'react';
 
 import { SchemaRenderer } from '../../../../shared/schema-ui/runtime/SchemaRenderer';
 import { CanvasHandle } from '../canvas/CanvasHandle';
@@ -19,13 +24,46 @@ import {
   getNodePickerOptionKey
 } from '../../lib/plugin-node-definitions';
 
+const QUICK_ACTION_HIDE_DELAY_MS = 1000;
+
 export function AgentFlowNodeCard({
   data,
   selected
 }: NodeProps<AgentFlowCanvasNode>) {
+  const [quickActionsVisible, setQuickActionsVisible] = useState(false);
+  const hideQuickActionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const stopActionEvent = (event: ReactMouseEvent<HTMLElement>) => {
     event.stopPropagation();
   };
+  const clearHideQuickActionsTimer = () => {
+    if (hideQuickActionsTimerRef.current === null) {
+      return;
+    }
+
+    clearTimeout(hideQuickActionsTimerRef.current);
+    hideQuickActionsTimerRef.current = null;
+  };
+  const showQuickActions = () => {
+    clearHideQuickActionsTimer();
+    setQuickActionsVisible(true);
+  };
+  const scheduleHideQuickActions = () => {
+    clearHideQuickActionsTimer();
+    hideQuickActionsTimerRef.current = setTimeout(() => {
+      setQuickActionsVisible(false);
+      hideQuickActionsTimerRef.current = null;
+    }, QUICK_ACTION_HIDE_DELAY_MS);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (hideQuickActionsTimerRef.current !== null) {
+        clearTimeout(hideQuickActionsTimerRef.current);
+      }
+    };
+  }, []);
   const nodePickerOptions = data.nodePickerOptions ?? [];
   const replaceItems: MenuProps['items'] = nodePickerOptions.map((option) => ({
     key: getNodePickerOptionKey(option),
@@ -122,6 +160,10 @@ export function AgentFlowNodeCard({
         role="button"
         tabIndex={0}
         onClick={() => data.onSelectNode(data.nodeId)}
+        onMouseEnter={showQuickActions}
+        onMouseLeave={scheduleHideQuickActions}
+        onFocus={showQuickActions}
+        onBlur={scheduleHideQuickActions}
         onDoubleClick={() => {
           if (data.canEnterContainer) {
             data.onOpenContainer(data.nodeId);
@@ -140,9 +182,12 @@ export function AgentFlowNodeCard({
           registry={agentFlowRendererRegistry}
         />
         <div
-          className="agent-flow-node-card__quick-actions"
+          className={`agent-flow-node-card__quick-actions${quickActionsVisible ? ' agent-flow-node-card__quick-actions--visible' : ''}`}
+          data-testid={`agent-flow-node-quick-actions-${data.nodeId}`}
           onClick={stopActionEvent}
           onDoubleClick={stopActionEvent}
+          onMouseEnter={showQuickActions}
+          onMouseLeave={scheduleHideQuickActions}
           onMouseDown={stopActionEvent}
         >
           <Tooltip title="执行此节点">
