@@ -2,11 +2,18 @@ import {
   createNextNodeId,
   createNodeDocument
 } from '../../lib/document/node-factory';
-import { insertNodeAfter } from '../../lib/document/transforms/node';
+import {
+  insertNodeAfter,
+  removeNodeSubgraph,
+  replaceNodeWithOption
+} from '../../lib/document/transforms/node';
 import type { NodePickerOption } from '../../lib/plugin-node-definitions';
 import { useContainerNavigation } from './use-container-navigation';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
-import { selectWorkingDocument } from '../../store/editor/selectors';
+import {
+  selectSelectedNodeId,
+  selectWorkingDocument
+} from '../../store/editor/selectors';
 
 export function useNodeInteractions() {
   const document = useAgentFlowEditorStore(selectWorkingDocument);
@@ -18,6 +25,7 @@ export function useNodeInteractions() {
   const setInteractionState = useAgentFlowEditorStore(
     (state) => state.setInteractionState
   );
+  const selectedNodeId = useAgentFlowEditorStore(selectSelectedNodeId);
   const navigation = useContainerNavigation();
 
   return {
@@ -71,7 +79,9 @@ export function useNodeInteractions() {
       });
     },
     insertAfterNode(anchorNodeId: string, option: NodePickerOption) {
-      const anchorNode = document.graph.nodes.find((node) => node.id === anchorNodeId);
+      const anchorNode = document.graph.nodes.find(
+        (node) => node.id === anchorNodeId
+      );
 
       if (!anchorNode) {
         return;
@@ -103,6 +113,55 @@ export function useNodeInteractions() {
           anchorNodeId: null,
           anchorEdgeId: null,
           anchorCanvasPosition: null
+        }
+      });
+    },
+    replaceNode(nodeId: string, option: NodePickerOption) {
+      const nextDocument = replaceNodeWithOption(document, { nodeId, option });
+
+      if (nextDocument === document) {
+        return;
+      }
+
+      setWorkingDocument(nextDocument);
+      setSelection({
+        selectedNodeId: nodeId,
+        selectedNodeIds: [nodeId],
+        selectedEdgeId: null
+      });
+      setInteractionState({
+        connectingPayload: {
+          sourceNodeId: null,
+          sourceHandleId: null,
+          sourceNodeType: null
+        }
+      });
+    },
+    deleteNode(nodeId: string) {
+      const nextDocument = removeNodeSubgraph(document, { nodeId });
+
+      if (nextDocument === document) {
+        return;
+      }
+
+      setWorkingDocument(nextDocument);
+
+      if (selectedNodeId === nodeId) {
+        setSelection({
+          selectedNodeId: null,
+          selectedNodeIds: [],
+          selectedEdgeId: null,
+          focusedFieldKey: null,
+          openInspectorSectionKey: null
+        });
+      }
+
+      setInteractionState({
+        pendingLocateNodeId: null,
+        connectingPayload: {
+          sourceNodeId: null,
+          sourceHandleId: null,
+          sourceNodeType: null
         }
       });
     },

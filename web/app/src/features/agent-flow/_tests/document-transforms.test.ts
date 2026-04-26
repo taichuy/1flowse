@@ -15,6 +15,7 @@ import {
 import {
   moveNodes,
   removeNodeSubgraph,
+  replaceNodeWithOption,
   updateNodeField
 } from '../lib/document/transforms/node';
 import { setViewport } from '../lib/document/transforms/viewport';
@@ -167,18 +168,21 @@ describe('agent flow document transforms', () => {
   test('duplicates a container subtree and rewrites internal ids', () => {
     const document = createNestedContainerDocument();
 
-    const next = duplicateNodeSubgraph(document, { nodeId: 'node-iteration-1' });
+    const next = duplicateNodeSubgraph(document, {
+      nodeId: 'node-iteration-1'
+    });
 
-    expect(next.graph.nodes.some((node) => node.id === 'node-iteration-1-copy')).toBe(
-      true
-    );
     expect(
-      next.graph.nodes.some((node) => node.containerId === 'node-iteration-1-copy')
+      next.graph.nodes.some((node) => node.id === 'node-iteration-1-copy')
+    ).toBe(true);
+    expect(
+      next.graph.nodes.some(
+        (node) => node.containerId === 'node-iteration-1-copy'
+      )
     ).toBe(true);
     expect(
       next.graph.edges.some(
-        (edge) =>
-      edge.source.includes('-copy') && edge.target.includes('-copy')
+        (edge) => edge.source.includes('-copy') && edge.target.includes('-copy')
       )
     ).toBe(true);
   });
@@ -217,6 +221,36 @@ describe('agent flow document transforms', () => {
         })
       ])
     );
+  });
+
+  test('replaces a node while keeping its id position and connected edges', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const originalNode = document.graph.nodes.find(
+      (node) => node.id === 'node-llm'
+    );
+
+    const next = replaceNodeWithOption(document, {
+      nodeId: 'node-llm',
+      option: {
+        kind: 'builtin',
+        type: 'tool',
+        label: 'Tool'
+      }
+    });
+    const replacedNode = next.graph.nodes.find(
+      (node) => node.id === 'node-llm'
+    );
+
+    expect(replacedNode).toEqual(
+      expect.objectContaining({
+        id: 'node-llm',
+        type: 'tool',
+        alias: 'Tool',
+        position: originalNode?.position,
+        containerId: originalNode?.containerId
+      })
+    );
+    expect(next.graph.edges).toEqual(document.graph.edges);
   });
 
   test('removes nested container children when deleting a container node', () => {

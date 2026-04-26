@@ -1,6 +1,9 @@
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 
-import type { AgentFlowCanvasNode, AgentFlowCanvasNodeData } from '../../components/canvas/node-types';
+import type {
+  AgentFlowCanvasNode,
+  AgentFlowCanvasNodeData
+} from '../../components/canvas/node-types';
 import type { NodePickerOption } from '../plugin-node-definitions';
 import { resolveAgentFlowNodeSchema } from '../../schema/node-schema-registry';
 
@@ -32,6 +35,9 @@ export function toCanvasNodes(
     | 'onOpenContainer'
     | 'onSelectNode'
     | 'onInsertNode'
+    | 'onRunNode'
+    | 'onReplaceNode'
+    | 'onDeleteNode'
   > & {
     nodePickerOptions: NodePickerOption[];
   }

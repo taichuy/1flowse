@@ -36,6 +36,7 @@ import type { NodePickerOption } from '../../lib/plugin-node-definitions';
 interface AgentFlowCanvasProps {
   issueCountByNodeId: Record<string, number>;
   nodePickerOptions?: NodePickerOption[];
+  onRunNode?: (nodeId: string) => void;
   onViewportSnapshotChange?: (
     viewport: FlowAuthoringDocument['editor']['viewport']
   ) => void;
@@ -51,7 +52,11 @@ function ZoomToolbar() {
   return (
     <Panel position="bottom-left" style={{ left: 0, bottom: 0 }}>
       <div className="agent-flow-zoom-toolbar">
-        <div aria-label="画布缩放工具栏" className="agent-flow-zoom-toolbar__actions" role="toolbar">
+        <div
+          aria-label="画布缩放工具栏"
+          className="agent-flow-zoom-toolbar__actions"
+          role="toolbar"
+        >
           <Button
             aria-label="缩小画布"
             className="agent-flow-zoom-toolbar__button"
@@ -150,15 +155,20 @@ function PendingLocateNodeEffect() {
 function AgentFlowCanvasInner({
   issueCountByNodeId,
   nodePickerOptions = BUILTIN_NODE_PICKER_OPTIONS,
+  onRunNode,
   onViewportSnapshotChange,
   onViewportGetterReady
 }: AgentFlowCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const document = useAgentFlowEditorStore(selectWorkingDocument);
   const activeContainerId = useAgentFlowEditorStore(selectActiveContainerId);
-  const selectedEdgeId = useAgentFlowEditorStore((state) => state.selectedEdgeId);
+  const selectedEdgeId = useAgentFlowEditorStore(
+    (state) => state.selectedEdgeId
+  );
   const selectedNodeId = useAgentFlowEditorStore(selectSelectedNodeId);
-  const nodePickerState = useAgentFlowEditorStore((state) => state.nodePickerState);
+  const nodePickerState = useAgentFlowEditorStore(
+    (state) => state.nodePickerState
+  );
   const canvasInteractions = useCanvasInteractions();
   const nodeInteractions = useNodeInteractions();
   const edgeInteractions = useEdgeInteractions();
@@ -180,6 +190,9 @@ function AgentFlowCanvasInner({
           onOpenContainer: nodeInteractions.openContainer,
           onSelectNode: nodeInteractions.selectNode,
           onInsertNode: nodeInteractions.insertAfterNode,
+          onRunNode: onRunNode ?? (() => undefined),
+          onReplaceNode: nodeInteractions.replaceNode,
+          onDeleteNode: nodeInteractions.deleteNode,
           nodePickerOptions
         }
       ),
@@ -189,6 +202,7 @@ function AgentFlowCanvasInner({
       issueCountByNodeId,
       nodeInteractions,
       nodePickerOptions,
+      onRunNode,
       nodePickerState.anchorCanvasPosition,
       nodePickerState.anchorNodeId,
       nodePickerState.open,

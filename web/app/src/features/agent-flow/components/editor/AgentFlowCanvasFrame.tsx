@@ -92,7 +92,9 @@ export function AgentFlowCanvasFrame({
   const debugConsoleActiveTab = useAgentFlowEditorStore(
     (state) => state.debugConsoleActiveTab
   );
-  const selectedNodeId = useAgentFlowEditorStore((state) => state.selectedNodeId);
+  const selectedNodeId = useAgentFlowEditorStore(
+    (state) => state.selectedNodeId
+  );
   const activeContainerPath = useAgentFlowEditorStore(
     (state) => state.activeContainerPath
   );
@@ -101,7 +103,9 @@ export function AgentFlowCanvasFrame({
   const isRestoringVersion = useAgentFlowEditorStore(
     (state) => state.isRestoringVersion
   );
-  const nodeDetailWidth = useAgentFlowEditorStore((state) => state.nodeDetailWidth);
+  const nodeDetailWidth = useAgentFlowEditorStore(
+    (state) => state.nodeDetailWidth
+  );
   const setPanelState = useAgentFlowEditorStore((state) => state.setPanelState);
   const setInteractionState = useAgentFlowEditorStore(
     (state) => state.setInteractionState
@@ -109,8 +113,9 @@ export function AgentFlowCanvasFrame({
   const documentRef = useRef(workingDocument);
   const lastSavedDocumentRef = useRef(lastSavedDocument);
   const viewportSnapshotRef = useRef(workingDocument.editor.viewport);
-  const viewportGetterRef =
-    useRef<(() => FlowAuthoringDocument['editor']['viewport']) | null>(null);
+  const viewportGetterRef = useRef<
+    (() => FlowAuthoringDocument['editor']['viewport']) | null
+  >(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const stopNodeDetailResizeRef = useRef<(() => void) | null>(null);
   const stopDebugConsoleResizeRef = useRef<(() => void) | null>(null);
@@ -126,7 +131,8 @@ export function AgentFlowCanvasFrame({
     applicationId,
     saveDraftOverride,
     restoreVersionOverride,
-    getCurrentDocument: () => getDocumentWithLatestViewport(documentRef.current),
+    getCurrentDocument: () =>
+      getDocumentWithLatestViewport(documentRef.current),
     getLastSavedDocument: () => lastSavedDocumentRef.current
   });
   const debugSession = useAgentFlowDebugSession({
@@ -138,9 +144,15 @@ export function AgentFlowCanvasFrame({
     () =>
       validateDocument(
         workingDocument,
-        modelProviderOptionsQuery.isSuccess ? modelProviderOptionsQuery.data : null
+        modelProviderOptionsQuery.isSuccess
+          ? modelProviderOptionsQuery.data
+          : null
       ),
-    [workingDocument, modelProviderOptionsQuery.data, modelProviderOptionsQuery.isSuccess]
+    [
+      workingDocument,
+      modelProviderOptionsQuery.data,
+      modelProviderOptionsQuery.isSuccess
+    ]
   );
   const activeContainerId = activeContainerPath.at(-1) ?? null;
   const detailActions = useNodeDetailActions();
@@ -158,7 +170,10 @@ export function AgentFlowCanvasFrame({
       );
     },
     onSuccess: async (lastRun, nodeId) => {
-      queryClient.setQueryData(nodeLastRunQueryKey(applicationId, nodeId), lastRun);
+      queryClient.setQueryData(
+        nodeLastRunQueryKey(applicationId, nodeId),
+        lastRun
+      );
       setPanelState({ nodeDetailTab: 'lastRun' });
       await queryClient.invalidateQueries({
         queryKey: ['applications', applicationId, 'runtime']
@@ -267,9 +282,7 @@ export function AgentFlowCanvasFrame({
   );
   const nodeDetailLayout = getNodeDetailLayout(boundedNodeDetailWidth);
 
-  function handleNodeDetailResizeStart(
-    event: ReactMouseEvent<HTMLDivElement>
-  ) {
+  function handleNodeDetailResizeStart(event: ReactMouseEvent<HTMLDivElement>) {
     event.preventDefault();
 
     const startX = event.clientX;
@@ -333,7 +346,10 @@ export function AgentFlowCanvasFrame({
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const nextWidth = Math.min(
-        Math.max(startWidth - (moveEvent.clientX - startX), DEBUG_CONSOLE_MIN_WIDTH),
+        Math.max(
+          startWidth - (moveEvent.clientX - startX),
+          DEBUG_CONSOLE_MIN_WIDTH
+        ),
         Math.max(
           containerWidth -
             (selectedNodeId ? boundedNodeDetailWidth : 0) -
@@ -350,8 +366,11 @@ export function AgentFlowCanvasFrame({
     window.addEventListener('mouseup', cleanup);
   }
 
-  function getDocumentWithLatestViewport(currentDocument: FlowAuthoringDocument) {
-    const viewport = viewportGetterRef.current?.() ?? viewportSnapshotRef.current;
+  function getDocumentWithLatestViewport(
+    currentDocument: FlowAuthoringDocument
+  ) {
+    const viewport =
+      viewportGetterRef.current?.() ?? viewportSnapshotRef.current;
     const currentViewport = currentDocument.editor.viewport;
 
     if (
@@ -371,12 +390,16 @@ export function AgentFlowCanvasFrame({
     };
   }
 
+  function handleRunNode(nodeId: string) {
+    nodePreviewMutation.mutate(nodeId);
+  }
+
   function handleRunSelectedNode() {
     if (!selectedNodeId) {
       return;
     }
 
-    nodePreviewMutation.mutate(selectedNodeId);
+    handleRunNode(selectedNodeId);
   }
 
   function handleLocateTraceNode(nodeId: string | null) {
@@ -429,8 +452,9 @@ export function AgentFlowCanvasFrame({
           <Typography.Text type="secondary">
             当前位于容器节点{' '}
             {
-              workingDocument.graph.nodes.find((node) => node.id === activeContainerId)
-                ?.alias
+              workingDocument.graph.nodes.find(
+                (node) => node.id === activeContainerId
+              )?.alias
             }
           </Typography.Text>
         </div>
@@ -443,6 +467,7 @@ export function AgentFlowCanvasFrame({
         <AgentFlowCanvas
           issueCountByNodeId={issueCountByNodeId}
           nodePickerOptions={nodePickerOptions}
+          onRunNode={handleRunNode}
           onViewportSnapshotChange={(viewport) => {
             viewportSnapshotRef.current = viewport;
           }}
@@ -501,7 +526,9 @@ export function AgentFlowCanvasFrame({
               traceItems={debugSession.traceItems}
               variableGroups={debugSession.variableGroups}
               onChangeRunContextValue={debugSession.setRunContextValue}
-              onChangeTab={(key) => setPanelState({ debugConsoleActiveTab: key })}
+              onChangeTab={(key) =>
+                setPanelState({ debugConsoleActiveTab: key })
+              }
               onClearSession={debugSession.clearSession}
               onClose={() => setPanelState({ debugConsoleOpen: false })}
               onLocateTraceNode={handleLocateTraceNode}

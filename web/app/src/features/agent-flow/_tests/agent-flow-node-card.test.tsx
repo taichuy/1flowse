@@ -78,11 +78,13 @@ describe('AgentFlowNodeCard', () => {
       </AppProviders>
     );
 
-    expect(screen.getByText('Answer').closest('.agent-flow-node-card')).toHaveClass(
-      'agent-flow-node-card--type-answer'
-    );
-    expect(document.querySelector('.agent-flow-node-card__type-icon')).toBeInTheDocument();
-    expect(document.querySelector('.agent-flow-node-card__badge')).not.toBeInTheDocument();
+    const card = screen.getByRole('button', { name: /message Answer/ });
+
+    expect(card).toHaveClass('agent-flow-node-card--type-answer');
+    expect(
+      within(card).getByRole('img', { name: 'message' })
+    ).toBeInTheDocument();
+    expect(screen.queryByText('3')).not.toBeInTheDocument();
   });
 
   test('uses the source handle itself as the add-node trigger instead of nesting a separate button', () => {
@@ -123,7 +125,7 @@ describe('AgentFlowNodeCard', () => {
             selected: false
           } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
         />
-      </AppProviders>,
+      </AppProviders>
     );
 
     const card = screen.getByRole('button', { name: /LLM OpenAI Prod GPT-4/ });
@@ -140,5 +142,76 @@ describe('AgentFlowNodeCard', () => {
     fireEvent.click(trigger);
 
     expect(onOpenPicker).toHaveBeenCalledWith('node-llm');
+  });
+
+  test('shows hover quick actions for running, replacing and deleting a node', async () => {
+    const onRunNode = vi.fn();
+    const onReplaceNode = vi.fn();
+    const onDeleteNode = vi.fn();
+
+    render(
+      <AppProviders>
+        <AgentFlowNodeCard
+          {...({
+            data: {
+              nodeId: 'node-tool',
+              nodeType: 'tool',
+              nodeSchema: resolveAgentFlowNodeSchema('tool'),
+              typeLabel: 'Tool',
+              alias: 'Tool',
+              description: '调用外部工具能力并返回工具执行结果。',
+              config: {},
+              issueCount: 0,
+              canEnterContainer: false,
+              pickerOpen: false,
+              showTargetHandle: true,
+              showSourceHandle: true,
+              isContainer: false,
+              nodePickerOptions: [
+                { kind: 'builtin', type: 'llm', label: 'LLM' },
+                {
+                  kind: 'builtin',
+                  type: 'template_transform',
+                  label: 'Template Transform'
+                }
+              ],
+              onOpenPicker: vi.fn(),
+              onClosePicker: vi.fn(),
+              onOpenContainer: vi.fn(),
+              onSelectNode: vi.fn(),
+              onInsertNode: vi.fn(),
+              onRunNode,
+              onReplaceNode,
+              onDeleteNode
+            },
+            id: 'node-tool',
+            selected: false
+          } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+        />
+      </AppProviders>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '执行 Tool' }));
+    expect(onRunNode).toHaveBeenCalledWith('node-tool');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tool 更多操作' }));
+    expect(
+      await screen.findByRole('menuitem', { name: /执行此节点/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /更换节点/ })
+    ).toBeInTheDocument();
+
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: /更换节点/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'LLM' }));
+    expect(onReplaceNode).toHaveBeenCalledWith('node-tool', {
+      kind: 'builtin',
+      type: 'llm',
+      label: 'LLM'
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tool 更多操作' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /删除节点/ }));
+    expect(onDeleteNode).toHaveBeenCalledWith('node-tool');
   });
 });

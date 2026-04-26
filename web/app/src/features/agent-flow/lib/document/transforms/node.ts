@@ -5,6 +5,8 @@ import type {
 } from '@1flowbase/flow-schema';
 
 import { createEdgeDocument } from '../edge-factory';
+import { createNodeDocument } from '../node-factory';
+import type { NodePickerOption } from '../../plugin-node-definitions';
 import { getOutgoingEdges, getNodeById } from '../selectors';
 
 const NODE_GAP_X = 280;
@@ -109,16 +111,55 @@ export function removeNodeSubgraph(
     return document;
   }
 
-  const removedNodeIds = new Set(collectNodeIdsToRemove(document, payload.nodeId));
+  const removedNodeIds = new Set(
+    collectNodeIdsToRemove(document, payload.nodeId)
+  );
 
   return {
     ...document,
     graph: {
       ...document.graph,
-      nodes: document.graph.nodes.filter((candidate) => !removedNodeIds.has(candidate.id)),
+      nodes: document.graph.nodes.filter(
+        (candidate) => !removedNodeIds.has(candidate.id)
+      ),
       edges: document.graph.edges.filter(
         (edge) =>
           !removedNodeIds.has(edge.source) && !removedNodeIds.has(edge.target)
+      )
+    }
+  };
+}
+
+export function replaceNodeWithOption(
+  document: FlowAuthoringDocument,
+  payload: { nodeId: string; option: NodePickerOption }
+): FlowAuthoringDocument {
+  const node = getNodeById(document, payload.nodeId);
+
+  if (!node) {
+    return document;
+  }
+
+  const replacement = createNodeDocument(
+    payload.option,
+    node.id,
+    node.position.x,
+    node.position.y
+  );
+
+  return {
+    ...document,
+    graph: {
+      ...document.graph,
+      nodes: document.graph.nodes.map((candidate) =>
+        candidate.id === payload.nodeId
+          ? {
+              ...replacement,
+              id: node.id,
+              containerId: node.containerId,
+              position: node.position
+            }
+          : candidate
       )
     }
   };

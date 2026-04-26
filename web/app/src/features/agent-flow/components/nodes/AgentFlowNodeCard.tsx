@@ -1,5 +1,12 @@
-import { Tooltip } from 'antd';
+import {
+  DeleteOutlined,
+  MoreOutlined,
+  PlayCircleOutlined,
+  SwapOutlined
+} from '@ant-design/icons';
+import { Button, Dropdown, Tooltip, type MenuProps } from 'antd';
 import { Position, type NodeProps } from '@xyflow/react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 
 import { SchemaRenderer } from '../../../../shared/schema-ui/runtime/SchemaRenderer';
 import { CanvasHandle } from '../canvas/CanvasHandle';
@@ -7,11 +14,58 @@ import { NodePickerPopover } from '../node-picker/NodePickerPopover';
 import type { AgentFlowCanvasNode } from '../canvas/node-types';
 import { agentFlowRendererRegistry } from '../../schema/agent-flow-renderer-registry';
 import { getNodeDefinitionMeta } from '../../lib/node-definitions';
+import {
+  getNodePickerOptionDescription,
+  getNodePickerOptionKey
+} from '../../lib/plugin-node-definitions';
 
 export function AgentFlowNodeCard({
   data,
   selected
 }: NodeProps<AgentFlowCanvasNode>) {
+  const stopActionEvent = (event: ReactMouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+  };
+  const nodePickerOptions = data.nodePickerOptions ?? [];
+  const replaceItems: MenuProps['items'] = nodePickerOptions.map((option) => ({
+    key: getNodePickerOptionKey(option),
+    label: getNodePickerOptionDescription(option)
+      ? `${option.label} · ${getNodePickerOptionDescription(option)}`
+      : option.label,
+    disabled: option.kind === 'plugin_contribution' && option.disabled,
+    onClick: ({ domEvent }) => {
+      domEvent.stopPropagation();
+      data.onReplaceNode(data.nodeId, option);
+    }
+  }));
+  const menuItems: MenuProps['items'] = [
+    {
+      key: 'run',
+      icon: <PlayCircleOutlined />,
+      label: '执行此节点',
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        data.onSelectNode(data.nodeId);
+        data.onRunNode(data.nodeId);
+      }
+    },
+    {
+      key: 'replace',
+      icon: <SwapOutlined />,
+      label: '更换节点',
+      children: replaceItems
+    },
+    {
+      key: 'delete',
+      icon: <DeleteOutlined />,
+      label: '删除节点',
+      danger: true,
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        data.onDeleteNode(data.nodeId);
+      }
+    }
+  ];
   const cardAdapter = {
     getValue(path: string) {
       if (path === 'alias') {
@@ -85,6 +139,39 @@ export function AgentFlowNodeCard({
           blocks={data.nodeSchema.card.blocks}
           registry={agentFlowRendererRegistry}
         />
+        <div
+          className="agent-flow-node-card__quick-actions"
+          onClick={stopActionEvent}
+          onDoubleClick={stopActionEvent}
+          onMouseDown={stopActionEvent}
+        >
+          <Tooltip title="执行此节点">
+            <Button
+              aria-label={`执行 ${data.alias}`}
+              className="agent-flow-node-card__quick-action"
+              icon={<PlayCircleOutlined />}
+              shape="circle"
+              size="small"
+              type="text"
+              onClick={(event) => {
+                stopActionEvent(event);
+                data.onSelectNode(data.nodeId);
+                data.onRunNode(data.nodeId);
+              }}
+            />
+          </Tooltip>
+          <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+            <Button
+              aria-label={`${data.alias} 更多操作`}
+              className="agent-flow-node-card__quick-action"
+              icon={<MoreOutlined />}
+              shape="circle"
+              size="small"
+              type="text"
+              onClick={stopActionEvent}
+            />
+          </Dropdown>
+        </div>
       </div>
       {data.showSourceHandle ? (
         <NodePickerPopover
@@ -103,7 +190,9 @@ export function AgentFlowNodeCard({
         >
           <Tooltip
             title={
-              <div style={{ textAlign: 'center', fontSize: 12, padding: '2px 0' }}>
+              <div
+                style={{ textAlign: 'center', fontSize: 12, padding: '2px 0' }}
+              >
                 <div>点击添加节点</div>
                 <div>拖拽连接节点</div>
               </div>
@@ -117,7 +206,9 @@ export function AgentFlowNodeCard({
                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
               }
             }}
-            open={!data.pickerOpen ? undefined : false} /* Disable tooltip when popover is open */
+            open={
+              !data.pickerOpen ? undefined : false
+            } /* Disable tooltip when popover is open */
           >
             <CanvasHandle
               type="source"
