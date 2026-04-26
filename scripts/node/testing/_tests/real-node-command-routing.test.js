@@ -32,7 +32,7 @@ test('repository and CI gates use the resolved real Node command for nested scri
 
   assert.deepEqual(
     buildRepoCommands({ repoRoot: '/repo-root', env }).map((command) => command.command),
-    [nodePath, nodePath, nodePath, nodePath]
+    [nodePath, nodePath, nodePath, nodePath, nodePath]
   );
   assert.deepEqual(
     buildCiCommands({ repoRoot: '/repo-root', env }).map((command) => command.command),

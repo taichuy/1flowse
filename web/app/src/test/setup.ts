@@ -6,6 +6,83 @@ Object.defineProperty(window, 'scrollTo', {
   writable: true
 });
 
+Object.defineProperty(window, 'innerWidth', {
+  value: 1280,
+  writable: true
+});
+
+Object.defineProperty(window, 'innerHeight', {
+  value: 800,
+  writable: true
+});
+
+class DOMMatrixReadOnlyMock {
+  readonly a = 1;
+  readonly b = 0;
+  readonly c = 0;
+  readonly d = 1;
+  readonly e = 0;
+  readonly f = 0;
+  readonly m11 = 1;
+  readonly m12 = 0;
+  readonly m13 = 0;
+  readonly m14 = 0;
+  readonly m21 = 0;
+  readonly m22 = 1;
+  readonly m23 = 0;
+  readonly m24 = 0;
+  readonly m31 = 0;
+  readonly m32 = 0;
+  readonly m33 = 1;
+  readonly m34 = 0;
+  readonly m41 = 0;
+  readonly m42 = 0;
+  readonly m43 = 0;
+  readonly m44 = 1;
+  readonly is2D = true;
+  readonly isIdentity = true;
+
+  constructor(_init?: string | number[]) {
+    void _init;
+  }
+
+  transformPoint(point: DOMPointInit = {}) {
+    return {
+      x: point.x ?? 0,
+      y: point.y ?? 0,
+      z: point.z ?? 0,
+      w: point.w ?? 1
+    };
+  }
+
+  toString() {
+    return 'matrix(1, 0, 0, 1, 0, 0)';
+  }
+
+  toJSON() {
+    return { a: this.a, b: this.b, c: this.c, d: this.d, e: this.e, f: this.f };
+  }
+}
+
+Object.defineProperty(window, 'DOMMatrixReadOnly', {
+  writable: true,
+  value: DOMMatrixReadOnlyMock
+});
+
+Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+  configurable: true,
+  get() {
+    return 1280;
+  }
+});
+
+Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+  configurable: true,
+  get() {
+    return 800;
+  }
+});
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
@@ -21,7 +98,38 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 class ResizeObserverMock {
-  observe() {}
+  private readonly callback: ResizeObserverCallback;
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+  }
+
+  observe(target: Element) {
+    const rect = target.getBoundingClientRect();
+    const width = rect.width || (target instanceof HTMLElement ? target.clientWidth : 1280) || 1280;
+    const height = rect.height || (target instanceof HTMLElement ? target.clientHeight : 800) || 800;
+
+    this.callback([
+      {
+        target,
+        contentRect: {
+          x: 0,
+          y: 0,
+          width,
+          height,
+          top: 0,
+          left: 0,
+          right: width,
+          bottom: height,
+          toJSON: () => ({})
+        } as DOMRectReadOnly,
+        borderBoxSize: [],
+        contentBoxSize: [],
+        devicePixelContentBoxSize: []
+      } as ResizeObserverEntry
+    ], this);
+  }
+
   unobserve() {}
   disconnect() {}
 }
@@ -33,7 +141,40 @@ Object.defineProperty(globalThis, 'ResizeObserver', {
 
 const originalGetComputedStyle = window.getComputedStyle.bind(window);
 
+function createCssPixelFallback(target: Element, propertyName: string, value: string) {
+  if (value && value !== 'NaN') {
+    return value;
+  }
+
+  if (propertyName === 'height') {
+    return target instanceof HTMLElement && target.classList.contains('ant-tabs-content-holder')
+      ? '0px'
+      : 'auto';
+  }
+
+  return value;
+}
+
 Object.defineProperty(window, 'getComputedStyle', {
   writable: true,
-  value: vi.fn().mockImplementation((element: Element) => originalGetComputedStyle(element))
+  value: vi.fn().mockImplementation((element: Element) => {
+    const style = originalGetComputedStyle(element);
+    const originalGetPropertyValue = style.getPropertyValue.bind(style);
+
+    return new Proxy(style, {
+      get(target, property, receiver) {
+        if (property === 'getPropertyValue') {
+          return (propertyName: string) =>
+            createCssPixelFallback(element, propertyName, originalGetPropertyValue(propertyName));
+        }
+
+        const value = Reflect.get(target, property, receiver);
+        if (typeof property === 'string') {
+          return createCssPixelFallback(element, property, value as string);
+        }
+
+        return value;
+      }
+    });
+  })
 });

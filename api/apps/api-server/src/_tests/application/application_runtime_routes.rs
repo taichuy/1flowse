@@ -479,7 +479,9 @@ async fn wait_for_run_detail(
         assert_eq!(response.status(), StatusCode::OK);
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let payload: Value = serde_json::from_slice(&body).unwrap();
-        let status = payload["data"]["flow_run"]["status"].as_str().unwrap_or_default();
+        let status = payload["data"]["flow_run"]["status"]
+            .as_str()
+            .unwrap_or_default();
         if expected_statuses.contains(&status) {
             return payload["data"].clone();
         }
@@ -676,15 +678,12 @@ async fn application_runtime_routes_start_debug_run_and_resume_waiting_human() {
     );
     let payload: Value = serde_json::from_slice(&start_body).unwrap();
     let run_id = payload["data"]["flow_run"]["id"].as_str().unwrap();
-    assert_eq!(payload["data"]["flow_run"]["status"].as_str(), Some("running"));
-    let detail = wait_for_run_detail(
-        &app,
-        &cookie,
-        &application_id,
-        run_id,
-        &["waiting_human"],
-    )
-    .await;
+    assert_eq!(
+        payload["data"]["flow_run"]["status"].as_str(),
+        Some("running")
+    );
+    let detail =
+        wait_for_run_detail(&app, &cookie, &application_id, run_id, &["waiting_human"]).await;
     let checkpoint_id = detail["checkpoints"][0]["id"].as_str().unwrap();
 
     let resume = app
@@ -750,15 +749,12 @@ async fn application_runtime_routes_cancel_waiting_flow_run() {
     let start_body = to_bytes(start.into_body(), usize::MAX).await.unwrap();
     let start_payload: Value = serde_json::from_slice(&start_body).unwrap();
     let run_id = start_payload["data"]["flow_run"]["id"].as_str().unwrap();
-    let waiting_detail = wait_for_run_detail(
-        &app,
-        &cookie,
-        &application_id,
-        run_id,
-        &["waiting_human"],
-    )
-    .await;
-    assert_eq!(waiting_detail["flow_run"]["status"].as_str(), Some("waiting_human"));
+    let waiting_detail =
+        wait_for_run_detail(&app, &cookie, &application_id, run_id, &["waiting_human"]).await;
+    assert_eq!(
+        waiting_detail["flow_run"]["status"].as_str(),
+        Some("waiting_human")
+    );
 
     let cancel = app
         .clone()
@@ -779,7 +775,10 @@ async fn application_runtime_routes_cancel_waiting_flow_run() {
     assert_eq!(cancel.status(), StatusCode::OK);
     let cancel_body = to_bytes(cancel.into_body(), usize::MAX).await.unwrap();
     let cancel_payload: Value = serde_json::from_slice(&cancel_body).unwrap();
-    assert_eq!(cancel_payload["data"]["flow_run"]["status"].as_str(), Some("cancelled"));
+    assert_eq!(
+        cancel_payload["data"]["flow_run"]["status"].as_str(),
+        Some("cancelled")
+    );
     assert!(cancel_payload["data"]["events"]
         .as_array()
         .unwrap()

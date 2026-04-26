@@ -6,6 +6,7 @@ pub struct StoredRoleRow {
     pub id: Uuid,
     pub code: String,
     pub name: String,
+    pub introduction: String,
     pub scope_kind: RoleScopeKind,
     pub is_builtin: bool,
     pub is_editable: bool,
@@ -20,6 +21,7 @@ impl PgRoleMapper {
         RoleTemplate {
             code: row.code,
             name: row.name,
+            introduction: row.introduction,
             scope_kind: row.scope_kind,
             is_builtin: row.is_builtin,
             is_editable: row.is_editable,

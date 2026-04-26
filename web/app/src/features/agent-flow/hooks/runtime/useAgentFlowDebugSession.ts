@@ -371,7 +371,10 @@ export function useAgentFlowDebugSession({
     }, RUN_DETAIL_POLL_INTERVAL_MS);
   }
 
-  useEffect(() => () => stopPolling(), []);
+  useEffect(() => () => {
+    clearPollTimer();
+    activeRunIdRef.current = null;
+  }, []);
 
   async function submitPrompt(prompt?: string) {
     const resolvedPrompt = resolvePrompt(runContext, prompt);

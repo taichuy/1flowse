@@ -2,7 +2,7 @@ import { createRendererRegistry } from '../../../shared/schema-ui/registry/creat
 
 import { LlmParameterForm } from '../components/detail/fields/LlmParameterForm';
 import { agentFlowFieldRenderers } from './agent-flow-field-renderers';
-import { agentFlowViewRenderers } from './agent-flow-view-renderers';
+import agentFlowViewRenderers from './agent-flow-view-renderers';
 
 export const agentFlowRendererRegistry = createRendererRegistry({
   fields: agentFlowFieldRenderers,

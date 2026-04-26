@@ -98,9 +98,9 @@ function buildCiCommands({ repoRoot, env = process.env }) {
       cwd: repoRoot,
     },
     {
-      label: 'ci-verify-coverage',
+      label: 'ci-coverage-frontend',
       command: nodeBinary,
-      args: [resolveScriptsNodeCliEntry(repoRoot, 'verify'), 'coverage', 'all'],
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'verify'), 'coverage', 'frontend'],
       cwd: repoRoot,
     },
   ];
@@ -109,7 +109,7 @@ function buildCiCommands({ repoRoot, env = process.env }) {
 function usageCi(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
     'Usage: node scripts/node/verify-ci.js\n'
-      + 'Runs: verify-repo + verify-coverage all\n'
+      + 'Runs: verify-repo + verify-coverage frontend\n'
   );
 }
 
@@ -548,13 +548,19 @@ function buildRepoCommands({ repoRoot, env = process.env }) {
       args: [resolveScriptsNodeCliEntry(repoRoot, 'verify'), 'backend'],
       cwd: repoRoot,
     },
+    {
+      label: 'repo-coverage-all',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'verify'), 'coverage', 'all'],
+      cwd: repoRoot,
+    },
   ];
 }
 
 function usageRepo(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
     'Usage: node scripts/node/verify-repo.js\n'
-      + 'Runs: scripts/node tests + contract tests + frontend full gate + backend full gate\n'
+      + 'Runs: scripts/node tests + contract tests + frontend full gate + backend full gate + coverage all\n'
   );
 }
 

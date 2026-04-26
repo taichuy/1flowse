@@ -203,7 +203,7 @@ function seedStyleBoundaryAuth() {
       name: 'Root',
       avatar_url: null,
       introduction: 'Boundary user',
-      effective_display_role: 'manager',
+      effective_display_role: 'root',
       permissions: [
         'route_page.view.all',
         'application.view.all',
@@ -211,8 +211,16 @@ function seedStyleBoundaryAuth() {
         'application.create.all',
         'embedded_app.view.all',
         'api_reference.view.all',
+        'system_runtime.view.all',
         'state_model.view.all',
-        'state_model.manage.all'
+        'state_model.manage.all',
+        'file_table.view.all',
+        'file_object.view.all',
+        'file_storage.view.all',
+        'user.view.all',
+        'user.manage.all',
+        'role_permission.view.all',
+        'role_permission.manage.all'
       ]
     }
   });

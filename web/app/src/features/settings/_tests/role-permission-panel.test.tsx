@@ -69,6 +69,7 @@ describe('RolePermissionPanel', () => {
       {
         code: 'manager',
         name: 'Manager',
+        introduction: '默认管理角色',
         scope_kind: 'workspace',
         is_builtin: true,
         is_editable: true,
@@ -84,6 +85,7 @@ describe('RolePermissionPanel', () => {
     rolesApi.createSettingsRole.mockResolvedValue({
       code: 'qa',
       name: 'QA',
+      introduction: '测试角色',
       scope_kind: 'workspace',
       is_builtin: false,
       is_editable: true,
@@ -100,7 +102,7 @@ describe('RolePermissionPanel', () => {
     async () => {
       renderPanel();
 
-      await screen.findByRole('heading', { name: '角色权限管理', level: 3 });
+      await screen.findByRole('heading', { name: '权限管理', level: 3 });
 
       fireEvent.click(screen.getByRole('button', { name: /新建角色/ }));
 
@@ -155,7 +157,7 @@ describe('RolePermissionPanel', () => {
           'manager',
           {
             name: 'Manager Updated',
-            introduction: '',
+            introduction: '默认管理角色',
             auto_grant_new_permissions: true,
             is_default_member_role: false
           },

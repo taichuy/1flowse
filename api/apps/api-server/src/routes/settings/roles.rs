@@ -46,6 +46,7 @@ pub struct ReplaceRolePermissionsBody {
 pub struct RoleResponse {
     pub code: String,
     pub name: String,
+    pub introduction: String,
     pub scope_kind: String,
     pub is_builtin: bool,
     pub is_editable: bool,
@@ -64,6 +65,7 @@ fn to_role_response(role: domain::RoleTemplate) -> RoleResponse {
     RoleResponse {
         code: role.code,
         name: role.name,
+        introduction: role.introduction,
         scope_kind: match role.scope_kind {
             domain::RoleScopeKind::System => "system".to_string(),
             domain::RoleScopeKind::Workspace => "workspace".to_string(),
@@ -124,7 +126,7 @@ pub async fn create_role(
             actor_user_id: context.user.id,
             code: body.code.clone(),
             name: body.name.clone(),
-            introduction: body.introduction,
+            introduction: body.introduction.clone(),
             auto_grant_new_permissions: body.auto_grant_new_permissions.unwrap_or(false),
             is_default_member_role: body.is_default_member_role.unwrap_or(false),
         })
@@ -135,6 +137,7 @@ pub async fn create_role(
         Json(ApiSuccess::new(RoleResponse {
             code: body.code,
             name: body.name,
+            introduction: body.introduction,
             scope_kind: "workspace".to_string(),
             is_builtin: false,
             is_editable: true,

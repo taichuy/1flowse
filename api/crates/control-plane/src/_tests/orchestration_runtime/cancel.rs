@@ -44,7 +44,9 @@ async fn cancel_flow_run_marks_running_debug_run_as_cancelled() {
 #[tokio::test]
 async fn cancel_flow_run_rejects_terminal_status() {
     let service = OrchestrationRuntimeService::for_tests();
-    let seeded = service.seed_application_with_human_input_flow("Support Agent").await;
+    let seeded = service
+        .seed_application_with_human_input_flow("Support Agent")
+        .await;
     let started = service
         .start_flow_debug_run(StartFlowDebugRunCommand {
             actor_user_id: seeded.actor_user_id,

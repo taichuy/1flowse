@@ -10,7 +10,7 @@ import {
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
 } from 'lexical';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 interface TemplateVariableChipProps {
   label: string;
@@ -25,17 +25,11 @@ export function TemplateVariableChip({
   const [editor] = useLexicalComposerContext();
   const [isSelected, setSelected, clearSelection] = useLexicalNodeSelection(nodeKey);
 
-  useEffect(() => {
-    function handleClick(event: MouseEvent) {
-      event.stopPropagation();
-      clearSelection();
-      setSelected(true);
-    }
-
-    const node = chipRef.current;
-    node?.addEventListener('click', handleClick);
-
-    return () => node?.removeEventListener('click', handleClick);
+  const handleMouseDown = useCallback((event: React.MouseEvent<HTMLSpanElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    clearSelection();
+    setSelected(true);
   }, [clearSelection, setSelected]);
 
   useEffect(() => {
@@ -67,6 +61,7 @@ export function TemplateVariableChip({
   return (
     <span
       ref={chipRef}
+      onMouseDown={handleMouseDown}
       className={`agent-flow-templated-text-field__chip${
         isSelected ? ' agent-flow-templated-text-field__chip--selected' : ''
       }`}

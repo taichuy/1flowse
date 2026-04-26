@@ -295,8 +295,12 @@ function AgentFlowCanvasInner({
         <div
           className="agent-flow-floating-picker-anchor"
           style={{
-            left: nodePickerState.anchorCanvasPosition.x,
-            top: nodePickerState.anchorCanvasPosition.y
+            left: Number.isFinite(nodePickerState.anchorCanvasPosition.x)
+              ? nodePickerState.anchorCanvasPosition.x
+              : 0,
+            top: Number.isFinite(nodePickerState.anchorCanvasPosition.y)
+              ? nodePickerState.anchorCanvasPosition.y
+              : 0
           }}
         >
           <NodePickerPopover

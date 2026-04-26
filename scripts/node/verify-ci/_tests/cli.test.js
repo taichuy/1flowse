@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const { buildCommands, main } = require('../../verify-ci.js');
 
-test('buildCommands composes repo full gate and coverage gate', () => {
+test('buildCommands composes repo full gate and frontend coverage gate', () => {
   const repoRoot = '/repo-root';
 
   assert.deepEqual(buildCommands({ repoRoot }), [
@@ -17,9 +17,9 @@ test('buildCommands composes repo full gate and coverage gate', () => {
       cwd: repoRoot,
     },
     {
-      label: 'ci-verify-coverage',
+      label: 'ci-coverage-frontend',
       command: process.execPath,
-      args: [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'coverage', 'all'],
+      args: [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'coverage', 'frontend'],
       cwd: repoRoot,
     },
   ]);
@@ -51,7 +51,7 @@ test('main runs repo and coverage gates in order and captures advisory output', 
     calls.map((call) => call.args),
     [
       [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'repo'],
-      [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'coverage', 'all'],
+      [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'coverage', 'frontend'],
     ]
   );
 

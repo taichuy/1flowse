@@ -248,7 +248,7 @@ describe('File management settings page', () => {
     renderApp('/settings/files');
 
     expect(
-      await screen.findByRole('heading', { name: '文件管理', level: 2 })
+      await screen.findByRole('heading', { name: '文件管理', level: 3 })
     ).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '存储配置' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '文件表' })).toBeInTheDocument();
@@ -262,7 +262,7 @@ describe('File management settings page', () => {
     renderApp('/settings/files');
 
     expect(
-      await screen.findByRole('heading', { name: '文件管理', level: 2 })
+      await screen.findByRole('heading', { name: '文件管理', level: 3 })
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('tab', { name: '存储配置' })
@@ -283,7 +283,7 @@ describe('File management settings page', () => {
     renderApp('/settings/files');
 
     expect(
-      await screen.findByRole('heading', { name: '文件管理', level: 2 })
+      await screen.findByRole('heading', { name: '文件管理', level: 3 })
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('tab', { name: '文件表' })

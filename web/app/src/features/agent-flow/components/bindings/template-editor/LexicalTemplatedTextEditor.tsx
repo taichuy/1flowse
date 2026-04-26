@@ -249,7 +249,7 @@ export const LexicalTemplatedTextEditor = forwardRef<
         throw error;
       }
     }),
-    []
+    [value]
   );
 
   const filteredOptions = useMemo(() => {
@@ -410,6 +410,7 @@ export const LexicalTemplatedTextEditor = forwardRef<
   return (
     <LexicalComposer initialConfig={initialConfig}>
       <div
+        data-testid="templated-text-editor-shell"
         ref={shellRef}
         className="agent-flow-templated-text-field__editor-shell"
         onBlurCapture={handleBlur}
