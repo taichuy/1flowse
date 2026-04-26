@@ -516,10 +516,11 @@
 
 .agent-flow-editor__variable-cache-trigger {
   position: absolute;
-  right: 16px;
-  bottom: 12px;
-  z-index: 2;
+  left: 50%;
+  bottom: 18px;
+  z-index: 9;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  transform: translateX(-50%);
 }
 
 .agent-flow-editor__variable-cache-panel {

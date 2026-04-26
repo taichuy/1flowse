@@ -534,6 +534,15 @@ export function AgentFlowCanvasFrame({
             viewportGetterRef.current = getter;
           }}
         />
+        <Button
+          className="agent-flow-editor__variable-cache-trigger"
+          icon={<EyeOutlined />}
+          size="small"
+          type="primary"
+          onClick={() => setVariableCacheOpen(true)}
+        >
+          查看缓存
+        </Button>
         {selectedNodeId ? (
           <div
             className="agent-flow-editor__detail-dock"
@@ -560,15 +569,6 @@ export function AgentFlowCanvasFrame({
               onRunNode={selectedNodeId ? handleRunSelectedNode : undefined}
               runLoading={nodePreviewMutation.isPending}
             />
-            <Button
-              className="agent-flow-editor__variable-cache-trigger"
-              icon={<EyeOutlined />}
-              size="small"
-              type="primary"
-              onClick={() => setVariableCacheOpen(true)}
-            >
-              查看缓存
-            </Button>
           </div>
         ) : null}
         {variableCacheOpen ? (
