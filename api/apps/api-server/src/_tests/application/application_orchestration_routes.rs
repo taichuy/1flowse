@@ -66,6 +66,15 @@ async fn application_orchestration_routes_bootstrap_save_and_restore() {
         .unwrap()
         .to_string();
     let mut document = get_state_body["data"]["draft"]["document"].clone();
+    let start_node = document["graph"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["type"] == "start")
+        .expect("default draft should include a start node");
+    assert_eq!(start_node["outputs"], json!([]));
+    assert_eq!(start_node["config"]["input_fields"], json!([]));
+
     document["graph"]["nodes"][1]["bindings"]["system_prompt"] =
         json!({ "kind": "templated_text", "value": "You are a support agent." });
 

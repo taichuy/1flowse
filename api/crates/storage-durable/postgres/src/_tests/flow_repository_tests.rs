@@ -136,6 +136,14 @@ async fn get_or_create_editor_state_bootstraps_default_draft_and_first_version()
             .len(),
         3
     );
+    let start_node = state.draft.document["graph"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["type"] == "start")
+        .expect("default draft should include a start node");
+    assert_eq!(start_node["outputs"], json!([]));
+    assert_eq!(start_node["config"]["input_fields"], json!([]));
     assert_eq!(state.versions.len(), 1);
     assert_eq!(state.versions[0].trigger, FlowVersionTrigger::Autosave);
 

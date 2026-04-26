@@ -25,6 +25,30 @@ async fn get_or_create_editor_state_requires_visible_application() {
 }
 
 #[tokio::test]
+async fn get_or_create_editor_state_bootstraps_start_node_without_outputs() {
+    let owner_id = Uuid::now_v7();
+    let service = FlowService::for_tests();
+    let application = service
+        .seed_application_for_actor(owner_id, "Support Agent")
+        .await
+        .unwrap();
+
+    let state = service
+        .get_or_create_editor_state(owner_id, application.id)
+        .await
+        .unwrap();
+    let start_node = state.draft.document["graph"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["type"] == "start")
+        .expect("default draft should include a start node");
+
+    assert_eq!(start_node["outputs"], json!([]));
+    assert_eq!(start_node["config"]["input_fields"], json!([]));
+}
+
+#[tokio::test]
 async fn save_draft_only_appends_history_for_logical_changes() {
     let owner_id = Uuid::now_v7();
     let service = FlowService::for_tests();

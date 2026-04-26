@@ -95,9 +95,9 @@ pub fn default_flow_document(flow_id: Uuid) -> serde_json::Value {
                     "containerId": serde_json::Value::Null,
                     "position": { "x": 80, "y": 220 },
                     "configVersion": 1,
-                    "config": {},
+                    "config": { "input_fields": [] },
                     "bindings": {},
-                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }],
+                    "outputs": [],
                 },
                 {
                     "id": "node-llm",
@@ -113,8 +113,13 @@ pub fn default_flow_document(flow_id: Uuid) -> serde_json::Value {
                             "source_instance_id": "",
                             "model_id": ""
                         },
-                        "model": "",
-                        "temperature": 0.7
+                        "llm_parameters": {
+                            "schema_version": "1.0.0",
+                            "items": {}
+                        },
+                        "response_format": {
+                            "mode": "text"
+                        }
                     },
                     "bindings": {
                         "user_prompt": { "kind": "selector", "value": ["node-start", "query"] },
