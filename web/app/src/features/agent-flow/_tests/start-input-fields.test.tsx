@@ -82,6 +82,12 @@ describe('start input fields', () => {
     expect(
       await screen.findByRole('dialog', { name: '输入字段设置' })
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('separator', { name: '从左侧调整输入字段设置宽度' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('separator', { name: '从右侧调整输入字段设置宽度' })
+    ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('输入字段变量名'), {
       target: { value: 'customer_name' }
