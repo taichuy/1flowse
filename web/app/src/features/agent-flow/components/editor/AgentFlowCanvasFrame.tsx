@@ -546,6 +546,16 @@ export function AgentFlowCanvasFrame({
   }
 
 
+  function handleVariableCacheValueChange(key: string, value: unknown) {
+    setSelectedVariable((current) =>
+      current?.key === key
+        ? {
+            ...current,
+            value
+          }
+        : current
+    );
+  }
   function getDocumentWithLatestViewport(
     currentDocument: FlowAuthoringDocument
   ) {
@@ -805,6 +815,7 @@ export function AgentFlowCanvasFrame({
             </header>
             <div className="agent-flow-editor__variable-cache-body">
               <DebugVariablesPane
+                onSelectedValueChange={handleVariableCacheValueChange}
                 groups={debugSession.variableGroups}
                 onSelectedChange={setSelectedVariable}
                 sidebarWidth={boundedVariableCacheSidebarWidth}

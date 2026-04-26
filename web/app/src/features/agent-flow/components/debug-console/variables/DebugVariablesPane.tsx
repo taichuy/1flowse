@@ -1,14 +1,32 @@
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
-import { Collapse, Empty, Tooltip, Typography } from 'antd';
+import { Collapse, Empty, Input, Tooltip, Typography } from 'antd';
 
 import type { AgentFlowVariableGroup } from '../../../api/runtime';
 
 function formatValue(value: unknown): string {
   if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean' || value === null || value === undefined) {
+  if (
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    value === null ||
+    value === undefined
+  ) {
     return String(value);
   }
+
   return JSON.stringify(value, null, 2);
+}
+
+function parseEditableValue(rawValue: string): unknown {
+  if (rawValue === '') {
+    return '';
+  }
+
+  try {
+    return JSON.parse(rawValue);
+  } catch {
+    return rawValue;
+  }
 }
 
 export interface SelectedVariableInfo {
@@ -23,6 +41,7 @@ const MIN_SIDEBAR_WIDTH = 140;
 export function DebugVariablesPane({
   groups,
   onSelectedChange,
+  onSelectedValueChange,
   sidebarWidth,
   sidebarMinWidth,
   sidebarMaxWidth,
@@ -30,12 +49,14 @@ export function DebugVariablesPane({
 }: {
   groups: AgentFlowVariableGroup[];
   onSelectedChange?: (info: SelectedVariableInfo | null) => void;
+  onSelectedValueChange?: (key: string, value: unknown) => void;
   sidebarWidth?: number;
   sidebarMinWidth?: number;
   sidebarMaxWidth?: number;
   onSidebarResizeStart?: (event: ReactMouseEvent<HTMLDivElement>) => void;
 }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [selectedValueText, setSelectedValueText] = useState('');
   const effectiveSidebarWidth = useMemo(() => {
     const minWidth = sidebarMinWidth ?? MIN_SIDEBAR_WIDTH;
     const maxWidth = sidebarMaxWidth ?? Number.POSITIVE_INFINITY;
@@ -70,6 +91,15 @@ export function DebugVariablesPane({
     }
   }, [allItems, selectedKey]);
 
+  useEffect(() => {
+    if (!selectedItem) {
+      setSelectedValueText('');
+      return;
+    }
+
+    setSelectedValueText(formatValue(selectedItem.value));
+  }, [selectedItem]);
+
   // 通知父级选中项变化
   useEffect(() => {
     if (selectedItem) {
@@ -82,6 +112,16 @@ export function DebugVariablesPane({
       onSelectedChange?.(null);
     }
   }, [selectedKey, selectedItem, onSelectedChange]);
+
+  function handleVariableValueBlur() {
+    if (!selectedItem) {
+      return;
+    }
+
+    const nextValue = parseEditableValue(selectedValueText);
+
+    onSelectedValueChange?.(selectedItem.key, nextValue);
+  }
 
   if (groups.length === 0) {
     return (
@@ -151,11 +191,14 @@ export function DebugVariablesPane({
       />
       <div className="agent-flow-editor__debug-variables-detail">
         {selectedItem ? (
-          <>
-            <pre className="agent-flow-editor__debug-variables-detail-value">
-              {formatValue(selectedItem.value)}
-            </pre>
-          </>
+          <Input.TextArea
+            style={{ height: '100%' }}
+            aria-label="变量值编辑框"
+            className="agent-flow-editor__debug-variables-detail-value"
+            onBlur={handleVariableValueBlur}
+            onChange={(event) => setSelectedValueText(event.target.value)}
+            value={selectedValueText}
+          />
         ) : (
           <div className="agent-flow-editor__debug-variables-detail-empty">
             <Empty description="选择左侧变量查看详情" image={Empty.PRESENTED_IMAGE_SIMPLE} />
