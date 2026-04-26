@@ -178,6 +178,14 @@ describe('node last run runtime', () => {
     fireEvent.click(screen.getByRole('button', { name: /查看缓存/ }));
 
     expect(await screen.findByRole('region', { name: '变量缓存' })).toBeInTheDocument();
+    const resizeHandle = screen.getByRole('separator', { name: '调整变量缓存高度' });
+    expect(resizeHandle).toBeInTheDocument();
+    fireEvent.mouseDown(resizeHandle, { clientY: 100 });
+    fireEvent.mouseMove(window, { clientY: 150 });
+    fireEvent.mouseUp(window);
+    expect(screen.getByRole('region', { name: '变量缓存' })).toHaveStyle({
+      height: '264px'
+    });
     expect(screen.getByText('node-start.query')).toBeInTheDocument();
     expect(screen.getByText('总结退款政策')).toBeInTheDocument();
   }, 30_000);

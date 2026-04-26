@@ -61,6 +61,10 @@ import { AgentFlowOverlay } from './AgentFlowOverlay';
 const DEBUG_CONSOLE_DEFAULT_WIDTH = 420;
 const DEBUG_CONSOLE_MIN_WIDTH = 320;
 const DEBUG_CONSOLE_GAP = 12;
+const VARIABLE_CACHE_DEFAULT_HEIGHT = 330;
+const VARIABLE_CACHE_MIN_HEIGHT = 180;
+const VARIABLE_CACHE_BOTTOM_GAP = 16;
+const VARIABLE_CACHE_MAX_TOP_GAP = 96;
 
 interface AgentFlowCanvasFrameProps {
   applicationId: string;
@@ -123,7 +127,9 @@ export function AgentFlowCanvasFrame({
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const stopNodeDetailResizeRef = useRef<(() => void) | null>(null);
   const stopDebugConsoleResizeRef = useRef<(() => void) | null>(null);
+  const stopVariableCacheResizeRef = useRef<(() => void) | null>(null);
   const [bodyWidth, setBodyWidth] = useState(0);
+  const [bodyHeight, setBodyHeight] = useState(0);
   const [isResizingNodeDetail, setIsResizingNodeDetail] = useState(false);
   const [isResizingDebugConsole, setIsResizingDebugConsole] = useState(false);
   const [pendingNodePreview, setPendingNodePreview] = useState<{
@@ -131,6 +137,10 @@ export function AgentFlowCanvasFrame({
     plan: NodeDebugPreviewPlan;
   } | null>(null);
   const [variableCacheOpen, setVariableCacheOpen] = useState(false);
+  const [variableCacheHeight, setVariableCacheHeight] = useState(
+    VARIABLE_CACHE_DEFAULT_HEIGHT
+  );
+  const [isResizingVariableCache, setIsResizingVariableCache] = useState(false);
   const modelProviderOptionsQuery = useQuery({
     queryKey: modelProviderOptionsQueryKey,
     queryFn: fetchModelProviderOptions
@@ -243,10 +253,13 @@ export function AgentFlowCanvasFrame({
       }
 
       setBodyWidth(entry.contentRect.width);
+      setBodyHeight(entry.contentRect.height);
     });
 
     resizeObserver.observe(element);
-    setBodyWidth(element.getBoundingClientRect().width);
+    const bodyRect = element.getBoundingClientRect();
+    setBodyWidth(bodyRect.width);
+    setBodyHeight(bodyRect.height);
 
     return () => resizeObserver.disconnect();
   }, []);
@@ -255,6 +268,7 @@ export function AgentFlowCanvasFrame({
     return () => {
       stopNodeDetailResizeRef.current?.();
       stopDebugConsoleResizeRef.current?.();
+      stopVariableCacheResizeRef.current?.();
     };
   }, []);
 
@@ -273,6 +287,14 @@ export function AgentFlowCanvasFrame({
 
     stopDebugConsoleResizeRef.current?.();
   }, [debugConsoleOpen]);
+
+  useEffect(() => {
+    if (variableCacheOpen) {
+      return;
+    }
+
+    stopVariableCacheResizeRef.current?.();
+  }, [variableCacheOpen]);
 
   useEffect(() => {
     debugSession.syncSelectedNode(selectedNodeId);
@@ -310,6 +332,16 @@ export function AgentFlowCanvasFrame({
   const variableCacheCenterLeft = Math.max(
     120,
     (canvasFrameWidth - variableCacheRightOffset) / 2
+  );
+  const variableCacheMaxHeight = Math.max(
+    VARIABLE_CACHE_MIN_HEIGHT,
+    (bodyHeight || VARIABLE_CACHE_DEFAULT_HEIGHT + VARIABLE_CACHE_MAX_TOP_GAP) -
+      VARIABLE_CACHE_MAX_TOP_GAP -
+      VARIABLE_CACHE_BOTTOM_GAP
+  );
+  const boundedVariableCacheHeight = Math.min(
+    Math.max(variableCacheHeight, VARIABLE_CACHE_MIN_HEIGHT),
+    variableCacheMaxHeight
   );
 
   function handleNodeDetailResizeStart(event: ReactMouseEvent<HTMLDivElement>) {
@@ -392,6 +424,47 @@ export function AgentFlowCanvasFrame({
     };
 
     stopDebugConsoleResizeRef.current = cleanup;
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', cleanup);
+  }
+
+  function handleVariableCacheResizeStart(
+    event: ReactMouseEvent<HTMLDivElement>
+  ) {
+    event.preventDefault();
+
+    const startY = event.clientY;
+    const startHeight = boundedVariableCacheHeight;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    stopVariableCacheResizeRef.current?.();
+    setIsResizingVariableCache(true);
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    const cleanup = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', cleanup);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      setIsResizingVariableCache(false);
+      stopVariableCacheResizeRef.current = null;
+    };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const nextHeight = Math.min(
+        Math.max(
+          startHeight + startY - moveEvent.clientY,
+          VARIABLE_CACHE_MIN_HEIGHT
+        ),
+        variableCacheMaxHeight
+      );
+
+      setVariableCacheHeight(nextHeight);
+    };
+
+    stopVariableCacheResizeRef.current = cleanup;
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', cleanup);
   }
@@ -587,8 +660,19 @@ export function AgentFlowCanvasFrame({
           <section
             aria-label="变量缓存"
             className="agent-flow-editor__variable-cache-panel"
-            style={{ right: variableCacheRightOffset }}
+            data-resizing={isResizingVariableCache ? 'true' : 'false'}
+            style={{
+              right: variableCacheRightOffset,
+              height: boundedVariableCacheHeight
+            }}
           >
+            <div
+              aria-label="调整变量缓存高度"
+              aria-orientation="horizontal"
+              className="agent-flow-editor__variable-cache-resize-handle"
+              onMouseDown={handleVariableCacheResizeStart}
+              role="separator"
+            />
             <header className="agent-flow-editor__variable-cache-header">
               <div className="agent-flow-editor__variable-cache-title">
                 <Typography.Text strong>变量缓存</Typography.Text>
