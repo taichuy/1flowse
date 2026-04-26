@@ -432,6 +432,10 @@ async fn provider_error_marks_flow_failed_and_redacts_summary() {
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
             assert_eq!(failure.error_payload["error_kind"], json!("auth_failed"));
+            assert_eq!(
+                outcome.node_traces[1].output_payload["error"]["error_kind"],
+                json!("auth_failed")
+            );
             assert!(failure.error_payload["provider_summary"]
                 .as_str()
                 .unwrap()

@@ -2,6 +2,7 @@ use control_plane::orchestration_runtime::{
     ContinueFlowDebugRunCommand, OrchestrationRuntimeService, StartFlowDebugRunCommand,
     StartNodeDebugPreviewCommand,
 };
+use time::Duration;
 use uuid::Uuid;
 
 #[tokio::test]
@@ -138,6 +139,35 @@ async fn start_node_debug_preview_uses_request_document_snapshot() {
         outcome.preview_payload["node_output"]["text"],
         serde_json::json!("echo:gpt-5.4-mini:snapshot draft prompt")
     );
+}
+
+#[tokio::test]
+async fn start_node_debug_preview_records_provider_invocation_duration() {
+    let service = OrchestrationRuntimeService::for_tests_with_provider_delay(
+        std::time::Duration::from_millis(50),
+    );
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+
+    let outcome = service
+        .start_node_debug_preview(StartNodeDebugPreviewCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            node_id: "node-llm".to_string(),
+            input_payload: serde_json::json!({
+                "node-start": { "query": "请总结退款政策" }
+            }),
+            document_snapshot: None,
+        })
+        .await
+        .unwrap();
+
+    let elapsed = outcome
+        .node_run
+        .finished_at
+        .expect("node preview should finish")
+        - outcome.node_run.started_at;
+
+    assert!(elapsed >= Duration::milliseconds(45));
 }
 
 #[tokio::test]

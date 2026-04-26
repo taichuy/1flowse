@@ -324,9 +324,10 @@ where
         Ok(output) => output,
         Err(error) => {
             let provider_error = provider_runtime_error_from_anyhow(&error);
+            let error_payload = build_provider_error_payload(runtime, &provider_error);
             return Ok(LlmNodeExecution {
-                output_payload: json!({ first_output_key(node): Value::Null }),
-                error_payload: Some(build_provider_error_payload(runtime, &provider_error)),
+                output_payload: build_failed_llm_output_payload(node, &error_payload),
+                error_payload: Some(error_payload),
                 metrics_payload: json!({
                     "provider_instance_id": runtime.provider_instance_id,
                     "provider_code": runtime.provider_code,
@@ -351,7 +352,7 @@ where
         .final_content
         .clone()
         .or_else(|| collect_text_deltas(&output.events));
-    let output_payload =
+    let mut output_payload =
         build_llm_output_payload(node, &output.result, final_content, finish_reason.clone());
     let metrics_payload = json!({
         "provider_instance_id": runtime.provider_instance_id,
@@ -374,11 +375,16 @@ where
         })
     });
 
+    let error_payload = provider_error
+        .as_ref()
+        .map(|error| build_provider_error_payload(runtime, error));
+    if let Some(error_payload) = &error_payload {
+        append_llm_error_to_output(&mut output_payload, error_payload);
+    }
+
     Ok(LlmNodeExecution {
         output_payload,
-        error_payload: provider_error
-            .as_ref()
-            .map(|error| build_provider_error_payload(runtime, error)),
+        error_payload,
         metrics_payload,
         provider_events: output.events,
     })
@@ -537,6 +543,22 @@ fn first_output_key(node: &CompiledNode) -> String {
         .first()
         .map(|output| output.key.clone())
         .unwrap_or_else(|| "result".to_string())
+}
+
+fn build_failed_llm_output_payload(node: &CompiledNode, error_payload: &Value) -> Value {
+    let mut output = Map::new();
+    output.insert(first_output_key(node), Value::Null);
+    output.insert("error".to_string(), error_payload.clone());
+    Value::Object(output)
+}
+
+fn append_llm_error_to_output(output_payload: &mut Value, error_payload: &Value) {
+    if let Some(output) = output_payload.as_object_mut() {
+        output.insert("error".to_string(), error_payload.clone());
+        return;
+    }
+
+    *output_payload = json!({ "error": error_payload });
 }
 
 fn build_llm_output_payload(

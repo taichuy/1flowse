@@ -1079,7 +1079,17 @@ impl ModelProviderRepository for InMemoryOrchestrationRuntimeRepository {
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct InMemoryProviderRuntime;
+pub(crate) struct InMemoryProviderRuntime {
+    invoke_delay: Option<std::time::Duration>,
+}
+
+impl InMemoryProviderRuntime {
+    pub(crate) fn with_invoke_delay(invoke_delay: std::time::Duration) -> Self {
+        Self {
+            invoke_delay: Some(invoke_delay),
+        }
+    }
+}
 
 #[async_trait]
 impl ProviderRuntimePort for InMemoryProviderRuntime {
@@ -1108,6 +1118,10 @@ impl ProviderRuntimePort for InMemoryProviderRuntime {
         _installation: &domain::PluginInstallationRecord,
         input: ProviderInvocationInput,
     ) -> Result<crate::ports::ProviderRuntimeInvocationOutput> {
+        if let Some(delay) = self.invoke_delay {
+            tokio::time::sleep(delay).await;
+        }
+
         let prompt = input
             .messages
             .first()

@@ -296,7 +296,18 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
                 "application.view.all",
                 "application.create.all",
             ]),
-            InMemoryProviderRuntime,
+            InMemoryProviderRuntime::default(),
+            "test-master-key",
+        )
+    }
+
+    pub fn for_tests_with_provider_delay(invoke_delay: std::time::Duration) -> Self {
+        Self::new(
+            InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
+                "application.view.all",
+                "application.create.all",
+            ]),
+            InMemoryProviderRuntime::with_invoke_delay(invoke_delay),
             "test-master-key",
         )
     }

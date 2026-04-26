@@ -160,6 +160,7 @@ where
         )?;
         ensure_compiled_plan_runnable(&compiled_plan)?;
         let invoker = self.runtime_invoker(application.workspace_id);
+        let started_at = OffsetDateTime::now_utc();
         let preview = orchestration_runtime::preview_executor::run_node_preview(
             &compiled_plan,
             &command.node_id,
@@ -167,7 +168,6 @@ where
             &invoker,
         )
         .await?;
-        let started_at = OffsetDateTime::now_utc();
         let compiled_record = self
             .repository
             .upsert_compiled_plan(&build_compiled_plan_input(
@@ -687,7 +687,7 @@ mod tests {
         let (alpha_instance_id, _) = repository.seed_included_provider_instances();
         let invoker = RuntimeProviderInvoker {
             repository,
-            runtime: test_support::InMemoryProviderRuntime,
+            runtime: test_support::InMemoryProviderRuntime::default(),
             workspace_id: Uuid::nil(),
             provider_secret_master_key: "test-master-key".to_string(),
         };
@@ -721,7 +721,7 @@ mod tests {
         );
         let invoker = RuntimeProviderInvoker {
             repository,
-            runtime: test_support::InMemoryProviderRuntime,
+            runtime: test_support::InMemoryProviderRuntime::default(),
             workspace_id: Uuid::nil(),
             provider_secret_master_key: "test-master-key".to_string(),
         };
@@ -751,7 +751,7 @@ mod tests {
         repository.set_instance_enabled_models(backup_instance_id, vec!["gpt-5.4-mini"]);
         let invoker = RuntimeProviderInvoker {
             repository: repository.clone(),
-            runtime: test_support::InMemoryProviderRuntime,
+            runtime: test_support::InMemoryProviderRuntime::default(),
             workspace_id: Uuid::nil(),
             provider_secret_master_key: "test-master-key".to_string(),
         };
@@ -791,7 +791,7 @@ mod tests {
             .set_instance_catalog_models(selected_instance_id, vec!["other-model", "gpt-5.4-mini"]);
         let invoker = RuntimeProviderInvoker {
             repository,
-            runtime: test_support::InMemoryProviderRuntime,
+            runtime: test_support::InMemoryProviderRuntime::default(),
             workspace_id: Uuid::nil(),
             provider_secret_master_key: "test-master-key".to_string(),
         };
