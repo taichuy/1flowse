@@ -615,6 +615,13 @@
   box-shadow: none;
 }
 
+.agent-flow-editor__debug-variables-detail-value:disabled,
+.agent-flow-editor__debug-variables-detail-value.ant-input-disabled{
+  color: #111827;
+  background-color: transparent;
+  opacity: 1;
+}
+
 
 .agent-flow-editor__debug-variables-detail-empty {
   display: flex;

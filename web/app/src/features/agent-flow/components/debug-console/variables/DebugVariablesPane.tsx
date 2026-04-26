@@ -33,6 +33,7 @@ export interface SelectedVariableInfo {
   label: string;
   value: unknown;
   key: string;
+  isReadOnly?: boolean;
 }
 
 const DEFAULT_SIDEBAR_WIDTH = 270;
@@ -106,7 +107,8 @@ export function DebugVariablesPane({
       onSelectedChange?.({
         label: selectedItem.label,
         value: selectedItem.value,
-        key: selectedItem.key
+        key: selectedItem.key,
+        isReadOnly: selectedItem.isReadOnly
       });
     } else {
       onSelectedChange?.(null);
@@ -114,7 +116,7 @@ export function DebugVariablesPane({
   }, [selectedKey, selectedItem, onSelectedChange]);
 
   function handleVariableValueBlur() {
-    if (!selectedItem) {
+    if (!selectedItem || selectedItem.isReadOnly) {
       return;
     }
 
@@ -192,12 +194,15 @@ export function DebugVariablesPane({
       <div className="agent-flow-editor__debug-variables-detail">
         {selectedItem ? (
           <Input.TextArea
+            key={selectedItem.key}
             style={{ height: '100%' }}
             aria-label="变量值编辑框"
             className="agent-flow-editor__debug-variables-detail-value"
+            disabled={selectedItem.isReadOnly}
             onBlur={handleVariableValueBlur}
             onChange={(event) => setSelectedValueText(event.target.value)}
             value={selectedValueText}
+            placeholder={selectedItem.isReadOnly ? '系统变量不可编辑' : undefined}
           />
         ) : (
           <div className="agent-flow-editor__debug-variables-detail-empty">

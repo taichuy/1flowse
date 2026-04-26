@@ -47,6 +47,7 @@ export interface AgentFlowVariableItem {
   key: string;
   label: string;
   value: unknown;
+  isReadOnly?: boolean;
 }
 
 export interface AgentFlowVariableGroup {

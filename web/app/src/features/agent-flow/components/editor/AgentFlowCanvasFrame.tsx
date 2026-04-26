@@ -547,6 +547,10 @@ export function AgentFlowCanvasFrame({
 
 
   function handleVariableCacheValueChange(key: string, value: unknown) {
+    if (selectedVariable?.isReadOnly || !selectedVariable || selectedVariable.key !== key) {
+      return;
+    }
+
     setSelectedVariable((current) =>
       current?.key === key
         ? {

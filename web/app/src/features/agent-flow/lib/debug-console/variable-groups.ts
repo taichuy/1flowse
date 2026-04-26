@@ -92,7 +92,8 @@ export function mapRunContextToVariableGroups(
         {
           key: 'session.remembered',
           label: 'session.remembered',
-          value: runContext.remembered
+          value: runContext.remembered,
+          isReadOnly: true
         }
       ]
     },
@@ -102,17 +103,20 @@ export function mapRunContextToVariableGroups(
         {
           key: 'environment.label',
           label: 'environment.label',
-          value: runContext.environmentLabel
+          value: runContext.environmentLabel,
+          isReadOnly: true
         },
         {
           key: 'environment.application_id',
           label: 'environment.application_id',
-          value: options.applicationId
+          value: options.applicationId,
+          isReadOnly: true
         },
         {
           key: 'environment.draft_id',
           label: 'environment.draft_id',
-          value: options.draftId
+          value: options.draftId,
+          isReadOnly: true
         }
       ]
     }
@@ -168,11 +172,15 @@ export function mapRunDetailToVariableGroups(
     {
       title: 'Conversation / Session',
       items: [
-        ...sessionItems,
+        ...sessionItems.map((item) => ({
+          ...item,
+          isReadOnly: true
+        })),
         {
           key: 'session.remembered',
           label: 'session.remembered',
-          value: options.runContext.remembered
+          value: options.runContext.remembered,
+          isReadOnly: true
         }
       ]
     },
@@ -182,22 +190,26 @@ export function mapRunDetailToVariableGroups(
         {
           key: 'environment.label',
           label: 'environment.label',
-          value: options.runContext.environmentLabel
+          value: options.runContext.environmentLabel,
+          isReadOnly: true
         },
         {
           key: 'environment.application_id',
           label: 'environment.application_id',
-          value: options.applicationId
+          value: options.applicationId,
+          isReadOnly: true
         },
         {
           key: 'environment.draft_id',
           label: 'environment.draft_id',
-          value: options.draftId
+          value: options.draftId,
+          isReadOnly: true
         },
         {
           key: 'environment.run_mode',
           label: 'environment.run_mode',
-          value: detail.flow_run.run_mode
+          value: detail.flow_run.run_mode,
+          isReadOnly: true
         }
       ]
     }
