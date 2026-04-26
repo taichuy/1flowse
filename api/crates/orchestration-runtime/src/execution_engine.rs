@@ -472,7 +472,7 @@ fn build_provider_invocation_input(
         system,
         tools: Vec::new(),
         mcp_bindings: Vec::new(),
-        response_format: node.config.get("response_format").cloned(),
+        response_format: build_response_format(&node.config),
         model_parameters: build_model_parameters(&node.config),
         trace_context,
         run_context: BTreeMap::from([(
@@ -480,6 +480,20 @@ fn build_provider_invocation_input(
             Value::Object(resolved_inputs.clone()),
         )]),
     }
+}
+
+fn build_response_format(config: &Value) -> Option<Value> {
+    let response_format = config.get("response_format")?;
+
+    if response_format
+        .get("mode")
+        .and_then(Value::as_str)
+        .is_some_and(|mode| mode == "text")
+    {
+        return None;
+    }
+
+    Some(response_format.clone())
 }
 
 fn binding_text(
