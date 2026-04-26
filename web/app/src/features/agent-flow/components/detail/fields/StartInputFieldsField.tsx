@@ -1,8 +1,6 @@
 import {
-  ArrowDownOutlined,
-  ArrowUpOutlined,
   DeleteOutlined,
-  EditOutlined,
+  HolderOutlined,
   PlusOutlined
 } from '@ant-design/icons';
 import { Button, Empty, Input, Select, Switch, Typography } from 'antd';
@@ -79,6 +77,7 @@ export function StartInputFieldsField({
 }) {
   const fields = normalizeList(value);
   const [editing, setEditing] = useState<EditingInputField | null>(null);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   function openAddPanel() {
@@ -130,6 +129,20 @@ export function StartInputFieldsField({
     }
 
     closePanel();
+  }
+
+  function handleDragStart(index: number) {
+    setDraggingIndex(index);
+  }
+
+  function handleDrop(targetIndex: number) {
+    if (draggingIndex === null || draggingIndex === targetIndex) {
+      setDraggingIndex(null);
+      return;
+    }
+
+    onChange(moveItem(fields, draggingIndex, targetIndex));
+    setDraggingIndex(null);
   }
 
   const floatingPanel = editing ? (
@@ -239,57 +252,60 @@ export function StartInputFieldsField({
           {fields.map((field, index) => (
             <div
               key={`${field.key}-${index}`}
-              className="agent-flow-start-input-fields__item"
+              className="agent-flow-start-input-fields__item agent-flow-node-detail__list-item"
+              data-testid={`start-input-field-row-${field.key}`}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={() => handleDrop(index)}
             >
-              <div className="agent-flow-start-input-fields__item-main">
-                <div className="agent-flow-start-input-fields__item-copy">
-                  <Typography.Text strong>{field.label}</Typography.Text>
-                  <Typography.Text className="agent-flow-start-input-fields__item-key">
+              <button
+                aria-label={`拖拽排序输入字段 ${field.key}`}
+                className="agent-flow-start-input-fields__drag-handle"
+                draggable
+                onDragStart={() => handleDragStart(index)}
+                onDragEnd={() => setDraggingIndex(null)}
+                type="button"
+              >
+                <HolderOutlined />
+              </button>
+              <button
+                aria-label={`编辑输入字段 ${field.key}`}
+                className="agent-flow-start-input-fields__variable-main"
+                type="button"
+                onClick={() => openEditPanel(field, index)}
+              >
+                <span className="agent-flow-node-detail__list-item-left">
+                  <span className="agent-flow-node-detail__list-item-icon">
+                    {'{x}'}
+                  </span>
+                  <span className="agent-flow-node-detail__list-item-name">
                     userinput.{field.key}
-                  </Typography.Text>
-                </div>
-                <span className="agent-flow-node-detail__list-item-type">
-                  {field.valueType}
-                  {field.required ? ' · 必填' : ''}
+                  </span>
                 </span>
-              </div>
-              <div className="agent-flow-start-input-fields__actions">
-                <Button
-                  aria-label={`编辑输入字段 ${field.key}`}
-                  icon={<EditOutlined />}
-                  size="small"
-                  type="text"
-                  onClick={() => openEditPanel(field, index)}
-                />
-                <Button
-                  aria-label={`上移输入字段 ${field.key}`}
-                  disabled={index === 0}
-                  icon={<ArrowUpOutlined />}
-                  size="small"
-                  type="text"
-                  onClick={() => onChange(moveItem(fields, index, index - 1))}
-                />
-                <Button
-                  aria-label={`下移输入字段 ${field.key}`}
-                  disabled={index === fields.length - 1}
-                  icon={<ArrowDownOutlined />}
-                  size="small"
-                  type="text"
-                  onClick={() => onChange(moveItem(fields, index, index + 1))}
-                />
-                <Button
-                  aria-label={`删除输入字段 ${field.key}`}
-                  danger
-                  icon={<DeleteOutlined />}
-                  size="small"
-                  type="text"
-                  onClick={() =>
-                    onChange(
-                      fields.filter((_, fieldIndex) => fieldIndex !== index)
-                    )
-                  }
-                />
-              </div>
+                <span className="agent-flow-node-detail__list-item-type">
+                  {field.valueType === 'array'
+                    ? 'Array[File]'
+                    : field.valueType === 'string'
+                      ? 'String'
+                      : field.valueType === 'number'
+                        ? 'Number'
+                        : field.valueType === 'boolean'
+                          ? 'Boolean'
+                          : 'JSON'}
+                </span>
+              </button>
+              <Button
+                aria-label={`删除输入字段 ${field.key}`}
+                className="agent-flow-start-input-fields__delete"
+                danger
+                icon={<DeleteOutlined />}
+                size="small"
+                type="text"
+                onClick={() =>
+                  onChange(
+                    fields.filter((_, fieldIndex) => fieldIndex !== index)
+                  )
+                }
+              />
             </div>
           ))}
         </div>

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useEffect, type ReactNode } from 'react';
 import { describe, expect, test } from 'vitest';
 
@@ -113,7 +113,7 @@ describe('start input fields', () => {
     ]);
   });
 
-  test('reorders and removes start input fields from the inspector', async () => {
+  test('drags and removes start input fields from single-line variable rows', async () => {
     const initialState = createInitialState();
 
     initialState.draft.document.graph.nodes =
@@ -157,9 +157,32 @@ describe('start input fields', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    fireEvent.click(
-      await screen.findByRole('button', { name: '下移输入字段 first_name' })
+    expect(
+      screen.queryByRole('button', { name: '下移输入字段 first_name' })
+    ).not.toBeInTheDocument();
+
+    const firstRow = await screen.findByTestId(
+      'start-input-field-row-first_name'
     );
+    const secondRow = screen.getByTestId('start-input-field-row-age');
+
+    expect(
+      within(firstRow).getByText('userinput.first_name')
+    ).toBeInTheDocument();
+    expect(within(firstRow).getByText('String')).toBeInTheDocument();
+    expect(
+      within(firstRow).getByRole('button', {
+        name: '拖拽排序输入字段 first_name'
+      })
+    ).toBeInTheDocument();
+
+    fireEvent.dragStart(
+      within(firstRow).getByRole('button', {
+        name: '拖拽排序输入字段 first_name'
+      })
+    );
+    fireEvent.dragOver(secondRow);
+    fireEvent.drop(secondRow);
     fireEvent.click(screen.getByRole('button', { name: '删除输入字段 age' }));
 
     const startNode = latestDocument.graph.nodes.find(

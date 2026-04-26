@@ -464,41 +464,62 @@
 }
 
 .agent-flow-start-input-fields__item {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 28px;
+  align-items: center;
   gap: 8px;
-  padding: 12px;
-  border: 1px solid #e4eadf;
-  border-radius: 8px;
-  background: #ffffff;
+  margin-bottom: 0;
+  padding: 0 8px 0 10px;
 }
 
-.agent-flow-start-input-fields__item-main {
+.agent-flow-start-input-fields__drag-handle,
+.agent-flow-start-input-fields__variable-main {
+  border: none;
+  background: transparent;
+}
+
+.agent-flow-start-input-fields__drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  color: #8ca095;
+  cursor: grab;
+}
+
+.agent-flow-start-input-fields__drag-handle:active {
+  cursor: grabbing;
+}
+
+.agent-flow-start-input-fields__drag-handle:hover,
+.agent-flow-start-input-fields__drag-handle:focus-visible {
+  background: #f3f8f3;
+  color: #55645d;
+}
+
+.agent-flow-start-input-fields__variable-main {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   min-width: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
 }
 
-.agent-flow-start-input-fields__item-copy,
-.agent-flow-start-input-fields__form,
-.agent-flow-start-input-fields__form-row {
-  display: flex;
-  flex-direction: column;
+.agent-flow-start-input-fields__variable-main:hover
+  .agent-flow-node-detail__list-item-name,
+.agent-flow-start-input-fields__variable-main:focus-visible
+  .agent-flow-node-detail__list-item-name {
+  color: #00c182;
 }
 
-.agent-flow-start-input-fields__item-copy {
-  gap: 2px;
-  min-width: 0;
-}
-
-.agent-flow-start-input-fields__item-key {
-  color: #7b8982;
-  font-family:
-    'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
-    monospace;
-  font-size: 12px;
+.agent-flow-start-input-fields__delete {
+  justify-self: end;
 }
 
 .agent-flow-start-input-fields__panel {
@@ -559,9 +580,14 @@
 }
 
 @media (max-width: 640px) {
-  .agent-flow-start-input-fields__item-main {
+  .agent-flow-start-input-fields__item {
+    grid-template-columns: 24px minmax(0, 1fr) 28px;
+  }
+
+  .agent-flow-start-input-fields__variable-main {
     align-items: flex-start;
     flex-direction: column;
+    gap: 4px;
   }
 
   .agent-flow-node-detail__policy-select-shell--compact {
