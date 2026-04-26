@@ -171,10 +171,7 @@ describe('LlmModelField', () => {
     await waitFor(() =>
       expect(
         trigger.querySelector('.agent-flow-model-chip__provider-image')
-      ).toHaveAttribute(
-        'src',
-        'https://cdn.example.com/openai-compatible.svg'
-      )
+      ).toHaveAttribute('src', 'https://cdn.example.com/openai-compatible.svg')
     );
   });
 
@@ -278,10 +275,14 @@ describe('LlmModelField', () => {
       await screen.findByText(primaryProviderOption.display_name)
     ).toBeInTheDocument();
     expect(
-      await screen.findByText(primaryProviderFirstGroup.source_instance_display_name)
+      await screen.findByText(
+        primaryProviderFirstGroup.source_instance_display_name
+      )
     ).toBeInTheDocument();
     expect(
-      await screen.findByText(primaryProviderSecondGroup.source_instance_display_name)
+      await screen.findByText(
+        primaryProviderSecondGroup.source_instance_display_name
+      )
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: '模型供应商设置' })
@@ -353,6 +354,54 @@ describe('LlmModelField', () => {
     expect(dialog).toHaveStyle({
       width: '320px',
       height: '400px'
+    });
+  });
+
+  test('opens the model settings panel in the blank area left of the node detail panel', async () => {
+    const { container } = renderWithProviders(
+      <div className="agent-flow-editor__body">
+        <div className="agent-flow-node-detail">
+          <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+            <NodeConfigTab />
+          </AgentFlowEditorStoreProvider>
+        </div>
+      </div>
+    );
+
+    const editorBody = container.querySelector('.agent-flow-editor__body');
+    const nodeDetail = container.querySelector('.agent-flow-node-detail');
+    const trigger = await screen.findByRole('button', { name: '模型' });
+
+    if (!editorBody || !nodeDetail) {
+      throw new Error('expected editor body and node detail container');
+    }
+
+    mockElementRect(editorBody, {
+      left: 0,
+      top: 0,
+      width: 1200,
+      height: 800
+    });
+    mockElementRect(nodeDetail, {
+      left: 760,
+      top: 40,
+      width: 420,
+      height: 720
+    });
+    mockElementRect(trigger, {
+      left: 980,
+      top: 180,
+      width: 180,
+      height: 40
+    });
+
+    fireEvent.click(trigger);
+
+    const dialog = await screen.findByRole('dialog', { name: '模型设置' });
+
+    expect(dialog).toHaveStyle({
+      left: '416px',
+      top: '180px'
     });
   });
 
@@ -494,7 +543,9 @@ describe('LlmModelField', () => {
     fireEvent.click(trigger);
 
     const dialog = await screen.findByRole('dialog', { name: '模型设置' });
-    const dragHandle = screen.getByTestId('agent-flow-model-settings-drag-handle');
+    const dragHandle = screen.getByTestId(
+      'agent-flow-model-settings-drag-handle'
+    );
 
     fireEvent.mouseDown(dragHandle, {
       clientX: 680,
@@ -561,9 +612,7 @@ describe('LlmModelField', () => {
         ]
       }
     ];
-    fetchModelProviderOptionsSpy.mockResolvedValueOnce(
-      duplicatedModelContract
-    );
+    fetchModelProviderOptionsSpy.mockResolvedValueOnce(duplicatedModelContract);
 
     const state = createInitialState();
     const llmNode = state.draft.document.graph.nodes.find(
@@ -657,9 +706,7 @@ describe('LlmModelField', () => {
         }
       ]
     };
-    fetchModelProviderOptionsSpy.mockResolvedValueOnce(
-      extendedContract
-    );
+    fetchModelProviderOptionsSpy.mockResolvedValueOnce(extendedContract);
 
     const state = createInitialState();
     const llmNode = state.draft.document.graph.nodes.find(
@@ -702,7 +749,9 @@ describe('LlmModelField', () => {
     expect(temperatureRow).not.toBeNull();
     expect(temperatureHead).not.toBeNull();
     expect(
-      temperatureHead?.querySelector('.agent-flow-llm-parameter-form__row-label')
+      temperatureHead?.querySelector(
+        '.agent-flow-llm-parameter-form__row-label'
+      )
     ).not.toBeNull();
     expect(
       temperatureRow?.querySelector(
@@ -736,9 +785,7 @@ describe('LlmModelField', () => {
     duplicatedModelContract.providers[0].model_groups[1].models[0].context_window = 64000;
     duplicatedModelContract.providers[0].model_groups[1].models[0].max_output_tokens =
       null;
-    fetchModelProviderOptionsSpy.mockResolvedValueOnce(
-      duplicatedModelContract
-    );
+    fetchModelProviderOptionsSpy.mockResolvedValueOnce(duplicatedModelContract);
 
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>

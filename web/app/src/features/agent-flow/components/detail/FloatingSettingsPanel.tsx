@@ -139,7 +139,11 @@ function resolveInitialPosition({
   }
 
   const triggerRect = trigger.getBoundingClientRect();
-  const preferredLeft = triggerRect.left - bounds.left - panelWidth - gap;
+  const nodeDetail = trigger.closest<HTMLElement>('.agent-flow-node-detail');
+  const detailRect = nodeDetail?.getBoundingClientRect();
+  const preferredLeft = detailRect
+    ? detailRect.left - bounds.left - panelWidth - gap
+    : triggerRect.left - bounds.left - panelWidth - gap;
   const fallbackLeft = triggerRect.right - bounds.left + gap;
 
   return clampPosition(
