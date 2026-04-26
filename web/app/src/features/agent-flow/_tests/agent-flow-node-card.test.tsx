@@ -59,7 +59,7 @@ describe('AgentFlowNodeCard', () => {
               alias: 'Answer',
               description: '向最终用户输出本轮工作流的回复结果。',
               config: {},
-              issueCount: 0,
+              issueCount: 3,
               canEnterContainer: false,
               pickerOpen: false,
               showTargetHandle: true,
@@ -82,6 +82,7 @@ describe('AgentFlowNodeCard', () => {
       'agent-flow-node-card--type-answer'
     );
     expect(document.querySelector('.agent-flow-node-card__type-icon')).toBeInTheDocument();
+    expect(document.querySelector('.agent-flow-node-card__badge')).not.toBeInTheDocument();
   });
 
   test('uses the source handle itself as the add-node trigger instead of nesting a separate button', () => {

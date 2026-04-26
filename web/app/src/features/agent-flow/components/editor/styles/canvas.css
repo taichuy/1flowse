@@ -1128,20 +1128,6 @@
   box-shadow: none;
 }
 
-.agent-flow-node-card__badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: #eef6ee;
-  color: #365540;
-  font-size: 12px;
-  font-weight: 600;
-}
-
 .agent-flow-node-picker {
   display: grid;
   gap: 6px;

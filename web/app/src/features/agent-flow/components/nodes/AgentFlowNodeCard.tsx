@@ -41,10 +41,6 @@ export function AgentFlowNodeCard({
         };
       }
 
-      if (key === 'issueCount') {
-        return data.issueCount;
-      }
-
       if (key === 'typeLabel') {
         return data.typeLabel;
       }

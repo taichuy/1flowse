@@ -100,8 +100,6 @@ function renderSummaryView({ adapter, block }: SchemaViewRendererProps) {
 
 function renderCardEyebrowView({ adapter }: SchemaViewRendererProps) {
   const node = getNode(adapter);
-  const issueCount = Number(adapter.getDerived('issueCount') ?? 0);
-
   if (!node) {
     return null;
   }
@@ -114,7 +112,6 @@ function renderCardEyebrowView({ adapter }: SchemaViewRendererProps) {
         {typeIcon ? <span className="agent-flow-node-card__type-icon">{typeIcon}</span> : null}
         <span className="agent-flow-node-card__title">{node.alias}</span>
       </span>
-      {issueCount > 0 ? <span className="agent-flow-node-card__badge">{issueCount}</span> : null}
     </div>
   );
 }
