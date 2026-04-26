@@ -212,6 +212,31 @@ afterEach(() => {
 });
 
 describe('useAgentFlowDebugSession', () => {
+  test('initializes a new draft with an empty query input', () => {
+    const queryClient = createQueryClient();
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    const { result } = renderHook(
+      () =>
+        useAgentFlowDebugSession({
+          applicationId: 'app-1',
+          draftId: 'draft-1',
+          document
+        }),
+      { wrapper: createWrapper(queryClient) }
+    );
+
+    expect(result.current.runContext.remembered).toBe(false);
+    expect(result.current.runContext.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'query',
+          value: ''
+        })
+      ])
+    );
+  });
+
   test('creates user and assistant messages after a debug run succeeds', async () => {
     const queryClient = createQueryClient();
     const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
@@ -341,15 +366,24 @@ describe('useAgentFlowDebugSession', () => {
       node.id === 'node-start'
         ? {
             ...node,
-            outputs: [
-              ...node.outputs,
-              { key: 'language', title: '语言', valueType: 'string' as const },
-              {
-                key: 'enable_search',
-                title: '启用搜索',
-                valueType: 'boolean' as const
-              }
-            ]
+            config: {
+              input_fields: [
+                {
+                  key: 'language',
+                  label: '语言',
+                  inputType: 'text',
+                  valueType: 'string',
+                  required: false
+                },
+                {
+                  key: 'enable_search',
+                  label: '启用搜索',
+                  inputType: 'checkbox',
+                  valueType: 'boolean',
+                  required: false
+                }
+              ]
+            }
           }
         : node
     );

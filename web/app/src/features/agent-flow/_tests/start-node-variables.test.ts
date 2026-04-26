@@ -151,7 +151,7 @@ describe('start node variables', () => {
           customer_name: 'Start customer_name 调试值',
           age: 1,
           files: [],
-          query: '总结退款政策'
+          query: ''
         }
       }
     });
@@ -192,7 +192,7 @@ describe('start node variables', () => {
         'node-start': {
           priority: '低',
           confirmed: false,
-          query: '总结退款政策'
+          query: ''
         }
       }
     });

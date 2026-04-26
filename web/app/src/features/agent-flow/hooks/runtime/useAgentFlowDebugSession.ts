@@ -243,14 +243,18 @@ export function useAgentFlowDebugSession({
   useEffect(() => {
     setRunContext((currentRunContext) => {
       // 文档更新时尽量保留用户正在编辑的输入值；仅在 draft 切换时回落到本地记忆。
-      const nextValues =
-        previousStorageKeyRef.current === storageKey
-          ? getRunContextValues(currentRunContext)
-          : rememberedInputValues;
+      const isSameDraft = previousStorageKeyRef.current === storageKey;
+      const nextValues = isSameDraft
+        ? getRunContextValues(currentRunContext)
+        : rememberedInputValues;
 
       previousStorageKeyRef.current = storageKey;
 
-      return buildRunContextFromDocument(document, nextValues);
+      const nextRunContext = buildRunContextFromDocument(document, nextValues);
+
+      return isSameDraft
+        ? { ...nextRunContext, remembered: currentRunContext.remembered }
+        : nextRunContext;
     });
   }, [document, rememberedInputValues, storageKey]);
 

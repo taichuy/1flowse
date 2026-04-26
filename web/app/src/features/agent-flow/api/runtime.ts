@@ -240,8 +240,8 @@ function buildStringPreviewValue(
   node: FlowNodeDocument | undefined,
   outputKey: string
 ) {
-  if (outputKey === 'query') {
-    return '总结退款政策';
+  if (node?.type === 'start' && outputKey === 'query') {
+    return '';
   }
 
   if (outputKey === 'text' || outputKey === 'answer') {
