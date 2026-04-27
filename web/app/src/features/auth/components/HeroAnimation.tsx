@@ -1,4 +1,4 @@
-import { Typography, theme } from 'antd';
+import { theme } from 'antd';
 import React from 'react';
 
 export function HeroAnimation() {
@@ -56,31 +56,11 @@ export function HeroAnimation() {
         }}
       />
       
-      <div className="hero-text-block" style={{ zIndex: 1, textAlign: 'center', padding: '0 80px', width: '100%', maxWidth: 1200, marginTop: '-15vh' }}>
-        <Typography.Title 
-          level={1} 
-          className="hero-title"
-          style={{ 
-            fontSize: 'clamp(6rem, 12vw, 14rem)', 
-            fontWeight: 900, 
-            marginBottom: 24,
-            letterSpacing: '-0.02em',
-            lineHeight: 1.1
-          }}
-        >
-          1flowbase
-        </Typography.Title>
-        <Typography.Paragraph 
-          className="hero-slogan"
-          style={{ 
-            fontSize: '1.5rem', 
-            fontWeight: 500,
-            maxWidth: 600,
-            margin: '0 auto'
-          }}
-        >
-          知道为什么构建是构建前提
-        </Typography.Paragraph>
+      <div className="hero-text-block" style={{ zIndex: 1, textAlign: 'center', padding: `0 clamp(12px, 6vw, 80px)`, width: '100%', marginTop: '-15vh' }}>
+        <div className="hero-tagline" aria-label="brand name and slogan">
+          <div className="hero-text-line hero-title-line">1flowbase</div>
+          <div className="hero-text-line hero-slogan-line">你的故事，从此开始</div>
+        </div>
       </div>
 
       <style>
@@ -89,34 +69,49 @@ export function HeroAnimation() {
             animation: reveal 1.5s cubic-bezier(0.2, 0, 0, 1) forwards;
           }
 
-          .hero-title {
-            background: linear-gradient(
-              120deg,
-              ${token.colorPrimary} 40%,
-              rgba(255, 255, 255, 1) 50%,
-              rgba(105, 177, 255, 0.9) 60%
-            );
-            background-size: 200% auto;
-            color: transparent;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            animation: shine 30s linear infinite 1.5s;
+          .hero-tagline {
+            --hero-slogan-size: clamp(1rem, 2.8vw, 3rem);
+            --hero-title-size: calc(var(--hero-slogan-size) * 7 / 3);
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            gap: clamp(0.1rem, 0.45vw, 0.6rem);
+            line-height: 1.05;
+            animation: reveal 1.5s cubic-bezier(0.2, 0, 0, 1) forwards;
+            font-weight: 500;
           }
 
-          .hero-slogan {
+          .hero-text-line {
             background: linear-gradient(
               120deg,
-              ${token.colorPrimary} 40%,
-              rgba(255, 255, 255, 0.9) 50%,
-              ${token.colorInfo} 60%
+              var(--hero-from-color) 40%,
+              var(--hero-mid-color) 50%,
+              var(--hero-to-color) 60%
             );
-            background-size: 200% auto;
+            background-size: 240% auto;
             color: transparent;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            animation: shine 30s linear infinite 1.5s;
+            animation: shine 20s linear infinite;
+            font-weight: 900;
+            margin: 0;
+            line-height: 1.05;
+            letter-spacing: -0.02em;
+            --hero-from-color: ${token.colorPrimary};
+            --hero-mid-color: rgba(255, 255, 255, 1);
+            --hero-to-color: rgba(105, 177, 255, 0.9);
+          }
+
+          .hero-title-line {
+            font-size: var(--hero-title-size);
+          }
+
+          .hero-slogan-line {
+            font-size: var(--hero-slogan-size);
+            font-weight: 500;
+            --hero-mid-color: rgba(255, 255, 255, 0.95);
+            --hero-to-color: ${token.colorInfo};
           }
 
           @keyframes reveal {
