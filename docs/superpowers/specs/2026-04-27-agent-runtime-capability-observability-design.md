@@ -127,9 +127,11 @@ Codex、OpenClaw、AionRS、Hermes Agent 等本地 agent 可以把 1flowbase 当
 
 类似 NocoBase AI 员工的内部 agent 属于 `system_agent` 能力。它可以调用内部业务能力、workflow、审批和 skill，但必须通过 CapabilityRuntime 申请、授权、执行和记录，不能绕过运行时直接写业务状态。
 
-### 4.4 中转站和模型路由
+### 4.4 中转站、模型供应商和模型路由
 
 上游不仅是官方 API，也可以是 OpenAI-compatible relay，如 sub2api、new-api 一类中转站。1flowbase 需要把它们建模为 LLM 节点可引用的供应目标，而不是混在模型节点的临时 URL 里。
+
+模型供应商是模型目录和运行目标的唯一产品入口。中转站插件不直接暴露给 LLM 节点；它负责连接中转站、拉取模型列表、归一化协议/能力/价格/上下文信息，并把结果写入模型供应商目录。LLM 节点和容灾队列只引用模型供应商中的真实目标：`provider_instance_id + upstream_model_id + protocol`。
 
 raw gateway 是对外协议入口；自动容灾不在 gateway 全局隐式发生，而由被调用的 LLM 节点决定。对外仍暴露一个逻辑模型或发布 API，内部由 LLM 节点选择 `fixed_model` 或 `failover_queue`。
 
@@ -162,8 +164,11 @@ Agent Session Runtime
 Capability Runtime
   catalog resolve, authorization, invocation, timeout/cancel, result normalization, artifact write
 
+Model Provider Catalog
+  provider instances, relay model sync, enabled models, capability snapshots, parameter schema
+
 Model Gateway / Provider Runtime
-  provider stdio v2, upstream relay, streaming parser, usage normalization, gateway_forward spans
+  provider stdio v2, upstream relay, streaming parser, usage normalization, provider attempts
 
 Runtime Event Bus + Span Tree
   live stream, durable batch writer, SSE/blocking fold, debug read model
@@ -178,6 +183,7 @@ Observability & Billing Ledger
 - control-plane 管 run 生命周期、权限、审计和持久化。
 - orchestration-runtime 管编排、节点运行、llm turn 和 capability loop。
 - plugin-framework 定义 provider/capability/skill/MCP 插件合同。
+- model-provider catalog 是 LLM 节点和容灾队列的唯一模型来源；官方供应商插件和中转站插件都只能通过 catalog sync 写入这里。
 - plugin-runner 只作为隔离进程宿主和 streaming stdio adapter。
 - provider 插件不得直接执行 host tool、MCP、skill 或 workflow。
 
@@ -415,7 +421,83 @@ CostLedger
   created_at
 ```
 
-### 6.8 ModelFailoverQueueTemplate
+### 6.8 ModelProviderCatalogSource
+
+模型供应商目录承接官方供应商和中转站插件的模型同步结果。中转站插件的职责是“发现和适配模型”，不是让 LLM 节点直接依赖插件。
+
+```text
+ModelProviderCatalogSource
+  id
+  workspace_id
+  source_kind: official_provider | relay_plugin
+  plugin_id
+  provider_code
+  display_name
+  base_url_ref
+  auth_secret_ref
+  protocol: openai | anthropic | gemini | provider_native
+  status: ready | disabled | error
+  last_sync_run_id
+  created_at
+  updated_at
+
+ModelCatalogSyncRun
+  id
+  catalog_source_id
+  started_at
+  finished_at
+  status: succeeded | failed
+  error_message_ref
+  discovered_count
+  imported_count
+  disabled_count
+
+ModelProviderCatalogEntry
+  id
+  provider_instance_id
+  catalog_source_id
+  upstream_model_id
+  display_label
+  protocol
+  capability_snapshot
+  parameter_schema_ref
+  context_window
+  max_output_tokens
+  pricing_ref
+  fetched_at
+  status: enabled | disabled | unavailable
+```
+
+规则：
+
+- 中转站插件通过 `ModelCatalogSyncRun` 拉取模型列表，归一化后写入 `ModelProviderCatalogEntry`。
+- 模型供应商设置页负责把 catalog entry 暴露为可启用模型；LLM 节点和容灾队列只消费已启用模型。
+- LLM 节点不保存 `plugin_id` 或中转站私有 URL，只保存 `provider_instance_id + upstream_model_id + protocol` 或引用容灾队列。
+- catalog 刷新只影响后续选择和后续运行；已经冻结的 run snapshot 不被后台同步改写。
+- 如果队列项指向的模型在运行开始时已不可用，该 attempt 如实失败并进入 attempt ledger，再按容灾队列尝试下一个。
+
+```text
+Relay Plugin Sync
+
++--------------+      list models       +------------------+
+| Relay Plugin | ---------------------> | upstream relay   |
++--------------+                        +------------------+
+       |
+       | normalize protocol/capability/pricing
+       v
++---------------------------+
+| Model Provider Catalog    |
+| provider_instance + model |
++---------------------------+
+       |
+       | selected by
+       v
++---------------------------+
+| LLM Node / Failover Queue |
++---------------------------+
+```
+
+### 6.9 ModelFailoverQueueTemplate
 
 LLM 节点是对外供应单元。自动容灾开启后，节点不再绑定单个 `source_instance_id`，而是引用用户在设置中创建的容灾队列模板。
 
@@ -464,7 +546,7 @@ Settings / Model Failover Queues
 +--------------------------------------------------+
 ```
 
-### 6.9 ModelFailoverAttemptLedger
+### 6.10 ModelFailoverAttemptLedger
 
 每个上游尝试必须独立入账。失败 attempt 不能被最终成功覆盖。
 
@@ -522,7 +604,72 @@ Routing mode
 3 gemini-backup / pro
 ```
 
-### 6.10 CreditLedger
+### 6.11 LlmNodeRuntimeContract
+
+LLM 节点需要从“模型选择控件”升级为稳定的一线运行节点。它负责把上游变量、prompt、上下文策略和工具声明编译成模型输入，并把最终输出写回 `VariablePool`，供下游节点消费。
+
+```text
+LlmNodeRuntimeContract
+  node_id
+  routing_mode: fixed_model | failover_queue
+  fixed_model_target
+  queue_template_id
+  queue_snapshot_id
+  input_mapping
+  prompt_template_refs
+  tool_policy
+  response_format
+  llm_parameters
+  context_policy
+  stream_policy
+  output_schema
+```
+
+```text
+LlmNodeOutputs
+  text
+  message
+  structured_output
+  tool_calls
+  finish_reason
+  route
+  usage
+  error
+  __raw_response_ref
+  __context_projection_id
+  __attempt_ids
+  __winner_attempt_id
+```
+
+变量传递规则：
+
+- 上游节点只通过 `VariablePool` 向 LLM 节点提供输入。LLM 节点编译时记录 `input_mapping`，运行时记录实际引用的变量和值 hash。
+- LLM 节点先生成 `ContextProjection`，再进入 fixed model 或 failover queue attempt；attempt 不能直接改写上游变量。
+- 成功完成后，LLM 节点把 `LlmNodeOutputs` 写入 `VariablePool`。下游节点只能读取这个输出对象，不直接读取 provider 原始响应。
+- `text` 是最常用的下游文本变量；`structured_output` 只在 response format 成功解析后写入；`tool_calls` 用于调试和 agent loop，不默认作为普通业务输出推进。
+- `__` 前缀字段为隐藏诊断字段，默认不进入变量选择器，但可在调试台和审计视图查看。
+- 全部 attempt 失败或 usage/cost 不可用导致最终响应报错时，LLM 节点写入错误诊断输出；默认不继续普通下游边，除非后续设计引入显式 error branch。
+
+```text
+Upstream Node Outputs
+        |
+        v
+VariablePool
+        |
+        v
+LLM input_mapping + prompt templates
+        |
+        v
+ContextProjection
+        |
+        v
+fixed_model OR failover_queue attempts
+        |
+        v
+LlmNodeOutputs -> VariablePool -> Downstream Nodes
+```
+
+### 6.12 CreditLedger
 
 产品层可以把额度展示成积分、余额、点数或套餐用量，但底层必须是可审计的额度账本。额度扣减以 `normalized_usage + price_snapshot` 形成的成本为依据，再按 workspace/user/app/agent 的计费策略生成交易。
 
@@ -553,7 +700,7 @@ CreditLedger
 - 额度账本必须支持幂等写入，避免 SSE 重连、任务重试或 durable writer 重放导致重复扣费。
 - 内部 agent、agent-as-model 和外部 agent observed session 都必须能归因到 workspace，不能只挂在 provider instance 上。
 
-### 6.11 ProviderAccountPool
+### 6.13 ProviderAccountPool
 
 账号平衡不应混进模型供应商实例的临时配置。一个 provider 或 relay 可以有多个上游账号/API key，路由层需要按健康状态、限额、优先级和模型支持情况选择账号，并把选择结果写入 span 和账本。
 
@@ -725,17 +872,19 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 4. llm_turn_started
 5. llm_input_projected
 6. llm_route_resolved
-7. failover_queue_snapshot_created 或 fixed_model_resolved
-8. provider_attempt_started
-9. provider stdio v2 stream
-10. provider_attempt_finished
-11. tool_call_commit
-12. CapabilityRuntime authorize
-13. CapabilityRuntime execute
-14. tool_result_appended
-15. 下一轮 llm_turn_started
-16. 达到 finish / max iteration / waiting approval / failed / cancelled
-17. attempt_recorded, usage_recorded, run_finished
+7. llm_input_mapping_resolved
+8. failover_queue_snapshot_created 或 fixed_model_resolved
+9. provider_attempt_started
+10. provider stdio v2 stream
+11. provider_attempt_finished
+12. llm_outputs_committed_to_variable_pool
+13. tool_call_commit
+14. CapabilityRuntime authorize
+15. CapabilityRuntime execute
+16. tool_result_appended
+17. 下一轮 llm_turn_started
+18. 达到 finish / max iteration / waiting approval / failed / cancelled
+19. attempt_recorded, usage_recorded, run_finished
 ```
 
 关键约束：
@@ -745,6 +894,7 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 - tool/MCP/skill/workflow/data retrieval 的返回必须归一化为多形态 `CapabilityResult`，再追加进下一轮模型输入。
 - LLM 节点可选择 `fixed_model` 或 `failover_queue`。`failover_queue` 模式由 LLM 节点冻结 snapshot，并按用户排序逐个 attempt。
 - LLM 节点参数是最终一线参数来源。队列项不得覆盖 prompt、tools、response format、sampling、context policy、timeout 和 streaming policy。
+- LLM 节点成功或失败都要形成标准输出对象；普通下游只消费 `VariablePool` 中的 `LlmNodeOutputs`，不直接消费 provider 原始响应。
 
 ## 9. Gateway / relay 运行流
 
@@ -1041,12 +1191,14 @@ billing_sessions
 职责：
 
 - OpenAI-compatible / Anthropic / Gemini / relay 协议转换；
+- 从官方供应商或中转站拉取模型列表；
+- 把发现的模型、能力、参数 schema、上下文窗口和价格信息归一化写入模型供应商目录；
 - route metadata；
 - usage 归一化；
 - upstream request id；
 - provider error normalization。
 
-自动容灾不由 GatewayProviderPlugin 自行决策，而由 LLM 节点的 `fixed_model` 或 `failover_queue` 运行策略驱动。
+自动容灾不由 GatewayProviderPlugin 自行决策，而由 LLM 节点的 `fixed_model` 或 `failover_queue` 运行策略驱动。GatewayProviderPlugin 不直接成为 LLM 节点的选择对象，LLM 节点只选择模型供应商目录中的 provider instance/model target。
 
 ### 17.3 CapabilityPlugin
 
@@ -1134,10 +1286,11 @@ ExternalAgentBridge 不接收 AI 自述日志作为主审计事实。
 4. 改 `plugin-runner` 为逐行 NDJSON streaming，处理协议版本、bad JSON、stderr 日志、timeout、kill 和 usage snapshot。
 5. 增加 host-owned capability loop：`tool_call_commit -> authorize -> execute -> append result -> next llm_turn`。
 6. 增加 skill index/load/snapshot，再增加 MCP client manager，把 MCP tools 投影进同一个 capability registry。
-7. 增加 Model Gateway / Relay：OpenAI-compatible API、Anthropic-compatible API、Gemini-compatible API、统一事实模型、usage normalization、gateway trace。
-8. 增加 LLM Node Routing：`fixed_model`、`failover_queue`、queue template、queue snapshot 和 attempt ledger。
-9. 增加 Billing / Credit / Provider Account Pool：额度预检查、成本换算、账号池选择、扣费/退款和账号健康事件。
-10. 增加 observed-facts-only external agent audit、subagent link 和 debug UI read model。
+7. 增加 Model Provider Catalog Sync：官方供应商和中转站插件都通过 catalog sync 写入可启用模型目录。
+8. 增加 Model Gateway / Relay：OpenAI-compatible API、Anthropic-compatible API、Gemini-compatible API、统一事实模型、usage normalization、gateway trace。
+9. 增加 LLM Node Routing 与输出变量：`fixed_model`、`failover_queue`、queue template、queue snapshot、attempt ledger、`LlmNodeOutputs` 和 VariablePool 写回。
+10. 增加 Billing / Credit / Provider Account Pool：额度预检查、成本换算、账号池选择、扣费/退款和账号健康事件。
+11. 增加 observed-facts-only external agent audit、subagent link 和 debug UI read model。
 
 ## 20. 风险和约束
 
@@ -1162,6 +1315,8 @@ ExternalAgentBridge 不接收 AI 自述日志作为主审计事实。
 - 是否命中 prompt cache 或上游 cache？
 - 这次 run 冻结了多少额度、实际扣了多少、是否退款、余额变化是什么？
 - 这次 LLM 节点使用固定模型还是容灾队列，queue snapshot 是什么，每个 attempt 为什么成功或失败？
+- 中转站插件拉取了哪些模型，哪些模型进入模型供应商目录，LLM 节点最终引用的是哪个 provider instance/model target？
+- LLM 节点从哪些上游变量生成输入，写出了哪些 `LlmNodeOutputs`，下游节点消费了哪个输出字段？
 - 模型请求了哪些 tool/MCP/skill/workflow/data source/approval？
 - 哪些请求被授权、拒绝、失败、取消或等待审批？
 - skill index 是什么，实际加载了哪些 skill，版本和 hash 是什么？
