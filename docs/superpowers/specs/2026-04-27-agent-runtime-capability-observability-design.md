@@ -4,6 +4,8 @@
 
 状态：设计稿已落地，待评审后进入实现拆分
 
+更新：2026-04-27 16:00，补充 LLM 节点容灾队列、attempt ledger、多协议统一事实模型和外部 agent 审计边界。
+
 ## 1. 目标
 
 本设计把 1flowbase 的运行时方向从单一 `RuntimeEvent` 扩展为：
@@ -15,6 +17,7 @@ Agent Runtime Event Bus
 + CapabilityRuntime 宿主执行层
 + Model Gateway / Relay
 + Credit / Cost / Provider Account Ledger
++ LLM Node Failover Queue + Attempt Ledger
 + provider stdio v2 NDJSON streaming
 ```
 
@@ -32,15 +35,18 @@ Agent Runtime Event Bus
 - 记录同一会话内的上下文投影、自动压缩、压缩摘要、压缩前后 token 和压缩触发原因。
 - 记录子 agent / 本地 agent / 系统内部 agent 的父子关系、能力授权、事件摘要和 usage 汇总。
 - 支持 1flowbase 作为本地 agent 的 OpenAI-compatible 模型供应商入口，也支持 1flowbase 自己托管编排 agent。
+- 支持 LLM 节点作为对外供应单元执行固定模型调用或按用户手动排序的容灾队列逐个尝试。
+- 支持内部统一事实模型，再映射 OpenAI-compatible、Anthropic-compatible、Gemini-compatible 等外部发布协议。
 - 支持中转站商业模式：上游官方 API、OpenAI-compatible 中转站、内部 agent、外部 agent 都能被纳入调用链和账单链。
 
 ### 2.2 暂不作为本阶段目标
 
 - 不在本阶段要求直接切换到 gRPC 或 Unix socket。
-- 不要求外部 CLI agent 必须立即改造客户端。基础模式先保证请求、响应、usage 和链路审计；完整 tool/skill/subagent 可观测能力通过可选 telemetry/callback 接入。
+- 不要求外部 CLI agent 必须立即改造客户端。基础模式先保证请求、响应、usage 和链路审计；外部 agent 未经过 1flowbase 的本地 tool/skill/subagent 行为只标记为 `external_opaque`。
 - 不把 provider 插件扩展成任意运行时宿主。provider 插件边界仍然只负责上游模型协议适配。
 - 不让 runtime extension 或 capability plugin 自行注册 HTTP 路由。外部入口由宿主提供固定 API，插件只贡献能力和 schema。
 - 不在事件表里持久化大段 skill 正文、完整文件内容或大 blob。大内容进入 artifact 存储，事件只保存引用和 hash。
+- 不把外部 agent 的自述日志作为主审计事实。Codex、Claude Code、OpenClaw 等本地 agent 未经 1flowbase 协议或回调产生的本地 tool/skill/subagent 行为，不进入主审计链。
 
 ## 3. 参考结论
 
@@ -64,7 +70,7 @@ n8n 的关键启发是：LLM tool call 会变成 host engine request，而不是
 - skill 不是普通 tool，更接近可加载的能力包或指令包。必须记录 skill index、按需加载、版本、路径、hash 和 loaded snapshot。
 - Codex 和 AionRS 都把自动压缩作为 session 内的重要事件处理：压缩后发给模型的是 projection，不应丢掉原始 transcript 和压缩审计。
 - Codex、AionRS、OpenClaw 都存在子 agent / delegated agent / spawn agent 类能力。父子 agent 必须进入 span tree，并能汇总子运行的 token、工具和失败。
-- OpenClaw 的 gateway 文档说明本地 agent 可以把服务端当作 OpenAI-compatible 模型入口；这种模式下外部 agent 可能自己调用本地工具，宿主只能在 gateway 层审计，除非外部 agent 主动上报 telemetry。
+- OpenClaw 的 gateway 文档说明本地 agent 可以把服务端当作 OpenAI-compatible 模型入口；这种模式下外部 agent 可能自己调用本地工具，宿主只能在 gateway 层审计。本阶段不把外部 agent 自述上报作为主审计事实。
 
 ### 3.5 MCP 官方边界
 
@@ -115,7 +121,7 @@ Codex、OpenClaw、AionRS、Hermes Agent 等本地 agent 可以把 1flowbase 当
 - 直接转发到官方模型或中转站；
 - 根据 `model` 或 route 选择一个 1flowbase agent/flow，让本地 agent 像调用模型一样调用编排 agent；
 - 记录请求、响应、上游、usage、cache、费用和错误；
-- 如果外部 agent 接入 telemetry/callback，再记录其内部 tool/MCP/skill/subagent 事件。
+- 只记录 1flowbase 实际观测到的模型请求、响应、工具调用消息、usage、cache、费用和错误；外部 agent 本机内部的 tool/MCP/skill/subagent 行为不通过 AI 自述进入主审计链。
 
 ### 4.3 内部系统守护 agent / AI 员工
 
@@ -123,7 +129,9 @@ Codex、OpenClaw、AionRS、Hermes Agent 等本地 agent 可以把 1flowbase 当
 
 ### 4.4 中转站和模型路由
 
-上游不仅是官方 API，也可以是 OpenAI-compatible relay，如 sub2api、new-api 一类中转站。1flowbase 需要把它们建模为 `gateway_provider` 或 `llm_provider` 的 route，而不是混在模型节点的临时 URL 里。
+上游不仅是官方 API，也可以是 OpenAI-compatible relay，如 sub2api、new-api 一类中转站。1flowbase 需要把它们建模为 LLM 节点可引用的供应目标，而不是混在模型节点的临时 URL 里。
+
+raw gateway 是对外协议入口；自动容灾不在 gateway 全局隐式发生，而由被调用的 LLM 节点决定。对外仍暴露一个逻辑模型或发布 API，内部由 LLM 节点选择 `fixed_model` 或 `failover_queue`。
 
 中转链路需要记录：
 
@@ -131,7 +139,8 @@ Codex、OpenClaw、AionRS、Hermes Agent 等本地 agent 可以把 1flowbase 当
 - 实际 route；
 - 上游 provider 或 relay id；
 - 请求参数快照；
-- retry/fallback/timeout；
+- LLM 节点 routing mode、容灾队列 snapshot 和 attempt 顺序；
+- timeout；
 - 上游 request id；
 - 原始 usage 与归一化 usage；
 - 价格版本和费用快照；
@@ -142,7 +151,7 @@ Codex、OpenClaw、AionRS、Hermes Agent 等本地 agent 可以把 1flowbase 当
 
 ```text
 API / Gateway Surface
-  OpenAI-compatible API, Responses API, Agent Run API, Capability API, MCP endpoint, telemetry ingest
+  OpenAI-compatible API, Anthropic-compatible API, Gemini-compatible API, Responses API, Agent Run API, Capability API, MCP endpoint
 
 Application Control Plane
   workspace/app/session 权限, run lifecycle, policy, audit, durable write
@@ -324,6 +333,7 @@ UsageLedger
   run_id
   span_id
   node_run_id
+  failover_attempt_id
   provider_instance_id
   gateway_route_id
   model_id
@@ -338,11 +348,12 @@ UsageLedger
   cache_write_tokens
   price_snapshot
   cost_snapshot
+  usage_status: recorded | unavailable_error
   raw_usage
   normalized_usage
 ```
 
-这能回答“输入 token、缓存命中、生产 token 有没有”。provider stream 的 `usage_snapshot` 可以多次出现，最终以 `llm_turn_finished` 或 `provider_result` 的结算 usage 为准。
+这能回答“输入 token、缓存命中、生产 token 有没有”。provider stream 的 `usage_snapshot` 可以多次出现，最终以 `llm_turn_finished` 或 `provider_result` 的结算 usage 为准。若某次 attempt 拿不到 usage/cost，不做估算扣费；该 attempt 进入 `unavailable_error`，最终响应和日志都如实记录上游未返回可结算 usage/cost 的错误。
 
 ### 6.6 ContextProjection
 
@@ -399,11 +410,119 @@ CostLedger
   raw_cost
   normalized_cost
   settlement_currency
-  cost_source: official_api | relay | internal_agent | external_agent | estimated
+  cost_source: official_api | relay | internal_agent | external_agent
+  cost_status: recorded | unavailable_error
   created_at
 ```
 
-### 6.8 CreditLedger
+### 6.8 ModelFailoverQueueTemplate
+
+LLM 节点是对外供应单元。自动容灾开启后，节点不再绑定单个 `source_instance_id`，而是引用用户在设置中创建的容灾队列模板。
+
+```text
+ModelFailoverQueueTemplate
+  id
+  workspace_id
+  name
+  version
+  status: draft | active | archived
+  items[]
+  created_by
+  created_at
+  updated_at
+
+ModelFailoverQueueItem
+  id
+  queue_template_id
+  sort_index
+  provider_instance_id
+  provider_code
+  upstream_model_id
+  protocol: openai | anthropic | gemini | provider_native
+  enabled
+```
+
+规则：
+
+- 队列由用户手动排序，不做同模型 ID 自动分组。
+- 队列允许混排不同供应商和协议；1flowbase 负责把外部协议映射到内部统一事实模型。
+- 队列项只表示“去哪请求”；prompt、tools、response format、sampling、context policy、timeout、stream buffer policy 等一线参数由 LLM 节点负责。
+- 模板编辑只影响后续运行。每次运行开始时冻结队列 snapshot，用于审计和复盘。
+
+```text
+Settings / Model Failover Queues
+
++ Coding Agent Default Queue ----------------------+
+| Version: v3                                      |
+|                                                  |
+|  #   Provider Instance      Protocol    Model    |
+|  1   openai-prod-a          OpenAI      gpt-4.1  |
+|  2   anthropic-main         Anthropic   sonnet   |
+|  3   gemini-backup          Gemini      pro      |
+|                                                  |
+| [Add target]  [Reorder]  [Save new version]      |
++--------------------------------------------------+
+```
+
+### 6.9 ModelFailoverAttemptLedger
+
+每个上游尝试必须独立入账。失败 attempt 不能被最终成功覆盖。
+
+```text
+ModelFailoverAttemptLedger
+  id
+  run_id
+  node_run_id
+  llm_turn_span_id
+  queue_snapshot_id
+  attempt_index
+  provider_instance_id
+  provider_code
+  upstream_model_id
+  protocol
+  request_ref
+  request_hash
+  started_at
+  first_token_at
+  finished_at
+  status: succeeded | failed | unavailable_error
+  failed_after_first_token
+  upstream_request_id
+  error_code
+  error_message_ref
+  usage_ledger_id
+  cost_ledger_id
+  response_ref
+```
+
+容灾规则：
+
+- 固定模型模式只产生一个 attempt。
+- 容灾队列模式按 snapshot 顺序尝试所有 enabled 队列项。
+- 没有失败白名单；任意失败都记录 attempt，然后尝试下一个队列项。
+- 全部失败后，LLM 节点返回聚合错误，包含每个 attempt 的 provider、model、状态、错误摘要和是否拿到 usage/cost。
+- 拿不到 usage/cost 时不做估算；该 attempt 标记为 `unavailable_error`，最终响应报错，日志记录最终响应错误。
+- 流式响应只允许首 token 前容灾。首 token 后失败不得拼接切换后的输出，只能如实结束并记录 `failed_after_first_token=true`。
+
+```text
+LLM Node / Routing
+
+Routing mode
+( ) Fixed model
+    Provider: openai-prod-a
+    Model: gpt-4.1
+
+(*) Failover queue
+    Queue: Coding Agent Default Queue
+    Version at run: freeze on start
+
+[Preview route order]
+1 openai-prod-a / gpt-4.1
+2 anthropic-main / sonnet
+3 gemini-backup / pro
+```
+
+### 6.10 CreditLedger
 
 产品层可以把额度展示成积分、余额、点数或套餐用量，但底层必须是可审计的额度账本。额度扣减以 `normalized_usage + price_snapshot` 形成的成本为依据，再按 workspace/user/app/agent 的计费策略生成交易。
 
@@ -430,11 +549,11 @@ CreditLedger
 规则：
 
 - 运行前可以按策略冻结额度，运行成功后按最终 usage 结算，多冻结部分退款。
-- provider 或 relay 失败且没有有效模型输出时，默认不扣用户额度，但必须记录上游失败成本和失败原因。
+- 每个 attempt 按实际记录到的 usage/cost 结算额度；拿不到 usage/cost 时不估算扣费，标记 `unavailable_error` 并让最终响应报错。
 - 额度账本必须支持幂等写入，避免 SSE 重连、任务重试或 durable writer 重放导致重复扣费。
-- 内部 agent、agent-as-model 和外部 agent telemetry 都必须能归因到 workspace，不能只挂在 provider instance 上。
+- 内部 agent、agent-as-model 和外部 agent observed session 都必须能归因到 workspace，不能只挂在 provider instance 上。
 
-### 6.9 ProviderAccountPool
+### 6.11 ProviderAccountPool
 
 账号平衡不应混进模型供应商实例的临时配置。一个 provider 或 relay 可以有多个上游账号/API key，路由层需要按健康状态、限额、优先级和模型支持情况选择账号，并把选择结果写入 span 和账本。
 
@@ -458,7 +577,7 @@ ProviderAccountPool
     usage_window_snapshot
 ```
 
-选择结果需要写入 `gateway_route_resolved` 或 `provider_request_started` 的 metadata，至少包括 `provider_account_id`、选择原因、限额快照、健康状态和 fallback 链路。
+选择结果需要写入 `gateway_route_resolved` 或 `provider_attempt_started` 的 metadata，至少包括 `provider_account_id`、选择原因、限额快照、健康状态和 attempt 关联。
 
 ## 7. 事件分类
 
@@ -580,8 +699,6 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 - `gateway_forward_failed`
 - `gateway_usage_normalized`
 - `external_agent_session_observed`
-- `external_agent_telemetry_received`
-- `external_agent_telemetry_rejected`
 - `external_agent_opaque_boundary_marked`
 
 ### 7.10 Billing / credit / account 事件
@@ -607,15 +724,18 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 3. node_started
 4. llm_turn_started
 5. llm_input_projected
-6. provider_request_started
-7. provider stdio v2 stream
-8. tool_call_commit
-9. CapabilityRuntime authorize
-10. CapabilityRuntime execute
-11. tool_result_appended
-12. 下一轮 llm_turn_started
-13. 达到 finish / max iteration / waiting approval / failed / cancelled
-14. usage_recorded, run_finished
+6. llm_route_resolved
+7. failover_queue_snapshot_created 或 fixed_model_resolved
+8. provider_attempt_started
+9. provider stdio v2 stream
+10. provider_attempt_finished
+11. tool_call_commit
+12. CapabilityRuntime authorize
+13. CapabilityRuntime execute
+14. tool_result_appended
+15. 下一轮 llm_turn_started
+16. 达到 finish / max iteration / waiting approval / failed / cancelled
+17. attempt_recorded, usage_recorded, run_finished
 ```
 
 关键约束：
@@ -623,6 +743,8 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 - LLM -> tool -> message -> LLM 是 Agent Session Runtime 的职责，不是 provider 的职责。
 - max iteration、approval pending、cancellation 都由 host 控制。
 - tool/MCP/skill/workflow/data retrieval 的返回必须归一化为多形态 `CapabilityResult`，再追加进下一轮模型输入。
+- LLM 节点可选择 `fixed_model` 或 `failover_queue`。`failover_queue` 模式由 LLM 节点冻结 snapshot，并按用户排序逐个 attempt。
+- LLM 节点参数是最终一线参数来源。队列项不得覆盖 prompt、tools、response format、sampling、context policy、timeout 和 streaming policy。
 
 ## 9. Gateway / relay 运行流
 
@@ -633,13 +755,14 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 ```text
 1. gateway_request_received
 2. credit_reserve_requested / credit_reserved
-3. gateway_route_resolved
-4. provider_account_selected
-5. gateway_forward span started
-6. 上游 provider/relay streaming
-7. usage_snapshot / gateway_usage_normalized
-8. cost_recorded / credit_debited 或 credit_refunded
-9. gateway_forward_finished
+3. gateway_route_resolved_to_logical_model_or_flow
+4. unified_protocol_request_created
+5. llm_node_started
+6. llm_route_resolved
+7. provider_attempt_started / provider_attempt_finished
+8. usage_snapshot / usage_recorded 或 unavailable_error
+9. cost_recorded / credit_debited 或 final_response_error
+10. gateway_forward_finished
 ```
 
 规则：
@@ -647,8 +770,9 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 - 默认不改写用户消息，不主动压缩上下文，不擅自插入 1flowbase skill。
 - 原始 request/response 以可配置脱敏策略记录，便于审计和复盘。
 - 如果请求中包含 tool definitions，可以记录“外部 agent 声明了哪些 tool”，但不能把后续本地 tool 执行当成宿主已观测事实。
-- 如果外部 agent 自己调用 MCP 或本地工具，1flowbase 在没有 telemetry/callback 的情况下只能标记为 `external_opaque`。
-- raw gateway 模式仍然需要执行额度预检查和账号池选择，但不能因为余额或账号池存在就宣称看见了外部 agent 内部工具调用。
+- 如果外部 agent 自己调用 MCP 或本地工具，且这些动作没有经过 1flowbase 协议或回调，只能标记为 `external_opaque`。
+- raw gateway 模式仍然需要执行额度预检查，但自动容灾由被调用的 LLM 节点控制，不在 gateway 层做隐式全局切换。
+- gateway 必须记录统一事实模型，再按外部协议映射响应；OpenAI-compatible、Anthropic-compatible、Gemini-compatible 只是外部发布协议。
 
 ### 9.2 1flowbase Agent-as-Model Mode
 
@@ -663,14 +787,18 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 
 这让本地 agent 能把 1flowbase 编排 agent 当作模型供应商接入，同时 1flowbase 保留完整内部 span、event、usage 和 capability 调用记录。
 
-### 9.3 External Agent Telemetry Bridge
+### 9.3 Observed Facts Only
 
-为了完整观察外部 agent 内部行为，提供可选 telemetry bridge：
+本阶段不把外部 agent 自述作为主审计链路。1flowbase 只记录自己实际观测到的事实：
 
-- 外部 agent 上报 `session_id`、`parent_run_id`、`span_id`、`tool_call`、`mcp_call`、`skill_load`、`subagent`、`usage` 等事件。
-- 1flowbase 校验签名、workspace、session 绑定和 schema。
-- 接入后事件进入同一 runtime event bus，但标记 `source=external_agent` 和可信等级。
-- 不接入时不阻塞中转能力，只在调试台明确显示“外部 agent 内部执行不可见”。
+- gateway request / response；
+- 统一事实模型 request / event / result；
+- 模型返回的 tool call delta；
+- 后续请求中客户端带回的 tool result message；
+- LLM 节点 routing mode、queue snapshot、attempt chain；
+- usage、cache、cost、credit、耗时和错误。
+
+如果外部 agent 在本机内部调用 MCP、skill、shell tool、subagent，但这些动作没有经过 1flowbase 协议或回调，主审计链只标记为 `external_opaque`。不接受 AI 自述日志来补全这些动作。
 
 ## 10. CapabilityRuntime 职责
 
@@ -762,7 +890,7 @@ McpBindingSpec
 - 被 summary 替代的消息范围；
 - 压缩后 projection；
 - 压缩后估算 token；
-- 是否失败以及 fallback 行为。
+- 是否失败以及失败处理。
 
 发送给模型的内容取决于模式：
 
@@ -804,14 +932,14 @@ SubagentInvocation
 - 子 agent 有自己的 run/session/span tree。
 - 父运行通过 `subagent_event_linked` 关联子运行摘要，不把所有子事件复制进父事件表。
 - usage 在子 run 记录一份，再向父 span 汇总一份。
-- 外部 CLI 子 agent 如果未接 telemetry，只能记录启动命令、输入摘要、退出状态、stdout/stderr/artifact 和 usage 可见部分。
+- 外部 CLI 子 agent 如果不是由 1flowbase 启动或回调，只能标记为 `external_opaque`；不能用 AI 自述补全 tool/skill/subagent 事实。
 
 需要区分两种 agent 调用语义：
 
 - `agent_as_tool`：子 agent 像工具一样被调用，输入由父 agent 或 workflow 生成，输出作为 tool result 回到父 agent。审批、失败和 usage 需要冒泡到父 span。
 - `handoff`：会话控制权转移到另一个 agent，后续消息由目标 agent 继续处理。handoff 必须记录 source agent、target agent、handoff input filter、控制权转移原因和恢复边界。
 
-外部 CLI 自建的子 agent 不默认视为 `agent_as_tool` 或 `handoff` 事实。没有 bridge telemetry 时，只能在父 run 标记 `external_opaque` 边界；接入 bridge 后，按签名、schema 和 session 绑定决定可信等级。
+外部 CLI 自建的子 agent 不默认视为 `agent_as_tool` 或 `handoff` 事实。没有经过 1flowbase 协议或回调时，只能在父 run 标记 `external_opaque` 边界。
 
 ## 15. 可观测与调试读模型
 
@@ -824,9 +952,9 @@ SubagentInvocation
 - MCP：server 连接、catalog snapshot、tool call、resource/prompt 使用。
 - Usage Ledger：输入 token、cached input、输出 token、reasoning token、cache read/write、费用。
 - Billing Ledger：成本快照、额度冻结、扣费、退款、余额和幂等交易。
-- Provider Account Pool：本次 route 选择的上游账号、选择原因、限额、健康状态和 fallback。
+- Provider Account Pool：本次 attempt 选择的上游账号、选择原因、限额和健康状态。
 - Context Projection：本轮实际发给模型的上下文、压缩摘要、压缩前后 token。
-- Gateway Trace：外部请求、route、上游 relay、retry/fallback、normalized usage。
+- Gateway Trace：外部请求、logical route、LLM 节点 route、attempt chain、normalized usage。
 - External Opacity：哪些步骤属于外部 agent 自己执行、宿主没有完整观测。
 
 调优诊断的第一步是“看清 AI 在做什么”。因此 UI 上不应只展示最终 answer，应优先能看到调用树、用量、失败和上下文投影。
@@ -916,7 +1044,9 @@ billing_sessions
 - route metadata；
 - usage 归一化；
 - upstream request id；
-- retry/fallback 错误分类。
+- provider error normalization。
+
+自动容灾不由 GatewayProviderPlugin 自行决策，而由 LLM 节点的 `fixed_model` 或 `failover_queue` 运行策略驱动。
 
 ### 17.3 CapabilityPlugin
 
@@ -966,11 +1096,12 @@ billing_sessions
 
 职责：
 
-- OpenAI-compatible 模型入口；
-- 可选 telemetry ingest；
-- 可选 tool callback；
+- OpenAI-compatible / Anthropic-compatible / Gemini-compatible 模型入口；
 - session/run 绑定；
-- 外部事件可信等级和脱敏策略。
+- 请求、响应、tool call message、usage、cache、cost 和错误审计；
+- 标记未经过 1flowbase 的外部本地行为为 `external_opaque`。
+
+ExternalAgentBridge 不接收 AI 自述日志作为主审计事实。
 
 ## 18. 外部 API 形态
 
@@ -985,7 +1116,6 @@ billing_sessions
 - `/api/agent-runs/{run_id}/debug-stream`
 - `/api/capabilities`
 - `/api/capabilities/{id}/invoke`
-- `/api/external-agent/telemetry`
 - `/mcp`
 
 插件贡献能力，不贡献路由。这样外部生态可以接入，但安全、审计、鉴权和版本兼容仍由宿主控制。
@@ -1004,22 +1134,23 @@ billing_sessions
 4. 改 `plugin-runner` 为逐行 NDJSON streaming，处理协议版本、bad JSON、stderr 日志、timeout、kill 和 usage snapshot。
 5. 增加 host-owned capability loop：`tool_call_commit -> authorize -> execute -> append result -> next llm_turn`。
 6. 增加 skill index/load/snapshot，再增加 MCP client manager，把 MCP tools 投影进同一个 capability registry。
-7. 增加 Model Gateway / Relay：OpenAI-compatible API、route、upstream relay、usage normalization、gateway trace。
-8. 增加 Billing / Credit / Provider Account Pool：额度预检查、成本换算、账号池选择、扣费/退款和账号健康事件。
-9. 增加 external agent telemetry bridge、subagent link 和 debug UI read model。
+7. 增加 Model Gateway / Relay：OpenAI-compatible API、Anthropic-compatible API、Gemini-compatible API、统一事实模型、usage normalization、gateway trace。
+8. 增加 LLM Node Routing：`fixed_model`、`failover_queue`、queue template、queue snapshot 和 attempt ledger。
+9. 增加 Billing / Credit / Provider Account Pool：额度预检查、成本换算、账号池选择、扣费/退款和账号健康事件。
+10. 增加 observed-facts-only external agent audit、subagent link 和 debug UI read model。
 
 ## 20. 风险和约束
 
 - token delta 不能逐字符持久化，否则事件表和 SSE 都会被打爆。
 - capability id 必须 canonical，否则同名 tool/MCP/skill/workflow 会冲突。
 - cancellation 必须是 run/span token tree，否则子 agent、MCP call、provider stream 无法可靠停止。
-- raw gateway 模式不能宣称完整可观测。没有 telemetry/callback 时，只能记录 1flowbase 看到的请求、响应和上游 usage。
-- 需要明确脱敏策略。prompt、tool args、artifact、stderr、external telemetry 都可能包含密钥或隐私数据。
+- raw gateway 模式不能宣称完整可观测。只能记录 1flowbase 看到的请求、响应、tool call message、attempt chain 和上游 usage/cost/error。
+- 需要明确脱敏策略。prompt、tool args、artifact、stderr 和外部请求 payload 都可能包含密钥或隐私数据。
 - provider-specific continuation metadata 必须跟随 `llm_turn` 或 `ContextProjection` 保存。
-- usage 要区分 raw usage 和 normalized usage，避免中转站、官方 API、内部 agent 口径混乱。
+- usage 要区分 raw usage 和 normalized usage，避免中转站、官方 API、内部 agent 口径混乱。拿不到 usage/cost 时必须报错并记录 `unavailable_error`，不能估算成可扣费事实。
 - pricing 需要记录 price snapshot，不能只依赖当前价格表回算历史成本。
 - 额度账本必须幂等，不能因为重试、流式结束事件重复或 durable writer 重放造成重复扣费。
-- 账号池选择必须记录原因和限额快照，否则后续无法解释为什么某次调用走了高价 relay 或失败 fallback。
+- LLM 节点容灾必须记录 queue snapshot、attempt 顺序和每次失败原因，否则后续无法解释为什么某次调用走了高价 relay 或最终失败。
 - 不能用单纯 token 余额表达所有模型成本；reasoning token、cache、relay 价格、内部 agent 成本都需要统一 credit 单位换算。
 
 ## 21. 验收标准
@@ -1030,14 +1161,15 @@ billing_sessions
 - 每个 LLM turn 的输入 token、cached input、输出 token、reasoning token 是多少？
 - 是否命中 prompt cache 或上游 cache？
 - 这次 run 冻结了多少额度、实际扣了多少、是否退款、余额变化是什么？
-- 这次 route 为什么选择该 provider account，是否发生账号耗尽、限流、降级或 fallback？
+- 这次 LLM 节点使用固定模型还是容灾队列，queue snapshot 是什么，每个 attempt 为什么成功或失败？
 - 模型请求了哪些 tool/MCP/skill/workflow/data source/approval？
 - 哪些请求被授权、拒绝、失败、取消或等待审批？
 - skill index 是什么，实际加载了哪些 skill，版本和 hash 是什么？
 - MCP 连接了哪些 server，解析出哪些 tool，调用了哪些 tool？
 - 是否触发自动压缩，压缩前后 token、summary、projection 是什么？
 - 是否调用子 agent，子 agent 的 run、usage、失败和结果是什么？
-- 哪些行为由外部 agent 自己执行，1flowbase 只能旁路审计？
+- 哪些行为由外部 agent 自己执行，1flowbase 只能标记为 `external_opaque`？
+- 如果某个 attempt 拿不到 usage/cost，最终响应是否报错，日志是否记录最终响应错误？
 - 最终 answer 是如何从 span tree 和 event stream fold 出来的？
 
 ## 22. 与既有设计的关系
@@ -1049,4 +1181,4 @@ billing_sessions
 
 ## 23. 当前无阻塞决策
 
-用户已明确：客户端怎么改不是当前重点，重点是先把记录和调试底座设计好。因此本设计不再等待外部 CLI agent 改造方案确认；外部 agent 完整可观测能力作为 optional telemetry/callback 能力进入架构。
+用户已明确：客户端怎么改不是当前重点，重点是先把记录和调试底座设计好。本阶段不等待外部 CLI agent 改造，也不把 AI 自述日志纳入主审计链；外部 agent 未经过 1flowbase 的本地动作统一标记为 `external_opaque`。
