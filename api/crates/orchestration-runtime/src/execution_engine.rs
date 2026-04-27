@@ -333,6 +333,7 @@ where
                     "provider_instance_id": runtime.provider_instance_id,
                     "provider_code": runtime.provider_code,
                     "protocol": runtime.protocol,
+                    "model": runtime.model,
                     "event_count": 0,
                     "usage": serde_json::to_value(ProviderUsage::default()).unwrap_or(Value::Null),
                     "finish_reason": "error",
@@ -359,6 +360,7 @@ where
         "provider_instance_id": runtime.provider_instance_id,
         "provider_code": runtime.provider_code,
         "protocol": runtime.protocol,
+        "model": runtime.model,
         "event_count": output.events.len(),
         "usage": serde_json::to_value(&usage).unwrap_or(Value::Null),
         "finish_reason": finish_reason

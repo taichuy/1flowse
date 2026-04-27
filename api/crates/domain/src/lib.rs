@@ -61,10 +61,10 @@ pub use orchestration::{
 pub use plugin_worker::{PluginWorkerLeaseRecord, PluginWorkerStatus};
 pub use resource::runtime_model_resource_code;
 pub use runtime_observability::{
-    BillingSessionStatus, RuntimeEventDurability, RuntimeEventLayer, RuntimeEventRecord,
-    RuntimeEventSource, RuntimeEventVisibility, RuntimeItemKind, RuntimeItemRecord,
-    RuntimeItemStatus, RuntimeSpanKind, RuntimeSpanRecord, RuntimeSpanStatus, RuntimeTrustLevel,
-    UsageLedgerStatus,
+    BillingSessionStatus, CapabilityInvocationRecord, ContextProjectionRecord,
+    RuntimeEventDurability, RuntimeEventLayer, RuntimeEventRecord, RuntimeEventSource,
+    RuntimeEventVisibility, RuntimeItemKind, RuntimeItemRecord, RuntimeItemStatus, RuntimeSpanKind,
+    RuntimeSpanRecord, RuntimeSpanStatus, RuntimeTrustLevel, UsageLedgerRecord, UsageLedgerStatus,
 };
 pub use scope::{ScopeContext, TenantRecord, WorkspaceRecord, SYSTEM_SCOPE_ID};
 

@@ -36,7 +36,7 @@
 - Modify: `api/crates/storage-durable/postgres/src/orchestration_runtime_repository.rs`
 - Modify: `api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs`
 
-- [ ] **Step 1: Write failing projection proof test**
+- [x] **Step 1: Write failing projection proof test**
 
 Add to `api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs`:
 
@@ -64,7 +64,7 @@ async fn llm_turn_records_context_projection_and_usage_ledger() {
 }
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -74,7 +74,7 @@ cargo test -p control-plane llm_turn_records_context_projection_and_usage_ledger
 
 Expected: FAIL because projections and usage ledger methods do not exist.
 
-- [ ] **Step 3: Add domain records**
+- [x] **Step 3: Add domain records**
 
 Append to `api/crates/domain/src/runtime_observability.rs`:
 
@@ -130,7 +130,7 @@ pub struct UsageLedgerRecord {
 
 Export both from `api/crates/domain/src/lib.rs`.
 
-- [ ] **Step 4: Add migration tables**
+- [x] **Step 4: Add migration tables**
 
 Append to `api/crates/storage-durable/postgres/migrations/20260427170000_create_runtime_observability_tables.sql` before implementation is committed:
 
@@ -182,7 +182,7 @@ create table runtime_usage_ledger (
 );
 ```
 
-- [ ] **Step 5: Add projection helper**
+- [x] **Step 5: Add projection helper**
 
 Create `api/crates/control-plane/src/runtime_observability/projection.rs`:
 
@@ -200,7 +200,7 @@ pub fn estimate_tokens_for_text(text: &str) -> i64 {
 }
 ```
 
-- [ ] **Step 6: Persist LLM projection and usage**
+- [x] **Step 6: Persist LLM projection and usage**
 
 In `api/crates/control-plane/src/orchestration_runtime/persistence.rs`, when `trace.node_type == "llm"`:
 
@@ -217,7 +217,7 @@ Write `runtime_context_projections` with `projection_kind = "managed_full"` and 
 
 Write usage ledger from `trace.metrics_payload["usage"]`. If usage is absent after provider error, write `usage_status = UnavailableError`.
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
 Run:
 
@@ -228,7 +228,7 @@ cargo test -p storage-postgres migration_smoke
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add api/crates/domain/src/runtime_observability.rs api/crates/domain/src/lib.rs api/crates/control-plane/src/ports/runtime.rs api/crates/control-plane/src/runtime_observability api/crates/control-plane/src/orchestration_runtime/persistence.rs api/crates/storage-durable/postgres/migrations/20260427170000_create_runtime_observability_tables.sql api/crates/storage-durable/postgres/src/orchestration_runtime_repository.rs api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs
@@ -244,7 +244,7 @@ git commit -m "feat: record llm context projection and usage"
 - Modify: `api/crates/storage-durable/postgres/src/orchestration_runtime_repository.rs`
 - Modify: `api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs`
 
-- [ ] **Step 1: Write failing RuntimeItem test**
+- [x] **Step 1: Write failing RuntimeItem test**
 
 Add:
 
@@ -265,7 +265,7 @@ async fn provider_events_fold_into_runtime_items() {
 }
 ```
 
-- [ ] **Step 2: Implement item repository methods**
+- [x] **Step 2: Implement item repository methods**
 
 Add port method:
 
@@ -291,7 +291,7 @@ pub struct AppendRuntimeItemInput {
 }
 ```
 
-- [ ] **Step 3: Add item folding helper**
+- [x] **Step 3: Add item folding helper**
 
 Create `api/crates/control-plane/src/runtime_observability/items.rs`:
 
@@ -309,11 +309,11 @@ pub fn item_kind_for_event(event_type: &str) -> Option<domain::RuntimeItemKind> 
 }
 ```
 
-- [ ] **Step 4: Append items when writing runtime events**
+- [x] **Step 4: Append items when writing runtime events**
 
 After `append_host_event` returns, if `item_kind_for_event` returns a kind, append one item with `RuntimeItemStatus::Created` and `source_event_id = event.id`.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -323,7 +323,7 @@ cargo test -p control-plane provider_events_fold_into_runtime_items
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/crates/control-plane/src/runtime_observability api/crates/control-plane/src/ports/runtime.rs api/crates/storage-durable/postgres/src/orchestration_runtime_repository.rs api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs
@@ -340,7 +340,7 @@ git commit -m "feat: fold runtime events into runtime items"
 - Modify: `api/crates/control-plane/src/orchestration_runtime/persistence.rs`
 - Modify: `api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs`
 
-- [ ] **Step 1: Write failing capability intent test**
+- [x] **Step 1: Write failing capability intent test**
 
 Add:
 
@@ -366,7 +366,7 @@ async fn tool_call_commit_creates_capability_invocation_request() {
 }
 ```
 
-- [ ] **Step 2: Add migration**
+- [x] **Step 2: Add migration**
 
 Create `api/crates/storage-durable/postgres/migrations/20260427183000_create_capability_invocations.sql`:
 
@@ -393,7 +393,7 @@ create index capability_invocations_flow_created_idx
     on capability_invocations (flow_run_id, created_at asc, id asc);
 ```
 
-- [ ] **Step 3: Add domain record**
+- [x] **Step 3: Add domain record**
 
 Append:
 
@@ -418,7 +418,7 @@ pub struct CapabilityInvocationRecord {
 }
 ```
 
-- [ ] **Step 4: Add capability runtime skeleton**
+- [x] **Step 4: Add capability runtime skeleton**
 
 Create `api/crates/control-plane/src/capability_runtime.rs`:
 
@@ -452,7 +452,7 @@ pub fn mcp_tool_capability_id(server: &str, method: &str) -> String {
 }
 ```
 
-- [ ] **Step 5: Write invocation rows for tool/MCP commits**
+- [x] **Step 5: Write invocation rows for tool/MCP commits**
 
 In `append_provider_stream_events`, when provider emits `ToolCallCommit` or `McpCallCommit`, append a `capability_invocations` row with:
 
@@ -464,7 +464,7 @@ arguments_ref = runtime_artifact:inline:<event_id>
 
 Also append a `capability_call_requested` runtime event with layer `capability`.
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run:
 
@@ -475,7 +475,7 @@ cargo test -p storage-postgres migration_smoke
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/crates/domain/src/runtime_observability.rs api/crates/storage-durable/postgres/migrations/20260427183000_create_capability_invocations.sql api/crates/control-plane/src/ports/runtime.rs api/crates/control-plane/src/capability_runtime.rs api/crates/control-plane/src/orchestration_runtime/persistence.rs api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs
@@ -488,7 +488,7 @@ git commit -m "feat: record capability invocation requests"
 - Modify: `api/crates/control-plane/src/capability_runtime.rs`
 - Modify: `api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs`
 
-- [ ] **Step 1: Write boundary tests**
+- [x] **Step 1: Write boundary tests**
 
 Add:
 
@@ -514,7 +514,7 @@ fn capability_ids_are_canonical_across_sources() {
 }
 ```
 
-- [ ] **Step 2: Implement canonical ID helpers**
+- [x] **Step 2: Implement canonical ID helpers**
 
 Add to `api/crates/control-plane/src/capability_runtime.rs`:
 
@@ -536,7 +536,7 @@ pub fn subagent_capability_id(agent_source: &str, agent_name: &str, version: &st
 }
 ```
 
-- [ ] **Step 3: Document runtime boundary in code**
+- [x] **Step 3: Document runtime boundary in code**
 
 Add this doc comment above `CapabilitySpec`:
 
@@ -546,7 +546,7 @@ Add this doc comment above `CapabilitySpec`:
 /// but only CapabilityRuntime may authorize and execute them.
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -556,7 +556,7 @@ cargo test -p control-plane capability_ids_are_canonical_across_sources
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/crates/control-plane/src/capability_runtime.rs api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs

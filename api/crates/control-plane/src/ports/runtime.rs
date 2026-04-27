@@ -124,6 +124,80 @@ pub struct AppendRuntimeEventInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct AppendRuntimeItemInput {
+    pub flow_run_id: Uuid,
+    pub span_id: Option<Uuid>,
+    pub kind: domain::RuntimeItemKind,
+    pub status: domain::RuntimeItemStatus,
+    pub source_event_id: Option<Uuid>,
+    pub input_ref: Option<String>,
+    pub output_ref: Option<String>,
+    pub usage_ledger_id: Option<Uuid>,
+    pub trust_level: domain::RuntimeTrustLevel,
+}
+
+#[derive(Debug, Clone)]
+pub struct AppendContextProjectionInput {
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub llm_turn_span_id: Option<Uuid>,
+    pub projection_kind: String,
+    pub merge_stage_ref: Option<String>,
+    pub source_transcript_ref: Option<String>,
+    pub source_item_refs: serde_json::Value,
+    pub compaction_event_id: Option<Uuid>,
+    pub summary_version: Option<String>,
+    pub model_input_ref: String,
+    pub model_input_hash: String,
+    pub compacted_summary_ref: Option<String>,
+    pub previous_projection_id: Option<Uuid>,
+    pub token_estimate: Option<i64>,
+    pub provider_continuation_metadata: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct AppendUsageLedgerInput {
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub span_id: Option<Uuid>,
+    pub failover_attempt_id: Option<Uuid>,
+    pub provider_instance_id: Option<Uuid>,
+    pub gateway_route_id: Option<Uuid>,
+    pub model_id: Option<String>,
+    pub upstream_model_id: Option<String>,
+    pub upstream_request_id: Option<String>,
+    pub input_tokens: Option<i64>,
+    pub cached_input_tokens: Option<i64>,
+    pub output_tokens: Option<i64>,
+    pub reasoning_output_tokens: Option<i64>,
+    pub total_tokens: Option<i64>,
+    pub cache_read_tokens: Option<i64>,
+    pub cache_write_tokens: Option<i64>,
+    pub price_snapshot: Option<serde_json::Value>,
+    pub cost_snapshot: Option<serde_json::Value>,
+    pub usage_status: domain::UsageLedgerStatus,
+    pub raw_usage: serde_json::Value,
+    pub normalized_usage: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct AppendCapabilityInvocationInput {
+    pub flow_run_id: Uuid,
+    pub span_id: Option<Uuid>,
+    pub capability_id: String,
+    pub requested_by_span_id: Option<Uuid>,
+    pub requester_kind: String,
+    pub arguments_ref: Option<String>,
+    pub authorization_status: String,
+    pub authorization_reason: Option<String>,
+    pub result_ref: Option<String>,
+    pub normalized_result: Option<serde_json::Value>,
+    pub started_at: Option<OffsetDateTime>,
+    pub finished_at: Option<OffsetDateTime>,
+    pub error_payload: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
 pub struct CreateCheckpointInput {
     pub flow_run_id: Uuid,
     pub node_run_id: Option<Uuid>,
@@ -218,6 +292,22 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         &self,
         input: &AppendRuntimeEventInput,
     ) -> anyhow::Result<domain::RuntimeEventRecord>;
+    async fn append_runtime_item(
+        &self,
+        input: &AppendRuntimeItemInput,
+    ) -> anyhow::Result<domain::RuntimeItemRecord>;
+    async fn append_context_projection(
+        &self,
+        input: &AppendContextProjectionInput,
+    ) -> anyhow::Result<domain::ContextProjectionRecord>;
+    async fn append_usage_ledger(
+        &self,
+        input: &AppendUsageLedgerInput,
+    ) -> anyhow::Result<domain::UsageLedgerRecord>;
+    async fn append_capability_invocation(
+        &self,
+        input: &AppendCapabilityInvocationInput,
+    ) -> anyhow::Result<domain::CapabilityInvocationRecord>;
     async fn list_runtime_spans(
         &self,
         flow_run_id: Uuid,
@@ -227,6 +317,22 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         flow_run_id: Uuid,
         after_sequence: i64,
     ) -> anyhow::Result<Vec<domain::RuntimeEventRecord>>;
+    async fn list_runtime_items(
+        &self,
+        flow_run_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::RuntimeItemRecord>>;
+    async fn list_context_projections(
+        &self,
+        flow_run_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::ContextProjectionRecord>>;
+    async fn list_usage_ledger(
+        &self,
+        flow_run_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::UsageLedgerRecord>>;
+    async fn list_capability_invocations(
+        &self,
+        flow_run_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::CapabilityInvocationRecord>>;
     async fn list_application_runs(
         &self,
         application_id: Uuid,

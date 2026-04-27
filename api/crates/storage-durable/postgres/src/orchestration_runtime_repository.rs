@@ -1,10 +1,12 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use control_plane::ports::{
-    AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeSpanInput,
-    CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput, CreateCallbackTaskInput,
-    CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput, OrchestrationRuntimeRepository,
-    UpdateFlowRunInput, UpdateNodeRunInput, UpsertCompiledPlanInput,
+    AppendCapabilityInvocationInput, AppendContextProjectionInput, AppendRunEventInput,
+    AppendRuntimeEventInput, AppendRuntimeItemInput, AppendRuntimeSpanInput,
+    AppendUsageLedgerInput, CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput,
+    CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
+    OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateNodeRunInput,
+    UpsertCompiledPlanInput,
 };
 use sqlx::{postgres::PgRow, Postgres, Row, Transaction};
 use uuid::Uuid;
@@ -12,8 +14,9 @@ use uuid::Uuid;
 use crate::{
     mappers::orchestration_runtime_mapper::{
         PgOrchestrationRuntimeMapper, StoredApplicationRunSummaryRow, StoredCallbackTaskRow,
-        StoredCheckpointRow, StoredCompiledPlanRow, StoredFlowRunRow, StoredNodeRunRow,
-        StoredRunEventRow, StoredRuntimeEventRow, StoredRuntimeSpanRow,
+        StoredCapabilityInvocationRow, StoredCheckpointRow, StoredCompiledPlanRow,
+        StoredContextProjectionRow, StoredFlowRunRow, StoredNodeRunRow, StoredRunEventRow,
+        StoredRuntimeEventRow, StoredRuntimeItemRow, StoredRuntimeSpanRow, StoredUsageLedgerRow,
     },
     repositories::PgControlPlaneStore,
 };
@@ -608,6 +611,266 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         map_runtime_event_record(row)
     }
 
+    async fn append_runtime_item(
+        &self,
+        input: &AppendRuntimeItemInput,
+    ) -> Result<domain::RuntimeItemRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into runtime_items (
+                id,
+                flow_run_id,
+                span_id,
+                kind,
+                status,
+                source_event_id,
+                input_ref,
+                output_ref,
+                usage_ledger_id,
+                trust_level
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            returning
+                id,
+                flow_run_id,
+                span_id,
+                kind,
+                status,
+                source_event_id,
+                input_ref,
+                output_ref,
+                usage_ledger_id,
+                trust_level,
+                created_at,
+                updated_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.flow_run_id)
+        .bind(input.span_id)
+        .bind(input.kind.as_str())
+        .bind(input.status.as_str())
+        .bind(input.source_event_id)
+        .bind(input.input_ref.as_deref())
+        .bind(input.output_ref.as_deref())
+        .bind(input.usage_ledger_id)
+        .bind(input.trust_level.as_str())
+        .fetch_one(self.pool())
+        .await?;
+
+        map_runtime_item_record(row)
+    }
+
+    async fn append_context_projection(
+        &self,
+        input: &AppendContextProjectionInput,
+    ) -> Result<domain::ContextProjectionRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into runtime_context_projections (
+                id,
+                flow_run_id,
+                node_run_id,
+                llm_turn_span_id,
+                projection_kind,
+                merge_stage_ref,
+                source_transcript_ref,
+                source_item_refs,
+                compaction_event_id,
+                summary_version,
+                model_input_ref,
+                model_input_hash,
+                compacted_summary_ref,
+                previous_projection_id,
+                token_estimate,
+                provider_continuation_metadata
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                llm_turn_span_id,
+                projection_kind,
+                merge_stage_ref,
+                source_transcript_ref,
+                source_item_refs,
+                compaction_event_id,
+                summary_version,
+                model_input_ref,
+                model_input_hash,
+                compacted_summary_ref,
+                previous_projection_id,
+                token_estimate,
+                provider_continuation_metadata,
+                created_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.flow_run_id)
+        .bind(input.node_run_id)
+        .bind(input.llm_turn_span_id)
+        .bind(&input.projection_kind)
+        .bind(input.merge_stage_ref.as_deref())
+        .bind(input.source_transcript_ref.as_deref())
+        .bind(&input.source_item_refs)
+        .bind(input.compaction_event_id)
+        .bind(input.summary_version.as_deref())
+        .bind(&input.model_input_ref)
+        .bind(&input.model_input_hash)
+        .bind(input.compacted_summary_ref.as_deref())
+        .bind(input.previous_projection_id)
+        .bind(input.token_estimate)
+        .bind(&input.provider_continuation_metadata)
+        .fetch_one(self.pool())
+        .await?;
+
+        Ok(map_context_projection_record(row))
+    }
+
+    async fn append_usage_ledger(
+        &self,
+        input: &AppendUsageLedgerInput,
+    ) -> Result<domain::UsageLedgerRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into runtime_usage_ledger (
+                id,
+                flow_run_id,
+                node_run_id,
+                span_id,
+                failover_attempt_id,
+                provider_instance_id,
+                gateway_route_id,
+                model_id,
+                upstream_model_id,
+                upstream_request_id,
+                input_tokens,
+                cached_input_tokens,
+                output_tokens,
+                reasoning_output_tokens,
+                total_tokens,
+                cache_read_tokens,
+                cache_write_tokens,
+                price_snapshot,
+                cost_snapshot,
+                usage_status,
+                raw_usage,
+                normalized_usage
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                      $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                span_id,
+                failover_attempt_id,
+                provider_instance_id,
+                gateway_route_id,
+                model_id,
+                upstream_model_id,
+                upstream_request_id,
+                input_tokens,
+                cached_input_tokens,
+                output_tokens,
+                reasoning_output_tokens,
+                total_tokens,
+                cache_read_tokens,
+                cache_write_tokens,
+                price_snapshot,
+                cost_snapshot,
+                usage_status,
+                raw_usage,
+                normalized_usage,
+                created_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.flow_run_id)
+        .bind(input.node_run_id)
+        .bind(input.span_id)
+        .bind(input.failover_attempt_id)
+        .bind(input.provider_instance_id)
+        .bind(input.gateway_route_id)
+        .bind(input.model_id.as_deref())
+        .bind(input.upstream_model_id.as_deref())
+        .bind(input.upstream_request_id.as_deref())
+        .bind(input.input_tokens)
+        .bind(input.cached_input_tokens)
+        .bind(input.output_tokens)
+        .bind(input.reasoning_output_tokens)
+        .bind(input.total_tokens)
+        .bind(input.cache_read_tokens)
+        .bind(input.cache_write_tokens)
+        .bind(&input.price_snapshot)
+        .bind(&input.cost_snapshot)
+        .bind(input.usage_status.as_str())
+        .bind(&input.raw_usage)
+        .bind(&input.normalized_usage)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_usage_ledger_record(row)
+    }
+
+    async fn append_capability_invocation(
+        &self,
+        input: &AppendCapabilityInvocationInput,
+    ) -> Result<domain::CapabilityInvocationRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into capability_invocations (
+                id,
+                flow_run_id,
+                span_id,
+                capability_id,
+                requested_by_span_id,
+                requester_kind,
+                arguments_ref,
+                authorization_status,
+                authorization_reason,
+                result_ref,
+                normalized_result,
+                started_at,
+                finished_at,
+                error_payload
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            returning
+                id,
+                flow_run_id,
+                span_id,
+                capability_id,
+                requested_by_span_id,
+                requester_kind,
+                arguments_ref,
+                authorization_status,
+                authorization_reason,
+                result_ref,
+                normalized_result,
+                started_at,
+                finished_at,
+                error_payload,
+                created_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.flow_run_id)
+        .bind(input.span_id)
+        .bind(&input.capability_id)
+        .bind(input.requested_by_span_id)
+        .bind(&input.requester_kind)
+        .bind(input.arguments_ref.as_deref())
+        .bind(&input.authorization_status)
+        .bind(input.authorization_reason.as_deref())
+        .bind(input.result_ref.as_deref())
+        .bind(&input.normalized_result)
+        .bind(input.started_at)
+        .bind(input.finished_at)
+        .bind(&input.error_payload)
+        .fetch_one(self.pool())
+        .await?;
+
+        Ok(map_capability_invocation_record(row))
+    }
+
     async fn list_runtime_spans(
         &self,
         flow_run_id: Uuid,
@@ -677,6 +940,152 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         .await?;
 
         rows.into_iter().map(map_runtime_event_record).collect()
+    }
+
+    async fn list_runtime_items(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Result<Vec<domain::RuntimeItemRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                flow_run_id,
+                span_id,
+                kind,
+                status,
+                source_event_id,
+                input_ref,
+                output_ref,
+                usage_ledger_id,
+                trust_level,
+                created_at,
+                updated_at
+            from runtime_items
+            where flow_run_id = $1
+            order by created_at asc, id asc
+            "#,
+        )
+        .bind(flow_run_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_runtime_item_record).collect()
+    }
+
+    async fn list_context_projections(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Result<Vec<domain::ContextProjectionRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                flow_run_id,
+                node_run_id,
+                llm_turn_span_id,
+                projection_kind,
+                merge_stage_ref,
+                source_transcript_ref,
+                source_item_refs,
+                compaction_event_id,
+                summary_version,
+                model_input_ref,
+                model_input_hash,
+                compacted_summary_ref,
+                previous_projection_id,
+                token_estimate,
+                provider_continuation_metadata,
+                created_at
+            from runtime_context_projections
+            where flow_run_id = $1
+            order by created_at asc, id asc
+            "#,
+        )
+        .bind(flow_run_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(map_context_projection_record)
+            .collect())
+    }
+
+    async fn list_usage_ledger(&self, flow_run_id: Uuid) -> Result<Vec<domain::UsageLedgerRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                flow_run_id,
+                node_run_id,
+                span_id,
+                failover_attempt_id,
+                provider_instance_id,
+                gateway_route_id,
+                model_id,
+                upstream_model_id,
+                upstream_request_id,
+                input_tokens,
+                cached_input_tokens,
+                output_tokens,
+                reasoning_output_tokens,
+                total_tokens,
+                cache_read_tokens,
+                cache_write_tokens,
+                price_snapshot,
+                cost_snapshot,
+                usage_status,
+                raw_usage,
+                normalized_usage,
+                created_at
+            from runtime_usage_ledger
+            where flow_run_id = $1
+            order by created_at asc, id asc
+            "#,
+        )
+        .bind(flow_run_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_usage_ledger_record).collect()
+    }
+
+    async fn list_capability_invocations(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Result<Vec<domain::CapabilityInvocationRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                flow_run_id,
+                span_id,
+                capability_id,
+                requested_by_span_id,
+                requester_kind,
+                arguments_ref,
+                authorization_status,
+                authorization_reason,
+                result_ref,
+                normalized_result,
+                started_at,
+                finished_at,
+                error_payload,
+                created_at
+            from capability_invocations
+            where flow_run_id = $1
+            order by created_at asc, id asc
+            "#,
+        )
+        .bind(flow_run_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(map_capability_invocation_record)
+            .collect())
     }
 
     async fn list_application_runs(
@@ -1170,6 +1579,93 @@ fn map_runtime_event_record(row: PgRow) -> Result<domain::RuntimeEventRecord> {
         payload: row.get("payload"),
         visibility: row.get("visibility"),
         durability: row.get("durability"),
+        created_at: row.get("created_at"),
+    })
+}
+
+fn map_runtime_item_record(row: PgRow) -> Result<domain::RuntimeItemRecord> {
+    PgOrchestrationRuntimeMapper::to_runtime_item_record(StoredRuntimeItemRow {
+        id: row.get("id"),
+        flow_run_id: row.get("flow_run_id"),
+        span_id: row.get("span_id"),
+        kind: row.get("kind"),
+        status: row.get("status"),
+        source_event_id: row.get("source_event_id"),
+        input_ref: row.get("input_ref"),
+        output_ref: row.get("output_ref"),
+        usage_ledger_id: row.get("usage_ledger_id"),
+        trust_level: row.get("trust_level"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+    })
+}
+
+fn map_context_projection_record(row: PgRow) -> domain::ContextProjectionRecord {
+    PgOrchestrationRuntimeMapper::to_context_projection_record(StoredContextProjectionRow {
+        id: row.get("id"),
+        flow_run_id: row.get("flow_run_id"),
+        node_run_id: row.get("node_run_id"),
+        llm_turn_span_id: row.get("llm_turn_span_id"),
+        projection_kind: row.get("projection_kind"),
+        merge_stage_ref: row.get("merge_stage_ref"),
+        source_transcript_ref: row.get("source_transcript_ref"),
+        source_item_refs: row.get("source_item_refs"),
+        compaction_event_id: row.get("compaction_event_id"),
+        summary_version: row.get("summary_version"),
+        model_input_ref: row.get("model_input_ref"),
+        model_input_hash: row.get("model_input_hash"),
+        compacted_summary_ref: row.get("compacted_summary_ref"),
+        previous_projection_id: row.get("previous_projection_id"),
+        token_estimate: row.get("token_estimate"),
+        provider_continuation_metadata: row.get("provider_continuation_metadata"),
+        created_at: row.get("created_at"),
+    })
+}
+
+fn map_usage_ledger_record(row: PgRow) -> Result<domain::UsageLedgerRecord> {
+    PgOrchestrationRuntimeMapper::to_usage_ledger_record(StoredUsageLedgerRow {
+        id: row.get("id"),
+        flow_run_id: row.get("flow_run_id"),
+        node_run_id: row.get("node_run_id"),
+        span_id: row.get("span_id"),
+        failover_attempt_id: row.get("failover_attempt_id"),
+        provider_instance_id: row.get("provider_instance_id"),
+        gateway_route_id: row.get("gateway_route_id"),
+        model_id: row.get("model_id"),
+        upstream_model_id: row.get("upstream_model_id"),
+        upstream_request_id: row.get("upstream_request_id"),
+        input_tokens: row.get("input_tokens"),
+        cached_input_tokens: row.get("cached_input_tokens"),
+        output_tokens: row.get("output_tokens"),
+        reasoning_output_tokens: row.get("reasoning_output_tokens"),
+        total_tokens: row.get("total_tokens"),
+        cache_read_tokens: row.get("cache_read_tokens"),
+        cache_write_tokens: row.get("cache_write_tokens"),
+        price_snapshot: row.get("price_snapshot"),
+        cost_snapshot: row.get("cost_snapshot"),
+        usage_status: row.get("usage_status"),
+        raw_usage: row.get("raw_usage"),
+        normalized_usage: row.get("normalized_usage"),
+        created_at: row.get("created_at"),
+    })
+}
+
+fn map_capability_invocation_record(row: PgRow) -> domain::CapabilityInvocationRecord {
+    PgOrchestrationRuntimeMapper::to_capability_invocation_record(StoredCapabilityInvocationRow {
+        id: row.get("id"),
+        flow_run_id: row.get("flow_run_id"),
+        span_id: row.get("span_id"),
+        capability_id: row.get("capability_id"),
+        requested_by_span_id: row.get("requested_by_span_id"),
+        requester_kind: row.get("requester_kind"),
+        arguments_ref: row.get("arguments_ref"),
+        authorization_status: row.get("authorization_status"),
+        authorization_reason: row.get("authorization_reason"),
+        result_ref: row.get("result_ref"),
+        normalized_result: row.get("normalized_result"),
+        started_at: row.get("started_at"),
+        finished_at: row.get("finished_at"),
+        error_payload: row.get("error_payload"),
         created_at: row.get("created_at"),
     })
 }

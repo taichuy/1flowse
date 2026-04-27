@@ -11,6 +11,10 @@ struct InMemoryOrchestrationRuntimeState {
     events_by_flow_run_id: HashMap<Uuid, Vec<domain::RunEventRecord>>,
     runtime_spans_by_flow_run_id: HashMap<Uuid, Vec<domain::RuntimeSpanRecord>>,
     runtime_events_by_flow_run_id: HashMap<Uuid, Vec<domain::RuntimeEventRecord>>,
+    runtime_items_by_flow_run_id: HashMap<Uuid, Vec<domain::RuntimeItemRecord>>,
+    context_projections_by_flow_run_id: HashMap<Uuid, Vec<domain::ContextProjectionRecord>>,
+    usage_ledger_by_flow_run_id: HashMap<Uuid, Vec<domain::UsageLedgerRecord>>,
+    capability_invocations_by_flow_run_id: HashMap<Uuid, Vec<domain::CapabilityInvocationRecord>>,
     installations_by_id: HashMap<Uuid, domain::PluginInstallationRecord>,
     assignments_by_workspace: HashMap<Uuid, Vec<domain::PluginAssignmentRecord>>,
     node_contributions_by_workspace: HashMap<Uuid, Vec<domain::NodeContributionRegistryEntry>>,
@@ -1532,6 +1536,134 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         Ok(event)
     }
 
+    async fn append_runtime_item(
+        &self,
+        input: &AppendRuntimeItemInput,
+    ) -> Result<domain::RuntimeItemRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let now = OffsetDateTime::now_utc();
+        let item = domain::RuntimeItemRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: input.flow_run_id,
+            span_id: input.span_id,
+            kind: input.kind,
+            status: input.status,
+            source_event_id: input.source_event_id,
+            input_ref: input.input_ref.clone(),
+            output_ref: input.output_ref.clone(),
+            usage_ledger_id: input.usage_ledger_id,
+            trust_level: input.trust_level,
+            created_at: now,
+            updated_at: now,
+        };
+        inner
+            .runtime_items_by_flow_run_id
+            .entry(input.flow_run_id)
+            .or_default()
+            .push(item.clone());
+        Ok(item)
+    }
+
+    async fn append_context_projection(
+        &self,
+        input: &AppendContextProjectionInput,
+    ) -> Result<domain::ContextProjectionRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let record = domain::ContextProjectionRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: input.flow_run_id,
+            node_run_id: input.node_run_id,
+            llm_turn_span_id: input.llm_turn_span_id,
+            projection_kind: input.projection_kind.clone(),
+            merge_stage_ref: input.merge_stage_ref.clone(),
+            source_transcript_ref: input.source_transcript_ref.clone(),
+            source_item_refs: input.source_item_refs.clone(),
+            compaction_event_id: input.compaction_event_id,
+            summary_version: input.summary_version.clone(),
+            model_input_ref: input.model_input_ref.clone(),
+            model_input_hash: input.model_input_hash.clone(),
+            compacted_summary_ref: input.compacted_summary_ref.clone(),
+            previous_projection_id: input.previous_projection_id,
+            token_estimate: input.token_estimate,
+            provider_continuation_metadata: input.provider_continuation_metadata.clone(),
+            created_at: OffsetDateTime::now_utc(),
+        };
+        inner
+            .context_projections_by_flow_run_id
+            .entry(input.flow_run_id)
+            .or_default()
+            .push(record.clone());
+        Ok(record)
+    }
+
+    async fn append_usage_ledger(
+        &self,
+        input: &AppendUsageLedgerInput,
+    ) -> Result<domain::UsageLedgerRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let record = domain::UsageLedgerRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: input.flow_run_id,
+            node_run_id: input.node_run_id,
+            span_id: input.span_id,
+            failover_attempt_id: input.failover_attempt_id,
+            provider_instance_id: input.provider_instance_id,
+            gateway_route_id: input.gateway_route_id,
+            model_id: input.model_id.clone(),
+            upstream_model_id: input.upstream_model_id.clone(),
+            upstream_request_id: input.upstream_request_id.clone(),
+            input_tokens: input.input_tokens,
+            cached_input_tokens: input.cached_input_tokens,
+            output_tokens: input.output_tokens,
+            reasoning_output_tokens: input.reasoning_output_tokens,
+            total_tokens: input.total_tokens,
+            cache_read_tokens: input.cache_read_tokens,
+            cache_write_tokens: input.cache_write_tokens,
+            price_snapshot: input.price_snapshot.clone(),
+            cost_snapshot: input.cost_snapshot.clone(),
+            usage_status: input.usage_status,
+            raw_usage: input.raw_usage.clone(),
+            normalized_usage: input.normalized_usage.clone(),
+            created_at: OffsetDateTime::now_utc(),
+        };
+        inner
+            .usage_ledger_by_flow_run_id
+            .entry(input.flow_run_id)
+            .or_default()
+            .push(record.clone());
+        Ok(record)
+    }
+
+    async fn append_capability_invocation(
+        &self,
+        input: &AppendCapabilityInvocationInput,
+    ) -> Result<domain::CapabilityInvocationRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let record = domain::CapabilityInvocationRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: input.flow_run_id,
+            span_id: input.span_id,
+            capability_id: input.capability_id.clone(),
+            requested_by_span_id: input.requested_by_span_id,
+            requester_kind: input.requester_kind.clone(),
+            arguments_ref: input.arguments_ref.clone(),
+            authorization_status: input.authorization_status.clone(),
+            authorization_reason: input.authorization_reason.clone(),
+            result_ref: input.result_ref.clone(),
+            normalized_result: input.normalized_result.clone(),
+            started_at: input.started_at,
+            finished_at: input.finished_at,
+            error_payload: input.error_payload.clone(),
+            created_at: OffsetDateTime::now_utc(),
+        };
+        inner
+            .capability_invocations_by_flow_run_id
+            .entry(input.flow_run_id)
+            .or_default()
+            .push(record.clone());
+        Ok(record)
+    }
+
     async fn list_runtime_spans(
         &self,
         flow_run_id: Uuid,
@@ -1564,6 +1696,51 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
             .into_iter()
             .filter(|event| event.sequence > after_sequence)
             .collect())
+    }
+
+    async fn list_runtime_items(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Result<Vec<domain::RuntimeItemRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .runtime_items_by_flow_run_id
+            .get(&flow_run_id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    async fn list_context_projections(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Result<Vec<domain::ContextProjectionRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .context_projections_by_flow_run_id
+            .get(&flow_run_id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    async fn list_usage_ledger(&self, flow_run_id: Uuid) -> Result<Vec<domain::UsageLedgerRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .usage_ledger_by_flow_run_id
+            .get(&flow_run_id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    async fn list_capability_invocations(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Result<Vec<domain::CapabilityInvocationRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .capability_invocations_by_flow_run_id
+            .get(&flow_run_id)
+            .cloned()
+            .unwrap_or_default())
     }
 
     async fn list_application_runs(

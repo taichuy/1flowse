@@ -6,8 +6,14 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::ports::{
-    AppendRuntimeEventInput, AppendRuntimeSpanInput, OrchestrationRuntimeRepository,
+    AppendRuntimeEventInput, AppendRuntimeItemInput, AppendRuntimeSpanInput,
+    OrchestrationRuntimeRepository,
 };
+
+pub mod items;
+pub mod projection;
+
+pub use items::item_kind_for_event;
 
 pub const PROVIDER_DELTA_COALESCE_MAX_BYTES: usize = 4096;
 
@@ -55,13 +61,14 @@ pub async fn append_host_event<R>(
 where
     R: OrchestrationRuntimeRepository,
 {
-    repository
+    let event_type = event_type.into();
+    let event = repository
         .append_runtime_event(&AppendRuntimeEventInput {
             flow_run_id,
             node_run_id,
             span_id,
             parent_span_id: None,
-            event_type: event_type.into(),
+            event_type: event_type.clone(),
             layer,
             source: domain::RuntimeEventSource::Host,
             trust_level: domain::RuntimeTrustLevel::HostFact,
@@ -71,7 +78,25 @@ where
             visibility: domain::RuntimeEventVisibility::Workspace,
             durability: domain::RuntimeEventDurability::Durable,
         })
-        .await
+        .await?;
+
+    if let Some(kind) = item_kind_for_event(&event_type) {
+        repository
+            .append_runtime_item(&AppendRuntimeItemInput {
+                flow_run_id,
+                span_id,
+                kind,
+                status: domain::RuntimeItemStatus::Created,
+                source_event_id: Some(event.id),
+                input_ref: None,
+                output_ref: None,
+                usage_ledger_id: None,
+                trust_level: domain::RuntimeTrustLevel::HostFact,
+            })
+            .await?;
+    }
+
+    Ok(event)
 }
 
 pub fn coalesce_provider_stream_events(

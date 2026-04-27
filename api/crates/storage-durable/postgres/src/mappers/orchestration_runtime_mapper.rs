@@ -127,6 +127,89 @@ pub struct StoredRuntimeEventRow {
 }
 
 #[derive(Debug, Clone)]
+pub struct StoredRuntimeItemRow {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub span_id: Option<Uuid>,
+    pub kind: String,
+    pub status: String,
+    pub source_event_id: Option<Uuid>,
+    pub input_ref: Option<String>,
+    pub output_ref: Option<String>,
+    pub usage_ledger_id: Option<Uuid>,
+    pub trust_level: String,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredContextProjectionRow {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub llm_turn_span_id: Option<Uuid>,
+    pub projection_kind: String,
+    pub merge_stage_ref: Option<String>,
+    pub source_transcript_ref: Option<String>,
+    pub source_item_refs: serde_json::Value,
+    pub compaction_event_id: Option<Uuid>,
+    pub summary_version: Option<String>,
+    pub model_input_ref: String,
+    pub model_input_hash: String,
+    pub compacted_summary_ref: Option<String>,
+    pub previous_projection_id: Option<Uuid>,
+    pub token_estimate: Option<i64>,
+    pub provider_continuation_metadata: serde_json::Value,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredUsageLedgerRow {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub span_id: Option<Uuid>,
+    pub failover_attempt_id: Option<Uuid>,
+    pub provider_instance_id: Option<Uuid>,
+    pub gateway_route_id: Option<Uuid>,
+    pub model_id: Option<String>,
+    pub upstream_model_id: Option<String>,
+    pub upstream_request_id: Option<String>,
+    pub input_tokens: Option<i64>,
+    pub cached_input_tokens: Option<i64>,
+    pub output_tokens: Option<i64>,
+    pub reasoning_output_tokens: Option<i64>,
+    pub total_tokens: Option<i64>,
+    pub cache_read_tokens: Option<i64>,
+    pub cache_write_tokens: Option<i64>,
+    pub price_snapshot: Option<serde_json::Value>,
+    pub cost_snapshot: Option<serde_json::Value>,
+    pub usage_status: String,
+    pub raw_usage: serde_json::Value,
+    pub normalized_usage: serde_json::Value,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredCapabilityInvocationRow {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub span_id: Option<Uuid>,
+    pub capability_id: String,
+    pub requested_by_span_id: Option<Uuid>,
+    pub requester_kind: String,
+    pub arguments_ref: Option<String>,
+    pub authorization_status: String,
+    pub authorization_reason: Option<String>,
+    pub result_ref: Option<String>,
+    pub normalized_result: Option<serde_json::Value>,
+    pub started_at: Option<OffsetDateTime>,
+    pub finished_at: Option<OffsetDateTime>,
+    pub error_payload: Option<serde_json::Value>,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
 pub struct StoredApplicationRunSummaryRow {
     pub id: Uuid,
     pub run_mode: String,
@@ -275,6 +358,97 @@ impl PgOrchestrationRuntimeMapper {
         })
     }
 
+    pub fn to_runtime_item_record(row: StoredRuntimeItemRow) -> Result<domain::RuntimeItemRecord> {
+        Ok(domain::RuntimeItemRecord {
+            id: row.id,
+            flow_run_id: row.flow_run_id,
+            span_id: row.span_id,
+            kind: parse_runtime_item_kind(&row.kind)?,
+            status: parse_runtime_item_status(&row.status)?,
+            source_event_id: row.source_event_id,
+            input_ref: row.input_ref,
+            output_ref: row.output_ref,
+            usage_ledger_id: row.usage_ledger_id,
+            trust_level: parse_runtime_trust_level(&row.trust_level)?,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+    }
+
+    pub fn to_context_projection_record(
+        row: StoredContextProjectionRow,
+    ) -> domain::ContextProjectionRecord {
+        domain::ContextProjectionRecord {
+            id: row.id,
+            flow_run_id: row.flow_run_id,
+            node_run_id: row.node_run_id,
+            llm_turn_span_id: row.llm_turn_span_id,
+            projection_kind: row.projection_kind,
+            merge_stage_ref: row.merge_stage_ref,
+            source_transcript_ref: row.source_transcript_ref,
+            source_item_refs: row.source_item_refs,
+            compaction_event_id: row.compaction_event_id,
+            summary_version: row.summary_version,
+            model_input_ref: row.model_input_ref,
+            model_input_hash: row.model_input_hash,
+            compacted_summary_ref: row.compacted_summary_ref,
+            previous_projection_id: row.previous_projection_id,
+            token_estimate: row.token_estimate,
+            provider_continuation_metadata: row.provider_continuation_metadata,
+            created_at: row.created_at,
+        }
+    }
+
+    pub fn to_usage_ledger_record(row: StoredUsageLedgerRow) -> Result<domain::UsageLedgerRecord> {
+        Ok(domain::UsageLedgerRecord {
+            id: row.id,
+            flow_run_id: row.flow_run_id,
+            node_run_id: row.node_run_id,
+            span_id: row.span_id,
+            failover_attempt_id: row.failover_attempt_id,
+            provider_instance_id: row.provider_instance_id,
+            gateway_route_id: row.gateway_route_id,
+            model_id: row.model_id,
+            upstream_model_id: row.upstream_model_id,
+            upstream_request_id: row.upstream_request_id,
+            input_tokens: row.input_tokens,
+            cached_input_tokens: row.cached_input_tokens,
+            output_tokens: row.output_tokens,
+            reasoning_output_tokens: row.reasoning_output_tokens,
+            total_tokens: row.total_tokens,
+            cache_read_tokens: row.cache_read_tokens,
+            cache_write_tokens: row.cache_write_tokens,
+            price_snapshot: row.price_snapshot,
+            cost_snapshot: row.cost_snapshot,
+            usage_status: parse_usage_ledger_status(&row.usage_status)?,
+            raw_usage: row.raw_usage,
+            normalized_usage: row.normalized_usage,
+            created_at: row.created_at,
+        })
+    }
+
+    pub fn to_capability_invocation_record(
+        row: StoredCapabilityInvocationRow,
+    ) -> domain::CapabilityInvocationRecord {
+        domain::CapabilityInvocationRecord {
+            id: row.id,
+            flow_run_id: row.flow_run_id,
+            span_id: row.span_id,
+            capability_id: row.capability_id,
+            requested_by_span_id: row.requested_by_span_id,
+            requester_kind: row.requester_kind,
+            arguments_ref: row.arguments_ref,
+            authorization_status: row.authorization_status,
+            authorization_reason: row.authorization_reason,
+            result_ref: row.result_ref,
+            normalized_result: row.normalized_result,
+            started_at: row.started_at,
+            finished_at: row.finished_at,
+            error_payload: row.error_payload,
+            created_at: row.created_at,
+        }
+    }
+
     pub fn to_application_run_summary(
         row: StoredApplicationRunSummaryRow,
     ) -> Result<domain::ApplicationRunSummary> {
@@ -419,5 +593,43 @@ pub fn parse_runtime_event_durability(value: &str) -> Result<domain::RuntimeEven
         "durable" => Ok(domain::RuntimeEventDurability::Durable),
         "sampled" => Ok(domain::RuntimeEventDurability::Sampled),
         _ => Err(anyhow!("unknown runtime event durability: {value}")),
+    }
+}
+
+pub fn parse_runtime_item_kind(value: &str) -> Result<domain::RuntimeItemKind> {
+    match value {
+        "message" => Ok(domain::RuntimeItemKind::Message),
+        "reasoning" => Ok(domain::RuntimeItemKind::Reasoning),
+        "tool_call" => Ok(domain::RuntimeItemKind::ToolCall),
+        "tool_result" => Ok(domain::RuntimeItemKind::ToolResult),
+        "mcp_call" => Ok(domain::RuntimeItemKind::McpCall),
+        "skill_load" => Ok(domain::RuntimeItemKind::SkillLoad),
+        "skill_action" => Ok(domain::RuntimeItemKind::SkillAction),
+        "approval" => Ok(domain::RuntimeItemKind::Approval),
+        "handoff" => Ok(domain::RuntimeItemKind::Handoff),
+        "agent_as_tool" => Ok(domain::RuntimeItemKind::AgentAsTool),
+        "compaction" => Ok(domain::RuntimeItemKind::Compaction),
+        "gateway_forward" => Ok(domain::RuntimeItemKind::GatewayForward),
+        _ => Err(anyhow!("unknown runtime item kind: {value}")),
+    }
+}
+
+pub fn parse_runtime_item_status(value: &str) -> Result<domain::RuntimeItemStatus> {
+    match value {
+        "created" => Ok(domain::RuntimeItemStatus::Created),
+        "running" => Ok(domain::RuntimeItemStatus::Running),
+        "waiting" => Ok(domain::RuntimeItemStatus::Waiting),
+        "succeeded" => Ok(domain::RuntimeItemStatus::Succeeded),
+        "failed" => Ok(domain::RuntimeItemStatus::Failed),
+        "cancelled" => Ok(domain::RuntimeItemStatus::Cancelled),
+        _ => Err(anyhow!("unknown runtime item status: {value}")),
+    }
+}
+
+pub fn parse_usage_ledger_status(value: &str) -> Result<domain::UsageLedgerStatus> {
+    match value {
+        "recorded" => Ok(domain::UsageLedgerStatus::Recorded),
+        "unavailable_error" => Ok(domain::UsageLedgerStatus::UnavailableError),
+        _ => Err(anyhow!("unknown usage ledger status: {value}")),
     }
 }

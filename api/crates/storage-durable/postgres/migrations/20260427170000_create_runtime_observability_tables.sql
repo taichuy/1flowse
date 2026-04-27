@@ -56,6 +56,58 @@ create table runtime_items (
     updated_at timestamptz not null default now()
 );
 
+create table runtime_context_projections (
+    id uuid primary key,
+    flow_run_id uuid not null references flow_runs(id) on delete cascade,
+    node_run_id uuid references node_runs(id) on delete cascade,
+    llm_turn_span_id uuid references runtime_spans(id) on delete set null,
+    projection_kind text not null,
+    merge_stage_ref text,
+    source_transcript_ref text,
+    source_item_refs jsonb not null default '[]'::jsonb,
+    compaction_event_id uuid references runtime_events(id) on delete set null,
+    summary_version text,
+    model_input_ref text not null,
+    model_input_hash text not null,
+    compacted_summary_ref text,
+    previous_projection_id uuid references runtime_context_projections(id) on delete set null,
+    token_estimate bigint,
+    provider_continuation_metadata jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now()
+);
+
+create index runtime_context_projections_flow_created_idx
+    on runtime_context_projections (flow_run_id, created_at asc, id asc);
+
+create table runtime_usage_ledger (
+    id uuid primary key,
+    flow_run_id uuid not null references flow_runs(id) on delete cascade,
+    node_run_id uuid references node_runs(id) on delete cascade,
+    span_id uuid references runtime_spans(id) on delete set null,
+    failover_attempt_id uuid,
+    provider_instance_id uuid,
+    gateway_route_id uuid,
+    model_id text,
+    upstream_model_id text,
+    upstream_request_id text,
+    input_tokens bigint,
+    cached_input_tokens bigint,
+    output_tokens bigint,
+    reasoning_output_tokens bigint,
+    total_tokens bigint,
+    cache_read_tokens bigint,
+    cache_write_tokens bigint,
+    price_snapshot jsonb,
+    cost_snapshot jsonb,
+    usage_status text not null,
+    raw_usage jsonb not null default '{}'::jsonb,
+    normalized_usage jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now()
+);
+
+create index runtime_usage_ledger_flow_created_idx
+    on runtime_usage_ledger (flow_run_id, created_at asc, id asc);
+
 create table runtime_artifacts (
     id uuid primary key,
     flow_run_id uuid not null references flow_runs(id) on delete cascade,

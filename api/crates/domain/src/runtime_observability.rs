@@ -173,3 +173,70 @@ pub struct RuntimeItemRecord {
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextProjectionRecord {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub llm_turn_span_id: Option<Uuid>,
+    pub projection_kind: String,
+    pub merge_stage_ref: Option<String>,
+    pub source_transcript_ref: Option<String>,
+    pub source_item_refs: serde_json::Value,
+    pub compaction_event_id: Option<Uuid>,
+    pub summary_version: Option<String>,
+    pub model_input_ref: String,
+    pub model_input_hash: String,
+    pub compacted_summary_ref: Option<String>,
+    pub previous_projection_id: Option<Uuid>,
+    pub token_estimate: Option<i64>,
+    pub provider_continuation_metadata: serde_json::Value,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UsageLedgerRecord {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub span_id: Option<Uuid>,
+    pub failover_attempt_id: Option<Uuid>,
+    pub provider_instance_id: Option<Uuid>,
+    pub gateway_route_id: Option<Uuid>,
+    pub model_id: Option<String>,
+    pub upstream_model_id: Option<String>,
+    pub upstream_request_id: Option<String>,
+    pub input_tokens: Option<i64>,
+    pub cached_input_tokens: Option<i64>,
+    pub output_tokens: Option<i64>,
+    pub reasoning_output_tokens: Option<i64>,
+    pub total_tokens: Option<i64>,
+    pub cache_read_tokens: Option<i64>,
+    pub cache_write_tokens: Option<i64>,
+    pub price_snapshot: Option<serde_json::Value>,
+    pub cost_snapshot: Option<serde_json::Value>,
+    pub usage_status: UsageLedgerStatus,
+    pub raw_usage: serde_json::Value,
+    pub normalized_usage: serde_json::Value,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CapabilityInvocationRecord {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub span_id: Option<Uuid>,
+    pub capability_id: String,
+    pub requested_by_span_id: Option<Uuid>,
+    pub requester_kind: String,
+    pub arguments_ref: Option<String>,
+    pub authorization_status: String,
+    pub authorization_reason: Option<String>,
+    pub result_ref: Option<String>,
+    pub normalized_result: Option<serde_json::Value>,
+    pub started_at: Option<OffsetDateTime>,
+    pub finished_at: Option<OffsetDateTime>,
+    pub error_payload: Option<serde_json::Value>,
+    pub created_at: OffsetDateTime,
+}

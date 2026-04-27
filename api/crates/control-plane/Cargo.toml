@@ -16,6 +16,7 @@ plugin-framework = { path = "../plugin-framework" }
 runtime-profile = { path = "../runtime-profile" }
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 storage-object = { path = "../storage-object" }
 thiserror.workspace = true
 time.workspace = true
@@ -25,6 +26,5 @@ runtime-core = { path = "../runtime-core" }
 [dev-dependencies]
 ed25519-dalek = { version = "2", features = ["pem"] }
 flate2.workspace = true
-sha2.workspace = true
 tar.workspace = true
 tokio.workspace = true

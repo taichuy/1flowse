@@ -60,7 +60,7 @@ Why second:
 1. `provider_contract.rs` 已有 `ProviderStreamEvent` 雏形，但 `plugin-runner` 仍是 `wait_with_output()`。
 2. 只有 provider raw stream 实时进入 fact spine，SSE/blocking/debug fold 才有共同事实源。
 
-- [ ] **Step 3: Execute Agent Session Capability Context**
+- [x] **Step 3: Execute Agent Session Capability Context**
 
 Plan:
 

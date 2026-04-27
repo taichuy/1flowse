@@ -504,6 +504,36 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         .expect("runtime events should be readable")
     }
 
+    pub async fn list_runtime_items(&self, flow_run_id: Uuid) -> Vec<domain::RuntimeItemRecord> {
+        OrchestrationRuntimeRepository::list_runtime_items(&self.repository, flow_run_id)
+            .await
+            .expect("runtime items should be readable")
+    }
+
+    pub async fn list_context_projections(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Vec<domain::ContextProjectionRecord> {
+        OrchestrationRuntimeRepository::list_context_projections(&self.repository, flow_run_id)
+            .await
+            .expect("context projections should be readable")
+    }
+
+    pub async fn list_usage_ledger(&self, flow_run_id: Uuid) -> Vec<domain::UsageLedgerRecord> {
+        OrchestrationRuntimeRepository::list_usage_ledger(&self.repository, flow_run_id)
+            .await
+            .expect("usage ledger should be readable")
+    }
+
+    pub async fn list_capability_invocations(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Vec<domain::CapabilityInvocationRecord> {
+        OrchestrationRuntimeRepository::list_capability_invocations(&self.repository, flow_run_id)
+            .await
+            .expect("capability invocations should be readable")
+    }
+
     async fn seed_application_with_document(
         &self,
         name: &str,
