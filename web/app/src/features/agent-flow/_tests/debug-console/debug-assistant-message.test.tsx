@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { DebugAssistantMessage } from '../../components/debug-console/conversation/DebugAssistantMessage';
@@ -64,4 +64,44 @@ describe('DebugAssistantMessage', () => {
     expect(screen.getByText('当前节点')).toBeInTheDocument();
     expect(screen.getAllByText('LLM').length).toBeGreaterThan(0);
   });
+
+
+  test('reveals newly arrived assistant content progressively', () => {
+    vi.useFakeTimers();
+    const baseMessage: AgentFlowDebugMessage = {
+      id: 'assistant-typing',
+      role: 'assistant',
+      status: 'running',
+      runId: 'run-1',
+      content: '',
+      rawOutput: null,
+      traceSummary: []
+    };
+
+    const { container, rerender } = render(
+      <DebugAssistantMessage
+        message={baseMessage}
+        onSelectTraceNode={vi.fn()}
+        onViewTrace={vi.fn()}
+      />
+    );
+
+    rerender(
+      <DebugAssistantMessage
+        message={{ ...baseMessage, content: 'abcdef' }}
+        onSelectTraceNode={vi.fn()}
+        onViewTrace={vi.fn()}
+      />
+    );
+
+    expect(container).not.toHaveTextContent('abcdef');
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(container).toHaveTextContent('abcdef');
+    vi.useRealTimers();
+  });
+
 });

@@ -304,10 +304,12 @@ describe('useAgentFlowDebugSession', () => {
       ])
     );
     expect(
-      window.localStorage.getItem(
-        buildAgentFlowDebugSessionStorageKey('app-1', 'draft-1')
-      )
-    ).toContain('请总结退款政策');
+      JSON.parse(
+        window.localStorage.getItem(
+          buildAgentFlowDebugSessionStorageKey('app-1', 'draft-1')
+        ) ?? '{}'
+      ).inputValues.query
+    ).toBe('');
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: ['applications', 'app-1', 'runtime']
     });

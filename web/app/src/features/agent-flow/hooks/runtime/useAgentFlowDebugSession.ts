@@ -155,6 +155,16 @@ function updateRunContextQuery(
   };
 }
 
+function clearRunContextQuery(runContext: AgentFlowRunContext): AgentFlowRunContext {
+  return updateRunContextQuery(runContext, '');
+}
+
+function clearPersistedQueryValue(
+  inputValues: Record<string, unknown>
+): Record<string, unknown> {
+  return { ...inputValues, query: '' };
+}
+
 function replaceAssistantMessage(
   currentMessages: AgentFlowDebugMessage[],
   nextMessage: AgentFlowDebugMessage,
@@ -405,7 +415,7 @@ export function useAgentFlowDebugSession({
     const runningMessage = createRunningAssistantMessage();
 
     stopPolling();
-    setRunContext(nextRunContext);
+    setRunContext(clearRunContextQuery(nextRunContext));
     setStatus('running');
     setLastDetail(null);
     setStreamTraceItems([]);
@@ -465,7 +475,7 @@ export function useAgentFlowDebugSession({
       });
 
       lastSubmittedPromptRef.current = resolvedPrompt;
-      writePersistedInputValues(storageKey, inputValues);
+      writePersistedInputValues(storageKey, clearPersistedQueryValue(inputValues));
       stopPolling();
       await queryClient.invalidateQueries({
         queryKey: ['applications', applicationId, 'runtime']
@@ -498,7 +508,7 @@ export function useAgentFlowDebugSession({
       );
 
       lastSubmittedPromptRef.current = resolvedPrompt;
-      writePersistedInputValues(storageKey, inputValues);
+      writePersistedInputValues(storageKey, clearPersistedQueryValue(inputValues));
       const assistantMessage = await applyRunDetail(detail, {
         fallbackMessageId: runningMessage.id,
         invalidateRuntime: !shouldPollRun(detail)

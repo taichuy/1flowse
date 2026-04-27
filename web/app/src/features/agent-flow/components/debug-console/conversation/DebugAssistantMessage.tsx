@@ -4,7 +4,7 @@ import {
   PartitionOutlined
 } from '@ant-design/icons';
 import { Button, Space, Tag, Typography } from 'antd';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { AgentFlowDebugMessage } from '../../../api/runtime';
 import { DebugMarkdownContent } from './DebugMarkdownContent';
@@ -70,6 +70,46 @@ function fallbackContent(message: AgentFlowDebugMessage) {
   return '暂无输出。';
 }
 
+const TYPEWRITER_INTERVAL_MS = 24;
+const TYPEWRITER_CHARS_PER_TICK = 12;
+
+function useProgressiveText(target: string) {
+  const [visibleText, setVisibleText] = useState(target);
+
+  useEffect(() => {
+    setVisibleText((currentText) => {
+      if (!target) {
+        return '';
+      }
+
+      if (!target.startsWith(currentText)) {
+        return target;
+      }
+
+      return currentText;
+    });
+  }, [target]);
+
+  useEffect(() => {
+    if (visibleText.length >= target.length) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setVisibleText((currentText) =>
+        target.slice(
+          0,
+          Math.min(target.length, currentText.length + TYPEWRITER_CHARS_PER_TICK)
+        )
+      );
+    }, TYPEWRITER_INTERVAL_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [target, visibleText]);
+
+  return visibleText;
+}
+
 export function DebugAssistantMessage({
   message,
   onViewTrace,
@@ -80,6 +120,7 @@ export function DebugAssistantMessage({
   onSelectTraceNode: (nodeId: string) => void;
 }) {
   const [showRawOutput, setShowRawOutput] = useState(false);
+  const visibleContent = useProgressiveText(message.content);
 
   async function handleCopyOutput() {
     if (!message.content) {
@@ -113,7 +154,7 @@ export function DebugAssistantMessage({
         />
         <DebugMarkdownContent
           className="agent-flow-editor__debug-message-content"
-          content={message.content || fallbackContent(message)}
+          content={message.content ? visibleContent : fallbackContent(message)}
         />
         <Space size={8} wrap>
           <Button

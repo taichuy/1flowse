@@ -103,6 +103,9 @@ describe('useAgentFlowDebugSession streaming', () => {
           content: '你好？'
         })
       );
+      expect(
+        result.current.runContext.fields.find((field) => field.key === 'query')?.value
+      ).toBe('');
       expect(result.current.messages.at(-1)).toEqual(
         expect.objectContaining({
           role: 'assistant',
