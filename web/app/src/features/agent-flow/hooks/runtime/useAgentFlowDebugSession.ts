@@ -8,12 +8,18 @@ import {
   cancelFlowDebugRun,
   fetchApplicationRunDetail,
   startFlowDebugRun,
+  startFlowDebugRunStream,
   type AgentFlowDebugMessage,
   type AgentFlowRunContext,
+  type AgentFlowTraceItem,
   type AgentFlowVariableGroup,
   type FlowDebugRunDetail,
   type NodeDebugPreviewVariableCache
 } from '../../api/runtime';
+import {
+  applyDebugStreamEventToAssistantMessage,
+  applyDebugStreamEventToTrace
+} from '../../lib/debug-console/stream-events';
 import {
   mapRunDetailToConversation,
   mapRunDetailToTrace
@@ -232,6 +238,7 @@ export function useAgentFlowDebugSession({
   const [status, setStatus] = useState<AgentFlowDebugSessionStatus>('idle');
   const [messages, setMessages] = useState<AgentFlowDebugMessage[]>([]);
   const [lastDetail, setLastDetail] = useState<FlowDebugRunDetail | null>(null);
+  const [streamTraceItems, setStreamTraceItems] = useState<AgentFlowTraceItem[]>([]);
   const [activeNodeFilter, setActiveNodeFilter] = useState<string | null>(null);
   const [nodePreviewVariableCache, setNodePreviewVariableCache] =
     useState<NodeDebugPreviewVariableCache>({});
@@ -262,8 +269,13 @@ export function useAgentFlowDebugSession({
   }, [document, rememberedInputValues, storageKey]);
 
   const rawTraceItems = useMemo(
-    () => (lastDetail ? mapRunDetailToTrace(lastDetail) : []),
-    [lastDetail]
+    () =>
+      streamTraceItems.length > 0
+        ? streamTraceItems
+        : lastDetail
+          ? mapRunDetailToTrace(lastDetail)
+          : [],
+    [lastDetail, streamTraceItems]
   );
   const traceItems = useMemo(
     () => filterTraceItemsByNode(rawTraceItems, activeNodeFilter),
@@ -385,6 +397,8 @@ export function useAgentFlowDebugSession({
     stopPolling();
     setRunContext(nextRunContext);
     setStatus('running');
+    setLastDetail(null);
+    setStreamTraceItems([]);
     setMessages((currentMessages) => [
       ...currentMessages,
       createUserMessage(resolvedPrompt),
@@ -403,13 +417,73 @@ export function useAgentFlowDebugSession({
       return null;
     }
 
+    const runInput = {
+      ...buildFlowDebugRunInput(document, inputValues),
+      document
+    };
+
+    try {
+      let streamAssistantMessage = runningMessage;
+      let streamTraceItemsSnapshot: AgentFlowTraceItem[] = [];
+
+      await startFlowDebugRunStream(applicationId, runInput, csrfToken, {
+        onEvent: (event) => {
+          streamTraceItemsSnapshot = applyDebugStreamEventToTrace(
+            streamTraceItemsSnapshot,
+            event
+          );
+          streamAssistantMessage = applyDebugStreamEventToAssistantMessage(
+            streamAssistantMessage,
+            event,
+            streamTraceItemsSnapshot
+          );
+
+          if (event.type === 'flow_started') {
+            activeRunIdRef.current = event.run_id;
+          }
+
+          setStreamTraceItems(streamTraceItemsSnapshot);
+          setStatus(streamAssistantMessage.status);
+          setMessages((currentMessages) =>
+            replaceAssistantMessage(
+              currentMessages,
+              streamAssistantMessage,
+              runningMessage.id
+            )
+          );
+        }
+      });
+
+      lastSubmittedPromptRef.current = resolvedPrompt;
+      writePersistedInputValues(storageKey, inputValues);
+      stopPolling();
+      await queryClient.invalidateQueries({
+        queryKey: ['applications', applicationId, 'runtime']
+      });
+
+      return null;
+    } catch (error) {
+      if (activeRunIdRef.current) {
+        const errorMessage =
+          error instanceof Error ? error.message : '调试流式连接中断';
+        setStatus('failed');
+        setMessages((currentMessages) =>
+          replaceAssistantMessageWithError(currentMessages, errorMessage, {
+            fallbackMessageId: runningMessage.id,
+            runId: activeRunIdRef.current
+          })
+        );
+        return null;
+      }
+
+      stopPolling();
+      setStreamTraceItems([]);
+    }
+
     try {
       const detail = await startFlowDebugRun(
         applicationId,
-        {
-          ...buildFlowDebugRunInput(document, inputValues),
-          document
-        },
+        runInput,
         csrfToken
       );
 
@@ -448,9 +522,11 @@ export function useAgentFlowDebugSession({
   }
 
   async function stopRun() {
+    const runId = lastDetail?.flow_run.id ?? activeRunIdRef.current;
+
     if (
       !csrfToken ||
-      !lastDetail?.flow_run.id ||
+      !runId ||
       !['running', 'waiting_human', 'waiting_callback'].includes(status)
     ) {
       return null;
@@ -459,7 +535,7 @@ export function useAgentFlowDebugSession({
     try {
       const detail = await cancelFlowDebugRun(
         applicationId,
-        lastDetail.flow_run.id,
+        runId,
         csrfToken
       );
       stopPolling();
@@ -475,6 +551,7 @@ export function useAgentFlowDebugSession({
     setStatus('idle');
     setMessages([]);
     setLastDetail(null);
+    setStreamTraceItems([]);
     setActiveNodeFilter(null);
   }
 
@@ -570,6 +647,7 @@ export function useAgentFlowDebugSession({
     stopPolling();
     setStatus('idle');
     setLastDetail(null);
+    setStreamTraceItems([]);
     setActiveNodeFilter(null);
     setNodePreviewVariableCache({});
     setRunContext(buildRunContextFromDocument(document, null));

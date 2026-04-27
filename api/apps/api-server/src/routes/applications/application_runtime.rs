@@ -1,8 +1,9 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, convert::Infallible, sync::Arc, time::Duration};
 
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
+    response::sse::{Event, KeepAlive, Sse},
     routing::{get, post},
     Json, Router,
 };
@@ -19,6 +20,8 @@ use control_plane::{
 use serde::{Deserialize, Serialize};
 use storage_durable::MainDurableStore;
 use time::format_description::well_known::Rfc3339;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::error;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -159,6 +162,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/applications/:id/orchestration/debug-runs",
             post(start_flow_debug_run),
+        )
+        .route(
+            "/applications/:id/orchestration/debug-runs/stream",
+            post(start_flow_debug_run_stream),
         )
         .route(
             "/applications/:id/orchestration/runs/:run_id/resume",
@@ -340,6 +347,252 @@ async fn ensure_application_visible(
     Ok(())
 }
 
+type DebugRunSseStream = ReceiverStream<Result<Event, Infallible>>;
+
+fn debug_stream_event(event_name: &str, payload: serde_json::Value) -> Result<Event, Infallible> {
+    Ok(Event::default().event(event_name).data(payload.to_string()))
+}
+
+fn stream_flow_started_payload(detail: &domain::ApplicationRunDetail) -> serde_json::Value {
+    serde_json::json!({
+        "type": "flow_started",
+        "run_id": detail.flow_run.id,
+        "status": detail.flow_run.status.as_str(),
+    })
+}
+
+fn stream_node_started_payload(node_run: &domain::NodeRunRecord) -> serde_json::Value {
+    serde_json::json!({
+        "type": "node_started",
+        "node_run_id": node_run.id,
+        "node_id": node_run.node_id,
+        "node_type": node_run.node_type,
+        "title": node_run.node_alias,
+        "input_payload": node_run.input_payload,
+        "started_at": format_time(node_run.started_at),
+    })
+}
+
+fn stream_node_finished_payload(node_run: &domain::NodeRunRecord) -> serde_json::Value {
+    serde_json::json!({
+        "type": "node_finished",
+        "node_run_id": node_run.id,
+        "node_id": node_run.node_id,
+        "status": node_run.status.as_str(),
+        "output_payload": node_run.output_payload,
+        "error_payload": node_run.error_payload,
+        "metrics_payload": node_run.metrics_payload,
+        "started_at": format_time(node_run.started_at),
+        "finished_at": format_optional_time(node_run.finished_at),
+    })
+}
+
+fn stream_run_event_payload(
+    event: &domain::RunEventRecord,
+    node_ids_by_run_id: &BTreeMap<Uuid, String>,
+) -> Option<(&'static str, serde_json::Value)> {
+    let node_id = event
+        .node_run_id
+        .and_then(|node_run_id| node_ids_by_run_id.get(&node_run_id))
+        .cloned()
+        .or_else(|| {
+            event
+                .payload
+                .get("node_id")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
+        .unwrap_or_default();
+    let node_run_id = event.node_run_id.map(|value| value.to_string());
+
+    match event.event_type.as_str() {
+        "text_delta" => Some((
+            "text_delta",
+            serde_json::json!({
+                "type": "text_delta",
+                "node_run_id": node_run_id,
+                "node_id": node_id,
+                "text": event.payload.get("delta").or_else(|| event.payload.get("text")).and_then(serde_json::Value::as_str).unwrap_or_default(),
+            }),
+        )),
+        "usage_snapshot" => Some((
+            "usage_snapshot",
+            serde_json::json!({
+                "type": "usage_snapshot",
+                "node_run_id": node_run_id,
+                "node_id": node_id,
+                "usage": event.payload,
+            }),
+        )),
+        _ => None,
+    }
+}
+
+fn stream_flow_terminal_payload(
+    detail: &domain::ApplicationRunDetail,
+) -> Option<(&'static str, serde_json::Value)> {
+    match detail.flow_run.status {
+        domain::FlowRunStatus::Succeeded => Some((
+            "flow_finished",
+            serde_json::json!({
+                "type": "flow_finished",
+                "run_id": detail.flow_run.id,
+                "status": detail.flow_run.status.as_str(),
+                "output": detail.flow_run.output_payload,
+            }),
+        )),
+        domain::FlowRunStatus::Failed => Some((
+            "flow_failed",
+            serde_json::json!({
+                "type": "flow_failed",
+                "run_id": detail.flow_run.id,
+                "error": detail
+                    .flow_run
+                    .error_payload
+                    .as_ref()
+                    .and_then(|payload| payload.get("message"))
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("调试运行失败"),
+                "error_payload": detail.flow_run.error_payload,
+            }),
+        )),
+        domain::FlowRunStatus::Cancelled => Some((
+            "flow_failed",
+            serde_json::json!({
+                "type": "flow_failed",
+                "run_id": detail.flow_run.id,
+                "error": "调试运行已停止",
+                "error_payload": detail.flow_run.error_payload,
+            }),
+        )),
+        domain::FlowRunStatus::WaitingHuman | domain::FlowRunStatus::WaitingCallback => Some((
+            "flow_finished",
+            serde_json::json!({
+                "type": "flow_finished",
+                "run_id": detail.flow_run.id,
+                "status": detail.flow_run.status.as_str(),
+                "output": detail.flow_run.output_payload,
+            }),
+        )),
+        _ => None,
+    }
+}
+
+async fn send_debug_run_stream_events(
+    state: Arc<ApiState>,
+    application_id: Uuid,
+    initial_detail: domain::ApplicationRunDetail,
+    workspace_id: Uuid,
+    sender: mpsc::Sender<Result<Event, Infallible>>,
+) {
+    let flow_run_id = initial_detail.flow_run.id;
+    let _ = sender
+        .send(debug_stream_event(
+            "flow_started",
+            stream_flow_started_payload(&initial_detail),
+        ))
+        .await;
+
+    let background_state = state.clone();
+    tokio::spawn(async move {
+        let background_service = OrchestrationRuntimeService::new(
+            background_state.store.clone(),
+            ApiProviderRuntime::new(background_state.provider_runtime.clone()),
+            background_state.provider_secret_master_key.clone(),
+        );
+        if let Err(error) = background_service
+            .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+                application_id,
+                flow_run_id,
+                workspace_id,
+            })
+            .await
+        {
+            error!(
+                application_id = %application_id,
+                flow_run_id = %flow_run_id,
+                error = %error,
+                "failed to continue streamed flow debug run"
+            );
+        }
+    });
+
+    let mut node_statuses = BTreeMap::<Uuid, String>::new();
+    let mut node_ids_by_run_id = BTreeMap::<Uuid, String>::new();
+    let mut last_event_sequence = 0_i64;
+    let mut interval = tokio::time::interval(Duration::from_millis(100));
+
+    loop {
+        interval.tick().await;
+        let Ok(Some(detail)) =
+            <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+                &state.store,
+                application_id,
+                flow_run_id,
+            )
+            .await
+        else {
+            break;
+        };
+
+        for node_run in &detail.node_runs {
+            node_ids_by_run_id.insert(node_run.id, node_run.node_id.clone());
+            let previous_status =
+                node_statuses.insert(node_run.id, node_run.status.as_str().to_string());
+            if previous_status.is_none() {
+                if sender
+                    .send(debug_stream_event(
+                        "node_started",
+                        stream_node_started_payload(node_run),
+                    ))
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            }
+
+            if node_run.status != domain::NodeRunStatus::Running
+                && previous_status.as_deref() != Some(node_run.status.as_str())
+            {
+                if sender
+                    .send(debug_stream_event(
+                        "node_finished",
+                        stream_node_finished_payload(node_run),
+                    ))
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            }
+        }
+
+        for event in &detail.events {
+            if event.sequence <= last_event_sequence {
+                continue;
+            }
+            last_event_sequence = event.sequence;
+            if let Some((event_name, payload)) =
+                stream_run_event_payload(event, &node_ids_by_run_id)
+            {
+                if sender
+                    .send(debug_stream_event(event_name, payload))
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            }
+        }
+
+        if let Some((event_name, payload)) = stream_flow_terminal_payload(&detail) {
+            let _ = sender.send(debug_stream_event(event_name, payload)).await;
+            break;
+        }
+    }
+}
+
 #[utoipa::path(
     post,
     path = "/api/console/applications/{id}/orchestration/debug-runs",
@@ -408,6 +661,42 @@ pub async fn start_flow_debug_run(
         StatusCode::CREATED,
         Json(ApiSuccess::new(to_application_run_detail_response(detail))),
     ))
+}
+
+pub async fn start_flow_debug_run_stream(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(body): Json<StartFlowDebugRunBody>,
+) -> Result<Sse<DebugRunSseStream>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+
+    let runtime_service = OrchestrationRuntimeService::new(
+        state.store.clone(),
+        ApiProviderRuntime::new(state.provider_runtime.clone()),
+        state.provider_secret_master_key.clone(),
+    );
+    let detail = runtime_service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: context.user.id,
+            application_id: id,
+            input_payload: body.input_payload,
+            document_snapshot: body.document,
+        })
+        .await?;
+    let workspace_id = context.actor.current_workspace_id;
+    let (sender, receiver) = mpsc::channel(32);
+
+    tokio::spawn(send_debug_run_stream_events(
+        state.clone(),
+        id,
+        detail,
+        workspace_id,
+        sender,
+    ));
+
+    Ok(Sse::new(ReceiverStream::new(receiver)).keep_alive(KeepAlive::default()))
 }
 
 #[utoipa::path(

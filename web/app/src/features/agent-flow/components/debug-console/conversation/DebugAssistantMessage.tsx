@@ -7,7 +7,10 @@ import { Button, Space, Tag, Typography } from 'antd';
 import { useState } from 'react';
 
 import type { AgentFlowDebugMessage } from '../../../api/runtime';
+import { DebugMarkdownContent } from './DebugMarkdownContent';
 import { DebugTraceSummary } from './DebugTraceSummary';
+import { DebugWorkflowProcess } from './DebugWorkflowProcess';
+import './debug-message.css';
 
 function statusColor(status: AgentFlowDebugMessage['status']) {
   switch (status) {
@@ -94,6 +97,13 @@ export function DebugAssistantMessage({
           <Typography.Text strong>Assistant</Typography.Text>
           <Tag color={statusColor(message.status)}>{statusLabel(message.status)}</Tag>
         </div>
+        <DebugWorkflowProcess
+          items={message.traceSummary}
+          onSelectNode={(nodeId) => {
+            onViewTrace();
+            onSelectTraceNode(nodeId);
+          }}
+        />
         <DebugTraceSummary
           items={message.traceSummary}
           onSelectNode={(nodeId) => {
@@ -101,9 +111,10 @@ export function DebugAssistantMessage({
             onSelectTraceNode(nodeId);
           }}
         />
-        <Typography.Paragraph className="agent-flow-editor__debug-message-content">
-          {message.content || fallbackContent(message)}
-        </Typography.Paragraph>
+        <DebugMarkdownContent
+          className="agent-flow-editor__debug-message-content"
+          content={message.content || fallbackContent(message)}
+        />
         <Space size={8} wrap>
           <Button
             disabled={!message.content}

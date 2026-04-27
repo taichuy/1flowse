@@ -1,5 +1,6 @@
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 
+import { ApiClientError } from './errors';
 import { apiFetch } from './transport';
 
 export type ConsoleFlowRunMode = 'debug_node_preview' | 'debug_flow_run';
@@ -89,6 +90,66 @@ export interface ConsoleApplicationRunDetail {
   events: ConsoleRunEvent[];
 }
 
+export type ConsoleFlowDebugStreamEvent =
+  | {
+      type: 'flow_started';
+      run_id: string;
+      status: string;
+    }
+  | {
+      type: 'node_started';
+      node_run_id: string;
+      node_id: string;
+      node_type: string;
+      title: string;
+      input_payload?: Record<string, unknown>;
+      started_at?: string;
+    }
+  | {
+      type: 'node_finished';
+      node_run_id: string;
+      node_id: string;
+      status: string;
+      output_payload?: Record<string, unknown>;
+      error_payload?: Record<string, unknown> | null;
+      metrics_payload?: Record<string, unknown>;
+      started_at?: string;
+      finished_at?: string | null;
+    }
+  | {
+      type: 'text_delta';
+      node_run_id?: string | null;
+      node_id: string;
+      text: string;
+    }
+  | {
+      type: 'usage_snapshot';
+      node_run_id?: string | null;
+      node_id: string;
+      usage: unknown;
+    }
+  | {
+      type: 'flow_finished';
+      run_id: string;
+      status: string;
+      output: Record<string, unknown>;
+    }
+  | {
+      type: 'flow_failed';
+      run_id: string;
+      error: string;
+      error_payload?: Record<string, unknown> | null;
+    }
+  | {
+      type: 'heartbeat';
+    };
+
+export interface ConsoleFlowDebugStreamHandlers {
+  onEvent: (event: ConsoleFlowDebugStreamEvent) => void;
+  onCompleted?: () => void;
+  getAbortController?: (abortController: AbortController) => void;
+}
+
 export interface ConsoleNodeLastRun {
   flow_run: ConsoleFlowRunDetail;
   node_run: ConsoleNodeRunDetail;
@@ -131,6 +192,95 @@ export function startConsoleFlowDebugRun(
     csrfToken,
     baseUrl
   });
+}
+
+function dispatchSseEvent(
+  eventBuffer: string,
+  handlers: ConsoleFlowDebugStreamHandlers
+) {
+  const dataLines: string[] = [];
+
+  for (const line of eventBuffer.split(/\r?\n/)) {
+    if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trimStart());
+    }
+  }
+
+  if (dataLines.length === 0) {
+    return;
+  }
+
+  handlers.onEvent(JSON.parse(dataLines.join('\n')) as ConsoleFlowDebugStreamEvent);
+}
+
+async function readSseStream(
+  response: Response,
+  handlers: ConsoleFlowDebugStreamHandlers
+) {
+  const reader = response.body?.getReader();
+
+  if (!reader) {
+    handlers.onCompleted?.();
+    return;
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+
+    if (done) {
+      if (buffer.trim().length > 0) {
+        dispatchSseEvent(buffer, handlers);
+      }
+      handlers.onCompleted?.();
+      return;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const eventFrames = buffer.split(/\r?\n\r?\n/);
+    buffer = eventFrames.pop() ?? '';
+
+    for (const eventFrame of eventFrames) {
+      dispatchSseEvent(eventFrame, handlers);
+    }
+  }
+}
+
+export async function startConsoleFlowDebugRunStream(
+  applicationId: string,
+  input: {
+    input_payload: Record<string, unknown>;
+    document?: FlowAuthoringDocument;
+  },
+  csrfToken: string,
+  handlers: ConsoleFlowDebugStreamHandlers,
+  baseUrl?: string
+) {
+  const abortController = new AbortController();
+  handlers.getAbortController?.(abortController);
+
+  const response = await fetch(
+    `${baseUrl ?? ''}/api/console/applications/${applicationId}/orchestration/debug-runs/stream`,
+    {
+      method: 'POST',
+      credentials: 'include',
+      signal: abortController.signal,
+      headers: {
+        accept: 'text/event-stream',
+        'content-type': 'application/json',
+        'x-csrf-token': csrfToken
+      },
+      body: JSON.stringify(input)
+    }
+  );
+
+  if (!response.ok) {
+    throw await ApiClientError.fromResponse(response);
+  }
+
+  await readSseStream(response, handlers);
 }
 
 export function resumeConsoleFlowRun(

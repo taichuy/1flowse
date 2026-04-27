@@ -7,9 +7,12 @@ import {
   cancelConsoleFlowRun,
   getConsoleApplicationRunDetail,
   startConsoleFlowDebugRun,
+  startConsoleFlowDebugRunStream,
   getConsoleNodeLastRun,
   startConsoleNodeDebugPreview,
   type ConsoleApplicationRunDetail,
+  type ConsoleFlowDebugStreamEvent,
+  type ConsoleFlowDebugStreamHandlers,
   type ConsoleNodeLastRun
 } from '@1flowbase/api-client';
 
@@ -21,6 +24,8 @@ import {
 
 export type NodeLastRun = ConsoleNodeLastRun;
 export type FlowDebugRunDetail = ConsoleApplicationRunDetail;
+export type FlowDebugRunStreamEvent = ConsoleFlowDebugStreamEvent;
+export type FlowDebugRunStreamHandlers = ConsoleFlowDebugStreamHandlers;
 export type AgentFlowDebugMessageStatus =
   | 'running'
   | 'completed'
@@ -196,6 +201,24 @@ export function startFlowDebugRun(
     applicationId,
     input,
     csrfToken,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function startFlowDebugRunStream(
+  applicationId: string,
+  input: {
+    input_payload: Record<string, Record<string, unknown>>;
+    document?: FlowAuthoringDocument;
+  },
+  csrfToken: string,
+  handlers: FlowDebugRunStreamHandlers
+) {
+  return startConsoleFlowDebugRunStream(
+    applicationId,
+    input,
+    csrfToken,
+    handlers,
     getApplicationsApiBaseUrl()
   );
 }
