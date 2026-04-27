@@ -7,11 +7,11 @@ use plugin_framework::{
         ProviderModelDescriptor, ProviderStdioMethod, ProviderStdioRequest, ProviderStreamEvent,
     },
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 
 use crate::package_loader::{LoadedProviderPackage, PackageLoader};
-use crate::stdio_runtime::call_executable;
+use crate::stdio_runtime::{call_executable, call_executable_streaming};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LoadedProviderSummary {
@@ -128,14 +128,20 @@ impl ProviderHost {
         input: ProviderInvocationInput,
     ) -> FrameworkResult<ProviderInvokeStreamOutput> {
         let loaded = self.loaded_package(plugin_id)?;
-        let output = self
-            .call_runtime(
-                loaded,
-                ProviderStdioMethod::Invoke,
-                serde_json::to_value(input).unwrap(),
-            )
-            .await?;
-        normalize_invoke_output(output)
+        let request = ProviderStdioRequest {
+            method: ProviderStdioMethod::Invoke,
+            input: serde_json::to_value(input).unwrap(),
+        };
+        let output = call_executable_streaming(
+            &loaded.runtime_executable,
+            &request,
+            &loaded.package.manifest.runtime.limits,
+        )
+        .await?;
+        Ok(ProviderInvokeStreamOutput {
+            events: output.events,
+            result: output.result,
+        })
     }
 
     fn loaded_package(&self, plugin_id: &str) -> FrameworkResult<&LoadedProviderPackage> {
@@ -162,12 +168,6 @@ impl ProviderHost {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct RuntimeInvocationEnvelope {
-    events: Vec<ProviderStreamEvent>,
-    result: ProviderInvocationResult,
-}
-
 fn normalize_models(raw: Value) -> FrameworkResult<Vec<ProviderModelDescriptor>> {
     serde_json::from_value(raw)
         .map_err(|error| PluginFrameworkError::invalid_provider_contract(error.to_string()))
@@ -185,15 +185,6 @@ fn merge_models(
         merged.insert(model.model_id.clone(), model);
     }
     merged.into_values().collect()
-}
-
-fn normalize_invoke_output(raw: Value) -> FrameworkResult<ProviderInvokeStreamOutput> {
-    let envelope: RuntimeInvocationEnvelope = serde_json::from_value(raw)
-        .map_err(|error| PluginFrameworkError::invalid_provider_contract(error.to_string()))?;
-    Ok(ProviderInvokeStreamOutput {
-        events: envelope.events,
-        result: envelope.result,
-    })
 }
 
 #[cfg(test)]

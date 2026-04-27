@@ -47,7 +47,7 @@ Why first:
 1. 后续所有主干都要写 `runtime_spans / runtime_events / runtime_items / runtime_artifacts`。
 2. 旧调试链路必须先有 shadow-write 兼容策略。
 
-- [ ] **Step 2: Execute Provider Streaming Spine**
+- [x] **Step 2: Execute Provider Streaming Spine**
 
 Plan:
 

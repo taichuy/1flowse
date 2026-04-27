@@ -30,7 +30,7 @@
 **Files:**
 - Modify: `api/crates/plugin-framework/src/provider_contract.rs`
 
-- [ ] **Step 1: Add contract test**
+- [x] **Step 1: Add contract test**
 
 Append a unit test in `api/crates/plugin-framework/src/provider_contract.rs`:
 
@@ -77,7 +77,7 @@ mod provider_runtime_line_tests {
 }
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -87,7 +87,7 @@ cargo test -p plugin-framework provider_runtime_line
 
 Expected: FAIL because `ProviderRuntimeLine` does not exist.
 
-- [ ] **Step 3: Implement `ProviderRuntimeLine`**
+- [x] **Step 3: Implement `ProviderRuntimeLine`**
 
 Add to `api/crates/plugin-framework/src/provider_contract.rs`:
 
@@ -127,7 +127,7 @@ impl ProviderRuntimeLine {
 }
 ```
 
-- [ ] **Step 4: Run test**
+- [x] **Step 4: Run test**
 
 Run:
 
@@ -137,7 +137,7 @@ cargo test -p plugin-framework provider_runtime_line
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/crates/plugin-framework/src/provider_contract.rs
@@ -151,7 +151,7 @@ git commit -m "feat: add provider runtime ndjson line contract"
 - Modify: `api/apps/plugin-runner/src/provider_host.rs`
 - Create: `api/apps/plugin-runner/tests/provider_stdio_streaming_tests.rs`
 
-- [ ] **Step 1: Write failing streaming tests**
+- [x] **Step 1: Write failing streaming tests**
 
 Create `api/apps/plugin-runner/tests/provider_stdio_streaming_tests.rs`:
 
@@ -223,7 +223,7 @@ printf '%s\n' '{not-json'
 }
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run:
 
@@ -233,7 +233,7 @@ cargo test -p plugin-runner provider_stdio_v2
 
 Expected: FAIL because `call_executable_streaming` does not exist.
 
-- [ ] **Step 3: Implement streaming function**
+- [x] **Step 3: Implement streaming function**
 
 In `api/apps/plugin-runner/src/stdio_runtime.rs`, add imports:
 
@@ -351,11 +351,11 @@ pub async fn call_executable_streaming(
 
 If the compiler complains about moved stderr, simplify by reading stderr after `wait_with_output` in a follow-up refactor; the test target is stdout NDJSON behavior.
 
-- [ ] **Step 4: Wire invoke path**
+- [x] **Step 4: Wire invoke path**
 
 Modify `api/apps/plugin-runner/src/provider_host.rs` so `invoke_stream` calls `call_executable_streaming`, while `validate` and `list_models` keep `call_executable`.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -366,7 +366,7 @@ cargo test -p api-server provider_runtime
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/apps/plugin-runner/src/stdio_runtime.rs api/apps/plugin-runner/src/provider_host.rs api/apps/plugin-runner/tests/provider_stdio_streaming_tests.rs
@@ -383,7 +383,7 @@ git commit -m "feat: stream provider invoke over stdio v2"
 - Create: `api/crates/observability/src/_tests/mod.rs`
 - Create: `api/crates/observability/src/_tests/delta_coalescer_tests.rs`
 
-- [ ] **Step 1: Write failing coalescer tests**
+- [x] **Step 1: Write failing coalescer tests**
 
 Create `api/crates/observability/src/_tests/delta_coalescer_tests.rs`:
 
@@ -418,7 +418,7 @@ Create `api/crates/observability/src/_tests/mod.rs`:
 mod delta_coalescer_tests;
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -428,7 +428,7 @@ cargo test -p observability delta_coalescer
 
 Expected: FAIL because observability primitives do not exist.
 
-- [ ] **Step 3: Add crate dependencies**
+- [x] **Step 3: Add crate dependencies**
 
 Modify `api/crates/observability/Cargo.toml`:
 
@@ -441,7 +441,7 @@ tokio.workspace = true
 uuid.workspace = true
 ```
 
-- [ ] **Step 4: Implement bus and coalescer**
+- [x] **Step 4: Implement bus and coalescer**
 
 Create `api/crates/observability/src/event_bus.rs`:
 
@@ -535,7 +535,7 @@ pub use event_bus::{RuntimeBusEvent, RuntimeEventBus};
 mod _tests;
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -545,7 +545,7 @@ cargo test -p observability
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/crates/observability
@@ -558,7 +558,7 @@ git commit -m "feat: add provider stream event bus"
 - Modify: `api/crates/control-plane/src/orchestration_runtime/persistence.rs`
 - Modify: `api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs`
 
-- [ ] **Step 1: Write failing boundary test**
+- [x] **Step 1: Write failing boundary test**
 
 Add to `api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs`:
 
@@ -586,7 +586,7 @@ async fn provider_tool_commit_is_recorded_as_intent_not_execution() {
 }
 ```
 
-- [ ] **Step 2: Run failing boundary test**
+- [x] **Step 2: Run failing boundary test**
 
 Run:
 
@@ -596,7 +596,7 @@ cargo test -p control-plane provider_tool_commit_is_recorded_as_intent_not_execu
 
 Expected: FAIL because provider tool commits are currently persisted only as provider events.
 
-- [ ] **Step 3: Add capability intent event for provider commits**
+- [x] **Step 3: Add capability intent event for provider commits**
 
 In `api/crates/control-plane/src/orchestration_runtime/persistence.rs`, inside `append_provider_stream_events`, add:
 
@@ -638,7 +638,7 @@ match event {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -649,7 +649,7 @@ cargo test -p control-plane orchestration_runtime
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/crates/control-plane/src/orchestration_runtime/persistence.rs api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs

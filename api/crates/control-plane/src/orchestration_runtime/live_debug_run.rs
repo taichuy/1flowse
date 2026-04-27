@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use observability::RuntimeEventBus;
 use plugin_framework::provider_contract::ProviderStreamEvent;
 use serde_json::{json, Value};
 use time::OffsetDateTime;
@@ -11,7 +12,10 @@ use crate::{
         AppendRunEventInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
         CreateNodeRunInput, OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateNodeRunInput,
     },
-    runtime_observability::{append_host_event, append_host_span},
+    runtime_observability::{
+        append_host_event, append_host_span, coalesce_provider_stream_events,
+        provider_stream_event_type, PROVIDER_DELTA_COALESCE_MAX_BYTES,
+    },
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
 
@@ -773,7 +777,10 @@ async fn append_provider_stream_events<R>(
 where
     R: OrchestrationRuntimeRepository,
 {
-    for event in events {
+    let runtime_bus = RuntimeEventBus::new((events.len() + 4).max(16));
+    let events =
+        coalesce_provider_stream_events(&runtime_bus, events, PROVIDER_DELTA_COALESCE_MAX_BYTES)?;
+    for event in &events {
         let event_type = provider_stream_event_type(event);
         let payload = serde_json::to_value(event)?;
         repository
@@ -794,24 +801,52 @@ where
             payload,
         )
         .await?;
+        append_provider_capability_intent(repository, flow_run_id, node_run_id, span_id, event)
+            .await?;
     }
 
     Ok(())
 }
 
-fn provider_stream_event_type(event: &ProviderStreamEvent) -> &'static str {
-    match event {
-        ProviderStreamEvent::TextDelta { .. } => "text_delta",
-        ProviderStreamEvent::ReasoningDelta { .. } => "reasoning_delta",
-        ProviderStreamEvent::ToolCallDelta { .. } => "tool_call_delta",
-        ProviderStreamEvent::ToolCallCommit { .. } => "tool_call_commit",
-        ProviderStreamEvent::McpCallDelta { .. } => "mcp_call_delta",
-        ProviderStreamEvent::McpCallCommit { .. } => "mcp_call_commit",
-        ProviderStreamEvent::UsageDelta { .. } => "usage_delta",
-        ProviderStreamEvent::UsageSnapshot { .. } => "usage_snapshot",
-        ProviderStreamEvent::Finish { .. } => "finish",
-        ProviderStreamEvent::Error { .. } => "error",
-    }
+async fn append_provider_capability_intent<R>(
+    repository: &R,
+    flow_run_id: Uuid,
+    node_run_id: Option<Uuid>,
+    span_id: Option<Uuid>,
+    event: &ProviderStreamEvent,
+) -> Result<()>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    let (capability_id, call) = match event {
+        ProviderStreamEvent::ToolCallCommit { call } => (
+            format!("host_tool:model:{}@runtime", call.name),
+            serde_json::to_value(call)?,
+        ),
+        ProviderStreamEvent::McpCallCommit { call } => (
+            format!("mcp_tool:mcp:{}:{}@runtime", call.server, call.method),
+            serde_json::to_value(call)?,
+        ),
+        _ => return Ok(()),
+    };
+
+    append_host_event(
+        repository,
+        flow_run_id,
+        node_run_id,
+        span_id,
+        "capability_call_requested",
+        domain::RuntimeEventLayer::Capability,
+        json!({
+            "provider_only_intent": true,
+            "capability_id": capability_id,
+            "requested_by": "model",
+            "call": call,
+        }),
+    )
+    .await?;
+
+    Ok(())
 }
 
 fn next_node_index(

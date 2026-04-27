@@ -1083,12 +1083,21 @@ impl ModelProviderRepository for InMemoryOrchestrationRuntimeRepository {
 #[derive(Clone, Default)]
 pub(crate) struct InMemoryProviderRuntime {
     invoke_delay: Option<std::time::Duration>,
+    provider_events: Option<Vec<ProviderStreamEvent>>,
 }
 
 impl InMemoryProviderRuntime {
     pub(crate) fn with_invoke_delay(invoke_delay: std::time::Duration) -> Self {
         Self {
             invoke_delay: Some(invoke_delay),
+            provider_events: None,
+        }
+    }
+
+    pub(crate) fn with_provider_events(provider_events: Vec<ProviderStreamEvent>) -> Self {
+        Self {
+            invoke_delay: None,
+            provider_events: Some(provider_events),
         }
     }
 }
@@ -1129,23 +1138,24 @@ impl ProviderRuntimePort for InMemoryProviderRuntime {
             .first()
             .map(|message| message.content.clone())
             .unwrap_or_default();
+        let default_events = vec![
+            ProviderStreamEvent::TextDelta {
+                delta: format!("echo:{}:{}", input.model, prompt),
+            },
+            ProviderStreamEvent::UsageSnapshot {
+                usage: plugin_framework::provider_contract::ProviderUsage {
+                    input_tokens: Some(5),
+                    output_tokens: Some(7),
+                    total_tokens: Some(12),
+                    ..plugin_framework::provider_contract::ProviderUsage::default()
+                },
+            },
+            ProviderStreamEvent::Finish {
+                reason: plugin_framework::provider_contract::ProviderFinishReason::Stop,
+            },
+        ];
         Ok(crate::ports::ProviderRuntimeInvocationOutput {
-            events: vec![
-                ProviderStreamEvent::TextDelta {
-                    delta: format!("echo:{}:{}", input.model, prompt),
-                },
-                ProviderStreamEvent::UsageSnapshot {
-                    usage: plugin_framework::provider_contract::ProviderUsage {
-                        input_tokens: Some(5),
-                        output_tokens: Some(7),
-                        total_tokens: Some(12),
-                        ..plugin_framework::provider_contract::ProviderUsage::default()
-                    },
-                },
-                ProviderStreamEvent::Finish {
-                    reason: plugin_framework::provider_contract::ProviderFinishReason::Stop,
-                },
-            ],
+            events: self.provider_events.clone().unwrap_or(default_events),
             result: plugin_framework::provider_contract::ProviderInvocationResult {
                 final_content: Some(format!("echo:{}:{}", input.model, prompt)),
                 usage: plugin_framework::provider_contract::ProviderUsage {

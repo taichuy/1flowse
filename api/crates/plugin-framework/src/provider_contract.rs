@@ -388,3 +388,41 @@ pub enum ProviderStreamEvent {
     Finish { reason: ProviderFinishReason },
     Error { error: ProviderRuntimeError },
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ProviderRuntimeLine {
+    TextDelta { delta: String },
+    ReasoningDelta { delta: String },
+    ToolCallDelta { call_id: String, delta: Value },
+    ToolCallCommit { call: ProviderToolCall },
+    McpCallDelta { call_id: String, delta: Value },
+    McpCallCommit { call: ProviderMcpCall },
+    UsageDelta { usage: ProviderUsage },
+    UsageSnapshot { usage: ProviderUsage },
+    Finish { reason: ProviderFinishReason },
+    Error { error: ProviderRuntimeError },
+    Result { result: ProviderInvocationResult },
+}
+
+impl ProviderRuntimeLine {
+    pub fn into_stream_event(self) -> Option<ProviderStreamEvent> {
+        match self {
+            Self::TextDelta { delta } => Some(ProviderStreamEvent::TextDelta { delta }),
+            Self::ReasoningDelta { delta } => Some(ProviderStreamEvent::ReasoningDelta { delta }),
+            Self::ToolCallDelta { call_id, delta } => {
+                Some(ProviderStreamEvent::ToolCallDelta { call_id, delta })
+            }
+            Self::ToolCallCommit { call } => Some(ProviderStreamEvent::ToolCallCommit { call }),
+            Self::McpCallDelta { call_id, delta } => {
+                Some(ProviderStreamEvent::McpCallDelta { call_id, delta })
+            }
+            Self::McpCallCommit { call } => Some(ProviderStreamEvent::McpCallCommit { call }),
+            Self::UsageDelta { usage } => Some(ProviderStreamEvent::UsageDelta { usage }),
+            Self::UsageSnapshot { usage } => Some(ProviderStreamEvent::UsageSnapshot { usage }),
+            Self::Finish { reason } => Some(ProviderStreamEvent::Finish { reason }),
+            Self::Error { error } => Some(ProviderStreamEvent::Error { error }),
+            Self::Result { .. } => None,
+        }
+    }
+}

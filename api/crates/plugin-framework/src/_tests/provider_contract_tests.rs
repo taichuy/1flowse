@@ -1,8 +1,9 @@
 use plugin_framework::{
     installation::PluginTaskStatus,
     provider_contract::{
-        ModelDiscoveryMode, ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderStdioMethod,
-        ProviderStdioRequest, ProviderStdioResponse, ProviderUsage,
+        ModelDiscoveryMode, ProviderInvocationResult, ProviderRuntimeError,
+        ProviderRuntimeErrorKind, ProviderRuntimeLine, ProviderStdioMethod, ProviderStdioRequest,
+        ProviderStdioResponse, ProviderStreamEvent, ProviderToolCall, ProviderUsage,
     },
 };
 use serde_json::json;
@@ -98,4 +99,48 @@ fn provider_stdio_contract_uses_snake_case_methods_and_result_payloads() {
     .unwrap();
     assert!(response.ok);
     assert_eq!(response.result[0]["model_id"], "fixture_dynamic");
+}
+
+#[test]
+fn provider_runtime_line_result_is_not_a_stream_event() {
+    let line = ProviderRuntimeLine::Result {
+        result: ProviderInvocationResult {
+            final_content: Some("hello".into()),
+            ..ProviderInvocationResult::default()
+        },
+    };
+
+    assert_eq!(line.into_stream_event(), None);
+}
+
+#[test]
+fn provider_runtime_line_text_maps_to_stream_event() {
+    let line = ProviderRuntimeLine::TextDelta {
+        delta: "hello".into(),
+    };
+
+    assert_eq!(
+        line.into_stream_event(),
+        Some(ProviderStreamEvent::TextDelta {
+            delta: "hello".into()
+        })
+    );
+}
+
+#[test]
+fn provider_runtime_line_tool_commit_preserves_arguments() {
+    let line = ProviderRuntimeLine::ToolCallCommit {
+        call: ProviderToolCall {
+            id: "call-1".into(),
+            name: "lookup_order".into(),
+            arguments: json!({ "order_id": "A-1" }),
+        },
+    };
+
+    match line.into_stream_event() {
+        Some(ProviderStreamEvent::ToolCallCommit { call }) => {
+            assert_eq!(call.arguments, json!({ "order_id": "A-1" }));
+        }
+        other => panic!("expected tool call commit stream event, got {other:?}"),
+    }
 }

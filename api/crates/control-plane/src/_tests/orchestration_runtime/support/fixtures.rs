@@ -312,6 +312,17 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         )
     }
 
+    pub fn for_tests_with_provider_events(provider_events: Vec<ProviderStreamEvent>) -> Self {
+        Self::new(
+            InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
+                "application.view.all",
+                "application.create.all",
+            ]),
+            InMemoryProviderRuntime::with_provider_events(provider_events),
+            "test-master-key",
+        )
+    }
+
     pub async fn seed_application_with_flow(&self, name: &str) -> SeededPreviewApplication {
         let actor_user_id = Uuid::now_v7();
         let application = self

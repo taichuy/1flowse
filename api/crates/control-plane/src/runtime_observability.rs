@@ -1,4 +1,6 @@
 use anyhow::Result;
+use observability::{DeltaCoalescer, RuntimeBusEvent, RuntimeEventBus};
+use plugin_framework::provider_contract::ProviderStreamEvent;
 use serde_json::Value;
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -6,6 +8,8 @@ use uuid::Uuid;
 use crate::ports::{
     AppendRuntimeEventInput, AppendRuntimeSpanInput, OrchestrationRuntimeRepository,
 };
+
+pub const PROVIDER_DELTA_COALESCE_MAX_BYTES: usize = 4096;
 
 pub async fn append_host_span<R>(
     repository: &R,
@@ -68,4 +72,92 @@ where
             durability: domain::RuntimeEventDurability::Durable,
         })
         .await
+}
+
+pub fn coalesce_provider_stream_events(
+    bus: &RuntimeEventBus,
+    events: &[ProviderStreamEvent],
+    max_bytes: usize,
+) -> Result<Vec<ProviderStreamEvent>> {
+    let mut coalescer = DeltaCoalescer::new(max_bytes);
+    let mut coalesced = Vec::with_capacity(events.len());
+
+    for event in events {
+        match event {
+            ProviderStreamEvent::TextDelta { delta } => {
+                flush_reasoning_delta(bus, &mut coalesced, &mut coalescer);
+                push_runtime_bus_delta(bus, &mut coalesced, coalescer.push_text(delta));
+            }
+            ProviderStreamEvent::ReasoningDelta { delta } => {
+                flush_text_delta(bus, &mut coalesced, &mut coalescer);
+                push_runtime_bus_delta(bus, &mut coalesced, coalescer.push_reasoning(delta));
+            }
+            other => {
+                flush_text_delta(bus, &mut coalesced, &mut coalescer);
+                flush_reasoning_delta(bus, &mut coalesced, &mut coalescer);
+                bus.publish(RuntimeBusEvent::RuntimeEvent {
+                    event_type: provider_stream_event_type(other).to_string(),
+                    payload: serde_json::to_value(other)?,
+                });
+                coalesced.push(other.clone());
+            }
+        }
+    }
+
+    flush_text_delta(bus, &mut coalesced, &mut coalescer);
+    flush_reasoning_delta(bus, &mut coalesced, &mut coalescer);
+
+    Ok(coalesced)
+}
+
+pub fn provider_stream_event_type(event: &ProviderStreamEvent) -> &'static str {
+    match event {
+        ProviderStreamEvent::TextDelta { .. } => "text_delta",
+        ProviderStreamEvent::ReasoningDelta { .. } => "reasoning_delta",
+        ProviderStreamEvent::ToolCallDelta { .. } => "tool_call_delta",
+        ProviderStreamEvent::ToolCallCommit { .. } => "tool_call_commit",
+        ProviderStreamEvent::McpCallDelta { .. } => "mcp_call_delta",
+        ProviderStreamEvent::McpCallCommit { .. } => "mcp_call_commit",
+        ProviderStreamEvent::UsageDelta { .. } => "usage_delta",
+        ProviderStreamEvent::UsageSnapshot { .. } => "usage_snapshot",
+        ProviderStreamEvent::Finish { .. } => "finish",
+        ProviderStreamEvent::Error { .. } => "error",
+    }
+}
+
+fn flush_text_delta(
+    bus: &RuntimeEventBus,
+    coalesced: &mut Vec<ProviderStreamEvent>,
+    coalescer: &mut DeltaCoalescer,
+) {
+    push_runtime_bus_delta(bus, coalesced, coalescer.flush_text());
+}
+
+fn flush_reasoning_delta(
+    bus: &RuntimeEventBus,
+    coalesced: &mut Vec<ProviderStreamEvent>,
+    coalescer: &mut DeltaCoalescer,
+) {
+    push_runtime_bus_delta(bus, coalesced, coalescer.flush_reasoning());
+}
+
+fn push_runtime_bus_delta(
+    bus: &RuntimeEventBus,
+    coalesced: &mut Vec<ProviderStreamEvent>,
+    event: Option<RuntimeBusEvent>,
+) {
+    let Some(event) = event else {
+        return;
+    };
+
+    bus.publish(event.clone());
+    match event {
+        RuntimeBusEvent::TextDelta { delta } => {
+            coalesced.push(ProviderStreamEvent::TextDelta { delta });
+        }
+        RuntimeBusEvent::ReasoningDelta { delta } => {
+            coalesced.push(ProviderStreamEvent::ReasoningDelta { delta });
+        }
+        _ => {}
+    }
 }

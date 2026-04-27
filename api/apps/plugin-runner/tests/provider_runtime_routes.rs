@@ -47,10 +47,14 @@ impl Drop for TempProviderPackage {
     }
 }
 
-fn write_fixture_runtime_with_invoke_result(
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+fn write_fixture_runtime_with_invoke_lines(
     package: &TempProviderPackage,
     dynamic_label: &str,
-    invoke_result: Value,
+    invoke_lines: Vec<String>,
 ) {
     let validate_output = json!({
         "ok": true,
@@ -82,11 +86,6 @@ fn write_fixture_runtime_with_invoke_result(
         ]
     })
     .to_string();
-    let invoke_output = json!({
-        "ok": true,
-        "result": invoke_result
-    })
-    .to_string();
     let error_output = json!({
         "ok": false,
         "error": {
@@ -96,6 +95,13 @@ fn write_fixture_runtime_with_invoke_result(
         }
     })
     .to_string();
+    let validate_output = shell_quote(&validate_output);
+    let list_models_output = shell_quote(&list_models_output);
+    let error_output = shell_quote(&error_output);
+    let invoke_output = invoke_lines
+        .iter()
+        .map(|line| format!("    printf '%s\\n' {}\n", shell_quote(line)))
+        .collect::<String>();
 
     package.write(
         "bin/fixture_provider",
@@ -106,16 +112,16 @@ set -euo pipefail
 payload="$(cat)"
 case "${{payload}}" in
   *'"method":"validate"'*)
-    printf '%s' '{validate_output}'
+    printf '%s' {validate_output}
     ;;
   *'"method":"list_models"'*)
-    printf '%s' '{list_models_output}'
+    printf '%s' {list_models_output}
     ;;
   *'"method":"invoke"'*)
-    printf '%s' '{invoke_output}'
+{invoke_output}
     ;;
   *)
-    printf '%s' '{error_output}'
+    printf '%s' {error_output}
     exit 1
     ;;
 esac
@@ -134,50 +140,55 @@ esac
 }
 
 fn write_fixture_runtime(package: &TempProviderPackage, dynamic_label: &str) {
-    write_fixture_runtime_with_invoke_result(
+    write_fixture_runtime_with_invoke_lines(
         package,
         dynamic_label,
-        json!({
-            "events": [
-                {
-                    "type": "text_delta",
-                    "delta": "echo:fixture_dynamic"
-                },
-                {
-                    "type": "tool_call_commit",
-                    "call": {
-                        "id": "tool-1",
-                        "name": "search_docs",
-                        "arguments": {
-                            "query": "provider host"
-                        }
+        vec![
+            json!({
+                "type": "text_delta",
+                "delta": "echo:fixture_dynamic"
+            })
+            .to_string(),
+            json!({
+                "type": "tool_call_commit",
+                "call": {
+                    "id": "tool-1",
+                    "name": "search_docs",
+                    "arguments": {
+                        "query": "provider host"
                     }
-                },
-                {
-                    "type": "mcp_call_commit",
-                    "call": {
-                        "id": "mcp-1",
-                        "server": "docs",
-                        "method": "search",
-                        "arguments": {
-                            "query": "provider host"
-                        }
-                    }
-                },
-                {
-                    "type": "usage_snapshot",
-                    "usage": {
-                        "input_tokens": 5,
-                        "output_tokens": 7,
-                        "total_tokens": 12
-                    }
-                },
-                {
-                    "type": "finish",
-                    "reason": "stop"
                 }
-            ],
-            "result": {
+            })
+            .to_string(),
+            json!({
+                "type": "mcp_call_commit",
+                "call": {
+                    "id": "mcp-1",
+                    "server": "docs",
+                    "method": "search",
+                    "arguments": {
+                        "query": "provider host"
+                    }
+                }
+            })
+            .to_string(),
+            json!({
+                "type": "usage_snapshot",
+                "usage": {
+                    "input_tokens": 5,
+                    "output_tokens": 7,
+                    "total_tokens": 12
+                }
+            })
+            .to_string(),
+            json!({
+                "type": "finish",
+                "reason": "stop"
+            })
+            .to_string(),
+            json!({
+                "type": "result",
+                "result": {
                 "final_content": "echo:fixture_dynamic",
                 "tool_calls": [
                     {
@@ -208,17 +219,23 @@ fn write_fixture_runtime(package: &TempProviderPackage, dynamic_label: &str) {
                     "provider_code": "fixture_provider"
                 }
             }
-        }),
+            })
+            .to_string(),
+        ],
     );
 }
 
 fn write_legacy_invoke_runtime(package: &TempProviderPackage) {
-    write_fixture_runtime_with_invoke_result(
+    write_fixture_runtime_with_invoke_lines(
         package,
         "Fixture Dynamic",
-        json!({
-            "output_text": "legacy text"
-        }),
+        vec![json!({
+            "ok": true,
+            "result": {
+                "output_text": "legacy text"
+            }
+        })
+        .to_string()],
     );
 }
 
@@ -489,11 +506,11 @@ async fn provider_runtime_routes_rejects_legacy_invoke_payload() {
     )
     .await;
 
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(status, StatusCode::BAD_GATEWAY);
     assert!(payload["message"]
         .as_str()
         .unwrap()
-        .contains("missing field"));
+        .contains("invalid provider ndjson"));
 }
 
 #[tokio::test]

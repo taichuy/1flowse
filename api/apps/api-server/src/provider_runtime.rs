@@ -452,7 +452,8 @@ config_schema:
         package.write(
             "bin/fixture_provider",
             r#"#!/usr/bin/env bash
-printf '%s' '{"ok":false,"error":{"kind":"auth_failed","message":"invalid api_key","provider_summary":null}}'
+printf '%s' 'invalid api_key' >&2
+exit 1
 "#,
         );
         #[cfg(unix)]

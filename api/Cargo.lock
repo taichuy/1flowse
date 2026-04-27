@@ -837,6 +837,7 @@ dependencies = [
  "domain",
  "ed25519-dalek",
  "flate2",
+ "observability",
  "orchestration-runtime",
  "plugin-framework",
  "runtime-core",
@@ -2140,6 +2141,12 @@ dependencies = [
 [[package]]
 name = "observability"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
 
 [[package]]
 name = "once_cell"
