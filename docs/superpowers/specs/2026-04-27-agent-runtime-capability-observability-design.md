@@ -14,10 +14,11 @@ Agent Runtime Event Bus
 + CapabilityCatalog 能力目录
 + CapabilityRuntime 宿主执行层
 + Model Gateway / Relay
++ Credit / Cost / Provider Account Ledger
 + provider stdio v2 NDJSON streaming
 ```
 
-目标不是只记录模型输出，而是让用户能看清一次 agent 运行中发生了什么：调用了哪个模型、使用了哪些 tool/MCP/skill/workflow/data source/approval、是否触发压缩、是否调用子 agent、用了多少 token、缓存命中多少、失败在哪里、哪些步骤由外部 agent 自己执行而宿主只能旁路审计。
+目标不是只记录模型输出，而是让用户能看清一次 agent 运行中发生了什么：调用了哪个模型、使用了哪些 tool/MCP/skill/workflow/data source/approval、是否触发压缩、是否调用子 agent、用了多少 token、缓存命中多少、消耗了多少额度、实际走了哪个上游账号、失败在哪里、哪些步骤由外部 agent 自己执行而宿主只能旁路审计。
 
 ## 2. 设计边界
 
@@ -27,6 +28,7 @@ Agent Runtime Event Bus
 - Provider 插件只产出模型事件和能力调用意图，不直接执行工具、不直连 MCP、不加载 skill。
 - SSE、blocking API、调试台、审计日志从同一条 runtime event stream 派生。
 - 记录模型 token 使用、cache hit、reasoning token、费用归因、上游转发链路和失败原因。
+- 记录 workspace/user/app/agent 的额度变动、成本换算、上游账号池选择、账号限额和扣费/冻结/退款链路。
 - 记录同一会话内的上下文投影、自动压缩、压缩摘要、压缩前后 token 和压缩触发原因。
 - 记录子 agent / 本地 agent / 系统内部 agent 的父子关系、能力授权、事件摘要和 usage 汇总。
 - 支持 1flowbase 作为本地 agent 的 OpenAI-compatible 模型供应商入口，也支持 1flowbase 自己托管编排 agent。
@@ -105,7 +107,9 @@ Codex、OpenClaw、AionRS、Hermes Agent 等本地 agent 可以把 1flowbase 当
 - retry/fallback/timeout；
 - 上游 request id；
 - 原始 usage 与归一化 usage；
-- 价格版本和费用快照。
+- 价格版本和费用快照；
+- 额度扣减交易；
+- 上游账号池选择、限额、健康状态和失败切换原因。
 
 ## 5. 分层架构
 
@@ -129,7 +133,7 @@ Runtime Event Bus + Span Tree
   live stream, durable batch writer, SSE/blocking fold, debug read model
 
 Observability & Billing Ledger
-  usage ledger, cost attribution, cache hit, failures, external opacity labels
+  usage ledger, cost ledger, credit ledger, account pool ledger, cache hit, failures, external opacity labels
 ```
 
 职责分界：
@@ -293,6 +297,87 @@ ContextProjection
 
 `provider_continuation_metadata` 用来保存 Anthropic/Gemini 等 provider-specific thinking signatures、cache control、response id 等继续生成所需信息，不能只靠 messages 重建。
 
+### 6.7 CostLedger
+
+`UsageLedger` 记录事实，`CostLedger` 负责把事实按价格快照换算成成本。成本账本不直接代表用户余额扣减，因为同一次调用可能存在赠送额度、套餐抵扣、内部补贴、失败成本和上游中转站结算差异。
+
+```text
+CostLedger
+  id
+  run_id
+  span_id
+  usage_ledger_id
+  workspace_id
+  provider_instance_id
+  provider_account_id
+  gateway_route_id
+  model_id
+  upstream_model_id
+  price_snapshot
+  raw_cost
+  normalized_cost
+  settlement_currency
+  cost_source: official_api | relay | internal_agent | external_agent | estimated
+  created_at
+```
+
+### 6.8 CreditLedger
+
+产品层可以把额度展示成积分、余额、点数或套餐用量，但底层必须是可审计的额度账本。额度扣减以 `normalized_usage + price_snapshot` 形成的成本为依据，再按 workspace/user/app/agent 的计费策略生成交易。
+
+```text
+CreditLedger
+  id
+  workspace_id
+  user_id
+  app_id
+  agent_id
+  run_id
+  span_id
+  cost_ledger_id
+  transaction_type: reserve | debit | refund | grant | adjustment | expire
+  amount
+  balance_after
+  credit_unit
+  reason
+  idempotency_key
+  status: pending | posted | reversed | failed
+  created_at
+```
+
+规则：
+
+- 运行前可以按策略冻结额度，运行成功后按最终 usage 结算，多冻结部分退款。
+- provider 或 relay 失败且没有有效模型输出时，默认不扣用户额度，但必须记录上游失败成本和失败原因。
+- 额度账本必须支持幂等写入，避免 SSE 重连、任务重试或 durable writer 重放导致重复扣费。
+- 内部 agent、agent-as-model 和外部 agent telemetry 都必须能归因到 workspace，不能只挂在 provider instance 上。
+
+### 6.9 ProviderAccountPool
+
+账号平衡不应混进模型供应商实例的临时配置。一个 provider 或 relay 可以有多个上游账号/API key，路由层需要按健康状态、限额、优先级和模型支持情况选择账号，并把选择结果写入 span 和账本。
+
+```text
+ProviderAccountPool
+  id
+  workspace_id
+  provider_code
+  upstream_kind: official_api | relay | internal
+  accounts[]:
+    provider_account_id
+    display_name
+    supported_models
+    priority
+    weight
+    daily_limit
+    monthly_limit
+    concurrency_limit
+    health_status: healthy | degraded | disabled | exhausted
+    last_error
+    usage_window_snapshot
+```
+
+选择结果需要写入 `gateway_route_resolved` 或 `provider_request_started` 的 metadata，至少包括 `provider_account_id`、选择原因、限额快照、健康状态和 fallback 链路。
+
 ## 7. 事件分类
 
 ### 7.1 基础运行事件
@@ -412,6 +497,18 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 - `external_agent_telemetry_received`
 - `external_agent_telemetry_rejected`
 
+### 7.10 Billing / credit / account 事件
+
+- `credit_reserve_requested`
+- `credit_reserved`
+- `credit_reserve_failed`
+- `credit_debited`
+- `credit_refunded`
+- `cost_recorded`
+- `provider_account_selected`
+- `provider_account_exhausted`
+- `provider_account_health_changed`
+
 ## 8. 托管 agent 运行流
 
 ```text
@@ -445,11 +542,14 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 
 ```text
 1. gateway_request_received
-2. gateway_route_resolved
-3. gateway_forward span started
-4. 上游 provider/relay streaming
-5. usage_snapshot / gateway_usage_normalized
-6. gateway_forward_finished
+2. credit_reserve_requested / credit_reserved
+3. gateway_route_resolved
+4. provider_account_selected
+5. gateway_forward span started
+6. 上游 provider/relay streaming
+7. usage_snapshot / gateway_usage_normalized
+8. cost_recorded / credit_debited 或 credit_refunded
+9. gateway_forward_finished
 ```
 
 规则：
@@ -458,6 +558,7 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 - 原始 request/response 以可配置脱敏策略记录，便于审计和复盘。
 - 如果请求中包含 tool definitions，可以记录“外部 agent 声明了哪些 tool”，但不能把后续本地 tool 执行当成宿主已观测事实。
 - 如果外部 agent 自己调用 MCP 或本地工具，1flowbase 在没有 telemetry/callback 的情况下只能标记为 `external_opaque`。
+- raw gateway 模式仍然需要执行额度预检查和账号池选择，但不能因为余额或账号池存在就宣称看见了外部 agent 内部工具调用。
 
 ### 9.2 1flowbase Agent-as-Model Mode
 
@@ -623,6 +724,8 @@ SubagentInvocation
 - Skills：skill index、loaded snapshot、按需加载原因、skill action。
 - MCP：server 连接、catalog snapshot、tool call、resource/prompt 使用。
 - Usage Ledger：输入 token、cached input、输出 token、reasoning token、cache read/write、费用。
+- Billing Ledger：成本快照、额度冻结、扣费、退款、余额和幂等交易。
+- Provider Account Pool：本次 route 选择的上游账号、选择原因、限额、健康状态和 fallback。
 - Context Projection：本轮实际发给模型的上下文、压缩摘要、压缩前后 token。
 - Gateway Trace：外部请求、route、上游 relay、retry/fallback、normalized usage。
 - External Opacity：哪些步骤属于外部 agent 自己执行、宿主没有完整观测。
@@ -637,6 +740,9 @@ SubagentInvocation
 runtime_spans
 runtime_events
 runtime_usage_ledger
+runtime_cost_ledger
+runtime_credit_ledger
+runtime_provider_account_ledger
 runtime_context_projections
 runtime_artifacts
 capability_catalog_snapshots
@@ -764,7 +870,8 @@ gateway_route_snapshots
 4. 增加 host-owned capability loop：`tool_call_commit -> authorize -> execute -> append result -> next llm_turn`。
 5. 增加 skill index/load/snapshot，再增加 MCP client manager，把 MCP tools 投影进同一个 capability registry。
 6. 增加 Model Gateway / Relay：OpenAI-compatible API、route、upstream relay、usage normalization、gateway trace。
-7. 增加 external agent telemetry bridge、subagent link 和 debug UI read model。
+7. 增加 Billing / Credit / Provider Account Pool：额度预检查、成本换算、账号池选择、扣费/退款和账号健康事件。
+8. 增加 external agent telemetry bridge、subagent link 和 debug UI read model。
 
 ## 20. 风险和约束
 
@@ -776,14 +883,19 @@ gateway_route_snapshots
 - provider-specific continuation metadata 必须跟随 `llm_turn` 或 `ContextProjection` 保存。
 - usage 要区分 raw usage 和 normalized usage，避免中转站、官方 API、内部 agent 口径混乱。
 - pricing 需要记录 price snapshot，不能只依赖当前价格表回算历史成本。
+- 额度账本必须幂等，不能因为重试、流式结束事件重复或 durable writer 重放造成重复扣费。
+- 账号池选择必须记录原因和限额快照，否则后续无法解释为什么某次调用走了高价 relay 或失败 fallback。
+- 不能用单纯 token 余额表达所有模型成本；reasoning token、cache、relay 价格、内部 agent 成本都需要统一 credit 单位换算。
 
 ## 21. 验收标准
 
 完成后，一次 agent run 至少能回答：
 
-- 这次 run 调用了哪个模型、哪个 provider、哪个 upstream relay？
+- 这次 run 调用了哪个模型、哪个 provider、哪个 upstream relay、哪个上游账号？
 - 每个 LLM turn 的输入 token、cached input、输出 token、reasoning token 是多少？
 - 是否命中 prompt cache 或上游 cache？
+- 这次 run 冻结了多少额度、实际扣了多少、是否退款、余额变化是什么？
+- 这次 route 为什么选择该 provider account，是否发生账号耗尽、限流、降级或 fallback？
 - 模型请求了哪些 tool/MCP/skill/workflow/data source/approval？
 - 哪些请求被授权、拒绝、失败、取消或等待审批？
 - skill index 是什么，实际加载了哪些 skill，版本和 hash 是什么？
