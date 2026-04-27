@@ -1,9 +1,9 @@
 use control_plane::ports::{
-    AppendModelFailoverAttemptLedgerInput, AppendRunEventInput, AppendRuntimeEventInput,
-    AppendRuntimeSpanInput, AppendUsageLedgerInput, ApplicationRepository, CreateApplicationInput,
-    CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
-    FlowRepository, LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
-    UpdateNodeRunInput, UpsertCompiledPlanInput,
+    AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput, AppendRunEventInput,
+    AppendRuntimeEventInput, AppendRuntimeSpanInput, AppendUsageLedgerInput, ApplicationRepository,
+    CreateApplicationInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
+    CreateNodeRunInput, FlowRepository, LinkUsageLedgerToModelFailoverAttemptInput,
+    OrchestrationRuntimeRepository, UpdateNodeRunInput, UpsertCompiledPlanInput,
 };
 use domain::{ApplicationType, CallbackTaskStatus, FlowRunMode, FlowRunStatus, NodeRunStatus};
 use serde_json::json;
@@ -645,4 +645,95 @@ async fn orchestration_runtime_repository_persists_model_failover_attempt_ledger
     assert_eq!(attempts[0].id, attempt.id);
     assert_eq!(attempts[0].usage_ledger_id, Some(usage.id));
     assert_eq!(usage_records[0].failover_attempt_id, Some(attempt.id));
+}
+
+#[tokio::test]
+async fn credit_ledger_idempotency_prevents_double_debit() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let workspace_id = seed_workspace(&store, "Billing").await;
+
+    let first = <PgControlPlaneStore as OrchestrationRuntimeRepository>::append_credit_ledger(
+        &store,
+        &AppendCreditLedgerInput {
+            workspace_id,
+            user_id: None,
+            app_id: None,
+            agent_id: None,
+            flow_run_id: None,
+            span_id: None,
+            cost_ledger_id: None,
+            transaction_type: "debit".into(),
+            amount: "3.50".into(),
+            balance_after: Some("96.50".into()),
+            credit_unit: "credit".into(),
+            reason: "gateway_settle".into(),
+            idempotency_key: "idem-1".into(),
+            status: "posted".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let replay = <PgControlPlaneStore as OrchestrationRuntimeRepository>::append_credit_ledger(
+        &store,
+        &AppendCreditLedgerInput {
+            workspace_id,
+            idempotency_key: "idem-1".into(),
+            amount: "3.50".into(),
+            transaction_type: "debit".into(),
+            credit_unit: "credit".into(),
+            reason: "gateway_settle".into(),
+            status: "posted".into(),
+            user_id: None,
+            app_id: None,
+            agent_id: None,
+            flow_run_id: None,
+            span_id: None,
+            cost_ledger_id: None,
+            balance_after: Some("96.50".into()),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(first.id, replay.id);
+}
+
+#[tokio::test]
+async fn audit_hash_chain_links_runtime_facts() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let run = seed_flow_run(
+        &store,
+        &seeded,
+        &compiled,
+        datetime!(2026-04-27 12:00:00 UTC),
+    )
+    .await;
+
+    let first = store
+        .append_audit_hash(
+            run.id,
+            "runtime_events",
+            Uuid::now_v7(),
+            serde_json::json!({"a":1}),
+        )
+        .await
+        .unwrap();
+    let second = store
+        .append_audit_hash(
+            run.id,
+            "runtime_events",
+            Uuid::now_v7(),
+            serde_json::json!({"a":2}),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(second.prev_hash.as_deref(), Some(first.row_hash.as_str()));
 }

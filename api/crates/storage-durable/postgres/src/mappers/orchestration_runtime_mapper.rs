@@ -191,6 +191,76 @@ pub struct StoredUsageLedgerRow {
 }
 
 #[derive(Debug, Clone)]
+pub struct StoredCostLedgerRow {
+    pub id: Uuid,
+    pub flow_run_id: Option<Uuid>,
+    pub span_id: Option<Uuid>,
+    pub usage_ledger_id: Option<Uuid>,
+    pub workspace_id: Uuid,
+    pub provider_instance_id: Option<Uuid>,
+    pub provider_account_id: Option<Uuid>,
+    pub gateway_route_id: Option<Uuid>,
+    pub model_id: Option<String>,
+    pub upstream_model_id: Option<String>,
+    pub price_snapshot: serde_json::Value,
+    pub raw_cost: Option<String>,
+    pub normalized_cost: Option<String>,
+    pub settlement_currency: Option<String>,
+    pub cost_source: String,
+    pub cost_status: String,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredCreditLedgerRow {
+    pub id: Uuid,
+    pub workspace_id: Uuid,
+    pub user_id: Option<Uuid>,
+    pub app_id: Option<Uuid>,
+    pub agent_id: Option<Uuid>,
+    pub flow_run_id: Option<Uuid>,
+    pub span_id: Option<Uuid>,
+    pub cost_ledger_id: Option<Uuid>,
+    pub transaction_type: String,
+    pub amount: String,
+    pub balance_after: Option<String>,
+    pub credit_unit: String,
+    pub reason: String,
+    pub idempotency_key: String,
+    pub status: String,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredBillingSessionRow {
+    pub id: Uuid,
+    pub workspace_id: Uuid,
+    pub flow_run_id: Option<Uuid>,
+    pub client_request_id: Option<String>,
+    pub idempotency_key: String,
+    pub route_id: Option<Uuid>,
+    pub provider_account_id: Option<Uuid>,
+    pub status: String,
+    pub reserved_credit_ledger_id: Option<Uuid>,
+    pub settled_credit_ledger_id: Option<Uuid>,
+    pub refund_credit_ledger_id: Option<Uuid>,
+    pub metadata: serde_json::Value,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredAuditHashRow {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub fact_table: String,
+    pub fact_id: Uuid,
+    pub prev_hash: Option<String>,
+    pub row_hash: String,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
 pub struct StoredModelFailoverAttemptLedgerRow {
     pub id: Uuid,
     pub flow_run_id: Uuid,
@@ -454,6 +524,82 @@ impl PgOrchestrationRuntimeMapper {
         })
     }
 
+    pub fn to_cost_ledger_record(row: StoredCostLedgerRow) -> domain::CostLedgerRecord {
+        domain::CostLedgerRecord {
+            id: row.id,
+            flow_run_id: row.flow_run_id,
+            span_id: row.span_id,
+            usage_ledger_id: row.usage_ledger_id,
+            workspace_id: row.workspace_id,
+            provider_instance_id: row.provider_instance_id,
+            provider_account_id: row.provider_account_id,
+            gateway_route_id: row.gateway_route_id,
+            model_id: row.model_id,
+            upstream_model_id: row.upstream_model_id,
+            price_snapshot: row.price_snapshot,
+            raw_cost: row.raw_cost,
+            normalized_cost: row.normalized_cost,
+            settlement_currency: row.settlement_currency,
+            cost_source: row.cost_source,
+            cost_status: row.cost_status,
+            created_at: row.created_at,
+        }
+    }
+
+    pub fn to_credit_ledger_record(row: StoredCreditLedgerRow) -> domain::CreditLedgerRecord {
+        domain::CreditLedgerRecord {
+            id: row.id,
+            workspace_id: row.workspace_id,
+            user_id: row.user_id,
+            app_id: row.app_id,
+            agent_id: row.agent_id,
+            flow_run_id: row.flow_run_id,
+            span_id: row.span_id,
+            cost_ledger_id: row.cost_ledger_id,
+            transaction_type: row.transaction_type,
+            amount: row.amount,
+            balance_after: row.balance_after,
+            credit_unit: row.credit_unit,
+            reason: row.reason,
+            idempotency_key: row.idempotency_key,
+            status: row.status,
+            created_at: row.created_at,
+        }
+    }
+
+    pub fn to_billing_session_record(
+        row: StoredBillingSessionRow,
+    ) -> Result<domain::BillingSessionRecord> {
+        Ok(domain::BillingSessionRecord {
+            id: row.id,
+            workspace_id: row.workspace_id,
+            flow_run_id: row.flow_run_id,
+            client_request_id: row.client_request_id,
+            idempotency_key: row.idempotency_key,
+            route_id: row.route_id,
+            provider_account_id: row.provider_account_id,
+            status: parse_billing_session_status(&row.status)?,
+            reserved_credit_ledger_id: row.reserved_credit_ledger_id,
+            settled_credit_ledger_id: row.settled_credit_ledger_id,
+            refund_credit_ledger_id: row.refund_credit_ledger_id,
+            metadata: row.metadata,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+    }
+
+    pub fn to_audit_hash_record(row: StoredAuditHashRow) -> domain::AuditHashRecord {
+        domain::AuditHashRecord {
+            id: row.id,
+            flow_run_id: row.flow_run_id,
+            fact_table: row.fact_table,
+            fact_id: row.fact_id,
+            prev_hash: row.prev_hash,
+            row_hash: row.row_hash,
+            created_at: row.created_at,
+        }
+    }
+
     pub fn to_model_failover_attempt_ledger_record(
         row: StoredModelFailoverAttemptLedgerRow,
     ) -> domain::ModelFailoverAttemptLedgerRecord {
@@ -688,5 +834,15 @@ pub fn parse_usage_ledger_status(value: &str) -> Result<domain::UsageLedgerStatu
         "recorded" => Ok(domain::UsageLedgerStatus::Recorded),
         "unavailable_error" => Ok(domain::UsageLedgerStatus::UnavailableError),
         _ => Err(anyhow!("unknown usage ledger status: {value}")),
+    }
+}
+
+pub fn parse_billing_session_status(value: &str) -> Result<domain::BillingSessionStatus> {
+    match value {
+        "reserved" => Ok(domain::BillingSessionStatus::Reserved),
+        "settled" => Ok(domain::BillingSessionStatus::Settled),
+        "refunded" => Ok(domain::BillingSessionStatus::Refunded),
+        "failed" => Ok(domain::BillingSessionStatus::Failed),
+        _ => Err(anyhow!("unknown billing session status: {value}")),
     }
 }

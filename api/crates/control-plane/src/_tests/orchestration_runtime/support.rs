@@ -10,12 +10,13 @@ use crate::capability_plugin_runtime::{
     ValidateCapabilityConfigInput,
 };
 use crate::ports::{
-    AppendCapabilityInvocationInput, AppendContextProjectionInput,
-    AppendModelFailoverAttemptLedgerInput, AppendRunEventInput, AppendRuntimeEventInput,
-    AppendRuntimeItemInput, AppendRuntimeSpanInput, AppendUsageLedgerInput, CompleteFlowRunInput,
-    CompleteNodeRunInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
-    CreateNodeRunInput, LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
-    UpdateFlowRunInput, UpdateNodeRunInput, UpsertCompiledPlanInput,
+    AppendBillingSessionInput, AppendCapabilityInvocationInput, AppendContextProjectionInput,
+    AppendCostLedgerInput, AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput,
+    AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeItemInput, AppendRuntimeSpanInput,
+    AppendUsageLedgerInput, CompleteFlowRunInput, CompleteNodeRunInput, CreateCallbackTaskInput,
+    CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
+    LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
+    UpdateNodeRunInput, UpsertCompiledPlanInput,
 };
 use plugin_framework::provider_contract::ProviderStreamEvent;
 

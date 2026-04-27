@@ -10,9 +10,10 @@ use crate::{
     errors::ControlPlaneError,
     flow::FlowService,
     ports::{
-        AppendCapabilityInvocationInput, AppendContextProjectionInput,
-        AppendModelFailoverAttemptLedgerInput, AppendRunEventInput, AppendUsageLedgerInput,
-        CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
+        AppendBillingSessionInput, AppendCapabilityInvocationInput, AppendContextProjectionInput,
+        AppendCostLedgerInput, AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput,
+        AppendRunEventInput, AppendUsageLedgerInput, CreateCallbackTaskInput,
+        CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
         LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
         UpdateFlowRunInput, UpdateNodeRunInput,
     },
@@ -106,12 +107,188 @@ where
             event_type: "flow_run_started".to_string(),
             payload: json!({
                 "run_mode": domain::FlowRunMode::DebugFlowRun.as_str(),
-                "input_payload": command.input_payload,
+                "input_payload": command.input_payload.clone(),
             }),
         })
         .await?;
 
+    record_gateway_billing_audit(
+        &service.repository,
+        &flow_run,
+        command.actor_user_id,
+        command.application_id,
+        application.workspace_id,
+        &compiled_plan,
+    )
+    .await?;
+
     load_run_detail(&service.repository, command.application_id, flow_run.id).await
+}
+
+async fn record_gateway_billing_audit<R>(
+    repository: &R,
+    flow_run: &domain::FlowRunRecord,
+    actor_user_id: Uuid,
+    application_id: Uuid,
+    workspace_id: Uuid,
+    compiled_plan: &orchestration_runtime::compiled_plan::CompiledPlan,
+) -> Result<()>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    let route_id = Uuid::now_v7();
+    let llm_runtime = compiled_plan
+        .nodes
+        .values()
+        .find_map(|node| node.llm_runtime.as_ref());
+    let provider_instance_id =
+        llm_runtime.and_then(|runtime| Uuid::parse_str(&runtime.provider_instance_id).ok());
+    let routing_mode = llm_runtime
+        .and_then(|runtime| runtime.routing.as_ref())
+        .map(|routing| match routing.routing_mode {
+            orchestration_runtime::compiled_plan::LlmRoutingMode::FixedModel => "fixed_model",
+            orchestration_runtime::compiled_plan::LlmRoutingMode::FailoverQueue => "failover_queue",
+        })
+        .unwrap_or("debug_run");
+    let logical_model_id = llm_runtime
+        .map(|runtime| runtime.model.as_str())
+        .unwrap_or("debug_run");
+    let upstream_model_id = llm_runtime.map(|runtime| runtime.model.clone());
+    let route_trace = json!({
+        "logical_model_id": logical_model_id,
+        "route_id": route_id,
+        "provider_instance_id": provider_instance_id,
+        "provider_account_id": null,
+        "upstream_model_id": upstream_model_id.clone(),
+        "routing_mode": routing_mode,
+        "trust_level": domain::RuntimeTrustLevel::HostFact.as_str(),
+    });
+    let idempotency_key = format!("gateway:{}:reserve", flow_run.id);
+    let cost = repository
+        .append_cost_ledger(&AppendCostLedgerInput {
+            flow_run_id: Some(flow_run.id),
+            span_id: None,
+            usage_ledger_id: None,
+            workspace_id,
+            provider_instance_id,
+            provider_account_id: None,
+            gateway_route_id: Some(route_id),
+            model_id: Some(logical_model_id.to_string()),
+            upstream_model_id,
+            price_snapshot: json!({
+                "route_trace": route_trace.clone(),
+                "source": "gateway_debug_run_start"
+            }),
+            raw_cost: Some("0".to_string()),
+            normalized_cost: Some("0".to_string()),
+            settlement_currency: Some("credit".to_string()),
+            cost_source: "gateway_reservation".to_string(),
+            cost_status: "pending_usage".to_string(),
+        })
+        .await?;
+    let credit = repository
+        .append_credit_ledger(&AppendCreditLedgerInput {
+            workspace_id,
+            user_id: Some(actor_user_id),
+            app_id: Some(application_id),
+            agent_id: None,
+            flow_run_id: Some(flow_run.id),
+            span_id: None,
+            cost_ledger_id: Some(cost.id),
+            transaction_type: "reserve".to_string(),
+            amount: "0".to_string(),
+            balance_after: None,
+            credit_unit: "credit".to_string(),
+            reason: "gateway_billing_session_reserved".to_string(),
+            idempotency_key: idempotency_key.clone(),
+            status: "posted".to_string(),
+        })
+        .await?;
+    let billing_session = repository
+        .append_billing_session(&AppendBillingSessionInput {
+            workspace_id,
+            flow_run_id: Some(flow_run.id),
+            client_request_id: None,
+            idempotency_key,
+            route_id: Some(route_id),
+            provider_account_id: None,
+            status: domain::BillingSessionStatus::Reserved,
+            reserved_credit_ledger_id: Some(credit.id),
+            settled_credit_ledger_id: None,
+            refund_credit_ledger_id: None,
+            metadata: json!({
+                "route_trace": route_trace.clone(),
+                "fail_safe": "continue"
+            }),
+        })
+        .await?;
+    let cost_hash = repository
+        .append_audit_hash(
+            flow_run.id,
+            "runtime_cost_ledger",
+            cost.id,
+            json!({
+                "cost_source": cost.cost_source.clone(),
+                "cost_status": cost.cost_status.clone(),
+                "route_trace": route_trace.clone(),
+            }),
+        )
+        .await?;
+    let credit_hash = repository
+        .append_audit_hash(
+            flow_run.id,
+            "runtime_credit_ledger",
+            credit.id,
+            json!({
+                "transaction_type": credit.transaction_type.clone(),
+                "amount": credit.amount.clone(),
+                "reason": credit.reason.clone(),
+                "idempotency_key": credit.idempotency_key.clone(),
+            }),
+        )
+        .await?;
+    let billing_hash = repository
+        .append_audit_hash(
+            flow_run.id,
+            "billing_sessions",
+            billing_session.id,
+            json!({
+                "status": billing_session.status.as_str(),
+                "idempotency_key": billing_session.idempotency_key.clone(),
+                "route_trace": route_trace.clone(),
+            }),
+        )
+        .await?;
+
+    repository
+        .append_run_event(&AppendRunEventInput {
+            flow_run_id: flow_run.id,
+            node_run_id: None,
+            event_type: "gateway_billing_session_reserved".to_string(),
+            payload: json!({
+                "billing_session": {
+                    "id": billing_session.id,
+                    "status": billing_session.status.as_str(),
+                    "idempotency_key": billing_session.idempotency_key,
+                },
+                "cost_ledger": {
+                    "id": cost.id,
+                    "cost_status": cost.cost_status,
+                },
+                "credit_ledger": {
+                    "id": credit.id,
+                    "transaction_type": credit.transaction_type,
+                },
+                "audit_hashes": [
+                    cost_hash.id,
+                    credit_hash.id,
+                    billing_hash.id
+                ],
+                "route_trace": route_trace,
+            }),
+        })
+        .await?;
+    Ok(())
 }
 
 pub(super) async fn continue_flow_debug_run<R, H>(

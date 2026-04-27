@@ -38,7 +38,7 @@
 - Create: `api/crates/publish-gateway/src/_tests/mod.rs`
 - Create: `api/crates/publish-gateway/src/_tests/billing_session_tests.rs`
 
-- [ ] **Step 1: Write failing state tests**
+- [x] **Step 1: Write failing state tests**
 
 Create `api/crates/publish-gateway/src/_tests/billing_session_tests.rs`:
 
@@ -77,7 +77,7 @@ Create `api/crates/publish-gateway/src/_tests/mod.rs`:
 mod billing_session_tests;
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run:
 
@@ -87,7 +87,7 @@ cargo test -p publish-gateway billing_session
 
 Expected: FAIL because gateway state types do not exist.
 
-- [ ] **Step 3: Add dependencies**
+- [x] **Step 3: Add dependencies**
 
 Modify `api/crates/publish-gateway/Cargo.toml`:
 
@@ -99,7 +99,7 @@ serde_json.workspace = true
 uuid.workspace = true
 ```
 
-- [ ] **Step 4: Implement state machines**
+- [x] **Step 4: Implement state machines**
 
 Create `api/crates/publish-gateway/src/billing_session.rs`:
 
@@ -195,7 +195,7 @@ pub use idempotency::IdempotencyStatus;
 mod _tests;
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -205,7 +205,7 @@ cargo test -p publish-gateway billing_session
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/crates/publish-gateway
@@ -221,7 +221,7 @@ git commit -m "feat: add gateway billing session state"
 - Modify: `api/crates/storage-durable/postgres/src/orchestration_runtime_repository.rs`
 - Modify: `api/crates/storage-durable/postgres/src/_tests/orchestration_runtime_repository_tests.rs`
 
-- [ ] **Step 1: Write failing ledger repository test**
+- [x] **Step 1: Write failing ledger repository test**
 
 Add:
 
@@ -277,7 +277,7 @@ async fn credit_ledger_idempotency_prevents_double_debit() {
 }
 ```
 
-- [ ] **Step 2: Add migration**
+- [x] **Step 2: Add migration**
 
 Create `api/crates/storage-durable/postgres/migrations/20260427200000_create_gateway_billing_audit_tables.sql`:
 
@@ -351,7 +351,7 @@ create table provider_account_pools (
 );
 ```
 
-- [ ] **Step 3: Implement idempotent credit append**
+- [x] **Step 3: Implement idempotent credit append**
 
 In repository, use:
 
@@ -365,7 +365,7 @@ returning ...
 
 This returns the original row and does not change amount/status.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -376,7 +376,7 @@ cargo test -p storage-postgres migration_smoke
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/crates/domain/src/runtime_observability.rs api/crates/storage-durable/postgres/migrations/20260427200000_create_gateway_billing_audit_tables.sql api/crates/control-plane/src/ports/runtime.rs api/crates/storage-durable/postgres/src/orchestration_runtime_repository.rs api/crates/storage-durable/postgres/src/_tests/orchestration_runtime_repository_tests.rs
@@ -392,7 +392,7 @@ git commit -m "feat: add gateway billing ledgers"
 - Modify: `api/crates/publish-gateway/src/lib.rs`
 - Create: `api/crates/publish-gateway/src/_tests/billing_session_tests.rs`
 
-- [ ] **Step 1: Write tests**
+- [x] **Step 1: Write tests**
 
 Append:
 
@@ -418,7 +418,7 @@ fn billing_unknown_fails_closed() {
 }
 ```
 
-- [ ] **Step 2: Implement route trace**
+- [x] **Step 2: Implement route trace**
 
 Create `api/crates/publish-gateway/src/route_trace.rs`:
 
@@ -435,7 +435,7 @@ pub struct GatewayRouteTrace {
 }
 ```
 
-- [ ] **Step 3: Implement account selection**
+- [x] **Step 3: Implement account selection**
 
 Create `api/crates/publish-gateway/src/account_pool.rs`:
 
@@ -456,7 +456,7 @@ pub fn select_provider_account(mut candidates: Vec<ProviderAccountCandidate>) ->
 }
 ```
 
-- [ ] **Step 4: Implement fail-safe**
+- [x] **Step 4: Implement fail-safe**
 
 Create `api/crates/publish-gateway/src/fail_safe.rs`:
 
@@ -479,7 +479,7 @@ pub fn decide_fail_safe(condition: &str) -> FailSafeDecision {
 }
 ```
 
-- [ ] **Step 5: Export and run tests**
+- [x] **Step 5: Export and run tests**
 
 Modify `api/crates/publish-gateway/src/lib.rs`:
 
@@ -502,7 +502,7 @@ cargo test -p publish-gateway billing_unknown_fails_closed
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/crates/publish-gateway
@@ -516,7 +516,7 @@ git commit -m "feat: add gateway route and fail-safe primitives"
 - Modify: `api/crates/storage-durable/postgres/src/orchestration_runtime_repository.rs`
 - Modify: `api/crates/storage-durable/postgres/src/_tests/orchestration_runtime_repository_tests.rs`
 
-- [ ] **Step 1: Write failing audit hash test**
+- [x] **Step 1: Write failing audit hash test**
 
 Add:
 
@@ -537,7 +537,7 @@ async fn audit_hash_chain_links_runtime_facts() {
 }
 ```
 
-- [ ] **Step 2: Implement hash helper**
+- [x] **Step 2: Implement hash helper**
 
 Add to `api/crates/control-plane/src/runtime_observability.rs`:
 
@@ -555,11 +555,11 @@ pub fn audit_row_hash(prev_hash: Option<&str>, fact_table: &str, fact_id: uuid::
 }
 ```
 
-- [ ] **Step 3: Implement repository append**
+- [x] **Step 3: Implement repository append**
 
 Add repository method that fetches the latest `row_hash` for the run, computes the next hash, inserts `runtime_audit_hashes`, and returns the row.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -569,7 +569,7 @@ cargo test -p storage-postgres audit_hash_chain_links_runtime_facts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/crates/control-plane/src/runtime_observability.rs api/crates/storage-durable/postgres/src/orchestration_runtime_repository.rs api/crates/storage-durable/postgres/src/_tests/orchestration_runtime_repository_tests.rs

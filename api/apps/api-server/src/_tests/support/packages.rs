@@ -85,19 +85,21 @@ switch (request.method) {{
     break;
   case 'invoke': {{
     const query = request.input?.messages?.[0]?.content ?? "";
-    result = {{
-      events: [
-        {{ type: "text_delta", delta: "reply:" + query }},
-        {{ type: "usage_snapshot", usage: {{ input_tokens: 5, output_tokens: 7, total_tokens: 12 }} }},
-        {{ type: "finish", reason: "stop" }}
-      ],
-      result: {{
-        final_content: "reply:" + query,
-        usage: {{ input_tokens: 5, output_tokens: 7, total_tokens: 12 }},
-        finish_reason: "stop"
+    const lines = [
+      {{ type: "text_delta", delta: "reply:" + query }},
+      {{ type: "usage_snapshot", usage: {{ input_tokens: 5, output_tokens: 7, total_tokens: 12 }} }},
+      {{ type: "finish", reason: "stop" }},
+      {{
+        type: "result",
+        result: {{
+          final_content: "reply:" + query,
+          usage: {{ input_tokens: 5, output_tokens: 7, total_tokens: 12 }},
+          finish_reason: "stop"
+        }}
       }}
-    }};
-    break;
+    ];
+    process.stdout.write(lines.map((line) => JSON.stringify(line)).join("\n") + "\n");
+    process.exit(0);
   }}
   default:
     result = {{}};

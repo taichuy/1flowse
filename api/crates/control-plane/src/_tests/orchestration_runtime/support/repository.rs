@@ -14,6 +14,10 @@ struct InMemoryOrchestrationRuntimeState {
     runtime_items_by_flow_run_id: HashMap<Uuid, Vec<domain::RuntimeItemRecord>>,
     context_projections_by_flow_run_id: HashMap<Uuid, Vec<domain::ContextProjectionRecord>>,
     usage_ledger_by_flow_run_id: HashMap<Uuid, Vec<domain::UsageLedgerRecord>>,
+    cost_ledger_by_flow_run_id: HashMap<Uuid, Vec<domain::CostLedgerRecord>>,
+    credit_ledger_by_idempotency: HashMap<(Uuid, String), domain::CreditLedgerRecord>,
+    billing_sessions_by_idempotency: HashMap<(Uuid, String), domain::BillingSessionRecord>,
+    audit_hashes_by_flow_run_id: HashMap<Uuid, Vec<domain::AuditHashRecord>>,
     capability_invocations_by_flow_run_id: HashMap<Uuid, Vec<domain::CapabilityInvocationRecord>>,
     installations_by_id: HashMap<Uuid, domain::PluginInstallationRecord>,
     assignments_by_workspace: HashMap<Uuid, Vec<domain::PluginAssignmentRecord>>,
@@ -1694,6 +1698,133 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
             .entry(input.flow_run_id)
             .or_default()
             .push(record.clone());
+        Ok(record)
+    }
+
+    async fn append_cost_ledger(
+        &self,
+        input: &AppendCostLedgerInput,
+    ) -> Result<domain::CostLedgerRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let record = domain::CostLedgerRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: input.flow_run_id,
+            span_id: input.span_id,
+            usage_ledger_id: input.usage_ledger_id,
+            workspace_id: input.workspace_id,
+            provider_instance_id: input.provider_instance_id,
+            provider_account_id: input.provider_account_id,
+            gateway_route_id: input.gateway_route_id,
+            model_id: input.model_id.clone(),
+            upstream_model_id: input.upstream_model_id.clone(),
+            price_snapshot: input.price_snapshot.clone(),
+            raw_cost: input.raw_cost.clone(),
+            normalized_cost: input.normalized_cost.clone(),
+            settlement_currency: input.settlement_currency.clone(),
+            cost_source: input.cost_source.clone(),
+            cost_status: input.cost_status.clone(),
+            created_at: OffsetDateTime::now_utc(),
+        };
+        if let Some(flow_run_id) = record.flow_run_id {
+            inner
+                .cost_ledger_by_flow_run_id
+                .entry(flow_run_id)
+                .or_default()
+                .push(record.clone());
+        }
+        Ok(record)
+    }
+
+    async fn append_credit_ledger(
+        &self,
+        input: &AppendCreditLedgerInput,
+    ) -> Result<domain::CreditLedgerRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let key = (input.workspace_id, input.idempotency_key.clone());
+        if let Some(record) = inner.credit_ledger_by_idempotency.get(&key) {
+            return Ok(record.clone());
+        }
+        let record = domain::CreditLedgerRecord {
+            id: Uuid::now_v7(),
+            workspace_id: input.workspace_id,
+            user_id: input.user_id,
+            app_id: input.app_id,
+            agent_id: input.agent_id,
+            flow_run_id: input.flow_run_id,
+            span_id: input.span_id,
+            cost_ledger_id: input.cost_ledger_id,
+            transaction_type: input.transaction_type.clone(),
+            amount: input.amount.clone(),
+            balance_after: input.balance_after.clone(),
+            credit_unit: input.credit_unit.clone(),
+            reason: input.reason.clone(),
+            idempotency_key: input.idempotency_key.clone(),
+            status: input.status.clone(),
+            created_at: OffsetDateTime::now_utc(),
+        };
+        inner
+            .credit_ledger_by_idempotency
+            .insert(key, record.clone());
+        Ok(record)
+    }
+
+    async fn append_billing_session(
+        &self,
+        input: &AppendBillingSessionInput,
+    ) -> Result<domain::BillingSessionRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let key = (input.workspace_id, input.idempotency_key.clone());
+        if let Some(record) = inner.billing_sessions_by_idempotency.get(&key) {
+            return Ok(record.clone());
+        }
+        let now = OffsetDateTime::now_utc();
+        let record = domain::BillingSessionRecord {
+            id: Uuid::now_v7(),
+            workspace_id: input.workspace_id,
+            flow_run_id: input.flow_run_id,
+            client_request_id: input.client_request_id.clone(),
+            idempotency_key: input.idempotency_key.clone(),
+            route_id: input.route_id,
+            provider_account_id: input.provider_account_id,
+            status: input.status,
+            reserved_credit_ledger_id: input.reserved_credit_ledger_id,
+            settled_credit_ledger_id: input.settled_credit_ledger_id,
+            refund_credit_ledger_id: input.refund_credit_ledger_id,
+            metadata: input.metadata.clone(),
+            created_at: now,
+            updated_at: now,
+        };
+        inner
+            .billing_sessions_by_idempotency
+            .insert(key, record.clone());
+        Ok(record)
+    }
+
+    async fn append_audit_hash(
+        &self,
+        flow_run_id: Uuid,
+        fact_table: &str,
+        fact_id: Uuid,
+        payload: serde_json::Value,
+    ) -> Result<domain::AuditHashRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let hashes = inner
+            .audit_hashes_by_flow_run_id
+            .entry(flow_run_id)
+            .or_default();
+        let prev_hash = hashes.last().map(|record| record.row_hash.as_str());
+        let record = domain::AuditHashRecord {
+            id: Uuid::now_v7(),
+            flow_run_id,
+            fact_table: fact_table.to_string(),
+            fact_id,
+            prev_hash: prev_hash.map(ToString::to_string),
+            row_hash: crate::runtime_observability::audit_row_hash(
+                prev_hash, fact_table, fact_id, &payload,
+            ),
+            created_at: OffsetDateTime::now_utc(),
+        };
+        hashes.push(record.clone());
         Ok(record)
     }
 

@@ -63,7 +63,8 @@ pub use orchestration::{
 pub use plugin_worker::{PluginWorkerLeaseRecord, PluginWorkerStatus};
 pub use resource::runtime_model_resource_code;
 pub use runtime_observability::{
-    BillingSessionStatus, CapabilityInvocationRecord, ContextProjectionRecord,
+    AuditHashRecord, BillingSessionRecord, BillingSessionStatus, CapabilityInvocationRecord,
+    ContextProjectionRecord, CostLedgerRecord, CreditLedgerRecord,
     ModelFailoverAttemptLedgerRecord, RuntimeEventDurability, RuntimeEventLayer,
     RuntimeEventRecord, RuntimeEventSource, RuntimeEventVisibility, RuntimeItemKind,
     RuntimeItemRecord, RuntimeItemStatus, RuntimeSpanKind, RuntimeSpanRecord, RuntimeSpanStatus,

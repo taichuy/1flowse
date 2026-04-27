@@ -86,7 +86,7 @@ Why fourth:
 1. LLM 节点需要稳定的一线合同才能驱动固定模型或容灾队列。
 2. attempt ledger 是 usage/cost 归因和容灾复盘的前置。
 
-- [ ] **Step 5: Execute Gateway Billing Audit**
+- [x] **Step 5: Execute Gateway Billing Audit**
 
 Plan:
 

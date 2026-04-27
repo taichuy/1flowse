@@ -181,6 +181,58 @@ pub struct AppendUsageLedgerInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct AppendCostLedgerInput {
+    pub flow_run_id: Option<Uuid>,
+    pub span_id: Option<Uuid>,
+    pub usage_ledger_id: Option<Uuid>,
+    pub workspace_id: Uuid,
+    pub provider_instance_id: Option<Uuid>,
+    pub provider_account_id: Option<Uuid>,
+    pub gateway_route_id: Option<Uuid>,
+    pub model_id: Option<String>,
+    pub upstream_model_id: Option<String>,
+    pub price_snapshot: serde_json::Value,
+    pub raw_cost: Option<String>,
+    pub normalized_cost: Option<String>,
+    pub settlement_currency: Option<String>,
+    pub cost_source: String,
+    pub cost_status: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct AppendCreditLedgerInput {
+    pub workspace_id: Uuid,
+    pub user_id: Option<Uuid>,
+    pub app_id: Option<Uuid>,
+    pub agent_id: Option<Uuid>,
+    pub flow_run_id: Option<Uuid>,
+    pub span_id: Option<Uuid>,
+    pub cost_ledger_id: Option<Uuid>,
+    pub transaction_type: String,
+    pub amount: String,
+    pub balance_after: Option<String>,
+    pub credit_unit: String,
+    pub reason: String,
+    pub idempotency_key: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct AppendBillingSessionInput {
+    pub workspace_id: Uuid,
+    pub flow_run_id: Option<Uuid>,
+    pub client_request_id: Option<String>,
+    pub idempotency_key: String,
+    pub route_id: Option<Uuid>,
+    pub provider_account_id: Option<Uuid>,
+    pub status: domain::BillingSessionStatus,
+    pub reserved_credit_ledger_id: Option<Uuid>,
+    pub settled_credit_ledger_id: Option<Uuid>,
+    pub refund_credit_ledger_id: Option<Uuid>,
+    pub metadata: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
 pub struct AppendModelFailoverAttemptLedgerInput {
     pub flow_run_id: Uuid,
     pub node_run_id: Option<Uuid>,
@@ -336,6 +388,25 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         &self,
         input: &AppendUsageLedgerInput,
     ) -> anyhow::Result<domain::UsageLedgerRecord>;
+    async fn append_cost_ledger(
+        &self,
+        input: &AppendCostLedgerInput,
+    ) -> anyhow::Result<domain::CostLedgerRecord>;
+    async fn append_credit_ledger(
+        &self,
+        input: &AppendCreditLedgerInput,
+    ) -> anyhow::Result<domain::CreditLedgerRecord>;
+    async fn append_billing_session(
+        &self,
+        input: &AppendBillingSessionInput,
+    ) -> anyhow::Result<domain::BillingSessionRecord>;
+    async fn append_audit_hash(
+        &self,
+        flow_run_id: Uuid,
+        fact_table: &str,
+        fact_id: Uuid,
+        payload: serde_json::Value,
+    ) -> anyhow::Result<domain::AuditHashRecord>;
     async fn append_model_failover_attempt_ledger(
         &self,
         input: &AppendModelFailoverAttemptLedgerInput,

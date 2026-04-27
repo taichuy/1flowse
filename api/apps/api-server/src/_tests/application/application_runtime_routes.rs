@@ -1,7 +1,8 @@
 use std::{fs, path::Path};
 
 use crate::_tests::support::{
-    login_and_capture_cookie, test_app, write_provider_manifest_v2, write_provider_runtime_script,
+    login_and_capture_cookie, test_app, test_app_with_database_url, write_provider_manifest_v2,
+    write_provider_runtime_script,
 };
 use axum::{
     body::{to_bytes, Body},
@@ -9,6 +10,7 @@ use axum::{
 };
 use serde_json::{json, Value};
 use tower::ServiceExt;
+use uuid::Uuid;
 
 fn create_provider_fixture(root: &Path) {
     fs::create_dir_all(root.join("provider")).unwrap();
@@ -462,7 +464,9 @@ async fn wait_for_run_detail(
     run_id: &str,
     expected_statuses: &[&str],
 ) -> Value {
-    for _ in 0..60 {
+    let mut last_status = String::new();
+    let mut last_error = Value::Null;
+    for _ in 0..200 {
         let response = app
             .clone()
             .oneshot(
@@ -482,13 +486,17 @@ async fn wait_for_run_detail(
         let status = payload["data"]["flow_run"]["status"]
             .as_str()
             .unwrap_or_default();
+        last_status = status.to_string();
+        last_error = payload["data"]["flow_run"]["error_payload"].clone();
         if expected_statuses.contains(&status) {
             return payload["data"].clone();
         }
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
 
-    panic!("timed out waiting for run status: {expected_statuses:?}");
+    panic!(
+        "timed out waiting for run status: {expected_statuses:?}, last status: {last_status}, last error: {last_error}"
+    );
 }
 
 #[tokio::test]
@@ -713,6 +721,89 @@ async fn application_runtime_routes_start_debug_run_and_resume_waiting_human() {
 
     assert_eq!(resume.status(), StatusCode::OK);
 }
+
+#[tokio::test]
+async fn application_runtime_routes_start_debug_run_persists_gateway_billing_audit() {
+    let (app, database_url) = test_app_with_database_url().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+
+    let start = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-runs"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "input_payload": {
+                            "node-start": { "query": "请总结退款政策" }
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let start_status = start.status();
+    let start_body = to_bytes(start.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        start_status,
+        StatusCode::CREATED,
+        "{}",
+        String::from_utf8_lossy(&start_body)
+    );
+    let payload: Value = serde_json::from_slice(&start_body).unwrap();
+    let run_id = Uuid::parse_str(payload["data"]["flow_run"]["id"].as_str().unwrap()).unwrap();
+    let event_types = payload["data"]["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|event| event["event_type"].as_str())
+        .collect::<Vec<_>>();
+    assert!(event_types.contains(&"gateway_billing_session_reserved"));
+
+    let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
+    let (billing_count,): (i64,) =
+        sqlx::query_as("select count(*) from billing_sessions where flow_run_id = $1")
+            .bind(run_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let (cost_count,): (i64,) =
+        sqlx::query_as("select count(*) from runtime_cost_ledger where flow_run_id = $1")
+            .bind(run_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let (credit_count,): (i64,) =
+        sqlx::query_as("select count(*) from runtime_credit_ledger where flow_run_id = $1")
+            .bind(run_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let (audit_count,): (i64,) =
+        sqlx::query_as("select count(*) from runtime_audit_hashes where flow_run_id = $1")
+            .bind(run_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    assert_eq!(billing_count, 1);
+    assert_eq!(cost_count, 1);
+    assert_eq!(credit_count, 1);
+    assert_eq!(audit_count, 3);
+}
+
 #[tokio::test]
 async fn application_runtime_routes_cancel_waiting_flow_run() {
     let app = test_app().await;

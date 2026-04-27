@@ -1,11 +1,11 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use control_plane::ports::{
-    AppendCapabilityInvocationInput, AppendContextProjectionInput,
-    AppendModelFailoverAttemptLedgerInput, AppendRunEventInput, AppendRuntimeEventInput,
-    AppendRuntimeItemInput, AppendRuntimeSpanInput, AppendUsageLedgerInput,
-    CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput, CreateCallbackTaskInput,
-    CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
+    AppendBillingSessionInput, AppendCapabilityInvocationInput, AppendContextProjectionInput,
+    AppendCostLedgerInput, AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput,
+    AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeItemInput, AppendRuntimeSpanInput,
+    AppendUsageLedgerInput, CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput,
+    CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
     LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
     UpdateNodeRunInput, UpsertCompiledPlanInput,
 };
@@ -14,11 +14,12 @@ use uuid::Uuid;
 
 use crate::{
     mappers::orchestration_runtime_mapper::{
-        PgOrchestrationRuntimeMapper, StoredApplicationRunSummaryRow, StoredCallbackTaskRow,
-        StoredCapabilityInvocationRow, StoredCheckpointRow, StoredCompiledPlanRow,
-        StoredContextProjectionRow, StoredFlowRunRow, StoredModelFailoverAttemptLedgerRow,
-        StoredNodeRunRow, StoredRunEventRow, StoredRuntimeEventRow, StoredRuntimeItemRow,
-        StoredRuntimeSpanRow, StoredUsageLedgerRow,
+        PgOrchestrationRuntimeMapper, StoredApplicationRunSummaryRow, StoredAuditHashRow,
+        StoredBillingSessionRow, StoredCallbackTaskRow, StoredCapabilityInvocationRow,
+        StoredCheckpointRow, StoredCompiledPlanRow, StoredContextProjectionRow,
+        StoredCostLedgerRow, StoredCreditLedgerRow, StoredFlowRunRow,
+        StoredModelFailoverAttemptLedgerRow, StoredNodeRunRow, StoredRunEventRow,
+        StoredRuntimeEventRow, StoredRuntimeItemRow, StoredRuntimeSpanRow, StoredUsageLedgerRow,
     },
     repositories::PgControlPlaneStore,
 };
@@ -811,6 +812,259 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         .await?;
 
         map_usage_ledger_record(row)
+    }
+
+    async fn append_cost_ledger(
+        &self,
+        input: &AppendCostLedgerInput,
+    ) -> Result<domain::CostLedgerRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into runtime_cost_ledger (
+                id,
+                flow_run_id,
+                span_id,
+                usage_ledger_id,
+                workspace_id,
+                provider_instance_id,
+                provider_account_id,
+                gateway_route_id,
+                model_id,
+                upstream_model_id,
+                price_snapshot,
+                raw_cost,
+                normalized_cost,
+                settlement_currency,
+                cost_source,
+                cost_status
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                      $11, $12::numeric, $13::numeric, $14, $15, $16)
+            returning
+                id,
+                flow_run_id,
+                span_id,
+                usage_ledger_id,
+                workspace_id,
+                provider_instance_id,
+                provider_account_id,
+                gateway_route_id,
+                model_id,
+                upstream_model_id,
+                price_snapshot,
+                raw_cost::text as raw_cost,
+                normalized_cost::text as normalized_cost,
+                settlement_currency,
+                cost_source,
+                cost_status,
+                created_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.flow_run_id)
+        .bind(input.span_id)
+        .bind(input.usage_ledger_id)
+        .bind(input.workspace_id)
+        .bind(input.provider_instance_id)
+        .bind(input.provider_account_id)
+        .bind(input.gateway_route_id)
+        .bind(input.model_id.as_deref())
+        .bind(input.upstream_model_id.as_deref())
+        .bind(&input.price_snapshot)
+        .bind(input.raw_cost.as_deref())
+        .bind(input.normalized_cost.as_deref())
+        .bind(input.settlement_currency.as_deref())
+        .bind(&input.cost_source)
+        .bind(&input.cost_status)
+        .fetch_one(self.pool())
+        .await?;
+
+        Ok(map_cost_ledger_record(row))
+    }
+
+    async fn append_credit_ledger(
+        &self,
+        input: &AppendCreditLedgerInput,
+    ) -> Result<domain::CreditLedgerRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into runtime_credit_ledger (
+                id,
+                workspace_id,
+                user_id,
+                app_id,
+                agent_id,
+                flow_run_id,
+                span_id,
+                cost_ledger_id,
+                transaction_type,
+                amount,
+                balance_after,
+                credit_unit,
+                reason,
+                idempotency_key,
+                status
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::numeric,
+                      $11::numeric, $12, $13, $14, $15)
+            on conflict (workspace_id, idempotency_key) do update
+            set idempotency_key = excluded.idempotency_key
+            returning
+                id,
+                workspace_id,
+                user_id,
+                app_id,
+                agent_id,
+                flow_run_id,
+                span_id,
+                cost_ledger_id,
+                transaction_type,
+                amount::text as amount,
+                balance_after::text as balance_after,
+                credit_unit,
+                reason,
+                idempotency_key,
+                status,
+                created_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.workspace_id)
+        .bind(input.user_id)
+        .bind(input.app_id)
+        .bind(input.agent_id)
+        .bind(input.flow_run_id)
+        .bind(input.span_id)
+        .bind(input.cost_ledger_id)
+        .bind(&input.transaction_type)
+        .bind(&input.amount)
+        .bind(input.balance_after.as_deref())
+        .bind(&input.credit_unit)
+        .bind(&input.reason)
+        .bind(&input.idempotency_key)
+        .bind(&input.status)
+        .fetch_one(self.pool())
+        .await?;
+
+        Ok(map_credit_ledger_record(row))
+    }
+
+    async fn append_billing_session(
+        &self,
+        input: &AppendBillingSessionInput,
+    ) -> Result<domain::BillingSessionRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into billing_sessions (
+                id,
+                workspace_id,
+                flow_run_id,
+                client_request_id,
+                idempotency_key,
+                route_id,
+                provider_account_id,
+                status,
+                reserved_credit_ledger_id,
+                settled_credit_ledger_id,
+                refund_credit_ledger_id,
+                metadata
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            on conflict (workspace_id, idempotency_key) do update
+            set idempotency_key = excluded.idempotency_key
+            returning
+                id,
+                workspace_id,
+                flow_run_id,
+                client_request_id,
+                idempotency_key,
+                route_id,
+                provider_account_id,
+                status,
+                reserved_credit_ledger_id,
+                settled_credit_ledger_id,
+                refund_credit_ledger_id,
+                metadata,
+                created_at,
+                updated_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.workspace_id)
+        .bind(input.flow_run_id)
+        .bind(&input.client_request_id)
+        .bind(&input.idempotency_key)
+        .bind(input.route_id)
+        .bind(input.provider_account_id)
+        .bind(input.status.as_str())
+        .bind(input.reserved_credit_ledger_id)
+        .bind(input.settled_credit_ledger_id)
+        .bind(input.refund_credit_ledger_id)
+        .bind(&input.metadata)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_billing_session_record(row)
+    }
+
+    async fn append_audit_hash(
+        &self,
+        flow_run_id: Uuid,
+        fact_table: &str,
+        fact_id: Uuid,
+        payload: serde_json::Value,
+    ) -> Result<domain::AuditHashRecord> {
+        let mut tx = self.pool().begin().await?;
+        sqlx::query("lock table runtime_audit_hashes in share row exclusive mode")
+            .execute(&mut *tx)
+            .await?;
+
+        let prev_hash = sqlx::query_scalar::<_, String>(
+            r#"
+            select row_hash
+            from runtime_audit_hashes
+            where flow_run_id = $1
+            order by created_at desc, id desc
+            limit 1
+            "#,
+        )
+        .bind(flow_run_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let row_hash = control_plane::runtime_observability::audit_row_hash(
+            prev_hash.as_deref(),
+            fact_table,
+            fact_id,
+            &payload,
+        );
+        let row = sqlx::query(
+            r#"
+            insert into runtime_audit_hashes (
+                id,
+                flow_run_id,
+                fact_table,
+                fact_id,
+                prev_hash,
+                row_hash
+            ) values ($1, $2, $3, $4, $5, $6)
+            returning
+                id,
+                flow_run_id,
+                fact_table,
+                fact_id,
+                prev_hash,
+                row_hash,
+                created_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(flow_run_id)
+        .bind(fact_table)
+        .bind(fact_id)
+        .bind(prev_hash.as_deref())
+        .bind(&row_hash)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(map_audit_hash_record(row))
     }
 
     async fn append_model_failover_attempt_ledger(
@@ -1824,6 +2078,80 @@ fn map_usage_ledger_record(row: PgRow) -> Result<domain::UsageLedgerRecord> {
         usage_status: row.get("usage_status"),
         raw_usage: row.get("raw_usage"),
         normalized_usage: row.get("normalized_usage"),
+        created_at: row.get("created_at"),
+    })
+}
+
+fn map_cost_ledger_record(row: PgRow) -> domain::CostLedgerRecord {
+    PgOrchestrationRuntimeMapper::to_cost_ledger_record(StoredCostLedgerRow {
+        id: row.get("id"),
+        flow_run_id: row.get("flow_run_id"),
+        span_id: row.get("span_id"),
+        usage_ledger_id: row.get("usage_ledger_id"),
+        workspace_id: row.get("workspace_id"),
+        provider_instance_id: row.get("provider_instance_id"),
+        provider_account_id: row.get("provider_account_id"),
+        gateway_route_id: row.get("gateway_route_id"),
+        model_id: row.get("model_id"),
+        upstream_model_id: row.get("upstream_model_id"),
+        price_snapshot: row.get("price_snapshot"),
+        raw_cost: row.get("raw_cost"),
+        normalized_cost: row.get("normalized_cost"),
+        settlement_currency: row.get("settlement_currency"),
+        cost_source: row.get("cost_source"),
+        cost_status: row.get("cost_status"),
+        created_at: row.get("created_at"),
+    })
+}
+
+fn map_credit_ledger_record(row: PgRow) -> domain::CreditLedgerRecord {
+    PgOrchestrationRuntimeMapper::to_credit_ledger_record(StoredCreditLedgerRow {
+        id: row.get("id"),
+        workspace_id: row.get("workspace_id"),
+        user_id: row.get("user_id"),
+        app_id: row.get("app_id"),
+        agent_id: row.get("agent_id"),
+        flow_run_id: row.get("flow_run_id"),
+        span_id: row.get("span_id"),
+        cost_ledger_id: row.get("cost_ledger_id"),
+        transaction_type: row.get("transaction_type"),
+        amount: row.get("amount"),
+        balance_after: row.get("balance_after"),
+        credit_unit: row.get("credit_unit"),
+        reason: row.get("reason"),
+        idempotency_key: row.get("idempotency_key"),
+        status: row.get("status"),
+        created_at: row.get("created_at"),
+    })
+}
+
+fn map_billing_session_record(row: PgRow) -> Result<domain::BillingSessionRecord> {
+    PgOrchestrationRuntimeMapper::to_billing_session_record(StoredBillingSessionRow {
+        id: row.get("id"),
+        workspace_id: row.get("workspace_id"),
+        flow_run_id: row.get("flow_run_id"),
+        client_request_id: row.get("client_request_id"),
+        idempotency_key: row.get("idempotency_key"),
+        route_id: row.get("route_id"),
+        provider_account_id: row.get("provider_account_id"),
+        status: row.get("status"),
+        reserved_credit_ledger_id: row.get("reserved_credit_ledger_id"),
+        settled_credit_ledger_id: row.get("settled_credit_ledger_id"),
+        refund_credit_ledger_id: row.get("refund_credit_ledger_id"),
+        metadata: row.get("metadata"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+    })
+}
+
+fn map_audit_hash_record(row: PgRow) -> domain::AuditHashRecord {
+    PgOrchestrationRuntimeMapper::to_audit_hash_record(StoredAuditHashRow {
+        id: row.get("id"),
+        flow_run_id: row.get("flow_run_id"),
+        fact_table: row.get("fact_table"),
+        fact_id: row.get("fact_id"),
+        prev_hash: row.get("prev_hash"),
+        row_hash: row.get("row_hash"),
         created_at: row.get("created_at"),
     })
 }

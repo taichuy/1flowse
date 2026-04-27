@@ -223,6 +223,76 @@ pub struct UsageLedgerRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CostLedgerRecord {
+    pub id: Uuid,
+    pub flow_run_id: Option<Uuid>,
+    pub span_id: Option<Uuid>,
+    pub usage_ledger_id: Option<Uuid>,
+    pub workspace_id: Uuid,
+    pub provider_instance_id: Option<Uuid>,
+    pub provider_account_id: Option<Uuid>,
+    pub gateway_route_id: Option<Uuid>,
+    pub model_id: Option<String>,
+    pub upstream_model_id: Option<String>,
+    pub price_snapshot: serde_json::Value,
+    pub raw_cost: Option<String>,
+    pub normalized_cost: Option<String>,
+    pub settlement_currency: Option<String>,
+    pub cost_source: String,
+    pub cost_status: String,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreditLedgerRecord {
+    pub id: Uuid,
+    pub workspace_id: Uuid,
+    pub user_id: Option<Uuid>,
+    pub app_id: Option<Uuid>,
+    pub agent_id: Option<Uuid>,
+    pub flow_run_id: Option<Uuid>,
+    pub span_id: Option<Uuid>,
+    pub cost_ledger_id: Option<Uuid>,
+    pub transaction_type: String,
+    pub amount: String,
+    pub balance_after: Option<String>,
+    pub credit_unit: String,
+    pub reason: String,
+    pub idempotency_key: String,
+    pub status: String,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BillingSessionRecord {
+    pub id: Uuid,
+    pub workspace_id: Uuid,
+    pub flow_run_id: Option<Uuid>,
+    pub client_request_id: Option<String>,
+    pub idempotency_key: String,
+    pub route_id: Option<Uuid>,
+    pub provider_account_id: Option<Uuid>,
+    pub status: BillingSessionStatus,
+    pub reserved_credit_ledger_id: Option<Uuid>,
+    pub settled_credit_ledger_id: Option<Uuid>,
+    pub refund_credit_ledger_id: Option<Uuid>,
+    pub metadata: serde_json::Value,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuditHashRecord {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub fact_table: String,
+    pub fact_id: Uuid,
+    pub prev_hash: Option<String>,
+    pub row_hash: String,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelFailoverAttemptLedgerRecord {
     pub id: Uuid,
     pub flow_run_id: Uuid,

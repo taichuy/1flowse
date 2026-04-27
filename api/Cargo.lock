@@ -2360,6 +2360,12 @@ dependencies = [
 [[package]]
 name = "publish-gateway"
 version = "0.1.0"
+dependencies = [
+ "domain",
+ "serde",
+ "serde_json",
+ "uuid",
+]
 
 [[package]]
 name = "quinn"
