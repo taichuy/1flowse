@@ -75,6 +75,33 @@ MCP tools 是 server 暴露、client 发现并调用的 model-controlled functio
 - [MCP Tools](https://modelcontextprotocol.io/docs/concepts/tools)
 - [MCP Prompts specification](https://modelcontextprotocol.io/specification/2025-06-18/server/prompts)
 
+### 3.6 OpenAI Agents JS
+
+OpenAI Agents JS 的参考价值主要在运行时状态机和前端流式消息适配，而不是把 `@openai/agents` 作为 1flowbase 核心运行时依赖。
+
+可吸收的机制：
+
+- event 分层：区分 raw model stream event、run item event、agent update event。1flowbase 需要把 provider 原始事件、runtime item、capability 调用、agent 转移和 ledger 事件分层，而不是只维护一条泛化日志。
+- RunItem 模型：message、reasoning、tool call、tool output、handoff、approval 都是可追踪项。1flowbase 应借鉴这个形态定义自己的 `RuntimeItem`，作为 event、span 和 debug UI 之间的稳定折叠单元。
+- Human-in-the-loop / RunState：工具审批会中断 run，审批后从原状态恢复；nested agent-as-tool 的审批也要向外层 run 暴露。这可以补强 `workflow-as-tool`、审批暂停和恢复语义。
+- session input 和 call model input filter：先合并会话历史，再生成最终发给模型的输入。1flowbase 的 `ContextProjection` 也应明确“session merge”和“final projection”两个阶段。
+- compaction session：自动压缩不只是替换正文，还要记录压缩候选、触发原因、摘要版本、provider continuation metadata 和压缩 usage。
+- agent-as-tool 与 handoff：前者把子 agent 当工具，结果返回原 agent；后者转移会话控制权。1flowbase 需要在 subagent、external agent bridge 和 routed agent 之间保持这条边界。
+- AI SDK UI stream adapter：可借鉴 text、reasoning、tool input、tool output、approval、data part 的前端消息分片模型，但不应替代 1flowbase 当前主调试协议。
+
+边界：
+
+- Rust 后端仍以 1flowbase 自有 runtime、event bus、ledger 和 CapabilityRuntime 为主。
+- OpenAI Responses compaction 只能作为某一 provider adapter 的能力，不能成为通用上下文压缩底座。
+- SDK tracing 不能替代防篡改 audit ledger。
+- 前端不直接把 AI SDK UI 作为主协议；可以后续提供一个可选 adapter，服务外部 demo 或嵌入场景。
+
+参考：
+
+- [OpenAI Agents JS 文档](https://openai.github.io/openai-agents-js/)
+- [OpenAI Agents JS Sessions](https://openai.github.io/openai-agents-js/guides/sessions/)
+- [OpenAI Agents JS Human-in-the-loop](https://openai.github.io/openai-agents-js/guides/human-in-the-loop/)
+
 ## 4. 产品形态
 
 ### 4.1 1flowbase 托管编排 agent
@@ -186,6 +213,16 @@ RuntimeEvent
   sequence
   created_at
   event_type
+  layer:
+    provider_raw | runtime_item | capability | agent_transition
+    ledger | diagnostic
+  source:
+    host | provider_plugin | gateway_relay | internal_agent
+    external_agent
+  trust_level:
+    host_fact | verified_bridge | agent_reported | external_opaque
+  item_id
+  ledger_ref
   payload
   visibility: internal | workspace | user | public
   durability: ephemeral | durable | sampled
@@ -196,6 +233,38 @@ RuntimeEvent
 - 同一个 run 内 `sequence` 单调递增。
 - token delta 不能逐字符落库，必须按 30-100ms 或 max bytes 合并。
 - 事件 payload 保存可调试的结构化摘要，大对象保存 artifact 引用。
+- `layer` 用来区分 provider 原始流、runtime 折叠项、能力调用、agent 转移、账本和诊断事件。
+- `trust_level` 是调试和审计的显示依据。`host_fact` 表示宿主自己执行或直接观测，`verified_bridge` 表示外部 bridge 经签名和 schema 校验，`agent_reported` 表示 agent 自述，`external_opaque` 表示宿主只能观测边界。
+
+### 6.2.1 RuntimeItem
+
+`RuntimeItem` 是从事件流折叠出的可对账运行项，借鉴 OpenAI Agents JS 的 RunItem 形态，但由 1flowbase 自己定义并持久化引用。
+
+```text
+RuntimeItem
+  id
+  run_id
+  span_id
+  kind:
+    message | reasoning | tool_call | tool_result | mcp_call
+    skill_load | skill_action | approval | handoff
+    agent_as_tool | compaction | gateway_forward
+  status: created | running | waiting | succeeded | failed | cancelled
+  source_event_id
+  input_ref
+  output_ref
+  usage_ledger_id
+  trust_level
+  created_at
+  updated_at
+```
+
+规则：
+
+- `RuntimeItem` 不替代 `RuntimeEvent`。事件负责时间线，item 负责折叠后的调试单元和对账锚点。
+- message、reasoning、tool call、tool output、approval、handoff 都必须能从 item 回溯到原始事件和 span。
+- 外部 agent 上报的 item 必须标记 `trust_level`，不能和宿主执行的 `host_fact` 混在一起。
+- 前端调试台优先消费 item view model，而不是直接理解 provider raw delta。
 
 ### 6.3 CapabilitySpec
 
@@ -286,8 +355,13 @@ ContextProjection
   run_id
   llm_turn_span_id
   projection_kind: raw_gateway | managed_full | managed_compacted | resumed
+  merge_stage_ref
   source_transcript_ref
+  source_item_refs
+  compaction_event_id
+  summary_version
   model_input_ref
+  model_input_hash
   compacted_summary_ref
   previous_projection_id
   token_estimate
@@ -296,6 +370,14 @@ ContextProjection
 ```
 
 `provider_continuation_metadata` 用来保存 Anthropic/Gemini 等 provider-specific thinking signatures、cache control、response id 等继续生成所需信息，不能只靠 messages 重建。
+
+生成规则：
+
+- `session_merge` 阶段只负责把历史 transcript、上一轮输出、审批恢复输入和本轮新输入合并成候选上下文。
+- `final_projection` 阶段负责裁剪、压缩摘要插入、provider continuation metadata 附加和最终 model input 生成。
+- `context_projection_created` 必须同时记录 `source_item_refs`、`summary_version`、`model_input_ref` 和 `model_input_hash`，保证调试时能证明模型实际看到了什么。
+- 自动压缩产生独立 `context_compaction_recorded` 事件和 compaction span，不能只把压缩文本混入下一次模型请求正文。
+- 对 server-managed continuation 或 provider response id，只记录 continuation metadata 和本轮 delta 关系；不能假设可以用完整 messages 重建所有 provider 状态。
 
 ### 6.7 CostLedger
 
@@ -463,6 +545,9 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 
 - `approval_requested`
 - `approval_resolved`
+- `approval_rejected`
+- `run_interrupted`
+- `run_resumed`
 - `data_retrieval_requested`
 - `data_retrieval_finished`
 - `variable_updated`
@@ -475,6 +560,7 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 - `compaction_started`
 - `compaction_finished`
 - `compaction_failed`
+- `context_compaction_recorded`
 - `context_projection_created`
 - `subagent_requested`
 - `subagent_started`
@@ -496,6 +582,7 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 - `external_agent_session_observed`
 - `external_agent_telemetry_received`
 - `external_agent_telemetry_rejected`
+- `external_agent_opaque_boundary_marked`
 
 ### 7.10 Billing / credit / account 事件
 
@@ -508,6 +595,9 @@ MCP tools、resources、prompts 分开建模，不能都塞进 tool。
 - `provider_account_selected`
 - `provider_account_exhausted`
 - `provider_account_health_changed`
+- `billing_session_started`
+- `billing_session_settled`
+- `billing_idempotency_replayed`
 
 ## 8. 托管 agent 运行流
 
@@ -685,6 +775,8 @@ McpBindingSpec
 - transcript 是事实历史。
 - projection 是“本轮实际发给模型的上下文”。
 - compaction span 是“为何从事实历史变成该 projection”的解释。
+- `summary_version` 是摘要版本，不等于 projection 版本。一次 summary 可以被多个 projection 使用，但每个 projection 必须有自己的 `model_input_hash`。
+- 如果 compaction 本身调用模型，应产生独立 usage ledger，endpoint 或用途标记为 `compaction`，不能混入业务 LLM turn 的 token。
 
 ## 14. 子 agent 模型
 
@@ -714,6 +806,13 @@ SubagentInvocation
 - usage 在子 run 记录一份，再向父 span 汇总一份。
 - 外部 CLI 子 agent 如果未接 telemetry，只能记录启动命令、输入摘要、退出状态、stdout/stderr/artifact 和 usage 可见部分。
 
+需要区分两种 agent 调用语义：
+
+- `agent_as_tool`：子 agent 像工具一样被调用，输入由父 agent 或 workflow 生成，输出作为 tool result 回到父 agent。审批、失败和 usage 需要冒泡到父 span。
+- `handoff`：会话控制权转移到另一个 agent，后续消息由目标 agent 继续处理。handoff 必须记录 source agent、target agent、handoff input filter、控制权转移原因和恢复边界。
+
+外部 CLI 自建的子 agent 不默认视为 `agent_as_tool` 或 `handoff` 事实。没有 bridge telemetry 时，只能在父 run 标记 `external_opaque` 边界；接入 bridge 后，按签名、schema 和 session 绑定决定可信等级。
+
 ## 15. 可观测与调试读模型
 
 调试台至少需要从事件和 span fold 出以下视图：
@@ -732,6 +831,31 @@ SubagentInvocation
 
 调优诊断的第一步是“看清 AI 在做什么”。因此 UI 上不应只展示最终 answer，应优先能看到调用树、用量、失败和上下文投影。
 
+### 15.1 前端流式视图边界
+
+调试台前端不直接消费 provider raw delta，也不直接绑定 OpenAI AI SDK UI 协议。后端应提供 1flowbase 自有 debug stream view model：
+
+```text
+DebugStreamPart
+  id
+  run_id
+  item_id
+  span_id
+  part_type:
+    text | reasoning | tool_input | tool_output | approval
+    handoff | usage_snapshot | ledger_ref | error | data
+  status
+  trust_level
+  payload
+```
+
+规则：
+
+- 当前主线前端继续消费 1flowbase 自有 SSE / read model，保持与 runtime event bus、span tree、ledger 一致。
+- AI SDK UI stream 只作为可选 adapter，用于外部 demo、嵌入应用或第三方前端集成。
+- adapter 只能从 `RuntimeItem + DebugStreamPart` 派生，不能反向成为后端事实源。
+- 前端显示外部 agent 上报内容时必须展示可信等级，避免把 agent 自述日志误呈现为宿主事实日志。
+
 ## 16. 持久化和流
 
 建议新增或扩展持久化对象：
@@ -739,6 +863,7 @@ SubagentInvocation
 ```text
 runtime_spans
 runtime_events
+runtime_items
 runtime_usage_ledger
 runtime_cost_ledger
 runtime_credit_ledger
@@ -749,6 +874,7 @@ capability_catalog_snapshots
 capability_invocations
 external_agent_sessions
 gateway_route_snapshots
+billing_sessions
 ```
 
 写入策略：
@@ -855,6 +981,8 @@ gateway_route_snapshots
 - `/api/agent-runs`
 - `/api/agent-runs/{run_id}/events`
 - `/api/agent-runs/{run_id}/spans`
+- `/api/agent-runs/{run_id}/items`
+- `/api/agent-runs/{run_id}/debug-stream`
 - `/api/capabilities`
 - `/api/capabilities/{id}/invoke`
 - `/api/external-agent/telemetry`
@@ -862,16 +990,23 @@ gateway_route_snapshots
 
 插件贡献能力，不贡献路由。这样外部生态可以接入，但安全、审计、鉴权和版本兼容仍由宿主控制。
 
+可选 adapter：
+
+- `/api/agent-runs/{run_id}/ai-sdk-ui-stream` 可以后续作为外部集成协议，用于把 `DebugStreamPart` 转成 AI SDK UI message stream。
+- 该 adapter 不作为 1flowbase 内部调试台主协议，不新增 runtime 事实来源。
+- Realtime / voice agent 可以后续参考 OpenAI RealtimeSession 的连接、interrupt、tool approval 形态，但不进入本阶段主线。
+
 ## 19. 实施顺序
 
 1. 定义 `RuntimeEvent`、`RuntimeSpan`、`CapabilitySpec`、`CapabilityInvocation`、`SkillSpec`、`McpBindingSpec`、`UsageLedger`、`ContextProjection`。
-2. 增加 runtime event bus 和批量 durable writer，SSE、blocking、debug read model 都从同一 stream fold。
-3. 改 `plugin-runner` 为逐行 NDJSON streaming，处理协议版本、bad JSON、stderr 日志、timeout、kill 和 usage snapshot。
-4. 增加 host-owned capability loop：`tool_call_commit -> authorize -> execute -> append result -> next llm_turn`。
-5. 增加 skill index/load/snapshot，再增加 MCP client manager，把 MCP tools 投影进同一个 capability registry。
-6. 增加 Model Gateway / Relay：OpenAI-compatible API、route、upstream relay、usage normalization、gateway trace。
-7. 增加 Billing / Credit / Provider Account Pool：额度预检查、成本换算、账号池选择、扣费/退款和账号健康事件。
-8. 增加 external agent telemetry bridge、subagent link 和 debug UI read model。
+2. 定义 `RuntimeItem` 和 `DebugStreamPart`，把 message、reasoning、tool、approval、handoff、compaction、gateway forward 折叠为稳定调试单元。
+3. 增加 runtime event bus 和批量 durable writer，SSE、blocking、debug read model 都从同一 stream fold。
+4. 改 `plugin-runner` 为逐行 NDJSON streaming，处理协议版本、bad JSON、stderr 日志、timeout、kill 和 usage snapshot。
+5. 增加 host-owned capability loop：`tool_call_commit -> authorize -> execute -> append result -> next llm_turn`。
+6. 增加 skill index/load/snapshot，再增加 MCP client manager，把 MCP tools 投影进同一个 capability registry。
+7. 增加 Model Gateway / Relay：OpenAI-compatible API、route、upstream relay、usage normalization、gateway trace。
+8. 增加 Billing / Credit / Provider Account Pool：额度预检查、成本换算、账号池选择、扣费/退款和账号健康事件。
+9. 增加 external agent telemetry bridge、subagent link 和 debug UI read model。
 
 ## 20. 风险和约束
 
