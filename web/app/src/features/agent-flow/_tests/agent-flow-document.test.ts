@@ -22,11 +22,22 @@ describe('agent flow document helpers', () => {
       'llm',
       'answer'
     ]);
-    expect(document.graph.edges.map((edge) => [edge.source, edge.target])).toEqual([
+    expect(
+      document.graph.edges.map((edge) => [edge.source, edge.target])
+    ).toEqual([
       ['node-start', 'node-llm'],
       ['node-llm', 'node-answer']
     ]);
-    expect(document.graph.nodes.every((node) => node.description === '')).toBe(true);
+    expect(
+      document.graph.nodes.find((node) => node.id === 'node-answer')?.bindings
+        .answer_template
+    ).toEqual({
+      kind: 'templated_text',
+      value: '{{node-llm.text}}'
+    });
+    expect(document.graph.nodes.every((node) => node.description === '')).toBe(
+      true
+    );
   });
 
   test('treats viewport-only edits as layout changes', () => {
@@ -76,7 +87,9 @@ describe('agent flow document helpers', () => {
 
   test('models the start node as configurable input fields with Dify-compatible system variables', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    const startNode = document.graph.nodes.find((node) => node.type === 'start');
+    const startNode = document.graph.nodes.find(
+      (node) => node.type === 'start'
+    );
 
     expect(startNode?.config.input_fields).toEqual([]);
     expect(startNode?.outputs).toEqual([]);

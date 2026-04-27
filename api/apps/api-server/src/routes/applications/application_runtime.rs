@@ -40,6 +40,7 @@ pub struct StartNodeDebugPreviewBody {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct StartFlowDebugRunBody {
     pub input_payload: serde_json::Value,
+    pub document: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -373,6 +374,7 @@ pub async fn start_flow_debug_run(
             actor_user_id: context.user.id,
             application_id: id,
             input_payload: body.input_payload,
+            document_snapshot: body.document,
         })
         .await?;
     let flow_run_id = detail.flow_run.id;

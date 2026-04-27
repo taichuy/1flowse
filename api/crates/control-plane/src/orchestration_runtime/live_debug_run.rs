@@ -51,10 +51,15 @@ where
     let compile_context = service
         .build_compile_context(application.workspace_id)
         .await?;
+    let debug_document = command
+        .document_snapshot
+        .as_ref()
+        .unwrap_or(&editor_state.draft.document);
+
     let compiled_plan = orchestration_runtime::compiler::FlowCompiler::compile(
         editor_state.flow.id,
         &editor_state.draft.id.to_string(),
-        &editor_state.draft.document,
+        debug_document,
         &compile_context,
     )?;
     ensure_compiled_plan_runnable(&compiled_plan)?;

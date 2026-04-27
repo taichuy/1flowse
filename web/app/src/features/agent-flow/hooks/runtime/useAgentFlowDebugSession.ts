@@ -406,7 +406,10 @@ export function useAgentFlowDebugSession({
     try {
       const detail = await startFlowDebugRun(
         applicationId,
-        buildFlowDebugRunInput(document, inputValues),
+        {
+          ...buildFlowDebugRunInput(document, inputValues),
+          document
+        },
         csrfToken
       );
 

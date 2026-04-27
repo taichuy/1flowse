@@ -56,4 +56,31 @@ describe('run detail mapper', () => {
 
     expect(extractAssistantOutputText(detail)).toBe('退款政策摘要');
   });
+
+  test('uses provider text delta events while a run is still producing output', () => {
+    const detail = baseDetail();
+    detail.flow_run.status = 'running';
+    detail.events = [
+      {
+        id: 'event-1',
+        flow_run_id: 'flow-run-1',
+        node_run_id: 'node-run-llm',
+        sequence: 1,
+        event_type: 'text_delta',
+        payload: { type: 'text_delta', delta: '退款' },
+        created_at: '2026-04-26T10:00:00Z'
+      },
+      {
+        id: 'event-2',
+        flow_run_id: 'flow-run-1',
+        node_run_id: 'node-run-llm',
+        sequence: 2,
+        event_type: 'text_delta',
+        payload: { type: 'text_delta', delta: '政策摘要' },
+        created_at: '2026-04-26T10:00:01Z'
+      }
+    ];
+
+    expect(extractAssistantOutputText(detail)).toBe('退款政策摘要');
+  });
 });

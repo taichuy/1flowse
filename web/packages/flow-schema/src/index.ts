@@ -202,7 +202,10 @@ export function createDefaultAgentFlowDocument({
           configVersion: 1,
           config: {},
           bindings: {
-            answer_template: { kind: 'selector', value: ['node-llm', 'text'] }
+            answer_template: {
+              kind: 'templated_text',
+              value: '{{node-llm.text}}'
+            }
           },
           outputs: [{ key: 'answer', title: '对话输出', valueType: 'string' }]
         }

@@ -184,6 +184,7 @@ async fn start_flow_debug_run_returns_running_detail_before_background_continuat
             input_payload: serde_json::json!({
                 "node-start": { "query": "world" }
             }),
+            document_snapshot: None,
         })
         .await
         .unwrap();
@@ -207,6 +208,7 @@ async fn continue_flow_debug_run_executes_plugin_node_through_capability_runtime
             input_payload: serde_json::json!({
                 "node-start": { "query": "world" }
             }),
+            document_snapshot: None,
         })
         .await
         .unwrap();

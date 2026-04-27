@@ -375,6 +375,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
                 input_payload: json!({
                     "node-start": { "query": "请总结退款政策" }
                 }),
+                document_snapshot: None,
             })
             .await
             .expect("seed waiting human run should succeed");
@@ -406,6 +407,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
                 input_payload: json!({
                     "node-start": { "query": "order_123" }
                 }),
+                document_snapshot: None,
             })
             .await
             .expect("seed waiting callback run should succeed");

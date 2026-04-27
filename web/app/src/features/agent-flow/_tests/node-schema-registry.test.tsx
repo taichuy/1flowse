@@ -1,12 +1,20 @@
-import { createDefaultAgentFlowDocument, type FlowNodeDocument } from '@1flowbase/flow-schema';
+import {
+  createDefaultAgentFlowDocument,
+  type FlowNodeDocument
+} from '@1flowbase/flow-schema';
 import { describe, expect, test, vi } from 'vitest';
 
 import { agentFlowRendererRegistry } from '../schema/agent-flow-renderer-registry';
 import { createAgentFlowNodeSchemaAdapter } from '../schema/node-schema-adapter';
 import { resolveAgentFlowNodeSchema } from '../schema/node-schema-registry';
 
-function getNode(document: ReturnType<typeof createDefaultAgentFlowDocument>, nodeId: string) {
-  const node = document.graph.nodes.find((candidate) => candidate.id === nodeId);
+function getNode(
+  document: ReturnType<typeof createDefaultAgentFlowDocument>,
+  nodeId: string
+) {
+  const node = document.graph.nodes.find(
+    (candidate) => candidate.id === nodeId
+  );
 
   if (!node) {
     throw new Error(`Missing node ${nodeId}`);
@@ -28,24 +36,32 @@ describe('agent-flow node schema registry', () => {
     );
     expect(schema.detail.tabs.config.blocks.length).toBeGreaterThan(0);
     expect(
-      JSON.stringify(schema.detail.tabs.config.blocks).includes('"path":"alias"')
+      JSON.stringify(schema.detail.tabs.config.blocks).includes(
+        '"path":"alias"'
+      )
     ).toBe(false);
     expect(
-      JSON.stringify(schema.detail.tabs.config.blocks).includes('"path":"description"')
+      JSON.stringify(schema.detail.tabs.config.blocks).includes(
+        '"path":"description"'
+      )
     ).toBe(false);
   });
 
   test('exposes a real renderer registry for later schema-driven consumers', () => {
     expect(agentFlowRendererRegistry.fields.text).toBeTypeOf('function');
     expect(agentFlowRendererRegistry.fields.llm_model).toBeTypeOf('function');
-    expect(agentFlowRendererRegistry.fields.llm_response_format).toBeTypeOf('function');
-    expect(agentFlowRendererRegistry.fields.output_contract_definition).toBeTypeOf(
+    expect(agentFlowRendererRegistry.fields.llm_response_format).toBeTypeOf(
       'function'
     );
+    expect(
+      agentFlowRendererRegistry.fields.output_contract_definition
+    ).toBeTypeOf('function');
     expect(agentFlowRendererRegistry.fields.start_input_fields).toBeTypeOf(
       'function'
     );
-    expect(agentFlowRendererRegistry.dynamicForms.llm_parameters).toBeTypeOf('function');
+    expect(agentFlowRendererRegistry.dynamicForms.llm_parameters).toBeTypeOf(
+      'function'
+    );
     expect(agentFlowRendererRegistry.views.summary).toBeTypeOf('function');
     expect(agentFlowRendererRegistry.views.relations).toBeTypeOf('function');
   });
@@ -70,6 +86,26 @@ describe('agent-flow node schema registry', () => {
           kind: 'view',
           renderer: 'relations',
           title: '下一步'
+        })
+      ])
+    );
+  });
+
+  test('renders answer content with the templated text editor', () => {
+    const schema = resolveAgentFlowNodeSchema('answer');
+
+    expect(schema.detail.tabs.config.blocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'section',
+          title: 'Inputs',
+          blocks: [
+            expect.objectContaining({
+              kind: 'field',
+              path: 'bindings.answer_template',
+              renderer: 'templated_text'
+            })
+          ]
         })
       ])
     );

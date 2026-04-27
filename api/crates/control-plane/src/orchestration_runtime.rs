@@ -51,6 +51,7 @@ pub struct StartFlowDebugRunCommand {
     pub actor_user_id: Uuid,
     pub application_id: Uuid,
     pub input_payload: serde_json::Value,
+    pub document_snapshot: Option<serde_json::Value>,
 }
 
 pub struct ContinueFlowDebugRunCommand {

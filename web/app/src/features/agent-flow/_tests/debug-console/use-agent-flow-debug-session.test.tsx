@@ -266,8 +266,9 @@ describe('useAgentFlowDebugSession', () => {
     expect(startFlowDebugRunSpy).toHaveBeenCalledWith(
       'app-1',
       {
+        document,
         input_payload: {
-          'node-start': { query: '请总结退款政策' }
+          'node-start': { files: undefined, query: '请总结退款政策' }
         }
       },
       'csrf-123'

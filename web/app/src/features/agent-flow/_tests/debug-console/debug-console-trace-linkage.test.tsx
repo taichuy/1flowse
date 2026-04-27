@@ -99,7 +99,9 @@ function createSucceededRunDetail() {
 }
 
 function TraceLinkageProbe() {
-  const selectedNodeId = useAgentFlowEditorStore((state) => state.selectedNodeId);
+  const selectedNodeId = useAgentFlowEditorStore(
+    (state) => state.selectedNodeId
+  );
   const pendingLocateNodeId = useAgentFlowEditorStore(
     (state) => state.pendingLocateNodeId
   );
@@ -122,9 +124,7 @@ function TraceLinkageProbe() {
       <div data-testid="trace-linkage-pending-locate">
         {pendingLocateNodeId ?? 'none'}
       </div>
-      <div data-testid="trace-linkage-last-locate">
-        {lastLocatedNodeId}
-      </div>
+      <div data-testid="trace-linkage-last-locate">{lastLocatedNodeId}</div>
       <button
         type="button"
         onClick={() =>
@@ -155,11 +155,23 @@ async function openConsoleAndRun() {
   await waitFor(() => {
     expect(runtimeApi.startFlowDebugRun).toHaveBeenCalledWith(
       'app-1',
-      { input_payload: { 'node-start': { query: '请总结退款政策' } } },
+      expect.objectContaining({
+        document: expect.objectContaining({
+          schemaVersion: '1flowbase.flow/v1'
+        }),
+        input_payload: {
+          'node-start': {
+            files: undefined,
+            query: '请总结退款政策'
+          }
+        }
+      }),
       'csrf-123'
     );
   });
-  expect(screen.queryByRole('tab', { name: 'Variables' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('tab', { name: 'Variables' })
+  ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('tab', { name: 'Trace' }));
 }
 
@@ -209,16 +221,22 @@ describe('debug console trace linkage', () => {
     await openConsoleAndRun();
     const tracePanel = screen.getByRole('tabpanel', { name: 'Trace' });
 
-    fireEvent.click(within(tracePanel).getByRole('button', { name: /清除筛选/ }));
+    fireEvent.click(
+      within(tracePanel).getByRole('button', { name: /清除筛选/ })
+    );
     fireEvent.click(screen.getByRole('button', { name: '选择 Answer' }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('trace-linkage-selected-node')).toHaveTextContent(
-        'node-answer'
-      );
+      expect(
+        screen.getByTestId('trace-linkage-selected-node')
+      ).toHaveTextContent('node-answer');
     });
-    expect(screen.getByTestId('trace-linkage-last-locate')).toHaveTextContent('none');
-    expect(screen.getByTestId('trace-linkage-pending-locate')).toHaveTextContent('none');
+    expect(screen.getByTestId('trace-linkage-last-locate')).toHaveTextContent(
+      'none'
+    );
+    expect(
+      screen.getByTestId('trace-linkage-pending-locate')
+    ).toHaveTextContent('none');
   }, 20_000);
 
   test('filters trace rows when a node is selected on canvas', async () => {
@@ -237,16 +255,28 @@ describe('debug console trace linkage', () => {
 
     const tracePanel = screen.getByRole('tabpanel', { name: 'Trace' });
 
-    expect(screen.getByTestId('trace-linkage-selected-node')).toHaveTextContent('node-llm');
-    expect(within(tracePanel).getByRole('button', { name: /LLM/ })).toBeInTheDocument();
-    expect(within(tracePanel).queryByRole('button', { name: /Answer/ })).not.toBeInTheDocument();
+    expect(screen.getByTestId('trace-linkage-selected-node')).toHaveTextContent(
+      'node-llm'
+    );
+    expect(
+      within(tracePanel).getByRole('button', { name: /LLM/ })
+    ).toBeInTheDocument();
+    expect(
+      within(tracePanel).queryByRole('button', { name: /Answer/ })
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '选择 Answer' }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('trace-linkage-selected-node')).toHaveTextContent('node-answer');
+      expect(
+        screen.getByTestId('trace-linkage-selected-node')
+      ).toHaveTextContent('node-answer');
     });
-    expect(within(tracePanel).getByRole('button', { name: /Answer/ })).toBeInTheDocument();
-    expect(within(tracePanel).queryByRole('button', { name: /LLM/ })).not.toBeInTheDocument();
+    expect(
+      within(tracePanel).getByRole('button', { name: /Answer/ })
+    ).toBeInTheDocument();
+    expect(
+      within(tracePanel).queryByRole('button', { name: /LLM/ })
+    ).not.toBeInTheDocument();
   }, 20_000);
 });

@@ -19,6 +19,7 @@ async fn continue_flow_debug_run_stops_at_human_input_and_persists_waiting_state
             actor_user_id: seeded.actor_user_id,
             application_id: seeded.application_id,
             input_payload: json!({ "node-start": { "query": "请总结退款政策" } }),
+            document_snapshot: None,
         })
         .await
         .unwrap();

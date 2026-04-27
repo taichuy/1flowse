@@ -47,6 +47,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
+function collectTextDeltaEvents(detail: FlowDebugRunDetail): string | null {
+  const text = detail.events
+    .filter((event) => event.event_type === 'text_delta')
+    .sort((left, right) => left.sequence - right.sequence)
+    .map((event) =>
+      isRecord(event.payload) && typeof event.payload.delta === 'string'
+        ? event.payload.delta
+        : ''
+    )
+    .join('');
+
+  return text.trim().length > 0 ? text : null;
+}
+
 function findPreferredOutputText(payload: unknown): string | null {
   if (!isRecord(payload)) {
     return null;
@@ -88,7 +102,9 @@ function mapMessageStatus(status: string): AgentFlowDebugMessageStatus {
   }
 }
 
-export function mapRunDetailToTrace(detail: FlowDebugRunDetail): AgentFlowTraceItem[] {
+export function mapRunDetailToTrace(
+  detail: FlowDebugRunDetail
+): AgentFlowTraceItem[] {
   return detail.node_runs.map((nodeRun) => ({
     nodeId: nodeRun.node_id,
     nodeAlias: nodeRun.node_alias,
@@ -117,6 +133,12 @@ export function extractAssistantOutputText(detail: FlowDebugRunDetail): string {
     detail.flow_run.status === 'cancelled'
   ) {
     return '';
+  }
+
+  const streamingText = collectTextDeltaEvents(detail);
+
+  if (streamingText && detail.flow_run.status === 'running') {
+    return streamingText;
   }
 
   const outputPayloadText =

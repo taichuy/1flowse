@@ -117,7 +117,10 @@ export function startConsoleNodeDebugPreview(
 
 export function startConsoleFlowDebugRun(
   applicationId: string,
-  input: { input_payload: Record<string, unknown> },
+  input: {
+    input_payload: Record<string, unknown>;
+    document?: FlowAuthoringDocument;
+  },
   csrfToken: string,
   baseUrl?: string
 ) {

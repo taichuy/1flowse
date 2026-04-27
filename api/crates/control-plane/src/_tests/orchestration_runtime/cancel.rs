@@ -18,6 +18,7 @@ async fn cancel_flow_run_marks_running_debug_run_as_cancelled() {
             input_payload: json!({
                 "node-start": { "query": "请总结退款政策" }
             }),
+            document_snapshot: None,
         })
         .await
         .unwrap();
@@ -54,6 +55,7 @@ async fn cancel_flow_run_rejects_terminal_status() {
             input_payload: json!({
                 "node-start": { "query": "请总结退款政策" }
             }),
+            document_snapshot: None,
         })
         .await
         .unwrap();

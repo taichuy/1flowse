@@ -186,7 +186,10 @@ export function buildFlowDebugRunInput(
 
 export function startFlowDebugRun(
   applicationId: string,
-  input: { input_payload: Record<string, Record<string, unknown>> },
+  input: {
+    input_payload: Record<string, Record<string, unknown>>;
+    document?: FlowAuthoringDocument;
+  },
   csrfToken: string
 ) {
   return startConsoleFlowDebugRun(
@@ -278,10 +281,7 @@ function hasPreviewVariableValue(value: unknown) {
   return value !== undefined && value !== null && value !== '';
 }
 
-function findNodeOutput(
-  node: FlowNodeDocument | undefined,
-  outputKey: string
-) {
+function findNodeOutput(node: FlowNodeDocument | undefined, outputKey: string) {
   return node
     ? getNodeVariableOutputs(node).find((output) => output.key === outputKey)
     : undefined;

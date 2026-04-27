@@ -16,7 +16,7 @@ export const answerNodeDefinition: NodeDefinition = {
         {
           key: 'bindings.answer_template',
           label: '回复内容',
-          editor: 'selector',
+          editor: 'templated_text',
           required: true
         }
       ]
@@ -24,7 +24,14 @@ export const answerNodeDefinition: NodeDefinition = {
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.answer', label: '对话输出', editor: 'text', required: true }]
+      fields: [
+        {
+          key: 'outputs.answer',
+          label: '对话输出',
+          editor: 'text',
+          required: true
+        }
+      ]
     }
   ]
 };
