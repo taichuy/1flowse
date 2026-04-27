@@ -7,6 +7,43 @@ use plugin_framework::provider_contract::{ProviderMcpCall, ProviderStreamEvent, 
 use uuid::Uuid;
 
 #[tokio::test]
+async fn external_opaque_boundary_marks_external_agent_event_as_durable_workspace_fact() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({
+                "node-start": { "query": "请总结退款政策" }
+            }),
+            document_snapshot: None,
+        })
+        .await
+        .unwrap();
+
+    let event = service
+        .mark_external_opaque_boundary(
+            started.flow_run.id,
+            serde_json::json!({ "reason": "external local tool execution not observed" }),
+        )
+        .await;
+    let events = service.list_runtime_events(started.flow_run.id, 0).await;
+
+    assert_eq!(event.event_type, "external_agent_opaque_boundary_marked");
+    assert_eq!(event.layer, domain::RuntimeEventLayer::Diagnostic);
+    assert_eq!(event.source, domain::RuntimeEventSource::ExternalAgent);
+    assert_eq!(event.trust_level, domain::RuntimeTrustLevel::ExternalOpaque);
+    assert_eq!(event.visibility, domain::RuntimeEventVisibility::Workspace);
+    assert_eq!(event.durability, domain::RuntimeEventDurability::Durable);
+    assert_eq!(
+        event.payload["reason"],
+        "external local tool execution not observed"
+    );
+    assert!(events.iter().any(|record| record.id == event.id));
+}
+
+#[tokio::test]
 async fn flow_debug_run_shadow_writes_runtime_spans_and_provider_events() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service.seed_application_with_flow("Support Agent").await;

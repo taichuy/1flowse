@@ -278,3 +278,62 @@ async fn migration_smoke_creates_plugin_trust_columns_and_constraints() {
     assert!(task_status_check.contains("queued"));
     assert!(task_status_check.contains("succeeded"));
 }
+
+#[tokio::test]
+async fn migration_smoke_creates_external_bridge_tables() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let schema: String = sqlx::query_scalar("select current_schema()")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    let tables: Vec<String> = sqlx::query_scalar(
+        r#"
+        select table_name
+        from information_schema.tables
+        where table_schema = $1
+        "#,
+    )
+    .bind(&schema)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let session_columns: Vec<String> = sqlx::query_scalar(
+        r#"
+        select column_name
+        from information_schema.columns
+        where table_schema = $1
+          and table_name = 'external_agent_sessions'
+        "#,
+    )
+    .bind(&schema)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let telemetry_columns: Vec<String> = sqlx::query_scalar(
+        r#"
+        select column_name
+        from information_schema.columns
+        where table_schema = $1
+          and table_name = 'external_agent_telemetry_events'
+        "#,
+    )
+    .bind(&schema)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    assert!(tables.contains(&"external_agent_sessions".to_string()));
+    assert!(tables.contains(&"external_agent_telemetry_events".to_string()));
+    assert!(session_columns.contains(&"workspace_id".to_string()));
+    assert!(session_columns.contains(&"flow_run_id".to_string()));
+    assert!(session_columns.contains(&"external_agent_kind".to_string()));
+    assert!(session_columns.contains(&"external_session_id".to_string()));
+    assert!(session_columns.contains(&"trust_level".to_string()));
+    assert!(session_columns.contains(&"opaque_boundary_marked".to_string()));
+    assert!(telemetry_columns.contains(&"external_agent_session_id".to_string()));
+    assert!(telemetry_columns.contains(&"runtime_event_id".to_string()));
+    assert!(telemetry_columns.contains(&"schema_version".to_string()));
+    assert!(telemetry_columns.contains(&"signature_status".to_string()));
+}

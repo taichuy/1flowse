@@ -521,6 +521,20 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         self.repository.force_flow_run_status(flow_run_id, status);
     }
 
+    pub async fn mark_external_opaque_boundary(
+        &self,
+        flow_run_id: Uuid,
+        payload: serde_json::Value,
+    ) -> domain::RuntimeEventRecord {
+        crate::runtime_observability::mark_external_opaque_boundary(
+            &self.repository,
+            flow_run_id,
+            payload,
+        )
+        .await
+        .expect("external opaque boundary event should be appended")
+    }
+
     pub async fn list_runtime_spans(&self, flow_run_id: Uuid) -> Vec<domain::RuntimeSpanRecord> {
         OrchestrationRuntimeRepository::list_runtime_spans(&self.repository, flow_run_id)
             .await

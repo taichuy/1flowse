@@ -99,7 +99,7 @@ Why fifth:
 1. gateway 商业模式需要 billing session 和幂等边界。
 2. usage/cost/credit/audit hash 要在一条事实主干上对账。
 
-- [ ] **Step 6: Execute External Bridge Isolation**
+- [x] **Step 6: Execute External Bridge Isolation**
 
 Plan:
 

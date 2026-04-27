@@ -33,7 +33,7 @@
 - Modify: `api/crates/control-plane/src/runtime_observability.rs`
 - Modify: `api/apps/api-server/src/_tests/application/application_runtime_routes.rs`
 
-- [ ] **Step 1: Write failing external opaque test**
+- [x] **Step 1: Write failing external opaque test**
 
 Add to `api/apps/api-server/src/_tests/application/application_runtime_routes.rs`:
 
@@ -66,7 +66,7 @@ async fn external_agent_opaque_boundary_keeps_external_trust_level() {
 }
 ```
 
-- [ ] **Step 2: Add helper**
+- [x] **Step 2: Add helper**
 
 Add to `api/crates/control-plane/src/runtime_observability.rs`:
 
@@ -97,7 +97,7 @@ where
 }
 ```
 
-- [ ] **Step 3: Run test**
+- [x] **Step 3: Run test**
 
 Run:
 
@@ -107,7 +107,7 @@ cargo test -p api-server external_agent_opaque_boundary_keeps_external_trust_lev
 
 Expected: PASS after plan 07 debug-stream route exists; before plan 07, keep this test marked in the child execution notes and run it when route lands.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add api/crates/control-plane/src/runtime_observability.rs api/apps/api-server/src/_tests/application/application_runtime_routes.rs
@@ -123,7 +123,7 @@ git commit -m "feat: mark external opaque runtime boundary"
 - Create: `api/crates/control-plane/src/_tests/external_agent_bridge_tests.rs`
 - Modify: `api/crates/control-plane/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write failing bridge verification tests**
+- [x] **Step 1: Write failing bridge verification tests**
 
 Create `api/crates/control-plane/src/_tests/external_agent_bridge_tests.rs`:
 
@@ -157,7 +157,7 @@ fn bridge_event_with_valid_signature_is_verified_bridge() {
 }
 ```
 
-- [ ] **Step 2: Implement bridge normalization**
+- [x] **Step 2: Implement bridge normalization**
 
 Create `api/crates/control-plane/src/external_agent_bridge.rs`:
 
@@ -203,7 +203,7 @@ Modify `api/crates/control-plane/src/lib.rs`:
 pub mod external_agent_bridge;
 ```
 
-- [ ] **Step 3: Add bridge tables**
+- [x] **Step 3: Add bridge tables**
 
 Create migration:
 
@@ -233,7 +233,7 @@ create table external_agent_telemetry_events (
 );
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -244,7 +244,7 @@ cargo test -p storage-postgres migration_smoke
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/crates/control-plane/src/external_agent_bridge.rs api/crates/control-plane/src/lib.rs api/crates/control-plane/src/_tests/external_agent_bridge_tests.rs api/crates/control-plane/src/_tests/mod.rs api/crates/storage-durable/postgres/migrations/20260427210000_create_external_bridge_and_isolation_tables.sql
@@ -259,7 +259,7 @@ git commit -m "feat: add external agent bridge trust protocol"
 - Modify: `api/crates/control-plane/src/lib.rs`
 - Modify: `api/crates/control-plane/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write failing isolation tests**
+- [x] **Step 1: Write failing isolation tests**
 
 Create `api/crates/control-plane/src/_tests/plugin_isolation_tests.rs`:
 
@@ -284,7 +284,7 @@ fn capability_plugin_must_use_host_api_for_state_changes() {
 }
 ```
 
-- [ ] **Step 2: Implement matrix**
+- [x] **Step 2: Implement matrix**
 
 Create `api/crates/control-plane/src/plugin_isolation.rs`:
 
@@ -352,7 +352,7 @@ Modify `api/crates/control-plane/src/lib.rs`:
 pub mod plugin_isolation;
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 Run:
 
@@ -362,7 +362,7 @@ cargo test -p control-plane plugin_isolation
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add api/crates/control-plane/src/plugin_isolation.rs api/crates/control-plane/src/lib.rs api/crates/control-plane/src/_tests/plugin_isolation_tests.rs api/crates/control-plane/src/_tests/mod.rs
@@ -377,7 +377,7 @@ git commit -m "feat: encode plugin runtime isolation matrix"
 - Modify: `api/crates/control-plane/src/lib.rs`
 - Modify: `api/crates/control-plane/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write failing system agent tests**
+- [x] **Step 1: Write failing system agent tests**
 
 Create `api/crates/control-plane/src/_tests/system_agent_tests.rs`:
 
@@ -401,7 +401,7 @@ fn system_agent_identity_is_not_external_bridge() {
 }
 ```
 
-- [ ] **Step 2: Implement system agent model**
+- [x] **Step 2: Implement system agent model**
 
 Create `api/crates/control-plane/src/system_agent.rs`:
 
@@ -441,7 +441,7 @@ Modify `api/crates/control-plane/src/lib.rs`:
 pub mod system_agent;
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 Run:
 
@@ -451,7 +451,7 @@ cargo test -p control-plane system_agent
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add api/crates/control-plane/src/system_agent.rs api/crates/control-plane/src/lib.rs api/crates/control-plane/src/_tests/system_agent_tests.rs api/crates/control-plane/src/_tests/mod.rs

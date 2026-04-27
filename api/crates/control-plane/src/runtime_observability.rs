@@ -117,6 +117,33 @@ where
     Ok(event)
 }
 
+pub async fn mark_external_opaque_boundary<R>(
+    repository: &R,
+    flow_run_id: Uuid,
+    payload: Value,
+) -> Result<domain::RuntimeEventRecord>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    repository
+        .append_runtime_event(&AppendRuntimeEventInput {
+            flow_run_id,
+            node_run_id: None,
+            span_id: None,
+            parent_span_id: None,
+            event_type: "external_agent_opaque_boundary_marked".into(),
+            layer: domain::RuntimeEventLayer::Diagnostic,
+            source: domain::RuntimeEventSource::ExternalAgent,
+            trust_level: domain::RuntimeTrustLevel::ExternalOpaque,
+            item_id: None,
+            ledger_ref: None,
+            payload,
+            visibility: domain::RuntimeEventVisibility::Workspace,
+            durability: domain::RuntimeEventDurability::Durable,
+        })
+        .await
+}
+
 pub fn coalesce_provider_stream_events(
     bus: &RuntimeEventBus,
     events: &[ProviderStreamEvent],
