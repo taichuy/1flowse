@@ -57,6 +57,66 @@ afterEach(() => {
 });
 
 describe('useAgentFlowDebugSession streaming', () => {
+  test('submits even when crypto.randomUUID is unavailable', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(crypto, 'randomUUID');
+    Object.defineProperty(crypto, 'randomUUID', {
+      configurable: true,
+      value: undefined
+    });
+    const queryClient = createQueryClient();
+    const startFlowDebugRunStreamSpy = vi
+      .spyOn(runtimeApi, 'startFlowDebugRunStream')
+      .mockImplementation(async (_applicationId, _input, _csrfToken, handlers) => {
+        handlers.onEvent({
+          type: 'flow_started',
+          run_id: 'flow-run-stream',
+          status: 'running'
+        });
+        handlers.onEvent({
+          type: 'flow_finished',
+          run_id: 'flow-run-stream',
+          status: 'succeeded',
+          output: { answer: '你好' }
+        });
+      });
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    try {
+      const { result } = renderHook(
+        () =>
+          useAgentFlowDebugSession({
+            applicationId: 'app-1',
+            draftId: 'draft-1',
+            document
+          }),
+        { wrapper: createWrapper(queryClient) }
+      );
+
+      await act(async () => {
+        await result.current.submitPrompt('你好？');
+      });
+
+      expect(startFlowDebugRunStreamSpy).toHaveBeenCalled();
+      expect(result.current.messages[0]).toEqual(
+        expect.objectContaining({
+          role: 'user',
+          content: '你好？'
+        })
+      );
+      expect(result.current.messages.at(-1)).toEqual(
+        expect.objectContaining({
+          role: 'assistant',
+          content: '你好',
+          status: 'completed'
+        })
+      );
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(crypto, 'randomUUID', descriptor);
+      }
+    }
+  });
+
   test('streams debug run events into assistant content and trace state', async () => {
     const queryClient = createQueryClient();
     const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');

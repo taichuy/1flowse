@@ -35,6 +35,7 @@ import {
 const DEBUG_SESSION_STORAGE_VERSION = 1;
 const DEBUG_SESSION_STORAGE_PREFIX = '1flowbase.agent-flow.debug-session';
 const RUN_DETAIL_POLL_INTERVAL_MS = 200;
+let debugMessageIdSequence = 0;
 
 interface PersistedDebugSessionPayload {
   version: number;
@@ -98,7 +99,7 @@ function writePersistedInputValues(
 
 function createUserMessage(prompt: string): AgentFlowDebugMessage {
   return {
-    id: `user-${crypto.randomUUID()}`,
+    id: createDebugMessageId('user'),
     role: 'user',
     content: prompt,
     status: 'completed',
@@ -110,7 +111,7 @@ function createUserMessage(prompt: string): AgentFlowDebugMessage {
 
 function createRunningAssistantMessage(): AgentFlowDebugMessage {
   return {
-    id: `assistant-pending-${crypto.randomUUID()}`,
+    id: createDebugMessageId('assistant-pending'),
     role: 'assistant',
     content: '',
     status: 'running',
@@ -118,6 +119,15 @@ function createRunningAssistantMessage(): AgentFlowDebugMessage {
     rawOutput: null,
     traceSummary: []
   };
+}
+
+function createDebugMessageId(prefix: string) {
+  const randomId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${(debugMessageIdSequence += 1).toString(36)}`;
+
+  return `${prefix}-${randomId}`;
 }
 
 function resolvePrompt(
@@ -201,7 +211,7 @@ function replaceAssistantMessageWithError(
   return [
     ...nextMessages,
     {
-      id: `assistant-error-${crypto.randomUUID()}`,
+      id: createDebugMessageId('assistant-error'),
       role: 'assistant',
       content: errorMessage,
       status: 'failed',
