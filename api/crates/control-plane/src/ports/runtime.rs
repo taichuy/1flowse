@@ -181,6 +181,38 @@ pub struct AppendUsageLedgerInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct AppendModelFailoverAttemptLedgerInput {
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub llm_turn_span_id: Option<Uuid>,
+    pub queue_snapshot_id: Option<Uuid>,
+    pub attempt_index: i32,
+    pub provider_instance_id: Option<Uuid>,
+    pub provider_code: String,
+    pub upstream_model_id: String,
+    pub protocol: String,
+    pub request_ref: Option<String>,
+    pub request_hash: Option<String>,
+    pub started_at: OffsetDateTime,
+    pub first_token_at: Option<OffsetDateTime>,
+    pub finished_at: Option<OffsetDateTime>,
+    pub status: String,
+    pub failed_after_first_token: bool,
+    pub upstream_request_id: Option<String>,
+    pub error_code: Option<String>,
+    pub error_message_ref: Option<String>,
+    pub usage_ledger_id: Option<Uuid>,
+    pub cost_ledger_id: Option<Uuid>,
+    pub response_ref: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LinkUsageLedgerToModelFailoverAttemptInput {
+    pub failover_attempt_id: Uuid,
+    pub usage_ledger_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
 pub struct AppendCapabilityInvocationInput {
     pub flow_run_id: Uuid,
     pub span_id: Option<Uuid>,
@@ -304,6 +336,14 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         &self,
         input: &AppendUsageLedgerInput,
     ) -> anyhow::Result<domain::UsageLedgerRecord>;
+    async fn append_model_failover_attempt_ledger(
+        &self,
+        input: &AppendModelFailoverAttemptLedgerInput,
+    ) -> anyhow::Result<domain::ModelFailoverAttemptLedgerRecord>;
+    async fn link_usage_ledger_to_model_failover_attempt(
+        &self,
+        input: &LinkUsageLedgerToModelFailoverAttemptInput,
+    ) -> anyhow::Result<domain::ModelFailoverAttemptLedgerRecord>;
     async fn append_capability_invocation(
         &self,
         input: &AppendCapabilityInvocationInput,
@@ -329,6 +369,10 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         &self,
         flow_run_id: Uuid,
     ) -> anyhow::Result<Vec<domain::UsageLedgerRecord>>;
+    async fn list_model_failover_attempt_ledger(
+        &self,
+        flow_run_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::ModelFailoverAttemptLedgerRecord>>;
     async fn list_capability_invocations(
         &self,
         flow_run_id: Uuid,

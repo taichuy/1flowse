@@ -323,6 +323,17 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         )
     }
 
+    pub fn for_tests_with_fail_before_token_models(models: Vec<&str>) -> Self {
+        Self::new(
+            InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
+                "application.view.all",
+                "application.create.all",
+            ]),
+            InMemoryProviderRuntime::with_fail_before_token_models(models),
+            "test-master-key",
+        )
+    }
+
     pub async fn seed_application_with_flow(&self, name: &str) -> SeededPreviewApplication {
         let actor_user_id = Uuid::now_v7();
         let application = self
@@ -367,6 +378,32 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
             flow_id: editor_state.flow.id,
             source_provider_instance_id: self.repository.default_provider_instance_id(),
         }
+    }
+
+    pub fn default_provider_instance_id(&self) -> Uuid {
+        self.repository.default_provider_instance_id()
+    }
+
+    pub fn seed_provider_instance(
+        &self,
+        provider_code: &str,
+        display_name: &str,
+        included_in_main: bool,
+        status: domain::ModelProviderInstanceStatus,
+        enabled_model_ids: Vec<&str>,
+    ) -> Uuid {
+        self.repository.seed_provider_instance(
+            provider_code,
+            display_name,
+            included_in_main,
+            status,
+            enabled_model_ids,
+        )
+    }
+
+    pub fn seed_catalog_entries_for_instance(&self, instance_id: Uuid, model_ids: Vec<&str>) {
+        self.repository
+            .seed_catalog_entries_for_instance(instance_id, model_ids);
     }
 
     pub async fn seed_application_with_human_input_flow(
@@ -523,6 +560,18 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         OrchestrationRuntimeRepository::list_usage_ledger(&self.repository, flow_run_id)
             .await
             .expect("usage ledger should be readable")
+    }
+
+    pub async fn list_model_failover_attempt_ledger(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Vec<domain::ModelFailoverAttemptLedgerRecord> {
+        OrchestrationRuntimeRepository::list_model_failover_attempt_ledger(
+            &self.repository,
+            flow_run_id,
+        )
+        .await
+        .expect("model failover attempt ledger should be readable")
     }
 
     pub async fn list_capability_invocations(

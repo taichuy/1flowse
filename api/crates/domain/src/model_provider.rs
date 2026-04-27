@@ -372,6 +372,86 @@ pub struct ModelProviderCatalogCacheRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelProviderCatalogSourceRecord {
+    pub id: Uuid,
+    pub workspace_id: Uuid,
+    pub source_kind: String,
+    pub plugin_id: String,
+    pub provider_code: String,
+    pub display_name: String,
+    pub base_url_ref: Option<String>,
+    pub auth_secret_ref: Option<String>,
+    pub protocol: String,
+    pub status: String,
+    pub last_sync_run_id: Option<Uuid>,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelCatalogSyncRunRecord {
+    pub id: Uuid,
+    pub catalog_source_id: Uuid,
+    pub status: String,
+    pub error_message_ref: Option<String>,
+    pub discovered_count: i64,
+    pub imported_count: i64,
+    pub disabled_count: i64,
+    pub started_at: OffsetDateTime,
+    pub finished_at: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelProviderCatalogEntryRecord {
+    pub id: Uuid,
+    pub provider_instance_id: Option<Uuid>,
+    pub catalog_source_id: Uuid,
+    pub upstream_model_id: String,
+    pub display_label: String,
+    pub protocol: String,
+    pub capability_snapshot: serde_json::Value,
+    pub parameter_schema_ref: Option<String>,
+    pub context_window: Option<i64>,
+    pub max_output_tokens: Option<i64>,
+    pub pricing_ref: Option<String>,
+    pub fetched_at: OffsetDateTime,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelFailoverQueueTemplateRecord {
+    pub id: Uuid,
+    pub workspace_id: Uuid,
+    pub name: String,
+    pub version: i64,
+    pub status: String,
+    pub created_by: Uuid,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelFailoverQueueItemRecord {
+    pub id: Uuid,
+    pub queue_template_id: Uuid,
+    pub sort_index: i32,
+    pub provider_instance_id: Uuid,
+    pub provider_code: String,
+    pub upstream_model_id: String,
+    pub protocol: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelFailoverQueueSnapshotRecord {
+    pub id: Uuid,
+    pub queue_template_id: Uuid,
+    pub version: i64,
+    pub items: serde_json::Value,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelProviderSecretRecord {
     pub provider_instance_id: Uuid,
     pub encrypted_secret_json: serde_json::Value,

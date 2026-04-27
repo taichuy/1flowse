@@ -10,9 +10,11 @@ use crate::{
     errors::ControlPlaneError,
     flow::FlowService,
     ports::{
-        AppendCapabilityInvocationInput, AppendContextProjectionInput, AppendRunEventInput,
-        AppendUsageLedgerInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
-        CreateNodeRunInput, OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateNodeRunInput,
+        AppendCapabilityInvocationInput, AppendContextProjectionInput,
+        AppendModelFailoverAttemptLedgerInput, AppendRunEventInput, AppendUsageLedgerInput,
+        CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
+        LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
+        UpdateFlowRunInput, UpdateNodeRunInput,
     },
     runtime_observability::{
         append_host_event, append_host_span, coalesce_provider_stream_events,
@@ -64,12 +66,13 @@ where
         .as_ref()
         .unwrap_or(&editor_state.draft.document);
 
-    let compiled_plan = orchestration_runtime::compiler::FlowCompiler::compile(
+    let mut compiled_plan = orchestration_runtime::compiler::FlowCompiler::compile(
         editor_state.flow.id,
         &editor_state.draft.id.to_string(),
         debug_document,
         &compile_context,
     )?;
+    super::freeze_failover_queue_routes(&service.repository, &mut compiled_plan).await?;
     ensure_compiled_plan_runnable(&compiled_plan)?;
     let compiled_record = service
         .repository
@@ -839,7 +842,7 @@ where
         "model": metrics_payload.get("model").cloned().unwrap_or(Value::Null),
     });
     let model_input_hash = model_input_hash(&model_input);
-    repository
+    let projection = repository
         .append_context_projection(&AppendContextProjectionInput {
             flow_run_id,
             node_run_id: Some(node_run_id),
@@ -867,12 +870,24 @@ where
         domain::UsageLedgerStatus::UnavailableError
     };
 
-    repository
+    let attempts = append_model_attempts_from_metrics(
+        repository,
+        flow_run_id,
+        node_run_id,
+        span_id,
+        &projection,
+        metrics_payload,
+        error_payload,
+    )
+    .await?;
+    let usage_attempt_id = winner_attempt_id(&attempts);
+
+    let usage_ledger = repository
         .append_usage_ledger(&AppendUsageLedgerInput {
             flow_run_id,
             node_run_id: Some(node_run_id),
             span_id: Some(span_id),
-            failover_attempt_id: None,
+            failover_attempt_id: usage_attempt_id,
             provider_instance_id: metrics_payload
                 .get("provider_instance_id")
                 .and_then(Value::as_str)
@@ -882,7 +897,10 @@ where
                 .get("model")
                 .and_then(Value::as_str)
                 .map(str::to_string),
-            upstream_model_id: None,
+            upstream_model_id: metrics_payload
+                .get("model")
+                .and_then(Value::as_str)
+                .map(str::to_string),
             upstream_request_id: None,
             input_tokens: usage_i64(&raw_usage, "input_tokens"),
             cached_input_tokens: usage_i64(&raw_usage, "cached_input_tokens"),
@@ -898,8 +916,144 @@ where
             normalized_usage: raw_usage,
         })
         .await?;
+    if let Some(failover_attempt_id) = usage_attempt_id {
+        repository
+            .link_usage_ledger_to_model_failover_attempt(
+                &LinkUsageLedgerToModelFailoverAttemptInput {
+                    failover_attempt_id,
+                    usage_ledger_id: usage_ledger.id,
+                },
+            )
+            .await?;
+    }
 
     Ok(())
+}
+
+async fn append_model_attempts_from_metrics<R>(
+    repository: &R,
+    flow_run_id: Uuid,
+    node_run_id: Uuid,
+    span_id: Uuid,
+    projection: &domain::ContextProjectionRecord,
+    metrics_payload: &Value,
+    error_payload: Option<&Value>,
+) -> Result<Vec<domain::ModelFailoverAttemptLedgerRecord>>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    let mut attempt_payloads = metrics_payload
+        .get("attempts")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    if attempt_payloads.is_empty() {
+        attempt_payloads.push(json!({
+            "attempt_index": 0,
+            "provider_instance_id": metrics_payload.get("provider_instance_id").cloned().unwrap_or(Value::Null),
+            "provider_code": metrics_payload.get("provider_code").cloned().unwrap_or(Value::Null),
+            "protocol": metrics_payload.get("protocol").cloned().unwrap_or(Value::Null),
+            "upstream_model_id": metrics_payload.get("model").cloned().unwrap_or(Value::Null),
+            "status": if error_payload.is_some() { "failed" } else { "succeeded" },
+            "failed_after_first_token": false,
+        }));
+    }
+
+    let mut records = Vec::with_capacity(attempt_payloads.len());
+    for selected_attempt in attempt_payloads {
+        let status = selected_attempt
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or(if error_payload.is_some() {
+                "failed"
+            } else {
+                "succeeded"
+            });
+
+        let record = repository
+            .append_model_failover_attempt_ledger(&AppendModelFailoverAttemptLedgerInput {
+                flow_run_id,
+                node_run_id: Some(node_run_id),
+                llm_turn_span_id: Some(span_id),
+                queue_snapshot_id: metrics_payload
+                    .get("queue_snapshot_id")
+                    .and_then(Value::as_str)
+                    .and_then(|value| Uuid::parse_str(value).ok()),
+                attempt_index: selected_attempt
+                    .get("attempt_index")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(records.len() as i64) as i32,
+                provider_instance_id: selected_attempt
+                    .get("provider_instance_id")
+                    .and_then(Value::as_str)
+                    .and_then(|value| Uuid::parse_str(value).ok()),
+                provider_code: selected_attempt
+                    .get("provider_code")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown")
+                    .to_string(),
+                upstream_model_id: selected_attempt
+                    .get("upstream_model_id")
+                    .or_else(|| selected_attempt.get("model"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown")
+                    .to_string(),
+                protocol: selected_attempt
+                    .get("protocol")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown")
+                    .to_string(),
+                request_ref: Some(projection.model_input_ref.clone()),
+                request_hash: Some(projection.model_input_hash.clone()),
+                started_at: OffsetDateTime::now_utc(),
+                first_token_at: None,
+                finished_at: Some(OffsetDateTime::now_utc()),
+                status: status.to_string(),
+                failed_after_first_token: selected_attempt
+                    .get("failed_after_first_token")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                upstream_request_id: selected_attempt
+                    .get("upstream_request_id")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                error_code: selected_attempt
+                    .get("error_code")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                    .or_else(|| {
+                        (status != "succeeded").then(|| {
+                            error_payload
+                                .and_then(|payload| payload.get("error_kind"))
+                                .and_then(Value::as_str)
+                                .unwrap_or("provider_error")
+                                .to_string()
+                        })
+                    }),
+                error_message_ref: selected_attempt
+                    .get("error_message_ref")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                usage_ledger_id: None,
+                cost_ledger_id: None,
+                response_ref: selected_attempt
+                    .get("response_ref")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+            })
+            .await?;
+        records.push(record);
+    }
+
+    Ok(records)
+}
+
+fn winner_attempt_id(attempts: &[domain::ModelFailoverAttemptLedgerRecord]) -> Option<Uuid> {
+    attempts
+        .iter()
+        .find(|attempt| attempt.status == "succeeded")
+        .map(|attempt| attempt.id)
 }
 
 fn usage_i64(usage: &Value, field: &str) -> Option<i64> {

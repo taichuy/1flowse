@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Result;
-use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
@@ -167,21 +166,15 @@ where
         return Ok(instance.enabled_model_ids.iter().cloned().collect());
     }
 
-    let cached_models = repository
-        .get_catalog_cache(instance.id)
+    let catalog_models = repository
+        .list_catalog_entries_for_provider_instance(instance.id)
         .await?
-        .and_then(|cache| cache.models_json.as_array().cloned())
-        .unwrap_or_default()
         .into_iter()
-        .filter_map(|model| {
-            model
-                .get("model_id")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-        })
+        .filter(|entry| entry.status == "active")
+        .map(|entry| entry.upstream_model_id)
         .collect::<BTreeSet<_>>();
 
-    Ok(cached_models)
+    Ok(catalog_models)
 }
 
 async fn installation_is_runnable<R>(
@@ -468,6 +461,45 @@ mod tests {
         .await;
 
         assert_eq!(field, "model");
+    }
+
+    #[tokio::test]
+    async fn orchestration_runtime_compile_context_uses_catalog_entries_as_model_source() {
+        let repository =
+            super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
+                vec![],
+            );
+        let selected_instance_id = repository.seed_provider_instance(
+            "fixture_provider",
+            "Catalog Entry Source",
+            true,
+            domain::ModelProviderInstanceStatus::Ready,
+            vec![],
+        );
+        repository.set_instance_catalog_models(selected_instance_id, vec!["cache-only-model"]);
+        repository.seed_catalog_entries_for_instance(selected_instance_id, vec!["gpt-5.4-mini"]);
+
+        let compile_context = build_compile_context(&repository, Uuid::nil())
+            .await
+            .expect("compile context should build");
+        let compiled_plan = orchestration_runtime::compiler::FlowCompiler::compile(
+            Uuid::now_v7(),
+            "draft-1",
+            &llm_document(
+                Uuid::now_v7(),
+                "fixture_provider",
+                Some(selected_instance_id),
+                "gpt-5.4-mini",
+            ),
+            &compile_context,
+        )
+        .expect("plan should compile");
+
+        assert!(
+            compiled_plan.compile_issues.is_empty(),
+            "catalog entry should be the model source, got {:?}",
+            compiled_plan.compile_issues
+        );
     }
 
     #[tokio::test]

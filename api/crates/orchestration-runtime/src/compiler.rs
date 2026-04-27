@@ -4,8 +4,9 @@ use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;
 
 use crate::compiled_plan::{
-    CompileIssue, CompileIssueCode, CompiledBinding, CompiledLlmRuntime, CompiledNode,
-    CompiledOutput, CompiledPlan, CompiledPluginRuntime,
+    CompileIssue, CompileIssueCode, CompiledBinding, CompiledLlmRouteTarget, CompiledLlmRouting,
+    CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan, CompiledPluginRuntime,
+    LlmRoutingMode,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -270,6 +271,14 @@ fn compile_llm_runtime(
     compile_issues: &mut Vec<CompileIssue>,
 ) -> Option<CompiledLlmRuntime> {
     let provider_config = config.get("model_provider");
+    if provider_config
+        .and_then(|value| value.get("routing_mode"))
+        .and_then(Value::as_str)
+        .is_some_and(|value| value == "failover_queue")
+    {
+        return compile_failover_queue_runtime(node_id, provider_config, context, compile_issues);
+    }
+
     let provider_code = provider_config
         .and_then(|value| value.get("provider_code"))
         .and_then(Value::as_str)
@@ -405,6 +414,7 @@ fn compile_llm_runtime(
             provider_code: provider_instance.provider_code.clone(),
             protocol: provider_instance.protocol.clone(),
             model: String::new(),
+            routing: Some(fixed_model_routing(provider_instance, "")),
         });
     };
 
@@ -425,7 +435,186 @@ fn compile_llm_runtime(
         provider_instance_id: provider_instance.provider_instance_id.clone(),
         provider_code: provider_instance.provider_code.clone(),
         protocol: provider_instance.protocol.clone(),
-        model,
+        model: model.clone(),
+        routing: Some(fixed_model_routing(provider_instance, &model)),
+    })
+}
+
+fn fixed_model_routing(
+    provider_instance: &FlowCompileProviderInstance,
+    model: &str,
+) -> CompiledLlmRouting {
+    CompiledLlmRouting {
+        routing_mode: LlmRoutingMode::FixedModel,
+        fixed_model_target: Some(serde_json::json!({
+            "provider_instance_id": provider_instance.provider_instance_id.clone(),
+            "provider_code": provider_instance.provider_code.clone(),
+            "protocol": provider_instance.protocol.clone(),
+            "upstream_model_id": model,
+        })),
+        queue_template_id: None,
+        queue_snapshot_id: None,
+        queue_targets: Vec::new(),
+        context_policy: serde_json::json!({}),
+        stream_policy: serde_json::json!({}),
+    }
+}
+
+fn compile_failover_queue_runtime(
+    node_id: &str,
+    provider_config: Option<&Value>,
+    context: &FlowCompileContext,
+    compile_issues: &mut Vec<CompileIssue>,
+) -> Option<CompiledLlmRuntime> {
+    let queue_template_id = provider_config
+        .and_then(|value| value.get("queue_template_id"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let queue_snapshot_id = provider_config
+        .and_then(|value| value.get("queue_snapshot_id"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let raw_targets = provider_config
+        .and_then(|value| value.get("queue_targets"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    if queue_template_id.is_none() {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::MissingProviderInstance,
+            message: format!("node {node_id} is missing config.model_provider.queue_template_id"),
+        });
+    }
+    let mut targets = Vec::new();
+    for (index, target) in raw_targets.iter().enumerate() {
+        let Some(compiled_target) =
+            compile_failover_queue_target(node_id, index, target, context, compile_issues)
+        else {
+            continue;
+        };
+        targets.push(compiled_target);
+    }
+    let first_target = targets.first().cloned().unwrap_or(CompiledLlmRouteTarget {
+        provider_instance_id: String::new(),
+        provider_code: String::new(),
+        protocol: String::new(),
+        upstream_model_id: String::new(),
+    });
+
+    Some(CompiledLlmRuntime {
+        provider_instance_id: first_target.provider_instance_id.clone(),
+        provider_code: first_target.provider_code.clone(),
+        protocol: first_target.protocol.clone(),
+        model: first_target.upstream_model_id.clone(),
+        routing: Some(CompiledLlmRouting {
+            routing_mode: LlmRoutingMode::FailoverQueue,
+            fixed_model_target: None,
+            queue_template_id,
+            queue_snapshot_id,
+            queue_targets: targets,
+            context_policy: serde_json::json!({}),
+            stream_policy: serde_json::json!({}),
+        }),
+    })
+}
+
+fn compile_failover_queue_target(
+    node_id: &str,
+    index: usize,
+    target: &Value,
+    context: &FlowCompileContext,
+    compile_issues: &mut Vec<CompileIssue>,
+) -> Option<CompiledLlmRouteTarget> {
+    let provider_instance_id = target
+        .get("provider_instance_id")
+        .or_else(|| target.get("source_instance_id"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let upstream_model_id = target
+        .get("upstream_model_id")
+        .or_else(|| target.get("model_id"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    let Some(provider_instance_id) = provider_instance_id else {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::MissingProviderInstance,
+            message: format!(
+                "node {node_id} failover target {index} is missing provider_instance_id"
+            ),
+        });
+        return None;
+    };
+    let Some(upstream_model_id) = upstream_model_id else {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::MissingModel,
+            message: format!("node {node_id} failover target {index} is missing upstream_model_id"),
+        });
+        return None;
+    };
+    let Some(provider_instance) = context.provider_instances.get(&provider_instance_id) else {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::ProviderInstanceNotFound,
+            message: format!(
+                "failover target source_instance_id {provider_instance_id} was not found"
+            ),
+        });
+        return None;
+    };
+
+    if !provider_instance.is_ready
+        || !provider_instance.is_runnable
+        || !provider_instance.included_in_main
+    {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::ProviderInstanceNotReady,
+            message: format!(
+                "failover target source_instance_id {provider_instance_id} is not runnable"
+            ),
+        });
+    }
+    if !provider_instance.allow_custom_models
+        && !provider_instance.available_models.is_empty()
+        && !provider_instance
+            .available_models
+            .contains(&upstream_model_id)
+    {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::ModelNotAvailable,
+            message: format!(
+                "model {upstream_model_id} is not available for failover target source_instance_id {provider_instance_id}"
+            ),
+        });
+    }
+
+    Some(CompiledLlmRouteTarget {
+        provider_instance_id: provider_instance.provider_instance_id.clone(),
+        provider_code: target
+            .get("provider_code")
+            .and_then(Value::as_str)
+            .unwrap_or(&provider_instance.provider_code)
+            .to_string(),
+        protocol: target
+            .get("protocol")
+            .and_then(Value::as_str)
+            .unwrap_or(&provider_instance.protocol)
+            .to_string(),
+        upstream_model_id,
     })
 }
 

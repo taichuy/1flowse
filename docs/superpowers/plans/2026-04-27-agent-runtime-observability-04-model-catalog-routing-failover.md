@@ -38,7 +38,7 @@
 - Modify: `api/crates/storage-durable/postgres/src/model_provider_repository.rs`
 - Create: `api/crates/control-plane/src/_tests/model_provider_failover_tests.rs`
 
-- [ ] **Step 1: Write failing catalog source test**
+- [x] **Step 1: Write failing catalog source test**
 
 Create `api/crates/control-plane/src/_tests/model_provider_failover_tests.rs`:
 
@@ -70,7 +70,7 @@ async fn relay_catalog_sync_imports_entries_as_model_provider_targets() {
 }
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -80,7 +80,7 @@ cargo test -p control-plane relay_catalog_sync_imports_entries_as_model_provider
 
 Expected: FAIL because catalog source tables and service methods do not exist.
 
-- [ ] **Step 3: Add domain records**
+- [x] **Step 3: Add domain records**
 
 Append to `api/crates/domain/src/model_provider.rs`:
 
@@ -133,7 +133,7 @@ pub struct ModelProviderCatalogEntryRecord {
 }
 ```
 
-- [ ] **Step 4: Add migration**
+- [x] **Step 4: Add migration**
 
 Append to `api/crates/storage-durable/postgres/migrations/20260427190000_create_model_catalog_routing_failover.sql`:
 
@@ -184,7 +184,7 @@ create table model_provider_catalog_entries (
 );
 ```
 
-- [ ] **Step 5: Add repository and service methods**
+- [x] **Step 5: Add repository and service methods**
 
 Add to `ModelProviderRepository`:
 
@@ -215,7 +215,7 @@ pub fn normalize_relay_model_entry(raw: &serde_json::Value) -> anyhow::Result<Up
 }
 ```
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run:
 
@@ -226,7 +226,7 @@ cargo test -p storage-postgres migration_smoke
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/crates/domain/src/model_provider.rs api/crates/control-plane/src/ports/model_provider.rs api/crates/control-plane/src/model_provider/catalog_source.rs api/crates/storage-durable/postgres/migrations/20260427190000_create_model_catalog_routing_failover.sql api/crates/storage-durable/postgres/src/model_provider_repository.rs api/crates/control-plane/src/_tests/model_provider_failover_tests.rs api/crates/control-plane/src/_tests/mod.rs
@@ -242,7 +242,7 @@ git commit -m "feat: add model provider catalog source"
 - Modify: `api/crates/storage-durable/postgres/src/model_provider_repository.rs`
 - Modify: `api/crates/control-plane/src/_tests/model_provider_failover_tests.rs`
 
-- [ ] **Step 1: Write failing queue snapshot test**
+- [x] **Step 1: Write failing queue snapshot test**
 
 Add:
 
@@ -266,7 +266,7 @@ async fn failover_queue_snapshot_freezes_order_for_run() {
 }
 ```
 
-- [ ] **Step 2: Add tables**
+- [x] **Step 2: Add tables**
 
 Append migration:
 
@@ -302,7 +302,7 @@ create table model_failover_queue_snapshots (
 );
 ```
 
-- [ ] **Step 3: Implement snapshot creation**
+- [x] **Step 3: Implement snapshot creation**
 
 Create `api/crates/control-plane/src/model_provider/failover_queue.rs`:
 
@@ -324,7 +324,7 @@ pub fn freeze_queue_items(items: &[FailoverQueueSnapshotItem]) -> serde_json::Va
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -334,7 +334,7 @@ cargo test -p control-plane failover_queue_snapshot_freezes_order_for_run
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/crates/domain/src/model_provider.rs api/crates/control-plane/src/model_provider/failover_queue.rs api/crates/storage-durable/postgres/migrations/20260427190000_create_model_catalog_routing_failover.sql api/crates/storage-durable/postgres/src/model_provider_repository.rs api/crates/control-plane/src/_tests/model_provider_failover_tests.rs
@@ -351,7 +351,7 @@ git commit -m "feat: add model failover queue snapshots"
 - Modify: `api/crates/orchestration-runtime/src/_tests/execution_engine_tests.rs`
 - Modify: `api/crates/storage-durable/postgres/migrations/20260427190000_create_model_catalog_routing_failover.sql`
 
-- [ ] **Step 1: Write failing LLM output test**
+- [x] **Step 1: Write failing LLM output test**
 
 Add to `api/crates/orchestration-runtime/src/_tests/execution_engine_tests.rs`:
 
@@ -367,7 +367,7 @@ async fn llm_node_outputs_include_hidden_route_projection_and_attempt_ids() {
 }
 ```
 
-- [ ] **Step 2: Add attempt ledger table**
+- [x] **Step 2: Add attempt ledger table**
 
 Append migration:
 
@@ -399,7 +399,7 @@ create table model_failover_attempt_ledger (
 );
 ```
 
-- [ ] **Step 3: Extend compiled LLM runtime contract**
+- [x] **Step 3: Extend compiled LLM runtime contract**
 
 In `api/crates/orchestration-runtime/src/compiled_plan.rs`, add:
 
@@ -421,7 +421,7 @@ pub struct CompiledLlmRouting {
 }
 ```
 
-- [ ] **Step 4: Write standard output object**
+- [x] **Step 4: Write standard output object**
 
 Modify `build_llm_output_payload` in `execution_engine.rs` so every LLM node writes:
 
@@ -452,7 +452,7 @@ json!({
 
 The placeholder string `pending_projection_id` is a temporary runtime value in code, not a plan placeholder; replace it in the same task when wiring real projection IDs from plan 03.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -462,7 +462,7 @@ cargo test -p orchestration-runtime llm_node_outputs_include_hidden_route_projec
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/crates/domain/src/runtime_observability.rs api/crates/orchestration-runtime/src/compiled_plan.rs api/crates/orchestration-runtime/src/execution_engine.rs api/crates/orchestration-runtime/src/compiler.rs api/crates/orchestration-runtime/src/_tests/execution_engine_tests.rs api/crates/storage-durable/postgres/migrations/20260427190000_create_model_catalog_routing_failover.sql

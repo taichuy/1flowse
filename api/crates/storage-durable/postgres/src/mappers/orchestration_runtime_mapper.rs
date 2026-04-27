@@ -191,6 +191,33 @@ pub struct StoredUsageLedgerRow {
 }
 
 #[derive(Debug, Clone)]
+pub struct StoredModelFailoverAttemptLedgerRow {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub llm_turn_span_id: Option<Uuid>,
+    pub queue_snapshot_id: Option<Uuid>,
+    pub attempt_index: i32,
+    pub provider_instance_id: Option<Uuid>,
+    pub provider_code: String,
+    pub upstream_model_id: String,
+    pub protocol: String,
+    pub request_ref: Option<String>,
+    pub request_hash: Option<String>,
+    pub started_at: OffsetDateTime,
+    pub first_token_at: Option<OffsetDateTime>,
+    pub finished_at: Option<OffsetDateTime>,
+    pub status: String,
+    pub failed_after_first_token: bool,
+    pub upstream_request_id: Option<String>,
+    pub error_code: Option<String>,
+    pub error_message_ref: Option<String>,
+    pub usage_ledger_id: Option<Uuid>,
+    pub cost_ledger_id: Option<Uuid>,
+    pub response_ref: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct StoredCapabilityInvocationRow {
     pub id: Uuid,
     pub flow_run_id: Uuid,
@@ -425,6 +452,36 @@ impl PgOrchestrationRuntimeMapper {
             normalized_usage: row.normalized_usage,
             created_at: row.created_at,
         })
+    }
+
+    pub fn to_model_failover_attempt_ledger_record(
+        row: StoredModelFailoverAttemptLedgerRow,
+    ) -> domain::ModelFailoverAttemptLedgerRecord {
+        domain::ModelFailoverAttemptLedgerRecord {
+            id: row.id,
+            flow_run_id: row.flow_run_id,
+            node_run_id: row.node_run_id,
+            llm_turn_span_id: row.llm_turn_span_id,
+            queue_snapshot_id: row.queue_snapshot_id,
+            attempt_index: row.attempt_index,
+            provider_instance_id: row.provider_instance_id,
+            provider_code: row.provider_code,
+            upstream_model_id: row.upstream_model_id,
+            protocol: row.protocol,
+            request_ref: row.request_ref,
+            request_hash: row.request_hash,
+            started_at: row.started_at,
+            first_token_at: row.first_token_at,
+            finished_at: row.finished_at,
+            status: row.status,
+            failed_after_first_token: row.failed_after_first_token,
+            upstream_request_id: row.upstream_request_id,
+            error_code: row.error_code,
+            error_message_ref: row.error_message_ref,
+            usage_ledger_id: row.usage_ledger_id,
+            cost_ledger_id: row.cost_ledger_id,
+            response_ref: row.response_ref,
+        }
     }
 
     pub fn to_capability_invocation_record(

@@ -1,12 +1,13 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use control_plane::ports::{
-    AppendCapabilityInvocationInput, AppendContextProjectionInput, AppendRunEventInput,
-    AppendRuntimeEventInput, AppendRuntimeItemInput, AppendRuntimeSpanInput,
-    AppendUsageLedgerInput, CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput,
-    CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
-    OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateNodeRunInput,
-    UpsertCompiledPlanInput,
+    AppendCapabilityInvocationInput, AppendContextProjectionInput,
+    AppendModelFailoverAttemptLedgerInput, AppendRunEventInput, AppendRuntimeEventInput,
+    AppendRuntimeItemInput, AppendRuntimeSpanInput, AppendUsageLedgerInput,
+    CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput, CreateCallbackTaskInput,
+    CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
+    LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
+    UpdateNodeRunInput, UpsertCompiledPlanInput,
 };
 use sqlx::{postgres::PgRow, Postgres, Row, Transaction};
 use uuid::Uuid;
@@ -15,8 +16,9 @@ use crate::{
     mappers::orchestration_runtime_mapper::{
         PgOrchestrationRuntimeMapper, StoredApplicationRunSummaryRow, StoredCallbackTaskRow,
         StoredCapabilityInvocationRow, StoredCheckpointRow, StoredCompiledPlanRow,
-        StoredContextProjectionRow, StoredFlowRunRow, StoredNodeRunRow, StoredRunEventRow,
-        StoredRuntimeEventRow, StoredRuntimeItemRow, StoredRuntimeSpanRow, StoredUsageLedgerRow,
+        StoredContextProjectionRow, StoredFlowRunRow, StoredModelFailoverAttemptLedgerRow,
+        StoredNodeRunRow, StoredRunEventRow, StoredRuntimeEventRow, StoredRuntimeItemRow,
+        StoredRuntimeSpanRow, StoredUsageLedgerRow,
     },
     repositories::PgControlPlaneStore,
 };
@@ -811,6 +813,137 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         map_usage_ledger_record(row)
     }
 
+    async fn append_model_failover_attempt_ledger(
+        &self,
+        input: &AppendModelFailoverAttemptLedgerInput,
+    ) -> Result<domain::ModelFailoverAttemptLedgerRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into model_failover_attempt_ledger (
+                id,
+                flow_run_id,
+                node_run_id,
+                llm_turn_span_id,
+                queue_snapshot_id,
+                attempt_index,
+                provider_instance_id,
+                provider_code,
+                upstream_model_id,
+                protocol,
+                request_ref,
+                request_hash,
+                started_at,
+                first_token_at,
+                finished_at,
+                status,
+                failed_after_first_token,
+                upstream_request_id,
+                error_code,
+                error_message_ref,
+                usage_ledger_id,
+                cost_ledger_id,
+                response_ref
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                      $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+                      $21, $22, $23)
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                llm_turn_span_id,
+                queue_snapshot_id,
+                attempt_index,
+                provider_instance_id,
+                provider_code,
+                upstream_model_id,
+                protocol,
+                request_ref,
+                request_hash,
+                started_at,
+                first_token_at,
+                finished_at,
+                status,
+                failed_after_first_token,
+                upstream_request_id,
+                error_code,
+                error_message_ref,
+                usage_ledger_id,
+                cost_ledger_id,
+                response_ref
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.flow_run_id)
+        .bind(input.node_run_id)
+        .bind(input.llm_turn_span_id)
+        .bind(input.queue_snapshot_id)
+        .bind(input.attempt_index)
+        .bind(input.provider_instance_id)
+        .bind(&input.provider_code)
+        .bind(&input.upstream_model_id)
+        .bind(&input.protocol)
+        .bind(input.request_ref.as_deref())
+        .bind(input.request_hash.as_deref())
+        .bind(input.started_at)
+        .bind(input.first_token_at)
+        .bind(input.finished_at)
+        .bind(&input.status)
+        .bind(input.failed_after_first_token)
+        .bind(input.upstream_request_id.as_deref())
+        .bind(input.error_code.as_deref())
+        .bind(input.error_message_ref.as_deref())
+        .bind(input.usage_ledger_id)
+        .bind(input.cost_ledger_id)
+        .bind(input.response_ref.as_deref())
+        .fetch_one(self.pool())
+        .await?;
+
+        Ok(map_model_failover_attempt_ledger_record(row))
+    }
+
+    async fn link_usage_ledger_to_model_failover_attempt(
+        &self,
+        input: &LinkUsageLedgerToModelFailoverAttemptInput,
+    ) -> Result<domain::ModelFailoverAttemptLedgerRecord> {
+        let row = sqlx::query(
+            r#"
+            update model_failover_attempt_ledger
+            set usage_ledger_id = $2
+            where id = $1
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                llm_turn_span_id,
+                queue_snapshot_id,
+                attempt_index,
+                provider_instance_id,
+                provider_code,
+                upstream_model_id,
+                protocol,
+                request_ref,
+                request_hash,
+                started_at,
+                first_token_at,
+                finished_at,
+                status,
+                failed_after_first_token,
+                upstream_request_id,
+                error_code,
+                error_message_ref,
+                usage_ledger_id,
+                cost_ledger_id,
+                response_ref
+            "#,
+        )
+        .bind(input.failover_attempt_id)
+        .bind(input.usage_ledger_id)
+        .fetch_one(self.pool())
+        .await?;
+
+        Ok(map_model_failover_attempt_ledger_record(row))
+    }
+
     async fn append_capability_invocation(
         &self,
         input: &AppendCapabilityInvocationInput,
@@ -1049,6 +1182,51 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         .await?;
 
         rows.into_iter().map(map_usage_ledger_record).collect()
+    }
+
+    async fn list_model_failover_attempt_ledger(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Result<Vec<domain::ModelFailoverAttemptLedgerRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                flow_run_id,
+                node_run_id,
+                llm_turn_span_id,
+                queue_snapshot_id,
+                attempt_index,
+                provider_instance_id,
+                provider_code,
+                upstream_model_id,
+                protocol,
+                request_ref,
+                request_hash,
+                started_at,
+                first_token_at,
+                finished_at,
+                status,
+                failed_after_first_token,
+                upstream_request_id,
+                error_code,
+                error_message_ref,
+                usage_ledger_id,
+                cost_ledger_id,
+                response_ref
+            from model_failover_attempt_ledger
+            where flow_run_id = $1
+            order by attempt_index asc, started_at asc, id asc
+            "#,
+        )
+        .bind(flow_run_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(map_model_failover_attempt_ledger_record)
+            .collect())
     }
 
     async fn list_capability_invocations(
@@ -1648,6 +1826,38 @@ fn map_usage_ledger_record(row: PgRow) -> Result<domain::UsageLedgerRecord> {
         normalized_usage: row.get("normalized_usage"),
         created_at: row.get("created_at"),
     })
+}
+
+fn map_model_failover_attempt_ledger_record(
+    row: PgRow,
+) -> domain::ModelFailoverAttemptLedgerRecord {
+    PgOrchestrationRuntimeMapper::to_model_failover_attempt_ledger_record(
+        StoredModelFailoverAttemptLedgerRow {
+            id: row.get("id"),
+            flow_run_id: row.get("flow_run_id"),
+            node_run_id: row.get("node_run_id"),
+            llm_turn_span_id: row.get("llm_turn_span_id"),
+            queue_snapshot_id: row.get("queue_snapshot_id"),
+            attempt_index: row.get("attempt_index"),
+            provider_instance_id: row.get("provider_instance_id"),
+            provider_code: row.get("provider_code"),
+            upstream_model_id: row.get("upstream_model_id"),
+            protocol: row.get("protocol"),
+            request_ref: row.get("request_ref"),
+            request_hash: row.get("request_hash"),
+            started_at: row.get("started_at"),
+            first_token_at: row.get("first_token_at"),
+            finished_at: row.get("finished_at"),
+            status: row.get("status"),
+            failed_after_first_token: row.get("failed_after_first_token"),
+            upstream_request_id: row.get("upstream_request_id"),
+            error_code: row.get("error_code"),
+            error_message_ref: row.get("error_message_ref"),
+            usage_ledger_id: row.get("usage_ledger_id"),
+            cost_ledger_id: row.get("cost_ledger_id"),
+            response_ref: row.get("response_ref"),
+        },
+    )
 }
 
 fn map_capability_invocation_record(row: PgRow) -> domain::CapabilityInvocationRecord {

@@ -107,6 +107,7 @@ fn sample_compiled_plan() -> CompiledPlan {
                 provider_code: "fixture_provider".to_string(),
                 protocol: "openai_compatible".to_string(),
                 model: "gpt-5.4-mini".to_string(),
+                routing: None,
             }),
         },
     );

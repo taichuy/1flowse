@@ -20,6 +20,9 @@ struct InMemoryOrchestrationRuntimeState {
     node_contributions_by_workspace: HashMap<Uuid, Vec<domain::NodeContributionRegistryEntry>>,
     instances_by_id: HashMap<Uuid, domain::ModelProviderInstanceRecord>,
     caches_by_instance_id: HashMap<Uuid, domain::ModelProviderCatalogCacheRecord>,
+    catalog_entries_by_instance_id: HashMap<Uuid, Vec<domain::ModelProviderCatalogEntryRecord>>,
+    model_failover_attempts_by_flow_run_id:
+        HashMap<Uuid, Vec<domain::ModelFailoverAttemptLedgerRecord>>,
     secret_json_by_instance_id: HashMap<Uuid, Value>,
     main_instances_by_provider: HashMap<(Uuid, String), domain::ModelProviderMainInstanceRecord>,
 }
@@ -326,6 +329,36 @@ impl InMemoryOrchestrationRuntimeRepository {
             .insert(instance_id, json!({ "api_key": "test-secret" }));
 
         instance_id
+    }
+
+    pub(crate) fn seed_catalog_entries_for_instance(
+        &self,
+        instance_id: Uuid,
+        model_ids: Vec<&str>,
+    ) {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let now = OffsetDateTime::now_utc();
+        let entries = model_ids
+            .into_iter()
+            .map(|model_id| domain::ModelProviderCatalogEntryRecord {
+                id: Uuid::now_v7(),
+                provider_instance_id: Some(instance_id),
+                catalog_source_id: Uuid::now_v7(),
+                upstream_model_id: model_id.to_string(),
+                display_label: model_id.to_string(),
+                protocol: "openai_compatible".to_string(),
+                capability_snapshot: json!({}),
+                parameter_schema_ref: None,
+                context_window: Some(128000),
+                max_output_tokens: Some(4096),
+                pricing_ref: None,
+                fetched_at: now,
+                status: "active".to_string(),
+            })
+            .collect::<Vec<_>>();
+        inner
+            .catalog_entries_by_instance_id
+            .insert(instance_id, entries);
     }
 
     pub(crate) fn set_instance_status(
@@ -968,6 +1001,18 @@ impl ModelProviderRepository for InMemoryOrchestrationRuntimeRepository {
             .cloned())
     }
 
+    async fn list_catalog_entries_for_provider_instance(
+        &self,
+        provider_instance_id: Uuid,
+    ) -> Result<Vec<domain::ModelProviderCatalogEntryRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .catalog_entries_by_instance_id
+            .get(&provider_instance_id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
     async fn upsert_secret(
         &self,
         _input: &crate::ports::UpsertModelProviderSecretInput,
@@ -1088,6 +1133,7 @@ impl ModelProviderRepository for InMemoryOrchestrationRuntimeRepository {
 pub(crate) struct InMemoryProviderRuntime {
     invoke_delay: Option<std::time::Duration>,
     provider_events: Option<Vec<ProviderStreamEvent>>,
+    fail_before_token_models: Vec<String>,
 }
 
 impl InMemoryProviderRuntime {
@@ -1095,6 +1141,7 @@ impl InMemoryProviderRuntime {
         Self {
             invoke_delay: Some(invoke_delay),
             provider_events: None,
+            fail_before_token_models: Vec::new(),
         }
     }
 
@@ -1102,6 +1149,15 @@ impl InMemoryProviderRuntime {
         Self {
             invoke_delay: None,
             provider_events: Some(provider_events),
+            fail_before_token_models: Vec::new(),
+        }
+    }
+
+    pub(crate) fn with_fail_before_token_models(models: Vec<&str>) -> Self {
+        Self {
+            invoke_delay: None,
+            provider_events: None,
+            fail_before_token_models: models.into_iter().map(str::to_string).collect(),
         }
     }
 }
@@ -1133,6 +1189,13 @@ impl ProviderRuntimePort for InMemoryProviderRuntime {
         _installation: &domain::PluginInstallationRecord,
         input: ProviderInvocationInput,
     ) -> Result<crate::ports::ProviderRuntimeInvocationOutput> {
+        if self
+            .fail_before_token_models
+            .iter()
+            .any(|model| model == &input.model)
+        {
+            anyhow::bail!("provider unavailable before first token");
+        }
         if let Some(delay) = self.invoke_delay {
             tokio::time::sleep(delay).await;
         }
@@ -1634,6 +1697,59 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         Ok(record)
     }
 
+    async fn append_model_failover_attempt_ledger(
+        &self,
+        input: &AppendModelFailoverAttemptLedgerInput,
+    ) -> Result<domain::ModelFailoverAttemptLedgerRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let record = domain::ModelFailoverAttemptLedgerRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: input.flow_run_id,
+            node_run_id: input.node_run_id,
+            llm_turn_span_id: input.llm_turn_span_id,
+            queue_snapshot_id: input.queue_snapshot_id,
+            attempt_index: input.attempt_index,
+            provider_instance_id: input.provider_instance_id,
+            provider_code: input.provider_code.clone(),
+            upstream_model_id: input.upstream_model_id.clone(),
+            protocol: input.protocol.clone(),
+            request_ref: input.request_ref.clone(),
+            request_hash: input.request_hash.clone(),
+            started_at: input.started_at,
+            first_token_at: input.first_token_at,
+            finished_at: input.finished_at,
+            status: input.status.clone(),
+            failed_after_first_token: input.failed_after_first_token,
+            upstream_request_id: input.upstream_request_id.clone(),
+            error_code: input.error_code.clone(),
+            error_message_ref: input.error_message_ref.clone(),
+            usage_ledger_id: input.usage_ledger_id,
+            cost_ledger_id: input.cost_ledger_id,
+            response_ref: input.response_ref.clone(),
+        };
+        inner
+            .model_failover_attempts_by_flow_run_id
+            .entry(input.flow_run_id)
+            .or_default()
+            .push(record.clone());
+        Ok(record)
+    }
+
+    async fn link_usage_ledger_to_model_failover_attempt(
+        &self,
+        input: &LinkUsageLedgerToModelFailoverAttemptInput,
+    ) -> Result<domain::ModelFailoverAttemptLedgerRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let attempt = inner
+            .model_failover_attempts_by_flow_run_id
+            .values_mut()
+            .flat_map(|attempts| attempts.iter_mut())
+            .find(|attempt| attempt.id == input.failover_attempt_id)
+            .ok_or_else(|| anyhow::anyhow!("model failover attempt not found"))?;
+        attempt.usage_ledger_id = Some(input.usage_ledger_id);
+        Ok(attempt.clone())
+    }
+
     async fn append_capability_invocation(
         &self,
         input: &AppendCapabilityInvocationInput,
@@ -1726,6 +1842,18 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         let inner = self.inner.lock().expect("runtime repo mutex poisoned");
         Ok(inner
             .usage_ledger_by_flow_run_id
+            .get(&flow_run_id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    async fn list_model_failover_attempt_ledger(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Result<Vec<domain::ModelFailoverAttemptLedgerRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .model_failover_attempts_by_flow_run_id
             .get(&flow_run_id)
             .cloned()
             .unwrap_or_default())

@@ -116,6 +116,7 @@ fn llm_plan(response_format: serde_json::Value) -> CompiledPlan {
                 provider_code: "openai_compatible".to_string(),
                 protocol: "openai_compatible".to_string(),
                 model: "qwen3.5-27b".to_string(),
+                routing: None,
             }),
         },
     );

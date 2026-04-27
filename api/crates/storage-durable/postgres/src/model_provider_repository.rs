@@ -3,9 +3,12 @@ use async_trait::async_trait;
 use control_plane::{
     errors::ControlPlaneError,
     ports::{
-        CreateModelProviderInstanceInput, CreateModelProviderPreviewSessionInput,
-        ModelProviderRepository, ReassignModelProviderInstancesInput,
-        UpdateModelProviderInstanceInput, UpsertModelProviderCatalogCacheInput,
+        CreateModelCatalogSyncRunInput, CreateModelFailoverQueueItemInput,
+        CreateModelFailoverQueueSnapshotInput, CreateModelFailoverQueueTemplateInput,
+        CreateModelProviderCatalogSourceInput, CreateModelProviderInstanceInput,
+        CreateModelProviderPreviewSessionInput, ModelProviderRepository,
+        ReassignModelProviderInstancesInput, UpdateModelProviderInstanceInput,
+        UpsertModelProviderCatalogCacheInput, UpsertModelProviderCatalogEntryInput,
         UpsertModelProviderMainInstanceInput, UpsertModelProviderSecretInput,
     },
 };
@@ -92,6 +95,102 @@ fn map_preview_session(
         config_fingerprint: row.get("config_fingerprint"),
         models_json: row.get("models_json"),
         expires_at: row.get("expires_at"),
+        created_at: row.get("created_at"),
+    })
+}
+
+fn map_catalog_source(
+    row: sqlx::postgres::PgRow,
+) -> Result<domain::ModelProviderCatalogSourceRecord> {
+    Ok(domain::ModelProviderCatalogSourceRecord {
+        id: row.get("id"),
+        workspace_id: row.get("workspace_id"),
+        source_kind: row.get("source_kind"),
+        plugin_id: row.get("plugin_id"),
+        provider_code: row.get("provider_code"),
+        display_name: row.get("display_name"),
+        base_url_ref: row.get("base_url_ref"),
+        auth_secret_ref: row.get("auth_secret_ref"),
+        protocol: row.get("protocol"),
+        status: row.get("status"),
+        last_sync_run_id: row.get("last_sync_run_id"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+    })
+}
+
+fn map_catalog_sync_run(row: sqlx::postgres::PgRow) -> Result<domain::ModelCatalogSyncRunRecord> {
+    Ok(domain::ModelCatalogSyncRunRecord {
+        id: row.get("id"),
+        catalog_source_id: row.get("catalog_source_id"),
+        status: row.get("status"),
+        error_message_ref: row.get("error_message_ref"),
+        discovered_count: row.get("discovered_count"),
+        imported_count: row.get("imported_count"),
+        disabled_count: row.get("disabled_count"),
+        started_at: row.get("started_at"),
+        finished_at: row.get("finished_at"),
+    })
+}
+
+fn map_catalog_entry(
+    row: sqlx::postgres::PgRow,
+) -> Result<domain::ModelProviderCatalogEntryRecord> {
+    Ok(domain::ModelProviderCatalogEntryRecord {
+        id: row.get("id"),
+        provider_instance_id: row.get("provider_instance_id"),
+        catalog_source_id: row.get("catalog_source_id"),
+        upstream_model_id: row.get("upstream_model_id"),
+        display_label: row.get("display_label"),
+        protocol: row.get("protocol"),
+        capability_snapshot: row.get("capability_snapshot"),
+        parameter_schema_ref: row.get("parameter_schema_ref"),
+        context_window: row.get("context_window"),
+        max_output_tokens: row.get("max_output_tokens"),
+        pricing_ref: row.get("pricing_ref"),
+        fetched_at: row.get("fetched_at"),
+        status: row.get("status"),
+    })
+}
+
+fn map_failover_queue_template(
+    row: sqlx::postgres::PgRow,
+) -> Result<domain::ModelFailoverQueueTemplateRecord> {
+    Ok(domain::ModelFailoverQueueTemplateRecord {
+        id: row.get("id"),
+        workspace_id: row.get("workspace_id"),
+        name: row.get("name"),
+        version: row.get("version"),
+        status: row.get("status"),
+        created_by: row.get("created_by"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+    })
+}
+
+fn map_failover_queue_item(
+    row: sqlx::postgres::PgRow,
+) -> Result<domain::ModelFailoverQueueItemRecord> {
+    Ok(domain::ModelFailoverQueueItemRecord {
+        id: row.get("id"),
+        queue_template_id: row.get("queue_template_id"),
+        sort_index: row.get("sort_index"),
+        provider_instance_id: row.get("provider_instance_id"),
+        provider_code: row.get("provider_code"),
+        upstream_model_id: row.get("upstream_model_id"),
+        protocol: row.get("protocol"),
+        enabled: row.get("enabled"),
+    })
+}
+
+fn map_failover_queue_snapshot(
+    row: sqlx::postgres::PgRow,
+) -> Result<domain::ModelFailoverQueueSnapshotRecord> {
+    Ok(domain::ModelFailoverQueueSnapshotRecord {
+        id: row.get("id"),
+        queue_template_id: row.get("queue_template_id"),
+        version: row.get("version"),
+        items: row.get("items"),
         created_at: row.get("created_at"),
     })
 }
@@ -730,6 +829,429 @@ impl ModelProviderRepository for PgControlPlaneStore {
         .await?;
 
         Ok(count as u64)
+    }
+
+    async fn create_catalog_source(
+        &self,
+        input: &CreateModelProviderCatalogSourceInput,
+    ) -> Result<domain::ModelProviderCatalogSourceRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into model_provider_catalog_sources (
+                id,
+                workspace_id,
+                source_kind,
+                plugin_id,
+                provider_code,
+                display_name,
+                base_url_ref,
+                auth_secret_ref,
+                protocol,
+                status
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            returning
+                id,
+                workspace_id,
+                source_kind,
+                plugin_id,
+                provider_code,
+                display_name,
+                base_url_ref,
+                auth_secret_ref,
+                protocol,
+                status,
+                last_sync_run_id,
+                created_at,
+                updated_at
+            "#,
+        )
+        .bind(input.source_id)
+        .bind(input.workspace_id)
+        .bind(&input.source_kind)
+        .bind(&input.plugin_id)
+        .bind(&input.provider_code)
+        .bind(&input.display_name)
+        .bind(input.base_url_ref.as_deref())
+        .bind(input.auth_secret_ref.as_deref())
+        .bind(&input.protocol)
+        .bind(&input.status)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_catalog_source(row)
+    }
+
+    async fn create_catalog_sync_run(
+        &self,
+        input: &CreateModelCatalogSyncRunInput,
+    ) -> Result<domain::ModelCatalogSyncRunRecord> {
+        let mut tx = self.pool().begin().await?;
+        let row = sqlx::query(
+            r#"
+            insert into model_catalog_sync_runs (
+                id,
+                catalog_source_id,
+                status,
+                error_message_ref,
+                discovered_count,
+                imported_count,
+                disabled_count,
+                started_at,
+                finished_at
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            returning
+                id,
+                catalog_source_id,
+                status,
+                error_message_ref,
+                discovered_count,
+                imported_count,
+                disabled_count,
+                started_at,
+                finished_at
+            "#,
+        )
+        .bind(input.sync_run_id)
+        .bind(input.catalog_source_id)
+        .bind(&input.status)
+        .bind(input.error_message_ref.as_deref())
+        .bind(input.discovered_count)
+        .bind(input.imported_count)
+        .bind(input.disabled_count)
+        .bind(input.started_at)
+        .bind(input.finished_at)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            r#"
+            update model_provider_catalog_sources
+            set last_sync_run_id = $1,
+                updated_at = now()
+            where id = $2
+            "#,
+        )
+        .bind(input.sync_run_id)
+        .bind(input.catalog_source_id)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        map_catalog_sync_run(row)
+    }
+
+    async fn upsert_catalog_entry(
+        &self,
+        input: &UpsertModelProviderCatalogEntryInput,
+    ) -> Result<domain::ModelProviderCatalogEntryRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into model_provider_catalog_entries (
+                id,
+                provider_instance_id,
+                catalog_source_id,
+                upstream_model_id,
+                display_label,
+                protocol,
+                capability_snapshot,
+                parameter_schema_ref,
+                context_window,
+                max_output_tokens,
+                pricing_ref,
+                status
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            on conflict (catalog_source_id, upstream_model_id, protocol) do update
+            set
+                provider_instance_id = excluded.provider_instance_id,
+                display_label = excluded.display_label,
+                capability_snapshot = excluded.capability_snapshot,
+                parameter_schema_ref = excluded.parameter_schema_ref,
+                context_window = excluded.context_window,
+                max_output_tokens = excluded.max_output_tokens,
+                pricing_ref = excluded.pricing_ref,
+                fetched_at = now(),
+                status = excluded.status
+            returning
+                id,
+                provider_instance_id,
+                catalog_source_id,
+                upstream_model_id,
+                display_label,
+                protocol,
+                capability_snapshot,
+                parameter_schema_ref,
+                context_window,
+                max_output_tokens,
+                pricing_ref,
+                fetched_at,
+                status
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.provider_instance_id)
+        .bind(input.catalog_source_id)
+        .bind(&input.upstream_model_id)
+        .bind(&input.display_label)
+        .bind(&input.protocol)
+        .bind(&input.capability_snapshot)
+        .bind(input.parameter_schema_ref.as_deref())
+        .bind(input.context_window)
+        .bind(input.max_output_tokens)
+        .bind(input.pricing_ref.as_deref())
+        .bind(&input.status)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_catalog_entry(row)
+    }
+
+    async fn list_catalog_entries(
+        &self,
+        catalog_source_id: Uuid,
+    ) -> Result<Vec<domain::ModelProviderCatalogEntryRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                provider_instance_id,
+                catalog_source_id,
+                upstream_model_id,
+                display_label,
+                protocol,
+                capability_snapshot,
+                parameter_schema_ref,
+                context_window,
+                max_output_tokens,
+                pricing_ref,
+                fetched_at,
+                status
+            from model_provider_catalog_entries
+            where catalog_source_id = $1
+            order by upstream_model_id asc, protocol asc
+            "#,
+        )
+        .bind(catalog_source_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_catalog_entry).collect()
+    }
+
+    async fn list_catalog_entries_for_provider_instance(
+        &self,
+        provider_instance_id: Uuid,
+    ) -> Result<Vec<domain::ModelProviderCatalogEntryRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                provider_instance_id,
+                catalog_source_id,
+                upstream_model_id,
+                display_label,
+                protocol,
+                capability_snapshot,
+                parameter_schema_ref,
+                context_window,
+                max_output_tokens,
+                pricing_ref,
+                fetched_at,
+                status
+            from model_provider_catalog_entries
+            where provider_instance_id = $1
+            order by upstream_model_id asc, protocol asc
+            "#,
+        )
+        .bind(provider_instance_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_catalog_entry).collect()
+    }
+
+    async fn create_failover_queue_template(
+        &self,
+        input: &CreateModelFailoverQueueTemplateInput,
+    ) -> Result<domain::ModelFailoverQueueTemplateRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into model_failover_queue_templates (
+                id,
+                workspace_id,
+                name,
+                version,
+                status,
+                created_by
+            ) values ($1, $2, $3, $4, $5, $6)
+            returning
+                id,
+                workspace_id,
+                name,
+                version,
+                status,
+                created_by,
+                created_at,
+                updated_at
+            "#,
+        )
+        .bind(input.queue_template_id)
+        .bind(input.workspace_id)
+        .bind(&input.name)
+        .bind(input.version)
+        .bind(&input.status)
+        .bind(input.created_by)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_failover_queue_template(row)
+    }
+
+    async fn get_failover_queue_template(
+        &self,
+        queue_template_id: Uuid,
+    ) -> Result<Option<domain::ModelFailoverQueueTemplateRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                id,
+                workspace_id,
+                name,
+                version,
+                status,
+                created_by,
+                created_at,
+                updated_at
+            from model_failover_queue_templates
+            where id = $1
+            "#,
+        )
+        .bind(queue_template_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_failover_queue_template).transpose()
+    }
+
+    async fn create_failover_queue_item(
+        &self,
+        input: &CreateModelFailoverQueueItemInput,
+    ) -> Result<domain::ModelFailoverQueueItemRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into model_failover_queue_items (
+                id,
+                queue_template_id,
+                sort_index,
+                provider_instance_id,
+                provider_code,
+                upstream_model_id,
+                protocol,
+                enabled
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+            returning
+                id,
+                queue_template_id,
+                sort_index,
+                provider_instance_id,
+                provider_code,
+                upstream_model_id,
+                protocol,
+                enabled
+            "#,
+        )
+        .bind(input.queue_item_id)
+        .bind(input.queue_template_id)
+        .bind(input.sort_index)
+        .bind(input.provider_instance_id)
+        .bind(&input.provider_code)
+        .bind(&input.upstream_model_id)
+        .bind(&input.protocol)
+        .bind(input.enabled)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_failover_queue_item(row)
+    }
+
+    async fn list_failover_queue_items(
+        &self,
+        queue_template_id: Uuid,
+    ) -> Result<Vec<domain::ModelFailoverQueueItemRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                queue_template_id,
+                sort_index,
+                provider_instance_id,
+                provider_code,
+                upstream_model_id,
+                protocol,
+                enabled
+            from model_failover_queue_items
+            where queue_template_id = $1
+            order by sort_index asc, id asc
+            "#,
+        )
+        .bind(queue_template_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_failover_queue_item).collect()
+    }
+
+    async fn create_failover_queue_snapshot(
+        &self,
+        input: &CreateModelFailoverQueueSnapshotInput,
+    ) -> Result<domain::ModelFailoverQueueSnapshotRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into model_failover_queue_snapshots (
+                id,
+                queue_template_id,
+                version,
+                items
+            ) values ($1, $2, $3, $4)
+            returning
+                id,
+                queue_template_id,
+                version,
+                items,
+                created_at
+            "#,
+        )
+        .bind(input.snapshot_id)
+        .bind(input.queue_template_id)
+        .bind(input.version)
+        .bind(&input.items)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_failover_queue_snapshot(row)
+    }
+
+    async fn list_failover_queue_snapshots(
+        &self,
+        queue_template_id: Uuid,
+    ) -> Result<Vec<domain::ModelFailoverQueueSnapshotRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                queue_template_id,
+                version,
+                items,
+                created_at
+            from model_failover_queue_snapshots
+            where queue_template_id = $1
+            order by created_at desc, id desc
+            "#,
+        )
+        .bind(queue_template_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_failover_queue_snapshot).collect()
     }
 }
 

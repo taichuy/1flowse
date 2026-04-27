@@ -46,11 +46,41 @@ pub struct CompiledOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmRoutingMode {
+    FixedModel,
+    FailoverQueue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompiledLlmRouting {
+    pub routing_mode: LlmRoutingMode,
+    pub fixed_model_target: Option<serde_json::Value>,
+    pub queue_template_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue_snapshot_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub queue_targets: Vec<CompiledLlmRouteTarget>,
+    pub context_policy: serde_json::Value,
+    pub stream_policy: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompiledLlmRouteTarget {
+    pub provider_instance_id: String,
+    pub provider_code: String,
+    pub protocol: String,
+    pub upstream_model_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompiledLlmRuntime {
     pub provider_instance_id: String,
     pub provider_code: String,
     pub protocol: String,
     pub model: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routing: Option<CompiledLlmRouting>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

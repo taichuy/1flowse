@@ -14,7 +14,9 @@ use serde_json::{json, Map, Value};
 
 use crate::{
     binding_runtime::{render_templated_bindings, resolve_node_inputs},
-    compiled_plan::{CompiledLlmRuntime, CompiledNode, CompiledPlan, CompiledPluginRuntime},
+    compiled_plan::{
+        CompiledLlmRuntime, CompiledNode, CompiledPlan, CompiledPluginRuntime, LlmRoutingMode,
+    },
     execution_state::{
         CheckpointSnapshot, ExecutionStopReason, FlowDebugExecutionOutcome, NodeExecutionFailure,
         NodeExecutionTrace, PendingCallbackTask, PendingHumanInput,
@@ -319,77 +321,169 @@ where
             node.node_id
         )
     })?;
-    let invocation_input =
-        build_provider_invocation_input(node, runtime, resolved_inputs, rendered_templates);
-    let output = match invoker.invoke_llm(runtime, invocation_input).await {
-        Ok(output) => output,
-        Err(error) => {
-            let provider_error = provider_runtime_error_from_anyhow(&error);
-            let error_payload = build_provider_error_payload(runtime, &provider_error);
+    let attempt_runtimes = llm_attempt_runtimes(runtime);
+    let failover_enabled = runtime
+        .routing
+        .as_ref()
+        .is_some_and(|routing| routing.routing_mode == LlmRoutingMode::FailoverQueue);
+    let mut attempt_metrics = Vec::new();
+    let mut failed_attempts = Vec::new();
+
+    for (attempt_index, attempt_runtime) in attempt_runtimes.iter().enumerate() {
+        let invocation_input = build_provider_invocation_input(
+            node,
+            attempt_runtime,
+            resolved_inputs,
+            rendered_templates,
+        );
+        let output = match invoker.invoke_llm(attempt_runtime, invocation_input).await {
+            Ok(output) => output,
+            Err(error) => {
+                let provider_error = provider_runtime_error_from_anyhow(&error);
+                let error_payload = build_provider_error_payload(attempt_runtime, &provider_error);
+                let attempt = build_attempt_metric(
+                    attempt_index,
+                    attempt_runtime,
+                    "failed",
+                    false,
+                    Some(&error_payload),
+                    &ProviderUsage::default(),
+                    0,
+                );
+                attempt_metrics.push(attempt.clone());
+                failed_attempts.push(attempt);
+                if failover_enabled && attempt_index + 1 < attempt_runtimes.len() {
+                    continue;
+                }
+
+                return Ok(LlmNodeExecution {
+                    output_payload: build_failed_llm_output_payload(
+                        node,
+                        attempt_runtime,
+                        &error_payload,
+                    ),
+                    error_payload: Some(error_payload),
+                    metrics_payload: build_llm_metrics_payload(
+                        attempt_runtime,
+                        ProviderUsage::default(),
+                        Some(ProviderFinishReason::Error),
+                        0,
+                        attempt_metrics,
+                    ),
+                    provider_events: Vec::new(),
+                });
+            }
+        };
+
+        let usage = collect_usage(&output.events, &output.result.usage);
+        let finish_reason = output
+            .result
+            .finish_reason
+            .clone()
+            .or_else(|| finish_reason_from_events(&output.events));
+        let final_content = output
+            .result
+            .final_content
+            .clone()
+            .or_else(|| collect_text_deltas(&output.events));
+        let provider_error = first_provider_error(&output.events).cloned().or_else(|| {
+            matches!(finish_reason, Some(ProviderFinishReason::Error)).then(|| {
+                ProviderRuntimeError::normalize(
+                    "invoke",
+                    "provider invocation finished with error",
+                    None,
+                )
+            })
+        });
+        let failed_after_first_token =
+            provider_error.is_some() && text_delta_seen_before_error(&output.events);
+        let error_payload = provider_error
+            .as_ref()
+            .map(|error| build_provider_error_payload(attempt_runtime, error));
+        let attempt_status = if error_payload.is_some() {
+            "failed"
+        } else {
+            "succeeded"
+        };
+        let attempt = build_attempt_metric(
+            attempt_index,
+            attempt_runtime,
+            attempt_status,
+            failed_after_first_token,
+            error_payload.as_ref(),
+            &usage,
+            output.events.len(),
+        );
+        attempt_metrics.push(attempt.clone());
+
+        if let Some(error_payload) = &error_payload {
+            failed_attempts.push(attempt);
+            if failover_enabled
+                && !failed_after_first_token
+                && attempt_index + 1 < attempt_runtimes.len()
+            {
+                continue;
+            }
+            let mut output_payload = build_llm_output_payload(
+                node,
+                attempt_runtime,
+                &output.result,
+                &usage,
+                final_content,
+                finish_reason.clone(),
+            );
+            append_llm_error_to_output(&mut output_payload, error_payload);
             return Ok(LlmNodeExecution {
-                output_payload: build_failed_llm_output_payload(node, &error_payload),
-                error_payload: Some(error_payload),
-                metrics_payload: json!({
-                    "provider_instance_id": runtime.provider_instance_id,
-                    "provider_code": runtime.provider_code,
-                    "protocol": runtime.protocol,
-                    "model": runtime.model,
-                    "event_count": 0,
-                    "usage": serde_json::to_value(ProviderUsage::default()).unwrap_or(Value::Null),
-                    "finish_reason": "error",
-                }),
-                provider_events: Vec::new(),
+                output_payload,
+                error_payload: Some(error_payload.clone()),
+                metrics_payload: build_llm_metrics_payload(
+                    attempt_runtime,
+                    usage,
+                    finish_reason,
+                    output.events.len(),
+                    attempt_metrics,
+                ),
+                provider_events: output.events,
             });
         }
-    };
 
-    let usage = collect_usage(&output.events, &output.result.usage);
-    let finish_reason = output
-        .result
-        .finish_reason
-        .clone()
-        .or_else(|| finish_reason_from_events(&output.events));
-    let final_content = output
-        .result
-        .final_content
-        .clone()
-        .or_else(|| collect_text_deltas(&output.events));
-    let mut output_payload =
-        build_llm_output_payload(node, &output.result, final_content, finish_reason.clone());
-    let metrics_payload = json!({
-        "provider_instance_id": runtime.provider_instance_id,
-        "provider_code": runtime.provider_code,
-        "protocol": runtime.protocol,
-        "model": runtime.model,
-        "event_count": output.events.len(),
-        "usage": serde_json::to_value(&usage).unwrap_or(Value::Null),
-        "finish_reason": finish_reason
-            .as_ref()
-            .map(|reason| serde_json::to_value(reason).unwrap_or(Value::Null))
-            .unwrap_or(Value::Null),
-    });
-    let provider_error = first_provider_error(&output.events).cloned().or_else(|| {
-        matches!(finish_reason, Some(ProviderFinishReason::Error)).then(|| {
-            ProviderRuntimeError::normalize(
-                "invoke",
-                "provider invocation finished with error",
-                None,
-            )
-        })
-    });
-
-    let error_payload = provider_error
-        .as_ref()
-        .map(|error| build_provider_error_payload(runtime, error));
-    if let Some(error_payload) = &error_payload {
-        append_llm_error_to_output(&mut output_payload, error_payload);
+        return Ok(LlmNodeExecution {
+            output_payload: build_llm_output_payload(
+                node,
+                attempt_runtime,
+                &output.result,
+                &usage,
+                final_content,
+                finish_reason.clone(),
+            ),
+            error_payload: None,
+            metrics_payload: build_llm_metrics_payload(
+                attempt_runtime,
+                usage,
+                finish_reason,
+                output.events.len(),
+                attempt_metrics,
+            ),
+            provider_events: output.events,
+        });
     }
 
+    let error_payload = json!({
+        "error_kind": "provider_unavailable",
+        "message": "all failover queue attempts failed",
+        "attempts": failed_attempts,
+    });
     Ok(LlmNodeExecution {
-        output_payload,
-        error_payload,
-        metrics_payload,
-        provider_events: output.events,
+        output_payload: build_failed_llm_output_payload(node, runtime, &error_payload),
+        error_payload: Some(error_payload),
+        metrics_payload: build_llm_metrics_payload(
+            runtime,
+            ProviderUsage::default(),
+            Some(ProviderFinishReason::Error),
+            0,
+            attempt_metrics,
+        ),
+        provider_events: Vec::new(),
     })
 }
 
@@ -441,6 +535,89 @@ where
             }),
         }),
     }
+}
+
+fn llm_attempt_runtimes(runtime: &CompiledLlmRuntime) -> Vec<CompiledLlmRuntime> {
+    let Some(routing) = runtime.routing.as_ref() else {
+        return vec![runtime.clone()];
+    };
+    if routing.routing_mode != LlmRoutingMode::FailoverQueue || routing.queue_targets.is_empty() {
+        return vec![runtime.clone()];
+    }
+
+    routing
+        .queue_targets
+        .iter()
+        .map(|target| {
+            let mut attempt = runtime.clone();
+            attempt.provider_instance_id = target.provider_instance_id.clone();
+            attempt.provider_code = target.provider_code.clone();
+            attempt.protocol = target.protocol.clone();
+            attempt.model = target.upstream_model_id.clone();
+            attempt
+        })
+        .collect()
+}
+
+fn build_attempt_metric(
+    attempt_index: usize,
+    runtime: &CompiledLlmRuntime,
+    status: &str,
+    failed_after_first_token: bool,
+    error_payload: Option<&Value>,
+    usage: &ProviderUsage,
+    event_count: usize,
+) -> Value {
+    json!({
+        "attempt_index": attempt_index,
+        "provider_instance_id": runtime.provider_instance_id,
+        "provider_code": runtime.provider_code,
+        "protocol": runtime.protocol,
+        "upstream_model_id": runtime.model,
+        "model": runtime.model,
+        "status": status,
+        "failed_after_first_token": failed_after_first_token,
+        "event_count": event_count,
+        "usage": serde_json::to_value(usage).unwrap_or(Value::Null),
+        "error_code": error_payload
+            .and_then(|payload| payload.get("error_kind"))
+            .cloned()
+            .unwrap_or(Value::Null),
+        "error_message_ref": error_payload
+            .and_then(|payload| payload.get("message"))
+            .and_then(Value::as_str)
+            .map(|message| format!("runtime_artifact:inline:error:{message}"))
+            .map(Value::String)
+            .unwrap_or(Value::Null),
+    })
+}
+
+fn build_llm_metrics_payload(
+    runtime: &CompiledLlmRuntime,
+    usage: ProviderUsage,
+    finish_reason: Option<ProviderFinishReason>,
+    event_count: usize,
+    attempts: Vec<Value>,
+) -> Value {
+    json!({
+        "provider_instance_id": runtime.provider_instance_id,
+        "provider_code": runtime.provider_code,
+        "protocol": runtime.protocol,
+        "model": runtime.model,
+        "event_count": event_count,
+        "usage": serde_json::to_value(&usage).unwrap_or(Value::Null),
+        "finish_reason": finish_reason
+            .as_ref()
+            .map(|reason| serde_json::to_value(reason).unwrap_or(Value::Null))
+            .unwrap_or(Value::Null),
+        "queue_snapshot_id": runtime
+            .routing
+            .as_ref()
+            .and_then(|routing| routing.queue_snapshot_id.clone())
+            .map(Value::String)
+            .unwrap_or(Value::Null),
+        "attempts": attempts,
+    })
 }
 
 fn build_provider_invocation_input(
@@ -562,11 +739,24 @@ fn first_output_key(node: &CompiledNode) -> String {
         .unwrap_or_else(|| "result".to_string())
 }
 
-fn build_failed_llm_output_payload(node: &CompiledNode, error_payload: &Value) -> Value {
-    let mut output = Map::new();
-    output.insert(first_output_key(node), Value::Null);
-    output.insert("error".to_string(), error_payload.clone());
-    Value::Object(output)
+fn build_failed_llm_output_payload(
+    node: &CompiledNode,
+    runtime: &CompiledLlmRuntime,
+    error_payload: &Value,
+) -> Value {
+    let mut output = standard_llm_output_payload(
+        node,
+        runtime,
+        "",
+        Value::Null,
+        Vec::new(),
+        Value::Null,
+        Some(error_payload.clone()),
+    );
+    if let Some(object) = output.as_object_mut() {
+        object.insert(first_output_key(node), Value::Null);
+    }
+    output
 }
 
 fn append_llm_error_to_output(output_payload: &mut Value, error_payload: &Value) {
@@ -580,39 +770,109 @@ fn append_llm_error_to_output(output_payload: &mut Value, error_payload: &Value)
 
 fn build_llm_output_payload(
     node: &CompiledNode,
+    runtime: &CompiledLlmRuntime,
     result: &ProviderInvocationResult,
+    usage: &ProviderUsage,
     final_content: Option<String>,
     finish_reason: Option<ProviderFinishReason>,
 ) -> Value {
-    let mut output = Map::new();
-    output.insert(
-        first_output_key(node),
-        final_content.map(Value::String).unwrap_or(Value::Null),
+    let text = final_content.unwrap_or_default();
+    let finish_reason = finish_reason
+        .map(|reason| serde_json::to_value(reason).unwrap_or(Value::Null))
+        .unwrap_or(Value::Null);
+    let tool_calls = serde_json::to_value(&result.tool_calls).unwrap_or(Value::Null);
+    let mut output = standard_llm_output_payload(
+        node,
+        runtime,
+        &text,
+        finish_reason,
+        result.tool_calls.clone(),
+        serde_json::to_value(usage).unwrap_or(Value::Null),
+        None,
     );
-    if !result.tool_calls.is_empty() {
-        output.insert(
-            "tool_calls".to_string(),
-            serde_json::to_value(&result.tool_calls).unwrap_or(Value::Null),
-        );
+
+    if let Some(object) = output.as_object_mut() {
+        object.insert("tool_calls".to_string(), tool_calls);
     }
     if !result.mcp_calls.is_empty() {
-        output.insert(
-            "mcp_calls".to_string(),
-            serde_json::to_value(&result.mcp_calls).unwrap_or(Value::Null),
-        );
+        output
+            .as_object_mut()
+            .expect("standard output is object")
+            .insert(
+                "mcp_calls".to_string(),
+                serde_json::to_value(&result.mcp_calls).unwrap_or(Value::Null),
+            );
     }
     if !result.provider_metadata.is_null() {
-        output.insert(
-            "provider_metadata".to_string(),
-            result.provider_metadata.clone(),
-        );
+        output
+            .as_object_mut()
+            .expect("standard output is object")
+            .insert(
+                "provider_metadata".to_string(),
+                result.provider_metadata.clone(),
+            );
     }
-    if let Some(reason) = finish_reason {
-        output.insert(
-            "finish_reason".to_string(),
-            serde_json::to_value(reason).unwrap_or(Value::Null),
-        );
-    }
+    output
+}
+
+fn standard_llm_output_payload(
+    node: &CompiledNode,
+    runtime: &CompiledLlmRuntime,
+    text: &str,
+    finish_reason: Value,
+    tool_calls: Vec<plugin_framework::provider_contract::ProviderToolCall>,
+    usage: Value,
+    error: Option<Value>,
+) -> Value {
+    let attempt_id = format!("pending_attempt_id:{}", node.node_id);
+    let route = match runtime.routing.as_ref() {
+        Some(routing) => json!({
+            "routing_mode": routing.routing_mode,
+            "fixed_model_target": routing.fixed_model_target,
+            "queue_template_id": routing.queue_template_id,
+            "provider_instance_id": runtime.provider_instance_id,
+            "provider_code": runtime.provider_code,
+            "upstream_model_id": runtime.model,
+            "protocol": runtime.protocol,
+        }),
+        None => json!({
+            "routing_mode": "fixed_model",
+            "provider_instance_id": runtime.provider_instance_id,
+            "provider_code": runtime.provider_code,
+            "upstream_model_id": runtime.model,
+            "protocol": runtime.protocol,
+        }),
+    };
+
+    let mut output = Map::new();
+    output.insert(first_output_key(node), Value::String(text.to_string()));
+    output.insert("text".to_string(), Value::String(text.to_string()));
+    output.insert(
+        "message".to_string(),
+        json!({
+            "role": "assistant",
+            "content": text,
+        }),
+    );
+    output.insert("structured_output".to_string(), Value::Null);
+    output.insert(
+        "tool_calls".to_string(),
+        serde_json::to_value(tool_calls).unwrap_or(Value::Null),
+    );
+    output.insert("finish_reason".to_string(), finish_reason);
+    output.insert("route".to_string(), route);
+    output.insert("usage".to_string(), usage);
+    output.insert("error".to_string(), error.unwrap_or(Value::Null));
+    output.insert("__raw_response_ref".to_string(), Value::Null);
+    output.insert(
+        "__context_projection_id".to_string(),
+        Value::String(format!("pending_projection_id:{}", node.node_id)),
+    );
+    output.insert(
+        "__attempt_ids".to_string(),
+        Value::Array(vec![Value::String(attempt_id.clone())]),
+    );
+    output.insert("__winner_attempt_id".to_string(), Value::String(attempt_id));
     Value::Object(output)
 }
 
@@ -669,6 +929,18 @@ fn first_provider_error(events: &[ProviderStreamEvent]) -> Option<&ProviderRunti
         ProviderStreamEvent::Error { error } => Some(error),
         _ => None,
     })
+}
+
+fn text_delta_seen_before_error(events: &[ProviderStreamEvent]) -> bool {
+    let mut saw_text_delta = false;
+    for event in events {
+        match event {
+            ProviderStreamEvent::TextDelta { .. } => saw_text_delta = true,
+            ProviderStreamEvent::Error { .. } => return saw_text_delta,
+            _ => {}
+        }
+    }
+    false
 }
 
 fn build_provider_error_payload(

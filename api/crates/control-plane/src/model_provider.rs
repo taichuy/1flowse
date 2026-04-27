@@ -24,6 +24,8 @@ use crate::{
 };
 
 mod catalog;
+pub mod catalog_source;
+pub mod failover_queue;
 mod instances;
 mod main_instance;
 mod options;

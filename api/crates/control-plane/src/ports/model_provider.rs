@@ -53,6 +53,78 @@ pub struct UpsertModelProviderCatalogCacheInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct CreateModelProviderCatalogSourceInput {
+    pub source_id: Uuid,
+    pub workspace_id: Uuid,
+    pub source_kind: String,
+    pub plugin_id: String,
+    pub provider_code: String,
+    pub display_name: String,
+    pub base_url_ref: Option<String>,
+    pub auth_secret_ref: Option<String>,
+    pub protocol: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateModelCatalogSyncRunInput {
+    pub sync_run_id: Uuid,
+    pub catalog_source_id: Uuid,
+    pub status: String,
+    pub error_message_ref: Option<String>,
+    pub discovered_count: i64,
+    pub imported_count: i64,
+    pub disabled_count: i64,
+    pub started_at: OffsetDateTime,
+    pub finished_at: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpsertModelProviderCatalogEntryInput {
+    pub provider_instance_id: Option<Uuid>,
+    pub catalog_source_id: Uuid,
+    pub upstream_model_id: String,
+    pub display_label: String,
+    pub protocol: String,
+    pub capability_snapshot: serde_json::Value,
+    pub parameter_schema_ref: Option<String>,
+    pub context_window: Option<i64>,
+    pub max_output_tokens: Option<i64>,
+    pub pricing_ref: Option<String>,
+    pub status: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateModelFailoverQueueTemplateInput {
+    pub queue_template_id: Uuid,
+    pub workspace_id: Uuid,
+    pub name: String,
+    pub version: i64,
+    pub status: String,
+    pub created_by: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateModelFailoverQueueItemInput {
+    pub queue_item_id: Uuid,
+    pub queue_template_id: Uuid,
+    pub sort_index: i32,
+    pub provider_instance_id: Uuid,
+    pub provider_code: String,
+    pub upstream_model_id: String,
+    pub protocol: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateModelFailoverQueueSnapshotInput {
+    pub snapshot_id: Uuid,
+    pub queue_template_id: Uuid,
+    pub version: i64,
+    pub items: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
 pub struct ReassignModelProviderInstancesInput {
     pub workspace_id: Uuid,
     pub provider_code: String,
@@ -154,4 +226,92 @@ pub trait ModelProviderRepository: Send + Sync {
         workspace_id: Uuid,
         instance_id: Uuid,
     ) -> anyhow::Result<u64>;
+    async fn create_catalog_source(
+        &self,
+        _input: &CreateModelProviderCatalogSourceInput,
+    ) -> anyhow::Result<domain::ModelProviderCatalogSourceRecord> {
+        Err(anyhow::anyhow!(
+            "model provider catalog sources are not supported by this repository"
+        ))
+    }
+    async fn create_catalog_sync_run(
+        &self,
+        _input: &CreateModelCatalogSyncRunInput,
+    ) -> anyhow::Result<domain::ModelCatalogSyncRunRecord> {
+        Err(anyhow::anyhow!(
+            "model catalog sync runs are not supported by this repository"
+        ))
+    }
+    async fn upsert_catalog_entry(
+        &self,
+        _input: &UpsertModelProviderCatalogEntryInput,
+    ) -> anyhow::Result<domain::ModelProviderCatalogEntryRecord> {
+        Err(anyhow::anyhow!(
+            "model provider catalog entries are not supported by this repository"
+        ))
+    }
+    async fn list_catalog_entries(
+        &self,
+        _catalog_source_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::ModelProviderCatalogEntryRecord>> {
+        Err(anyhow::anyhow!(
+            "model provider catalog entries are not supported by this repository"
+        ))
+    }
+    async fn list_catalog_entries_for_provider_instance(
+        &self,
+        _provider_instance_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::ModelProviderCatalogEntryRecord>> {
+        Err(anyhow::anyhow!(
+            "model provider catalog entries are not supported by this repository"
+        ))
+    }
+    async fn create_failover_queue_template(
+        &self,
+        _input: &CreateModelFailoverQueueTemplateInput,
+    ) -> anyhow::Result<domain::ModelFailoverQueueTemplateRecord> {
+        Err(anyhow::anyhow!(
+            "model failover queue templates are not supported by this repository"
+        ))
+    }
+    async fn get_failover_queue_template(
+        &self,
+        _queue_template_id: Uuid,
+    ) -> anyhow::Result<Option<domain::ModelFailoverQueueTemplateRecord>> {
+        Err(anyhow::anyhow!(
+            "model failover queue templates are not supported by this repository"
+        ))
+    }
+    async fn create_failover_queue_item(
+        &self,
+        _input: &CreateModelFailoverQueueItemInput,
+    ) -> anyhow::Result<domain::ModelFailoverQueueItemRecord> {
+        Err(anyhow::anyhow!(
+            "model failover queue items are not supported by this repository"
+        ))
+    }
+    async fn list_failover_queue_items(
+        &self,
+        _queue_template_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::ModelFailoverQueueItemRecord>> {
+        Err(anyhow::anyhow!(
+            "model failover queue items are not supported by this repository"
+        ))
+    }
+    async fn create_failover_queue_snapshot(
+        &self,
+        _input: &CreateModelFailoverQueueSnapshotInput,
+    ) -> anyhow::Result<domain::ModelFailoverQueueSnapshotRecord> {
+        Err(anyhow::anyhow!(
+            "model failover queue snapshots are not supported by this repository"
+        ))
+    }
+    async fn list_failover_queue_snapshots(
+        &self,
+        _queue_template_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::ModelFailoverQueueSnapshotRecord>> {
+        Err(anyhow::anyhow!(
+            "model failover queue snapshots are not supported by this repository"
+        ))
+    }
 }

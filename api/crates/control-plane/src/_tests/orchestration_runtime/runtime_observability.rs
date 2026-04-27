@@ -282,6 +282,242 @@ async fn llm_turn_records_context_projection_and_usage_ledger() {
 }
 
 #[tokio::test]
+async fn llm_turn_records_failover_attempt_and_links_usage_ledger() {
+    let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
+        ProviderStreamEvent::TextDelta {
+            delta: "hello".into(),
+        },
+        ProviderStreamEvent::UsageSnapshot {
+            usage: plugin_framework::provider_contract::ProviderUsage {
+                input_tokens: Some(9),
+                output_tokens: Some(2),
+                total_tokens: Some(11),
+                ..Default::default()
+            },
+        },
+        ProviderStreamEvent::Finish {
+            reason: plugin_framework::provider_contract::ProviderFinishReason::Stop,
+        },
+    ]);
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({
+                "node-start": { "query": "请总结退款政策" }
+            }),
+            document_snapshot: None,
+        })
+        .await
+        .unwrap();
+    let detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let attempts = service
+        .list_model_failover_attempt_ledger(detail.flow_run.id)
+        .await;
+    let usage = service.list_usage_ledger(detail.flow_run.id).await;
+
+    assert_eq!(attempts.len(), 1);
+    assert_eq!(attempts[0].attempt_index, 0);
+    assert_eq!(attempts[0].status, "succeeded");
+    assert_eq!(attempts[0].provider_code, "fixture_provider");
+    assert_eq!(attempts[0].upstream_model_id, "gpt-5.4-mini");
+    assert_eq!(usage.len(), 1);
+    assert_eq!(usage[0].failover_attempt_id, Some(attempts[0].id));
+    assert_eq!(attempts[0].usage_ledger_id, Some(usage[0].id));
+}
+
+#[tokio::test]
+async fn failover_queue_records_each_attempt_and_links_usage_to_winner() {
+    let service =
+        OrchestrationRuntimeService::for_tests_with_fail_before_token_models(vec!["gpt-5.4-mini"]);
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+    let primary_instance_id = service.default_provider_instance_id();
+    let backup_instance_id = service.seed_provider_instance(
+        "fixture_provider",
+        "Fixture Backup",
+        true,
+        domain::ModelProviderInstanceStatus::Ready,
+        vec!["backup-model"],
+    );
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({
+                "node-start": { "query": "请总结退款政策" }
+            }),
+            document_snapshot: Some(failover_queue_document(
+                seeded.flow_id,
+                primary_instance_id,
+                backup_instance_id,
+            )),
+        })
+        .await
+        .unwrap();
+    let detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let attempts = service
+        .list_model_failover_attempt_ledger(detail.flow_run.id)
+        .await;
+    let usage = service.list_usage_ledger(detail.flow_run.id).await;
+
+    assert_eq!(attempts.len(), 2);
+    assert_eq!(attempts[0].attempt_index, 0);
+    assert_eq!(attempts[0].status, "failed");
+    assert_eq!(attempts[0].provider_instance_id, Some(primary_instance_id));
+    assert_eq!(attempts[0].upstream_model_id, "gpt-5.4-mini");
+    assert_eq!(attempts[0].usage_ledger_id, None);
+    assert_eq!(attempts[1].attempt_index, 1);
+    assert_eq!(attempts[1].status, "succeeded");
+    assert_eq!(attempts[1].provider_instance_id, Some(backup_instance_id));
+    assert_eq!(attempts[1].upstream_model_id, "backup-model");
+    assert_eq!(usage.len(), 1);
+    assert_eq!(usage[0].failover_attempt_id, Some(attempts[1].id));
+    assert_eq!(attempts[1].usage_ledger_id, Some(usage[0].id));
+}
+
+#[tokio::test]
+async fn all_failed_failover_attempts_do_not_receive_usage_ledger_link() {
+    let service = OrchestrationRuntimeService::for_tests_with_fail_before_token_models(vec![
+        "gpt-5.4-mini",
+        "backup-model",
+    ]);
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+    let primary_instance_id = service.default_provider_instance_id();
+    let backup_instance_id = service.seed_provider_instance(
+        "fixture_provider",
+        "Fixture Backup",
+        true,
+        domain::ModelProviderInstanceStatus::Ready,
+        vec!["backup-model"],
+    );
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({
+                "node-start": { "query": "请总结退款政策" }
+            }),
+            document_snapshot: Some(failover_queue_document(
+                seeded.flow_id,
+                primary_instance_id,
+                backup_instance_id,
+            )),
+        })
+        .await
+        .unwrap();
+    let detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let attempts = service
+        .list_model_failover_attempt_ledger(detail.flow_run.id)
+        .await;
+    let usage = service.list_usage_ledger(detail.flow_run.id).await;
+
+    assert_eq!(attempts.len(), 2);
+    assert!(attempts.iter().all(|attempt| attempt.status == "failed"));
+    assert!(attempts
+        .iter()
+        .all(|attempt| attempt.usage_ledger_id.is_none()));
+    assert_eq!(usage.len(), 1);
+    assert_eq!(usage[0].failover_attempt_id, None);
+    assert_eq!(
+        usage[0].usage_status,
+        domain::UsageLedgerStatus::UnavailableError
+    );
+}
+
+fn failover_queue_document(
+    flow_id: Uuid,
+    primary_instance_id: Uuid,
+    backup_instance_id: Uuid,
+) -> serde_json::Value {
+    serde_json::json!({
+        "schemaVersion": "1flowbase.flow/v1",
+        "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
+        "graph": {
+            "nodes": [
+                {
+                    "id": "node-start",
+                    "type": "start",
+                    "alias": "Start",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 0, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {},
+                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                },
+                {
+                    "id": "node-llm",
+                    "type": "llm",
+                    "alias": "LLM",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 240, "y": 0 },
+                    "configVersion": 1,
+                    "config": {
+                        "model_provider": {
+                            "routing_mode": "failover_queue",
+                            "queue_template_id": "queue-template-1",
+                            "queue_snapshot_id": "queue-snapshot-1",
+                            "queue_targets": [
+                                {
+                                    "provider_instance_id": primary_instance_id.to_string(),
+                                    "provider_code": "fixture_provider",
+                                    "protocol": "openai_compatible",
+                                    "upstream_model_id": "gpt-5.4-mini"
+                                },
+                                {
+                                    "provider_instance_id": backup_instance_id.to_string(),
+                                    "provider_code": "fixture_provider",
+                                    "protocol": "openai_compatible",
+                                    "upstream_model_id": "backup-model"
+                                }
+                            ]
+                        }
+                    },
+                    "bindings": {
+                        "user_prompt": { "kind": "selector", "value": ["node-start", "query"] }
+                    },
+                    "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
+                }
+            ],
+            "edges": [
+                { "id": "edge-start-llm", "source": "node-start", "target": "node-llm", "sourceHandle": null, "targetHandle": null, "containerId": null, "points": [] }
+            ]
+        },
+        "editor": { "viewport": { "x": 0, "y": 0, "zoom": 1 }, "annotations": [], "activeContainerPath": [] }
+    })
+}
+
+#[tokio::test]
 async fn provider_events_fold_into_runtime_items() {
     let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
         ProviderStreamEvent::TextDelta {

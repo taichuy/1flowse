@@ -1,8 +1,9 @@
 use control_plane::ports::{
-    AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeSpanInput, ApplicationRepository,
-    CreateApplicationInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
-    CreateNodeRunInput, FlowRepository, OrchestrationRuntimeRepository, UpdateNodeRunInput,
-    UpsertCompiledPlanInput,
+    AppendModelFailoverAttemptLedgerInput, AppendRunEventInput, AppendRuntimeEventInput,
+    AppendRuntimeSpanInput, AppendUsageLedgerInput, ApplicationRepository, CreateApplicationInput,
+    CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
+    FlowRepository, LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
+    UpdateNodeRunInput, UpsertCompiledPlanInput,
 };
 use domain::{ApplicationType, CallbackTaskStatus, FlowRunMode, FlowRunStatus, NodeRunStatus};
 use serde_json::json;
@@ -520,4 +521,128 @@ async fn runtime_fact_spine_preserves_span_sequence_and_trust_level() {
     assert_eq!(events[0].id, event.id);
     assert_eq!(events[0].sequence, 1);
     assert_eq!(events[0].trust_level, domain::RuntimeTrustLevel::HostFact);
+}
+
+#[tokio::test]
+async fn orchestration_runtime_repository_persists_model_failover_attempt_ledger() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-04-27 09:00:00 UTC);
+    let run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        started_at,
+        FlowRunMode::DebugFlowRun,
+        None,
+    )
+    .await;
+    let node_run = seed_node_run(&store, &run, started_at).await;
+    let span = <PgControlPlaneStore as OrchestrationRuntimeRepository>::append_runtime_span(
+        &store,
+        &AppendRuntimeSpanInput {
+            flow_run_id: run.id,
+            node_run_id: Some(node_run.id),
+            parent_span_id: None,
+            kind: domain::RuntimeSpanKind::LlmTurn,
+            name: "LLM".into(),
+            status: domain::RuntimeSpanStatus::Running,
+            capability_id: None,
+            input_ref: None,
+            output_ref: None,
+            error_payload: None,
+            metadata: json!({}),
+            started_at,
+            finished_at: None,
+        },
+    )
+    .await
+    .unwrap();
+    let attempt =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::append_model_failover_attempt_ledger(
+            &store,
+            &AppendModelFailoverAttemptLedgerInput {
+                flow_run_id: run.id,
+                node_run_id: Some(node_run.id),
+                llm_turn_span_id: Some(span.id),
+                queue_snapshot_id: None,
+                attempt_index: 0,
+                provider_instance_id: None,
+                provider_code: "fixture_provider".into(),
+                upstream_model_id: "gpt-5.4-mini".into(),
+                protocol: "openai_compatible".into(),
+                request_ref: Some("runtime_artifact:inline:req".into()),
+                request_hash: Some("sha256:req".into()),
+                started_at,
+                first_token_at: None,
+                finished_at: Some(started_at + Duration::seconds(1)),
+                status: "succeeded".into(),
+                failed_after_first_token: false,
+                upstream_request_id: Some("req-1".into()),
+                error_code: None,
+                error_message_ref: None,
+                usage_ledger_id: None,
+                cost_ledger_id: None,
+                response_ref: Some("runtime_artifact:inline:res".into()),
+            },
+        )
+        .await
+        .unwrap();
+    let usage = <PgControlPlaneStore as OrchestrationRuntimeRepository>::append_usage_ledger(
+        &store,
+        &AppendUsageLedgerInput {
+            flow_run_id: run.id,
+            node_run_id: Some(node_run.id),
+            span_id: Some(span.id),
+            failover_attempt_id: Some(attempt.id),
+            provider_instance_id: None,
+            gateway_route_id: None,
+            model_id: Some("gpt-5.4-mini".into()),
+            upstream_model_id: Some("gpt-5.4-mini".into()),
+            upstream_request_id: Some("req-1".into()),
+            input_tokens: Some(1),
+            cached_input_tokens: None,
+            output_tokens: Some(2),
+            reasoning_output_tokens: None,
+            total_tokens: Some(3),
+            cache_read_tokens: None,
+            cache_write_tokens: None,
+            price_snapshot: None,
+            cost_snapshot: None,
+            usage_status: domain::UsageLedgerStatus::Recorded,
+            raw_usage: json!({ "total_tokens": 3 }),
+            normalized_usage: json!({ "total_tokens": 3 }),
+        },
+    )
+    .await
+    .unwrap();
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::link_usage_ledger_to_model_failover_attempt(
+        &store,
+        &LinkUsageLedgerToModelFailoverAttemptInput {
+            failover_attempt_id: attempt.id,
+            usage_ledger_id: usage.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    let attempts =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_model_failover_attempt_ledger(
+            &store,
+            run.id,
+        )
+        .await
+        .unwrap();
+    let usage_records =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_usage_ledger(&store, run.id)
+            .await
+            .unwrap();
+
+    assert_eq!(attempts.len(), 1);
+    assert_eq!(attempts[0].id, attempt.id);
+    assert_eq!(attempts[0].usage_ledger_id, Some(usage.id));
+    assert_eq!(usage_records[0].failover_attempt_id, Some(attempt.id));
 }

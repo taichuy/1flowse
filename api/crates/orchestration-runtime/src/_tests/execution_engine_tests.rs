@@ -17,8 +17,8 @@ use uuid::Uuid;
 
 use crate::{
     compiled_plan::{
-        CompiledBinding, CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan,
-        CompiledPluginRuntime,
+        CompiledBinding, CompiledLlmRouteTarget, CompiledLlmRouting, CompiledLlmRuntime,
+        CompiledNode, CompiledOutput, CompiledPlan, CompiledPluginRuntime, LlmRoutingMode,
     },
     execution_engine::{
         resume_flow_debug_run, start_flow_debug_run, CapabilityInvocationOutput, CapabilityInvoker,
@@ -139,12 +139,96 @@ impl CapabilityInvoker for RuntimeContractErrorInvoker {
     }
 }
 
+struct FailFirstFailoverInvoker {
+    calls: Arc<Mutex<Vec<String>>>,
+}
+
+#[async_trait]
+impl ProviderInvoker for FailFirstFailoverInvoker {
+    async fn invoke_llm(
+        &self,
+        runtime: &CompiledLlmRuntime,
+        _input: ProviderInvocationInput,
+    ) -> Result<ProviderInvocationOutput> {
+        self.calls
+            .lock()
+            .expect("calls mutex poisoned")
+            .push(runtime.provider_instance_id.clone());
+        if runtime.provider_instance_id == "provider-primary" {
+            anyhow::bail!("primary provider unavailable");
+        }
+
+        Ok(ProviderInvocationOutput {
+            events: vec![
+                ProviderStreamEvent::TextDelta {
+                    delta: format!("winner:{}", runtime.model),
+                },
+                ProviderStreamEvent::UsageSnapshot {
+                    usage: ProviderUsage {
+                        input_tokens: Some(3),
+                        output_tokens: Some(4),
+                        total_tokens: Some(7),
+                        ..ProviderUsage::default()
+                    },
+                },
+                ProviderStreamEvent::Finish {
+                    reason: ProviderFinishReason::Stop,
+                },
+            ],
+            result: ProviderInvocationResult {
+                final_content: Some(format!("winner:{}", runtime.model)),
+                usage: ProviderUsage {
+                    input_tokens: Some(3),
+                    output_tokens: Some(4),
+                    total_tokens: Some(7),
+                    ..ProviderUsage::default()
+                },
+                finish_reason: Some(ProviderFinishReason::Stop),
+                ..ProviderInvocationResult::default()
+            },
+        })
+    }
+}
+
+#[async_trait]
+impl CapabilityInvoker for FailFirstFailoverInvoker {
+    async fn invoke_capability_node(
+        &self,
+        _runtime: &CompiledPluginRuntime,
+        _config_payload: serde_json::Value,
+        _input_payload: serde_json::Value,
+    ) -> Result<CapabilityInvocationOutput> {
+        unreachable!("failover plan does not execute capability nodes")
+    }
+}
+
 fn successful_invoker() -> StubProviderInvoker {
     StubProviderInvoker {
         fail: false,
         captured_input: Arc::new(Mutex::new(None)),
         final_content: "echo:gpt-5.4-mini".to_string(),
     }
+}
+
+async fn run_llm_node_with_fixture_provider() -> Value {
+    let outcome = start_flow_debug_run(
+        &base_plan(),
+        &json!({
+            "node-start": {
+                "query": "hello"
+            }
+        }),
+        &successful_invoker(),
+    )
+    .await
+    .unwrap();
+
+    outcome
+        .node_traces
+        .into_iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("llm trace should exist")
+        .output_payload
 }
 
 fn base_plan() -> CompiledPlan {
@@ -201,6 +285,7 @@ fn base_plan() -> CompiledPlan {
                 provider_code: "fixture_provider".to_string(),
                 protocol: "openai_compatible".to_string(),
                 model: "gpt-5.4-mini".to_string(),
+                routing: None,
             }),
         },
     );
@@ -272,6 +357,93 @@ fn base_plan() -> CompiledPlan {
         nodes,
         compile_issues: Vec::new(),
     }
+}
+
+#[tokio::test]
+async fn llm_node_outputs_include_hidden_route_projection_and_attempt_ids() {
+    let output = run_llm_node_with_fixture_provider().await;
+
+    assert_eq!(output["text"], json!("echo:gpt-5.4-mini"));
+    assert_eq!(output["message"]["role"], json!("assistant"));
+    assert!(output["route"]["provider_instance_id"].as_str().is_some());
+    assert!(output["__context_projection_id"].as_str().is_some());
+    assert!(output["__attempt_ids"].as_array().is_some());
+    assert!(output["__winner_attempt_id"].as_str().is_some());
+}
+
+#[tokio::test]
+async fn failover_queue_retries_next_target_before_first_token() {
+    let mut plan = base_plan();
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.llm_runtime = Some(CompiledLlmRuntime {
+        provider_instance_id: "provider-primary".to_string(),
+        provider_code: "fixture_provider".to_string(),
+        protocol: "openai_compatible".to_string(),
+        model: "primary-model".to_string(),
+        routing: Some(CompiledLlmRouting {
+            routing_mode: LlmRoutingMode::FailoverQueue,
+            fixed_model_target: None,
+            queue_template_id: Some("queue-template-1".to_string()),
+            queue_snapshot_id: Some("queue-snapshot-1".to_string()),
+            queue_targets: vec![
+                CompiledLlmRouteTarget {
+                    provider_instance_id: "provider-primary".to_string(),
+                    provider_code: "fixture_provider".to_string(),
+                    protocol: "openai_compatible".to_string(),
+                    upstream_model_id: "primary-model".to_string(),
+                },
+                CompiledLlmRouteTarget {
+                    provider_instance_id: "provider-backup".to_string(),
+                    provider_code: "fixture_provider".to_string(),
+                    protocol: "openai_compatible".to_string(),
+                    upstream_model_id: "backup-model".to_string(),
+                },
+            ],
+            context_policy: json!({}),
+            stream_policy: json!({}),
+        }),
+    });
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let invoker = FailFirstFailoverInvoker {
+        calls: calls.clone(),
+    };
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+    let llm_trace = outcome
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("llm trace should exist");
+
+    assert_eq!(
+        calls.lock().expect("calls mutex poisoned").as_slice(),
+        ["provider-primary", "provider-backup"]
+    );
+    assert_eq!(
+        llm_trace.output_payload["text"],
+        json!("winner:backup-model")
+    );
+    assert_eq!(
+        llm_trace.metrics_payload["attempts"][0]["status"],
+        json!("failed")
+    );
+    assert_eq!(
+        llm_trace.metrics_payload["attempts"][1]["status"],
+        json!("succeeded")
+    );
+    assert_eq!(
+        llm_trace.metrics_payload["queue_snapshot_id"],
+        json!("queue-snapshot-1")
+    );
 }
 
 fn plugin_plan() -> CompiledPlan {

@@ -73,7 +73,7 @@ Why third:
 1. `LLM -> tool -> message -> LLM` 必须由 host runtime 管，而不是 provider plugin 管。
 2. ContextProjection 是证明模型真实输入的 P0，不应等待 UI。
 
-- [ ] **Step 4: Execute Model Catalog Routing Failover**
+- [x] **Step 4: Execute Model Catalog Routing Failover**
 
 Plan:
 

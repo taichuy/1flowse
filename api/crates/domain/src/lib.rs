@@ -40,9 +40,11 @@ pub use flow::{
     FLOW_SCHEMA_VERSION,
 };
 pub use model_provider::{
-    ModelProviderCatalogCacheRecord, ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource,
-    ModelProviderConfiguredModel, ModelProviderDiscoveryMode, ModelProviderInstanceRecord,
-    ModelProviderInstanceStatus, ModelProviderMainInstanceRecord,
+    ModelCatalogSyncRunRecord, ModelFailoverQueueItemRecord, ModelFailoverQueueSnapshotRecord,
+    ModelFailoverQueueTemplateRecord, ModelProviderCatalogCacheRecord,
+    ModelProviderCatalogEntryRecord, ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource,
+    ModelProviderCatalogSourceRecord, ModelProviderConfiguredModel, ModelProviderDiscoveryMode,
+    ModelProviderInstanceRecord, ModelProviderInstanceStatus, ModelProviderMainInstanceRecord,
     ModelProviderPreviewSessionRecord, ModelProviderSecretRecord, ModelProviderValidationStatus,
     PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
     PluginInstallationRecord, PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord,
@@ -62,9 +64,10 @@ pub use plugin_worker::{PluginWorkerLeaseRecord, PluginWorkerStatus};
 pub use resource::runtime_model_resource_code;
 pub use runtime_observability::{
     BillingSessionStatus, CapabilityInvocationRecord, ContextProjectionRecord,
-    RuntimeEventDurability, RuntimeEventLayer, RuntimeEventRecord, RuntimeEventSource,
-    RuntimeEventVisibility, RuntimeItemKind, RuntimeItemRecord, RuntimeItemStatus, RuntimeSpanKind,
-    RuntimeSpanRecord, RuntimeSpanStatus, RuntimeTrustLevel, UsageLedgerRecord, UsageLedgerStatus,
+    ModelFailoverAttemptLedgerRecord, RuntimeEventDurability, RuntimeEventLayer,
+    RuntimeEventRecord, RuntimeEventSource, RuntimeEventVisibility, RuntimeItemKind,
+    RuntimeItemRecord, RuntimeItemStatus, RuntimeSpanKind, RuntimeSpanRecord, RuntimeSpanStatus,
+    RuntimeTrustLevel, UsageLedgerRecord, UsageLedgerStatus,
 };
 pub use scope::{ScopeContext, TenantRecord, WorkspaceRecord, SYSTEM_SCOPE_ID};
 

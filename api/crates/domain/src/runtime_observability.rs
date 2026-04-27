@@ -223,6 +223,33 @@ pub struct UsageLedgerRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelFailoverAttemptLedgerRecord {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub llm_turn_span_id: Option<Uuid>,
+    pub queue_snapshot_id: Option<Uuid>,
+    pub attempt_index: i32,
+    pub provider_instance_id: Option<Uuid>,
+    pub provider_code: String,
+    pub upstream_model_id: String,
+    pub protocol: String,
+    pub request_ref: Option<String>,
+    pub request_hash: Option<String>,
+    pub started_at: OffsetDateTime,
+    pub first_token_at: Option<OffsetDateTime>,
+    pub finished_at: Option<OffsetDateTime>,
+    pub status: String,
+    pub failed_after_first_token: bool,
+    pub upstream_request_id: Option<String>,
+    pub error_code: Option<String>,
+    pub error_message_ref: Option<String>,
+    pub usage_ledger_id: Option<Uuid>,
+    pub cost_ledger_id: Option<Uuid>,
+    pub response_ref: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CapabilityInvocationRecord {
     pub id: Uuid,
     pub flow_run_id: Uuid,

@@ -282,6 +282,62 @@ fn compile_uses_selected_instance_models_instead_of_provider_family_aggregate() 
 }
 
 #[test]
+fn compile_failover_queue_routes_with_frozen_targets() {
+    let flow_id = Uuid::now_v7();
+    let mut context = compile_context();
+    context.provider_instances.insert(
+        "provider-backup".to_string(),
+        FlowCompileProviderInstance {
+            provider_instance_id: "provider-backup".to_string(),
+            provider_code: "fixture_provider".to_string(),
+            protocol: "openai_compatible".to_string(),
+            is_ready: true,
+            is_runnable: true,
+            included_in_main: true,
+            available_models: BTreeSet::from(["backup-model".to_string()]),
+            allow_custom_models: false,
+        },
+    );
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["config"]["model_provider"] = json!({
+        "routing_mode": "failover_queue",
+        "queue_template_id": "queue-template-1",
+        "queue_snapshot_id": "queue-snapshot-1",
+        "queue_targets": [
+            {
+                "provider_instance_id": "provider-selected",
+                "provider_code": "fixture_provider",
+                "protocol": "openai_compatible",
+                "upstream_model_id": "gpt-5.4-mini"
+            },
+            {
+                "provider_instance_id": "provider-backup",
+                "provider_code": "fixture_provider",
+                "protocol": "openai_compatible",
+                "upstream_model_id": "backup-model"
+            }
+        ]
+    });
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &context).unwrap();
+    let plan_json = serde_json::to_value(&plan).unwrap();
+    let routing = &plan_json["nodes"]["node-llm"]["llm_runtime"]["routing"];
+
+    assert!(plan.compile_issues.is_empty(), "{:?}", plan.compile_issues);
+    assert_eq!(routing["routing_mode"], json!("failover_queue"));
+    assert_eq!(routing["queue_template_id"], json!("queue-template-1"));
+    assert_eq!(routing["queue_snapshot_id"], json!("queue-snapshot-1"));
+    assert_eq!(
+        routing["queue_targets"][0]["upstream_model_id"],
+        json!("gpt-5.4-mini")
+    );
+    assert_eq!(
+        routing["queue_targets"][1]["provider_instance_id"],
+        json!("provider-backup")
+    );
+}
+
+#[test]
 fn compile_collects_missing_source_instance_issue() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
