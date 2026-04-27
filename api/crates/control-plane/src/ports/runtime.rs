@@ -90,6 +90,40 @@ pub struct AppendRunEventInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct AppendRuntimeSpanInput {
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub parent_span_id: Option<Uuid>,
+    pub kind: domain::RuntimeSpanKind,
+    pub name: String,
+    pub status: domain::RuntimeSpanStatus,
+    pub capability_id: Option<String>,
+    pub input_ref: Option<String>,
+    pub output_ref: Option<String>,
+    pub error_payload: Option<serde_json::Value>,
+    pub metadata: serde_json::Value,
+    pub started_at: OffsetDateTime,
+    pub finished_at: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AppendRuntimeEventInput {
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub span_id: Option<Uuid>,
+    pub parent_span_id: Option<Uuid>,
+    pub event_type: String,
+    pub layer: domain::RuntimeEventLayer,
+    pub source: domain::RuntimeEventSource,
+    pub trust_level: domain::RuntimeTrustLevel,
+    pub item_id: Option<Uuid>,
+    pub ledger_ref: Option<String>,
+    pub payload: serde_json::Value,
+    pub visibility: domain::RuntimeEventVisibility,
+    pub durability: domain::RuntimeEventDurability,
+}
+
+#[derive(Debug, Clone)]
 pub struct CreateCheckpointInput {
     pub flow_run_id: Uuid,
     pub node_run_id: Option<Uuid>,
@@ -176,6 +210,23 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         &self,
         input: &AppendRunEventInput,
     ) -> anyhow::Result<domain::RunEventRecord>;
+    async fn append_runtime_span(
+        &self,
+        input: &AppendRuntimeSpanInput,
+    ) -> anyhow::Result<domain::RuntimeSpanRecord>;
+    async fn append_runtime_event(
+        &self,
+        input: &AppendRuntimeEventInput,
+    ) -> anyhow::Result<domain::RuntimeEventRecord>;
+    async fn list_runtime_spans(
+        &self,
+        flow_run_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::RuntimeSpanRecord>>;
+    async fn list_runtime_events(
+        &self,
+        flow_run_id: Uuid,
+        after_sequence: i64,
+    ) -> anyhow::Result<Vec<domain::RuntimeEventRecord>>;
     async fn list_application_runs(
         &self,
         application_id: Uuid,

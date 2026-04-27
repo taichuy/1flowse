@@ -21,6 +21,7 @@ pub mod plugin_management;
 pub mod ports;
 pub mod profile;
 pub mod role;
+pub mod runtime_observability;
 pub mod runtime_registry_sync;
 pub mod session_security;
 pub mod state_transition;

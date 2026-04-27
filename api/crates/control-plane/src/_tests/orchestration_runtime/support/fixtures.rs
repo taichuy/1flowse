@@ -473,6 +473,26 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         self.repository.force_flow_run_status(flow_run_id, status);
     }
 
+    pub async fn list_runtime_spans(&self, flow_run_id: Uuid) -> Vec<domain::RuntimeSpanRecord> {
+        OrchestrationRuntimeRepository::list_runtime_spans(&self.repository, flow_run_id)
+            .await
+            .expect("runtime spans should be readable")
+    }
+
+    pub async fn list_runtime_events(
+        &self,
+        flow_run_id: Uuid,
+        after_sequence: i64,
+    ) -> Vec<domain::RuntimeEventRecord> {
+        OrchestrationRuntimeRepository::list_runtime_events(
+            &self.repository,
+            flow_run_id,
+            after_sequence,
+        )
+        .await
+        .expect("runtime events should be readable")
+    }
+
     async fn seed_application_with_document(
         &self,
         name: &str,

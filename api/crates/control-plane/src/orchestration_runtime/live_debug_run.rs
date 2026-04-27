@@ -11,6 +11,7 @@ use crate::{
         AppendRunEventInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
         CreateNodeRunInput, OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateNodeRunInput,
     },
+    runtime_observability::{append_host_event, append_host_span},
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
 
@@ -232,6 +233,21 @@ where
         .cloned()
         .ok_or_else(|| anyhow!("input payload must be an object"))?;
     let mut last_output_payload = json!({});
+    let flow_span = append_host_span(
+        &service.repository,
+        flow_run.id,
+        None,
+        None,
+        domain::RuntimeSpanKind::Flow,
+        "debug flow",
+        flow_run.started_at,
+        json!({
+            "application_id": command.application_id,
+            "run_mode": flow_run.run_mode.as_str(),
+            "trigger_event_type": "flow_run_continued",
+        }),
+    )
+    .await?;
 
     for node_id in &compiled_plan.topological_order {
         if is_run_cancelled(&service.repository, command.application_id, flow_run.id).await? {
@@ -248,6 +264,7 @@ where
             node,
             &resolved_inputs,
         );
+        let node_started_at = OffsetDateTime::now_utc();
         let node_run = service
             .repository
             .create_node_run(&CreateNodeRunInput {
@@ -257,9 +274,27 @@ where
                 node_alias: node.alias.clone(),
                 status: domain::NodeRunStatus::Running,
                 input_payload: Value::Object(resolved_inputs.clone()),
-                started_at: OffsetDateTime::now_utc(),
+                started_at: node_started_at,
             })
             .await?;
+        let node_span = append_host_span(
+            &service.repository,
+            flow_run.id,
+            Some(node_run.id),
+            Some(flow_span.id),
+            if node.node_type == "llm" {
+                domain::RuntimeSpanKind::LlmTurn
+            } else {
+                domain::RuntimeSpanKind::Node
+            },
+            node.alias.clone(),
+            node_started_at,
+            json!({
+                "node_id": node.node_id,
+                "node_type": node.node_type,
+            }),
+        )
+        .await?;
 
         match node.node_type.as_str() {
             "start" => {
@@ -314,6 +349,7 @@ where
                     &service.repository,
                     flow_run.id,
                     Some(node_run.id),
+                    Some(node_span.id),
                     &execution.provider_events,
                 )
                 .await?;
@@ -731,20 +767,33 @@ async fn append_provider_stream_events<R>(
     repository: &R,
     flow_run_id: Uuid,
     node_run_id: Option<Uuid>,
+    span_id: Option<Uuid>,
     events: &[ProviderStreamEvent],
 ) -> Result<()>
 where
     R: OrchestrationRuntimeRepository,
 {
     for event in events {
+        let event_type = provider_stream_event_type(event);
+        let payload = serde_json::to_value(event)?;
         repository
             .append_run_event(&AppendRunEventInput {
                 flow_run_id,
                 node_run_id,
-                event_type: provider_stream_event_type(event).to_string(),
-                payload: serde_json::to_value(event)?,
+                event_type: event_type.to_string(),
+                payload: payload.clone(),
             })
             .await?;
+        append_host_event(
+            repository,
+            flow_run_id,
+            node_run_id,
+            span_id,
+            event_type,
+            domain::RuntimeEventLayer::ProviderRaw,
+            payload,
+        )
+        .await?;
     }
 
     Ok(())

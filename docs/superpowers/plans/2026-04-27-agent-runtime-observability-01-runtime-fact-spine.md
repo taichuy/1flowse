@@ -36,7 +36,7 @@
 - Create: `api/crates/domain/src/_tests/runtime_observability_tests.rs`
 - Modify: `api/crates/domain/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write failing enum stability tests**
+- [x] **Step 1: Write failing enum stability tests**
 
 Create `api/crates/domain/src/_tests/runtime_observability_tests.rs`:
 
@@ -65,7 +65,7 @@ mod resource_tests;
 mod runtime_observability_tests;
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -75,7 +75,7 @@ cargo test -p domain runtime_observability_enum_strings_are_stable
 
 Expected: FAIL with unresolved imports for runtime observability types.
 
-- [ ] **Step 3: Implement domain contract**
+- [x] **Step 3: Implement domain contract**
 
 Create `api/crates/domain/src/runtime_observability.rs`:
 
@@ -266,7 +266,7 @@ pub use runtime_observability::{
 };
 ```
 
-- [ ] **Step 4: Run domain test**
+- [x] **Step 4: Run domain test**
 
 Run:
 
@@ -276,7 +276,7 @@ cargo test -p domain runtime_observability_enum_strings_are_stable
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/crates/domain/src/runtime_observability.rs api/crates/domain/src/lib.rs api/crates/domain/src/_tests/mod.rs api/crates/domain/src/_tests/runtime_observability_tests.rs
@@ -292,7 +292,7 @@ git commit -m "feat: add runtime observability domain contract"
 - Modify: `api/crates/storage-durable/postgres/src/mappers/orchestration_runtime_mapper.rs`
 - Modify: `api/crates/storage-durable/postgres/src/_tests/orchestration_runtime_repository_tests.rs`
 
-- [ ] **Step 1: Write failing repository test**
+- [x] **Step 1: Write failing repository test**
 
 Append to `api/crates/storage-durable/postgres/src/_tests/orchestration_runtime_repository_tests.rs`:
 
@@ -377,7 +377,7 @@ Add imports:
 use control_plane::ports::{AppendRuntimeEventInput, AppendRuntimeSpanInput};
 ```
 
-- [ ] **Step 2: Run failing repository test**
+- [x] **Step 2: Run failing repository test**
 
 Run:
 
@@ -387,7 +387,7 @@ cargo test -p storage-postgres runtime_fact_spine_preserves_span_sequence_and_tr
 
 Expected: FAIL because repository methods and tables do not exist.
 
-- [ ] **Step 3: Add migration**
+- [x] **Step 3: Add migration**
 
 Create `api/crates/storage-durable/postgres/migrations/20260427170000_create_runtime_observability_tables.sql`:
 
@@ -474,7 +474,7 @@ create table runtime_audit_hashes (
 );
 ```
 
-- [ ] **Step 4: Add repository port inputs**
+- [x] **Step 4: Add repository port inputs**
 
 Modify `api/crates/control-plane/src/ports/runtime.rs` and add:
 
@@ -523,7 +523,7 @@ async fn list_runtime_spans(&self, flow_run_id: Uuid) -> anyhow::Result<Vec<doma
 async fn list_runtime_events(&self, flow_run_id: Uuid, after_sequence: i64) -> anyhow::Result<Vec<domain::RuntimeEventRecord>>;
 ```
 
-- [ ] **Step 5: Implement PostgreSQL repository methods**
+- [x] **Step 5: Implement PostgreSQL repository methods**
 
 In `api/crates/storage-durable/postgres/src/orchestration_runtime_repository.rs`, implement:
 
@@ -540,7 +540,7 @@ async fn next_runtime_event_sequence(tx: &mut Transaction<'_, Postgres>, flow_ru
 
 Use `Uuid::now_v7()` for all new rows, call enum `as_str()` on writes, and parse strings with explicit `match` functions in `api/crates/storage-durable/postgres/src/mappers/orchestration_runtime_mapper.rs`.
 
-- [ ] **Step 6: Run migration and repository tests**
+- [x] **Step 6: Run migration and repository tests**
 
 Run:
 
@@ -551,7 +551,7 @@ cargo test -p storage-postgres runtime_fact_spine_preserves_span_sequence_and_tr
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/crates/control-plane/src/ports/runtime.rs api/crates/storage-durable/postgres/migrations/20260427170000_create_runtime_observability_tables.sql api/crates/storage-durable/postgres/src/orchestration_runtime_repository.rs api/crates/storage-durable/postgres/src/mappers/orchestration_runtime_mapper.rs api/crates/storage-durable/postgres/src/_tests/orchestration_runtime_repository_tests.rs
@@ -568,7 +568,7 @@ git commit -m "feat: persist runtime fact spine"
 - Create: `api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs`
 - Modify: `api/crates/control-plane/src/_tests/orchestration_runtime/mod.rs`
 
-- [ ] **Step 1: Write failing shadow-write test**
+- [x] **Step 1: Write failing shadow-write test**
 
 Create `api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs`:
 
@@ -597,7 +597,7 @@ async fn flow_debug_run_shadow_writes_runtime_spans_and_provider_events() {
 
 If `runtime_harness_with_llm_response` is not present, create it under `api/crates/control-plane/src/_tests/orchestration_runtime/support` using the existing in-memory repository/fake provider patterns from current orchestration runtime tests.
 
-- [ ] **Step 2: Run failing shadow-write test**
+- [x] **Step 2: Run failing shadow-write test**
 
 Run:
 
@@ -607,7 +607,7 @@ cargo test -p control-plane flow_debug_run_shadow_writes_runtime_spans_and_provi
 
 Expected: FAIL because existing persistence only writes `flow_run_events`.
 
-- [ ] **Step 3: Add helper functions**
+- [x] **Step 3: Add helper functions**
 
 Modify `api/crates/control-plane/Cargo.toml`:
 
@@ -691,7 +691,7 @@ Modify `api/crates/control-plane/src/lib.rs`:
 pub mod runtime_observability;
 ```
 
-- [ ] **Step 4: Wire shadow-write persistence**
+- [x] **Step 4: Wire shadow-write persistence**
 
 In `api/crates/control-plane/src/orchestration_runtime/persistence.rs`:
 
@@ -706,7 +706,7 @@ Use this event payload:
 let runtime_payload = serde_json::to_value(event)?;
 ```
 
-- [ ] **Step 5: Run compatibility tests**
+- [x] **Step 5: Run compatibility tests**
 
 Run:
 
@@ -718,7 +718,7 @@ cargo test -p api-server application_runtime_routes
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/crates/control-plane/Cargo.toml api/crates/control-plane/src/lib.rs api/crates/control-plane/src/runtime_observability.rs api/crates/control-plane/src/orchestration_runtime/persistence.rs api/crates/control-plane/src/_tests/orchestration_runtime

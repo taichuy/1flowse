@@ -89,6 +89,44 @@ pub struct StoredRunEventRow {
 }
 
 #[derive(Debug, Clone)]
+pub struct StoredRuntimeSpanRow {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub parent_span_id: Option<Uuid>,
+    pub kind: String,
+    pub name: String,
+    pub status: String,
+    pub capability_id: Option<String>,
+    pub input_ref: Option<String>,
+    pub output_ref: Option<String>,
+    pub error_payload: Option<serde_json::Value>,
+    pub metadata: serde_json::Value,
+    pub started_at: OffsetDateTime,
+    pub finished_at: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredRuntimeEventRow {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub span_id: Option<Uuid>,
+    pub parent_span_id: Option<Uuid>,
+    pub sequence: i64,
+    pub event_type: String,
+    pub layer: String,
+    pub source: String,
+    pub trust_level: String,
+    pub item_id: Option<Uuid>,
+    pub ledger_ref: Option<String>,
+    pub payload: serde_json::Value,
+    pub visibility: String,
+    pub durability: String,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
 pub struct StoredApplicationRunSummaryRow {
     pub id: Uuid,
     pub run_mode: String,
@@ -195,6 +233,48 @@ impl PgOrchestrationRuntimeMapper {
         }
     }
 
+    pub fn to_runtime_span_record(row: StoredRuntimeSpanRow) -> Result<domain::RuntimeSpanRecord> {
+        Ok(domain::RuntimeSpanRecord {
+            id: row.id,
+            flow_run_id: row.flow_run_id,
+            node_run_id: row.node_run_id,
+            parent_span_id: row.parent_span_id,
+            kind: parse_runtime_span_kind(&row.kind)?,
+            name: row.name,
+            status: parse_runtime_span_status(&row.status)?,
+            capability_id: row.capability_id,
+            input_ref: row.input_ref,
+            output_ref: row.output_ref,
+            error_payload: row.error_payload,
+            metadata: row.metadata,
+            started_at: row.started_at,
+            finished_at: row.finished_at,
+        })
+    }
+
+    pub fn to_runtime_event_record(
+        row: StoredRuntimeEventRow,
+    ) -> Result<domain::RuntimeEventRecord> {
+        Ok(domain::RuntimeEventRecord {
+            id: row.id,
+            flow_run_id: row.flow_run_id,
+            node_run_id: row.node_run_id,
+            span_id: row.span_id,
+            parent_span_id: row.parent_span_id,
+            sequence: row.sequence,
+            event_type: row.event_type,
+            layer: parse_runtime_event_layer(&row.layer)?,
+            source: parse_runtime_event_source(&row.source)?,
+            trust_level: parse_runtime_trust_level(&row.trust_level)?,
+            item_id: row.item_id,
+            ledger_ref: row.ledger_ref,
+            payload: row.payload,
+            visibility: parse_runtime_event_visibility(&row.visibility)?,
+            durability: parse_runtime_event_durability(&row.durability)?,
+            created_at: row.created_at,
+        })
+    }
+
     pub fn to_application_run_summary(
         row: StoredApplicationRunSummaryRow,
     ) -> Result<domain::ApplicationRunSummary> {
@@ -254,5 +334,90 @@ pub fn parse_node_run_status(value: &str) -> Result<domain::NodeRunStatus> {
         "failed" => Ok(domain::NodeRunStatus::Failed),
         "skipped" => Ok(domain::NodeRunStatus::Skipped),
         _ => Err(anyhow!("unknown node run status: {value}")),
+    }
+}
+
+pub fn parse_runtime_span_kind(value: &str) -> Result<domain::RuntimeSpanKind> {
+    match value {
+        "flow" => Ok(domain::RuntimeSpanKind::Flow),
+        "node" => Ok(domain::RuntimeSpanKind::Node),
+        "llm_turn" => Ok(domain::RuntimeSpanKind::LlmTurn),
+        "provider_request" => Ok(domain::RuntimeSpanKind::ProviderRequest),
+        "gateway_forward" => Ok(domain::RuntimeSpanKind::GatewayForward),
+        "tool_call" => Ok(domain::RuntimeSpanKind::ToolCall),
+        "mcp_call" => Ok(domain::RuntimeSpanKind::McpCall),
+        "skill_load" => Ok(domain::RuntimeSpanKind::SkillLoad),
+        "skill_action" => Ok(domain::RuntimeSpanKind::SkillAction),
+        "workflow_tool" => Ok(domain::RuntimeSpanKind::WorkflowTool),
+        "data_retrieval" => Ok(domain::RuntimeSpanKind::DataRetrieval),
+        "approval" => Ok(domain::RuntimeSpanKind::Approval),
+        "compaction" => Ok(domain::RuntimeSpanKind::Compaction),
+        "subagent" => Ok(domain::RuntimeSpanKind::Subagent),
+        "system_agent" => Ok(domain::RuntimeSpanKind::SystemAgent),
+        _ => Err(anyhow!("unknown runtime span kind: {value}")),
+    }
+}
+
+pub fn parse_runtime_span_status(value: &str) -> Result<domain::RuntimeSpanStatus> {
+    match value {
+        "running" => Ok(domain::RuntimeSpanStatus::Running),
+        "succeeded" => Ok(domain::RuntimeSpanStatus::Succeeded),
+        "failed" => Ok(domain::RuntimeSpanStatus::Failed),
+        "cancelled" => Ok(domain::RuntimeSpanStatus::Cancelled),
+        "waiting" => Ok(domain::RuntimeSpanStatus::Waiting),
+        _ => Err(anyhow!("unknown runtime span status: {value}")),
+    }
+}
+
+pub fn parse_runtime_event_layer(value: &str) -> Result<domain::RuntimeEventLayer> {
+    match value {
+        "provider_raw" => Ok(domain::RuntimeEventLayer::ProviderRaw),
+        "runtime_item" => Ok(domain::RuntimeEventLayer::RuntimeItem),
+        "capability" => Ok(domain::RuntimeEventLayer::Capability),
+        "agent_transition" => Ok(domain::RuntimeEventLayer::AgentTransition),
+        "ledger" => Ok(domain::RuntimeEventLayer::Ledger),
+        "diagnostic" => Ok(domain::RuntimeEventLayer::Diagnostic),
+        _ => Err(anyhow!("unknown runtime event layer: {value}")),
+    }
+}
+
+pub fn parse_runtime_event_source(value: &str) -> Result<domain::RuntimeEventSource> {
+    match value {
+        "host" => Ok(domain::RuntimeEventSource::Host),
+        "provider_plugin" => Ok(domain::RuntimeEventSource::ProviderPlugin),
+        "gateway_relay" => Ok(domain::RuntimeEventSource::GatewayRelay),
+        "internal_agent" => Ok(domain::RuntimeEventSource::InternalAgent),
+        "external_agent" => Ok(domain::RuntimeEventSource::ExternalAgent),
+        _ => Err(anyhow!("unknown runtime event source: {value}")),
+    }
+}
+
+pub fn parse_runtime_trust_level(value: &str) -> Result<domain::RuntimeTrustLevel> {
+    match value {
+        "host_fact" => Ok(domain::RuntimeTrustLevel::HostFact),
+        "verified_bridge" => Ok(domain::RuntimeTrustLevel::VerifiedBridge),
+        "agent_reported" => Ok(domain::RuntimeTrustLevel::AgentReported),
+        "external_opaque" => Ok(domain::RuntimeTrustLevel::ExternalOpaque),
+        "inferred" => Ok(domain::RuntimeTrustLevel::Inferred),
+        _ => Err(anyhow!("unknown runtime trust level: {value}")),
+    }
+}
+
+pub fn parse_runtime_event_visibility(value: &str) -> Result<domain::RuntimeEventVisibility> {
+    match value {
+        "internal" => Ok(domain::RuntimeEventVisibility::Internal),
+        "workspace" => Ok(domain::RuntimeEventVisibility::Workspace),
+        "user" => Ok(domain::RuntimeEventVisibility::User),
+        "public" => Ok(domain::RuntimeEventVisibility::Public),
+        _ => Err(anyhow!("unknown runtime event visibility: {value}")),
+    }
+}
+
+pub fn parse_runtime_event_durability(value: &str) -> Result<domain::RuntimeEventDurability> {
+    match value {
+        "ephemeral" => Ok(domain::RuntimeEventDurability::Ephemeral),
+        "durable" => Ok(domain::RuntimeEventDurability::Durable),
+        "sampled" => Ok(domain::RuntimeEventDurability::Sampled),
+        _ => Err(anyhow!("unknown runtime event durability: {value}")),
     }
 }

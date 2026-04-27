@@ -9,6 +9,8 @@ struct InMemoryOrchestrationRuntimeState {
     checkpoints_by_id: HashMap<Uuid, domain::CheckpointRecord>,
     callback_tasks_by_id: HashMap<Uuid, domain::CallbackTaskRecord>,
     events_by_flow_run_id: HashMap<Uuid, Vec<domain::RunEventRecord>>,
+    runtime_spans_by_flow_run_id: HashMap<Uuid, Vec<domain::RuntimeSpanRecord>>,
+    runtime_events_by_flow_run_id: HashMap<Uuid, Vec<domain::RuntimeEventRecord>>,
     installations_by_id: HashMap<Uuid, domain::PluginInstallationRecord>,
     assignments_by_workspace: HashMap<Uuid, Vec<domain::PluginAssignmentRecord>>,
     node_contributions_by_workspace: HashMap<Uuid, Vec<domain::NodeContributionRegistryEntry>>,
@@ -1458,6 +1460,100 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         };
         events.push(event.clone());
         Ok(event)
+    }
+
+    async fn append_runtime_span(
+        &self,
+        input: &AppendRuntimeSpanInput,
+    ) -> Result<domain::RuntimeSpanRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let span = domain::RuntimeSpanRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: input.flow_run_id,
+            node_run_id: input.node_run_id,
+            parent_span_id: input.parent_span_id,
+            kind: input.kind,
+            name: input.name.clone(),
+            status: input.status,
+            capability_id: input.capability_id.clone(),
+            input_ref: input.input_ref.clone(),
+            output_ref: input.output_ref.clone(),
+            error_payload: input.error_payload.clone(),
+            metadata: input.metadata.clone(),
+            started_at: input.started_at,
+            finished_at: input.finished_at,
+        };
+        inner
+            .runtime_spans_by_flow_run_id
+            .entry(input.flow_run_id)
+            .or_default()
+            .push(span.clone());
+        Ok(span)
+    }
+
+    async fn append_runtime_event(
+        &self,
+        input: &AppendRuntimeEventInput,
+    ) -> Result<domain::RuntimeEventRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let events = inner
+            .runtime_events_by_flow_run_id
+            .entry(input.flow_run_id)
+            .or_default();
+        let event = domain::RuntimeEventRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: input.flow_run_id,
+            node_run_id: input.node_run_id,
+            span_id: input.span_id,
+            parent_span_id: input.parent_span_id,
+            sequence: (events.len() + 1) as i64,
+            event_type: input.event_type.clone(),
+            layer: input.layer,
+            source: input.source,
+            trust_level: input.trust_level,
+            item_id: input.item_id,
+            ledger_ref: input.ledger_ref.clone(),
+            payload: input.payload.clone(),
+            visibility: input.visibility,
+            durability: input.durability,
+            created_at: OffsetDateTime::now_utc(),
+        };
+        events.push(event.clone());
+        Ok(event)
+    }
+
+    async fn list_runtime_spans(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Result<Vec<domain::RuntimeSpanRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let mut spans = inner
+            .runtime_spans_by_flow_run_id
+            .get(&flow_run_id)
+            .cloned()
+            .unwrap_or_default();
+        spans.sort_by(|left, right| {
+            left.started_at
+                .cmp(&right.started_at)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        Ok(spans)
+    }
+
+    async fn list_runtime_events(
+        &self,
+        flow_run_id: Uuid,
+        after_sequence: i64,
+    ) -> Result<Vec<domain::RuntimeEventRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .runtime_events_by_flow_run_id
+            .get(&flow_run_id)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|event| event.sequence > after_sequence)
+            .collect())
     }
 
     async fn list_application_runs(

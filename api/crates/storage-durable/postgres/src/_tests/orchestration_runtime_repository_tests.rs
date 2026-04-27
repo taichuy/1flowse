@@ -1,7 +1,8 @@
 use control_plane::ports::{
-    AppendRunEventInput, ApplicationRepository, CreateApplicationInput, CreateCallbackTaskInput,
-    CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput, FlowRepository,
-    OrchestrationRuntimeRepository, UpdateNodeRunInput, UpsertCompiledPlanInput,
+    AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeSpanInput, ApplicationRepository,
+    CreateApplicationInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
+    CreateNodeRunInput, FlowRepository, OrchestrationRuntimeRepository, UpdateNodeRunInput,
+    UpsertCompiledPlanInput,
 };
 use domain::{ApplicationType, CallbackTaskStatus, FlowRunMode, FlowRunStatus, NodeRunStatus};
 use serde_json::json;
@@ -443,4 +444,80 @@ async fn latest_node_run_returns_most_recent_run_for_node() {
         .unwrap();
 
     assert_eq!(node_last_run.node_run.id, second_node_run.id);
+}
+
+#[tokio::test]
+async fn runtime_fact_spine_preserves_span_sequence_and_trust_level() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-04-27 09:00:00 UTC);
+    let run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        started_at,
+        FlowRunMode::DebugFlowRun,
+        None,
+    )
+    .await;
+
+    let span = <PgControlPlaneStore as OrchestrationRuntimeRepository>::append_runtime_span(
+        &store,
+        &AppendRuntimeSpanInput {
+            flow_run_id: run.id,
+            node_run_id: None,
+            parent_span_id: None,
+            kind: domain::RuntimeSpanKind::Flow,
+            name: "debug flow".into(),
+            status: domain::RuntimeSpanStatus::Running,
+            capability_id: None,
+            input_ref: None,
+            output_ref: None,
+            error_payload: None,
+            metadata: json!({ "mode": "debug_flow_run" }),
+            started_at,
+            finished_at: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let event = <PgControlPlaneStore as OrchestrationRuntimeRepository>::append_runtime_event(
+        &store,
+        &AppendRuntimeEventInput {
+            flow_run_id: run.id,
+            node_run_id: None,
+            span_id: Some(span.id),
+            parent_span_id: None,
+            event_type: "run_started".into(),
+            layer: domain::RuntimeEventLayer::RuntimeItem,
+            source: domain::RuntimeEventSource::Host,
+            trust_level: domain::RuntimeTrustLevel::HostFact,
+            item_id: None,
+            ledger_ref: None,
+            payload: json!({ "run_id": run.id }),
+            visibility: domain::RuntimeEventVisibility::Workspace,
+            durability: domain::RuntimeEventDurability::Durable,
+        },
+    )
+    .await
+    .unwrap();
+
+    let spans =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_runtime_spans(&store, run.id)
+            .await
+            .unwrap();
+    let events = <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_runtime_events(
+        &store, run.id, 0,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(spans[0].id, span.id);
+    assert_eq!(events[0].id, event.id);
+    assert_eq!(events[0].sequence, 1);
+    assert_eq!(events[0].trust_level, domain::RuntimeTrustLevel::HostFact);
 }

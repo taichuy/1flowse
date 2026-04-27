@@ -1,10 +1,10 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use control_plane::ports::{
-    AppendRunEventInput, CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput,
-    CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
-    OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateNodeRunInput,
-    UpsertCompiledPlanInput,
+    AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeSpanInput,
+    CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput, CreateCallbackTaskInput,
+    CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput, OrchestrationRuntimeRepository,
+    UpdateFlowRunInput, UpdateNodeRunInput, UpsertCompiledPlanInput,
 };
 use sqlx::{postgres::PgRow, Postgres, Row, Transaction};
 use uuid::Uuid;
@@ -13,7 +13,7 @@ use crate::{
     mappers::orchestration_runtime_mapper::{
         PgOrchestrationRuntimeMapper, StoredApplicationRunSummaryRow, StoredCallbackTaskRow,
         StoredCheckpointRow, StoredCompiledPlanRow, StoredFlowRunRow, StoredNodeRunRow,
-        StoredRunEventRow,
+        StoredRunEventRow, StoredRuntimeEventRow, StoredRuntimeSpanRow,
     },
     repositories::PgControlPlaneStore,
 };
@@ -483,6 +483,202 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         Ok(map_run_event_record(row))
     }
 
+    async fn append_runtime_span(
+        &self,
+        input: &AppendRuntimeSpanInput,
+    ) -> Result<domain::RuntimeSpanRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into runtime_spans (
+                id,
+                flow_run_id,
+                node_run_id,
+                parent_span_id,
+                kind,
+                name,
+                status,
+                capability_id,
+                input_ref,
+                output_ref,
+                error_payload,
+                metadata,
+                started_at,
+                finished_at
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                parent_span_id,
+                kind,
+                name,
+                status,
+                capability_id,
+                input_ref,
+                output_ref,
+                error_payload,
+                metadata,
+                started_at,
+                finished_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.flow_run_id)
+        .bind(input.node_run_id)
+        .bind(input.parent_span_id)
+        .bind(input.kind.as_str())
+        .bind(&input.name)
+        .bind(input.status.as_str())
+        .bind(input.capability_id.as_deref())
+        .bind(input.input_ref.as_deref())
+        .bind(input.output_ref.as_deref())
+        .bind(&input.error_payload)
+        .bind(&input.metadata)
+        .bind(input.started_at)
+        .bind(input.finished_at)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_runtime_span_record(row)
+    }
+
+    async fn append_runtime_event(
+        &self,
+        input: &AppendRuntimeEventInput,
+    ) -> Result<domain::RuntimeEventRecord> {
+        let mut tx = self.pool().begin().await?;
+        let next_sequence = next_runtime_event_sequence(&mut tx, input.flow_run_id).await?;
+        let row = sqlx::query(
+            r#"
+            insert into runtime_events (
+                id,
+                flow_run_id,
+                node_run_id,
+                span_id,
+                parent_span_id,
+                sequence,
+                event_type,
+                layer,
+                source,
+                trust_level,
+                item_id,
+                ledger_ref,
+                payload,
+                visibility,
+                durability
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                span_id,
+                parent_span_id,
+                sequence,
+                event_type,
+                layer,
+                source,
+                trust_level,
+                item_id,
+                ledger_ref,
+                payload,
+                visibility,
+                durability,
+                created_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.flow_run_id)
+        .bind(input.node_run_id)
+        .bind(input.span_id)
+        .bind(input.parent_span_id)
+        .bind(next_sequence)
+        .bind(&input.event_type)
+        .bind(input.layer.as_str())
+        .bind(input.source.as_str())
+        .bind(input.trust_level.as_str())
+        .bind(input.item_id)
+        .bind(input.ledger_ref.as_deref())
+        .bind(&input.payload)
+        .bind(input.visibility.as_str())
+        .bind(input.durability.as_str())
+        .fetch_one(&mut *tx)
+        .await?;
+        tx.commit().await?;
+
+        map_runtime_event_record(row)
+    }
+
+    async fn list_runtime_spans(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Result<Vec<domain::RuntimeSpanRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                flow_run_id,
+                node_run_id,
+                parent_span_id,
+                kind,
+                name,
+                status,
+                capability_id,
+                input_ref,
+                output_ref,
+                error_payload,
+                metadata,
+                started_at,
+                finished_at
+            from runtime_spans
+            where flow_run_id = $1
+            order by started_at asc, id asc
+            "#,
+        )
+        .bind(flow_run_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_runtime_span_record).collect()
+    }
+
+    async fn list_runtime_events(
+        &self,
+        flow_run_id: Uuid,
+        after_sequence: i64,
+    ) -> Result<Vec<domain::RuntimeEventRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                flow_run_id,
+                node_run_id,
+                span_id,
+                parent_span_id,
+                sequence,
+                event_type,
+                layer,
+                source,
+                trust_level,
+                item_id,
+                ledger_ref,
+                payload,
+                visibility,
+                durability,
+                created_at
+            from runtime_events
+            where flow_run_id = $1
+              and sequence > $2
+            order by sequence asc, id asc
+            "#,
+        )
+        .bind(flow_run_id)
+        .bind(after_sequence)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_runtime_event_record).collect()
+    }
+
     async fn list_application_runs(
         &self,
         application_id: Uuid,
@@ -575,6 +771,18 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
 async fn next_event_sequence(tx: &mut Transaction<'_, Postgres>, flow_run_id: Uuid) -> Result<i64> {
     Ok(sqlx::query_scalar::<_, i64>(
         "select coalesce(max(sequence), 0) + 1 from flow_run_events where flow_run_id = $1",
+    )
+    .bind(flow_run_id)
+    .fetch_one(&mut **tx)
+    .await?)
+}
+
+async fn next_runtime_event_sequence(
+    tx: &mut Transaction<'_, Postgres>,
+    flow_run_id: Uuid,
+) -> Result<i64> {
+    Ok(sqlx::query_scalar::<_, i64>(
+        "select coalesce(max(sequence), 0) + 1 from runtime_events where flow_run_id = $1",
     )
     .bind(flow_run_id)
     .fetch_one(&mut **tx)
@@ -922,6 +1130,46 @@ fn map_run_event_record(row: PgRow) -> domain::RunEventRecord {
         sequence: row.get("sequence"),
         event_type: row.get("event_type"),
         payload: row.get("payload"),
+        created_at: row.get("created_at"),
+    })
+}
+
+fn map_runtime_span_record(row: PgRow) -> Result<domain::RuntimeSpanRecord> {
+    PgOrchestrationRuntimeMapper::to_runtime_span_record(StoredRuntimeSpanRow {
+        id: row.get("id"),
+        flow_run_id: row.get("flow_run_id"),
+        node_run_id: row.get("node_run_id"),
+        parent_span_id: row.get("parent_span_id"),
+        kind: row.get("kind"),
+        name: row.get("name"),
+        status: row.get("status"),
+        capability_id: row.get("capability_id"),
+        input_ref: row.get("input_ref"),
+        output_ref: row.get("output_ref"),
+        error_payload: row.get("error_payload"),
+        metadata: row.get("metadata"),
+        started_at: row.get("started_at"),
+        finished_at: row.get("finished_at"),
+    })
+}
+
+fn map_runtime_event_record(row: PgRow) -> Result<domain::RuntimeEventRecord> {
+    PgOrchestrationRuntimeMapper::to_runtime_event_record(StoredRuntimeEventRow {
+        id: row.get("id"),
+        flow_run_id: row.get("flow_run_id"),
+        node_run_id: row.get("node_run_id"),
+        span_id: row.get("span_id"),
+        parent_span_id: row.get("parent_span_id"),
+        sequence: row.get("sequence"),
+        event_type: row.get("event_type"),
+        layer: row.get("layer"),
+        source: row.get("source"),
+        trust_level: row.get("trust_level"),
+        item_id: row.get("item_id"),
+        ledger_ref: row.get("ledger_ref"),
+        payload: row.get("payload"),
+        visibility: row.get("visibility"),
+        durability: row.get("durability"),
         created_at: row.get("created_at"),
     })
 }

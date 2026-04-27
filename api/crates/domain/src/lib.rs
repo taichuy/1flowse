@@ -13,6 +13,7 @@ pub mod node_contribution;
 pub mod orchestration;
 pub mod plugin_worker;
 pub mod resource;
+pub mod runtime_observability;
 pub mod scope;
 
 pub use application::{
@@ -59,6 +60,12 @@ pub use orchestration::{
 };
 pub use plugin_worker::{PluginWorkerLeaseRecord, PluginWorkerStatus};
 pub use resource::runtime_model_resource_code;
+pub use runtime_observability::{
+    BillingSessionStatus, RuntimeEventDurability, RuntimeEventLayer, RuntimeEventRecord,
+    RuntimeEventSource, RuntimeEventVisibility, RuntimeItemKind, RuntimeItemRecord,
+    RuntimeItemStatus, RuntimeSpanKind, RuntimeSpanRecord, RuntimeSpanStatus, RuntimeTrustLevel,
+    UsageLedgerStatus,
+};
 pub use scope::{ScopeContext, TenantRecord, WorkspaceRecord, SYSTEM_SCOPE_ID};
 
 pub fn crate_name() -> &'static str {

@@ -9,6 +9,7 @@ use crate::{
         AppendRunEventInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateNodeRunInput,
         OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateNodeRunInput,
     },
+    runtime_observability::{append_host_event, append_host_span},
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
 
@@ -44,6 +45,21 @@ where
         base_started_at,
         waiting_node_resume,
     } = input;
+    let flow_span = append_host_span(
+        repository,
+        flow_run.id,
+        None,
+        None,
+        domain::RuntimeSpanKind::Flow,
+        "debug flow",
+        base_started_at,
+        json!({
+            "application_id": application_id,
+            "run_mode": flow_run.run_mode.as_str(),
+            "trigger_event_type": trigger_event_type,
+        }),
+    )
+    .await?;
     repository
         .append_run_event(&AppendRunEventInput {
             flow_run_id: flow_run.id,
@@ -71,8 +87,14 @@ where
             .await?;
     }
 
-    let waiting_node_run =
-        persist_flow_debug_node_traces(repository, flow_run.id, outcome, base_started_at).await?;
+    let waiting_node_run = persist_flow_debug_node_traces(
+        repository,
+        flow_run.id,
+        Some(flow_span.id),
+        outcome,
+        base_started_at,
+    )
+    .await?;
 
     match &outcome.stop_reason {
         orchestration_runtime::execution_state::ExecutionStopReason::WaitingHuman(wait) => {
@@ -243,6 +265,7 @@ where
             repository,
             flow_run.id,
             Some(node_run.id),
+            None,
             &preview.provider_events,
         )
         .await?,
@@ -315,6 +338,7 @@ async fn append_provider_stream_events<R>(
     repository: &R,
     flow_run_id: Uuid,
     node_run_id: Option<Uuid>,
+    span_id: Option<Uuid>,
     events: &[ProviderStreamEvent],
 ) -> Result<Vec<domain::RunEventRecord>>
 where
@@ -322,16 +346,28 @@ where
 {
     let mut records = Vec::with_capacity(events.len());
     for event in events {
+        let event_type = provider_stream_event_type(event);
+        let payload = serde_json::to_value(event)?;
         records.push(
             repository
                 .append_run_event(&AppendRunEventInput {
                     flow_run_id,
                     node_run_id,
-                    event_type: provider_stream_event_type(event).to_string(),
-                    payload: serde_json::to_value(event)?,
+                    event_type: event_type.to_string(),
+                    payload: payload.clone(),
                 })
                 .await?,
         );
+        append_host_event(
+            repository,
+            flow_run_id,
+            node_run_id,
+            span_id,
+            event_type,
+            domain::RuntimeEventLayer::ProviderRaw,
+            payload,
+        )
+        .await?;
     }
     Ok(records)
 }
@@ -354,6 +390,7 @@ fn provider_stream_event_type(event: &ProviderStreamEvent) -> &'static str {
 async fn persist_flow_debug_node_traces<R>(
     repository: &R,
     flow_run_id: Uuid,
+    flow_span_id: Option<Uuid>,
     outcome: &orchestration_runtime::execution_state::FlowDebugExecutionOutcome,
     base_started_at: OffsetDateTime,
 ) -> Result<Option<domain::NodeRunRecord>>
@@ -390,6 +427,25 @@ where
                 started_at,
             })
             .await?;
+        let span_kind = if trace.node_type == "llm" {
+            domain::RuntimeSpanKind::LlmTurn
+        } else {
+            domain::RuntimeSpanKind::Node
+        };
+        let node_span = append_host_span(
+            repository,
+            flow_run_id,
+            Some(node_run.id),
+            flow_span_id,
+            span_kind,
+            trace.node_alias.clone(),
+            started_at,
+            json!({
+                "node_id": trace.node_id,
+                "node_type": trace.node_type,
+            }),
+        )
+        .await?;
         let (status, finished_at) = match waiting_node_id {
             Some((waiting_id, waiting_status)) if waiting_id == trace.node_id => {
                 if waiting_status == domain::NodeRunStatus::Failed {
@@ -419,6 +475,7 @@ where
             repository,
             flow_run_id,
             Some(node_run.id),
+            Some(node_span.id),
             &trace.provider_events,
         )
         .await?;
