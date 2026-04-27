@@ -500,6 +500,143 @@ async fn wait_for_run_detail(
 }
 
 #[tokio::test]
+async fn get_runtime_debug_stream_returns_trusted_parts() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+
+    let preview = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/nodes/node-llm/debug-runs"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "input_payload": {
+                            "node-start": { "query": "总结退款政策" }
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(preview.status(), StatusCode::CREATED);
+    let preview_body = to_bytes(preview.into_body(), usize::MAX).await.unwrap();
+    let preview_payload: Value = serde_json::from_slice(&preview_body).unwrap();
+    let run_id = preview_payload["data"]["flow_run"]["id"].as_str().unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{run_id}/debug-stream"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert!(payload["data"]["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|part| part["trust_level"] == "host_fact"));
+}
+
+#[tokio::test]
+async fn external_agent_opaque_boundary_keeps_external_trust_level() {
+    let (app, database_url) = test_app_with_database_url().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+
+    let preview = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/nodes/node-llm/debug-runs"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "input_payload": {
+                            "node-start": { "query": "总结退款政策" }
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(preview.status(), StatusCode::CREATED);
+    let preview_body = to_bytes(preview.into_body(), usize::MAX).await.unwrap();
+    let preview_payload: Value = serde_json::from_slice(&preview_body).unwrap();
+    let run_id =
+        Uuid::parse_str(preview_payload["data"]["flow_run"]["id"].as_str().unwrap()).unwrap();
+    let store = storage_durable::build_main_durable_postgres(&database_url)
+        .await
+        .unwrap()
+        .store;
+    control_plane::runtime_observability::mark_external_opaque_boundary(
+        &store,
+        run_id,
+        json!({ "reason": "external local tool execution not observed" }),
+    )
+    .await
+    .unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{run_id}/debug-stream"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert!(payload["data"]["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|part| {
+            part["trust_level"] == "external_opaque"
+                && part["payload"]["event_type"] == "external_agent_opaque_boundary_marked"
+        }));
+}
+
+#[tokio::test]
 async fn application_runtime_routes_start_node_preview_and_query_logs() {
     let app = test_app().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;

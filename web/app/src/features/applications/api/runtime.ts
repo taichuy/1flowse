@@ -2,15 +2,19 @@ import {
   completeConsoleCallbackTask,
   getConsoleApplicationRunDetail,
   getConsoleApplicationRuns,
+  getConsoleRuntimeDebugStream,
   resumeConsoleFlowRun,
   type ConsoleApplicationRunDetail,
-  type ConsoleApplicationRunSummary
+  type ConsoleApplicationRunSummary,
+  type RuntimeDebugStreamPart
 } from '@1flowbase/api-client';
 
 import { getApplicationsApiBaseUrl } from './applications';
 
 export type ApplicationRunSummary = ConsoleApplicationRunSummary;
 export type ApplicationRunDetail = ConsoleApplicationRunDetail;
+export type ApplicationRuntimeDebugStreamPart = RuntimeDebugStreamPart;
+export type { RuntimeDebugStreamPart };
 
 export const applicationRunsQueryKey = (applicationId: string) =>
   ['applications', applicationId, 'runtime', 'runs'] as const;
@@ -19,6 +23,19 @@ export const applicationRunDetailQueryKey = (
   applicationId: string,
   runId: string
 ) => ['applications', applicationId, 'runtime', 'runs', runId] as const;
+
+export const applicationRuntimeDebugStreamQueryKey = (
+  applicationId: string,
+  runId: string
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'debug-stream'
+  ] as const;
 
 export function fetchApplicationRuns(applicationId: string) {
   return getConsoleApplicationRuns(applicationId, getApplicationsApiBaseUrl());
@@ -31,6 +48,16 @@ export function fetchApplicationRunDetail(applicationId: string, runId: string) 
     getApplicationsApiBaseUrl()
   );
 }
+
+export function fetchRuntimeDebugStream(applicationId: string, runId: string) {
+  return getConsoleRuntimeDebugStream(
+    applicationId,
+    runId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export { getConsoleRuntimeDebugStream };
 
 export function resumeFlowRun(
   applicationId: string,

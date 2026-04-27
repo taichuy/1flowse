@@ -1,6 +1,8 @@
+pub mod debug_stream;
 pub mod delta_coalescer;
 pub mod event_bus;
 
+pub use debug_stream::DebugStreamPart;
 pub use delta_coalescer::DeltaCoalescer;
 pub use event_bus::{RuntimeBusEvent, RuntimeEventBus};
 

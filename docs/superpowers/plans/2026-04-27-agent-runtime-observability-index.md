@@ -112,7 +112,7 @@ Why sixth:
 1. 外部 agent 不能被包装成完整可控事实。
 2. 插件隔离、bridge 可信等级和 system_agent 身份要在运行时边界上落地。
 
-- [ ] **Step 7: Execute Debug Read Model UI**
+- [x] **Step 7: Execute Debug Read Model UI**
 
 Plan:
 
@@ -171,7 +171,7 @@ Why last:
 
 ## Locked Decisions
 
-- [ ] **Step 1: Preserve compatibility**
+- [x] **Step 1: Preserve compatibility**
 
 Every child plan must keep existing application runtime routes working:
 
@@ -186,7 +186,7 @@ Expected:
 1. Existing `ApplicationRunDetail` response shape remains valid.
 2. New facts are written beside old records until plan 07 switches debug reads.
 
-- [ ] **Step 2: Keep provider boundary narrow**
+- [x] **Step 2: Keep provider boundary narrow**
 
 Provider plugins may:
 
@@ -208,7 +208,7 @@ register HTTP routes
 debit credit
 ```
 
-- [ ] **Step 3: Keep external agent audit honest**
+- [x] **Step 3: Keep external agent audit honest**
 
 Raw gateway mode records:
 
@@ -229,7 +229,7 @@ Those facts are `external_opaque` unless they pass through signed bridge telemet
 
 ## Final Verification
 
-- [ ] **Step 1: Backend verification**
+- [x] **Step 1: Backend verification**
 
 Run after all child plans:
 
@@ -245,7 +245,7 @@ cargo test -p api-server application_runtime_routes
 
 Expected: PASS.
 
-- [ ] **Step 2: Frontend verification**
+- [x] **Step 2: Frontend verification**
 
 Run after plan 07:
 

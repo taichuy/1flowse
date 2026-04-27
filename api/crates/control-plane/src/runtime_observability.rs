@@ -10,6 +10,7 @@ use crate::ports::{
     OrchestrationRuntimeRepository,
 };
 
+pub mod debug_read_model;
 pub mod items;
 pub mod projection;
 

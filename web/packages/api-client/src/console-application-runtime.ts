@@ -90,6 +90,21 @@ export interface ConsoleApplicationRunDetail {
   events: ConsoleRunEvent[];
 }
 
+export interface RuntimeDebugStreamPart {
+  id: string;
+  flow_run_id: string;
+  item_id?: string | null;
+  span_id?: string | null;
+  part_type: string;
+  status: string;
+  trust_level: string;
+  payload: unknown;
+}
+
+export interface RuntimeDebugStreamResponse {
+  parts: RuntimeDebugStreamPart[];
+}
+
 export type ConsoleFlowDebugStreamEvent =
   | {
       type: 'flow_started';
@@ -346,6 +361,17 @@ export function getConsoleApplicationRunDetail(
 ) {
   return apiFetch<ConsoleApplicationRunDetail>({
     path: `/api/console/applications/${applicationId}/logs/runs/${runId}`,
+    baseUrl
+  });
+}
+
+export function getConsoleRuntimeDebugStream(
+  applicationId: string,
+  runId: string,
+  baseUrl?: string
+) {
+  return apiFetch<RuntimeDebugStreamResponse>({
+    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/debug-stream`,
     baseUrl
   });
 }

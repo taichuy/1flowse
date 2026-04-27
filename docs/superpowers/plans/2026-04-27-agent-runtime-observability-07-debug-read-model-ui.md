@@ -33,7 +33,7 @@
 - Modify: `api/crates/observability/src/lib.rs`
 - Create: `api/crates/control-plane/src/runtime_observability/debug_read_model.rs`
 
-- [ ] **Step 1: Write backend fold test**
+- [x] **Step 1: Write backend fold test**
 
 Create or extend `api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs`:
 
@@ -67,7 +67,7 @@ fn runtime_event_folds_to_debug_stream_part_with_trust_level() {
 }
 ```
 
-- [ ] **Step 2: Add DebugStreamPart**
+- [x] **Step 2: Add DebugStreamPart**
 
 Create `api/crates/observability/src/debug_stream.rs`:
 
@@ -92,7 +92,7 @@ pub mod debug_stream;
 pub use debug_stream::DebugStreamPart;
 ```
 
-- [ ] **Step 3: Add fold helper**
+- [x] **Step 3: Add fold helper**
 
 Create `api/crates/control-plane/src/runtime_observability/debug_read_model.rs`:
 
@@ -134,7 +134,7 @@ pub fn fold_event_to_debug_part(
 }
 ```
 
-- [ ] **Step 4: Run backend fold test**
+- [x] **Step 4: Run backend fold test**
 
 Run:
 
@@ -144,7 +144,7 @@ cargo test -p control-plane runtime_event_folds_to_debug_stream_part_with_trust_
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/crates/observability/src/debug_stream.rs api/crates/observability/src/lib.rs api/crates/control-plane/src/runtime_observability/debug_read_model.rs api/crates/control-plane/src/_tests/orchestration_runtime/runtime_observability.rs
@@ -160,7 +160,7 @@ git commit -m "feat: fold runtime events into debug stream parts"
 - Modify: `web/packages/api-client/src/console-application-runtime.ts`
 - Modify: `web/packages/api-client/src/index.ts`
 
-- [ ] **Step 1: Write failing route test**
+- [x] **Step 1: Write failing route test**
 
 Add:
 
@@ -189,7 +189,7 @@ async fn get_runtime_debug_stream_returns_trusted_parts() {
 }
 ```
 
-- [ ] **Step 2: Add API response DTO**
+- [x] **Step 2: Add API response DTO**
 
 In `api/apps/api-server/src/routes/applications/application_runtime.rs`:
 
@@ -212,7 +212,7 @@ pub struct RuntimeDebugStreamPartResponse {
 }
 ```
 
-- [ ] **Step 3: Add route**
+- [x] **Step 3: Add route**
 
 Add router entry:
 
@@ -252,7 +252,7 @@ pub async fn get_runtime_debug_stream(
 }
 ```
 
-- [ ] **Step 4: Add API client**
+- [x] **Step 4: Add API client**
 
 Modify `web/packages/api-client/src/console-application-runtime.ts`:
 
@@ -282,7 +282,7 @@ export async function getConsoleRuntimeDebugStream(
 
 Export from `web/packages/api-client/src/index.ts`.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -293,7 +293,7 @@ pnpm --dir web/packages/api-client test
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/apps/api-server/src/routes/applications/application_runtime.rs api/apps/api-server/src/openapi.rs api/apps/api-server/src/_tests/application/application_runtime_routes.rs web/packages/api-client/src/console-application-runtime.ts web/packages/api-client/src/index.ts
@@ -307,7 +307,7 @@ git commit -m "feat: expose runtime debug stream api"
 - Create: `web/app/src/features/applications/lib/runtime-observability/debug-stream-parts.ts`
 - Create: `web/app/src/features/applications/_tests/runtime-observability/debug-stream-parts.test.ts`
 
-- [ ] **Step 1: Write failing frontend mapper tests**
+- [x] **Step 1: Write failing frontend mapper tests**
 
 Create `web/app/src/features/applications/_tests/runtime-observability/debug-stream-parts.test.ts`:
 
@@ -357,7 +357,7 @@ test('maps host text deltas to stream text parts', () => {
 });
 ```
 
-- [ ] **Step 2: Implement mapper**
+- [x] **Step 2: Implement mapper**
 
 Create `web/app/src/features/applications/lib/runtime-observability/debug-stream-parts.ts`:
 
@@ -403,7 +403,7 @@ export function mapRuntimeDebugStreamParts(
 }
 ```
 
-- [ ] **Step 3: Export app API wrapper**
+- [x] **Step 3: Export app API wrapper**
 
 Modify `web/app/src/features/applications/api/runtime.ts`:
 
@@ -412,7 +412,7 @@ export { getConsoleRuntimeDebugStream } from '@1flowbase/api-client';
 export type { RuntimeDebugStreamPart } from '@1flowbase/api-client';
 ```
 
-- [ ] **Step 4: Run frontend tests**
+- [x] **Step 4: Run frontend tests**
 
 Run:
 
@@ -422,7 +422,7 @@ pnpm --dir web/app test -- src/features/applications/_tests/runtime-observabilit
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/app/src/features/applications/api/runtime.ts web/app/src/features/applications/lib/runtime-observability/debug-stream-parts.ts web/app/src/features/applications/_tests/runtime-observability/debug-stream-parts.test.ts
@@ -434,7 +434,7 @@ git commit -m "feat: map runtime debug stream parts"
 **Files:**
 - Modify: `web/app/src/features/applications/_tests/runtime-observability/runtime-debug-api.test.ts`
 
-- [ ] **Step 1: Add compatibility test note**
+- [x] **Step 1: Add compatibility test note**
 
 Create `web/app/src/features/applications/_tests/runtime-observability/runtime-debug-api.test.ts`:
 
@@ -448,7 +448,7 @@ test('runtime debug read model is additive to legacy application run detail', ()
 });
 ```
 
-- [ ] **Step 2: Run full compatibility tests**
+- [x] **Step 2: Run full compatibility tests**
 
 Run:
 
@@ -464,7 +464,7 @@ Expected:
 2. Runtime debug-stream route passes.
 3. Existing agent-flow debug console tests pass.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add web/app/src/features/applications/_tests/runtime-observability/runtime-debug-api.test.ts

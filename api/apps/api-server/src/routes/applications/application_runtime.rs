@@ -150,6 +150,23 @@ pub struct ApplicationRunDetailResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+pub struct RuntimeDebugStreamResponse {
+    pub parts: Vec<RuntimeDebugStreamPartResponse>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RuntimeDebugStreamPartResponse {
+    pub id: String,
+    pub flow_run_id: String,
+    pub item_id: Option<String>,
+    pub span_id: Option<String>,
+    pub part_type: String,
+    pub status: String,
+    pub trust_level: String,
+    pub payload: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct NodeLastRunResponse {
     pub flow_run: FlowRunResponse,
     pub node_run: NodeRunResponse,
@@ -187,6 +204,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/applications/:id/logs/runs/:run_id",
             get(get_application_run_detail),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/debug-stream",
+            get(get_runtime_debug_stream),
         )
         .route(
             "/applications/:id/orchestration/nodes/:node_id/last-run",
@@ -333,6 +354,21 @@ fn to_node_last_run_response(last_run: domain::NodeLastRun) -> NodeLastRunRespon
             .into_iter()
             .map(to_run_event_response)
             .collect(),
+    }
+}
+
+fn to_runtime_debug_stream_part_response(
+    part: observability::DebugStreamPart,
+) -> RuntimeDebugStreamPartResponse {
+    RuntimeDebugStreamPartResponse {
+        id: part.id.to_string(),
+        flow_run_id: part.flow_run_id.to_string(),
+        item_id: part.item_id.map(|value| value.to_string()),
+        span_id: part.span_id.map(|value| value.to_string()),
+        part_type: part.part_type,
+        status: part.status,
+        trust_level: part.trust_level.as_str().to_string(),
+        payload: part.payload,
     }
 }
 
@@ -943,6 +979,50 @@ pub async fn get_application_run_detail(
     Ok(Json(ApiSuccess::new(to_application_run_detail_response(
         detail,
     ))))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/logs/runs/{run_id}/debug-stream",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("run_id" = String, Path, description = "Flow run id")
+    ),
+    responses(
+        (status = 200, body = RuntimeDebugStreamResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_runtime_debug_stream(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, run_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ApiSuccess<RuntimeDebugStreamResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_application_visible(&state, context.user.id, id).await?;
+
+    <MainDurableStore as OrchestrationRuntimeRepository>::get_flow_run(&state.store, id, run_id)
+        .await?
+        .ok_or(ControlPlaneError::NotFound("flow_run"))?;
+
+    let parts = <MainDurableStore as OrchestrationRuntimeRepository>::list_runtime_events(
+        &state.store,
+        run_id,
+        0,
+    )
+    .await?
+    .iter()
+    .filter_map(|event| {
+        control_plane::runtime_observability::debug_read_model::fold_event_to_debug_part(
+            run_id, event,
+        )
+    })
+    .map(to_runtime_debug_stream_part_response)
+    .collect();
+
+    Ok(Json(ApiSuccess::new(RuntimeDebugStreamResponse { parts })))
 }
 
 #[utoipa::path(
