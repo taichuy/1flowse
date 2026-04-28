@@ -12,6 +12,11 @@ export const LLM_PROMPT_MESSAGE_ROLES: LlmPromptMessageRole[] = [
   'assistant'
 ];
 
+const LLM_DYNAMIC_PROMPT_MESSAGE_ROLES: LlmPromptMessageRole[] = [
+  'user',
+  'assistant'
+];
+
 export function createPromptMessage(
   role: LlmPromptMessageRole,
   index: number,
@@ -57,19 +62,39 @@ export function normalizePromptMessagesBinding(
     promptMessages.kind === 'prompt_messages' &&
     Array.isArray(promptMessages.value)
   ) {
-    return promptMessages.value.map((message, index) => ({
-      id: message.id || `${message.role}-${index + 1}`,
-      role: LLM_PROMPT_MESSAGE_ROLES.includes(message.role)
-        ? message.role
-        : 'user',
-      content: {
-        kind: 'templated_text',
-        value:
-          message.content?.kind === 'templated_text'
-            ? message.content.value
-            : ''
-      }
-    }));
+    const normalizedMessages: LlmPromptMessage[] = promptMessages.value.map(
+      (message, index) => ({
+        id: message.id || `${message.role}-${index + 1}`,
+        role: LLM_PROMPT_MESSAGE_ROLES.includes(message.role)
+          ? message.role
+          : 'user',
+        content: {
+          kind: 'templated_text',
+          value:
+            message.content?.kind === 'templated_text'
+              ? message.content.value
+              : ''
+        }
+      })
+    );
+    const systemMessageIndex = normalizedMessages.findIndex(
+      (message) => message.role === 'system'
+    );
+    const systemMessage =
+      systemMessageIndex >= 0
+        ? normalizedMessages[systemMessageIndex]
+        : createPromptMessage('system', 0);
+    const dynamicMessages = normalizedMessages
+      .filter((_, index) => index !== systemMessageIndex)
+      .map((message, index) => ({
+        ...message,
+        id: message.id || `user-${index + 2}`,
+        role: LLM_DYNAMIC_PROMPT_MESSAGE_ROLES.includes(message.role)
+          ? message.role
+          : 'user'
+      }));
+
+    return [systemMessage, ...dynamicMessages];
   }
 
   const messages: LlmPromptMessage[] = [];
@@ -84,9 +109,7 @@ export function normalizePromptMessagesBinding(
     messages.push(createPromptMessage('user', messages.length, userText));
   }
 
-  return messages.length > 0
-    ? messages
-    : [createPromptMessage('system', 0)];
+  return messages.length > 0 ? messages : [createPromptMessage('system', 0)];
 }
 
 export function toPromptMessagesBinding(

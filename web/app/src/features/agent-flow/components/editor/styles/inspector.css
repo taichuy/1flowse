@@ -128,10 +128,13 @@
 
 .agent-flow-templated-text-field {
   display: grid;
+  width: 100%;
+  min-width: 0;
   gap: 8px;
 }
 
 .agent-flow-templated-text-field__frame {
+  width: 100%;
   overflow: hidden;
   border: 1px solid #d9e3dc;
   border-radius: 12px;
@@ -408,7 +411,7 @@
 
 .agent-flow-llm-prompt-messages__row {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 72px minmax(0, 1fr);
   align-items: start;
   gap: 8px;
 }
@@ -439,16 +442,28 @@
 
 .agent-flow-llm-prompt-messages__body {
   display: flex;
+  width: 100%;
   min-width: 0;
   flex-direction: column;
   gap: 8px;
 }
 
-.agent-flow-llm-prompt-messages__role-select {
-  width: 132px;
+.agent-flow-llm-prompt-messages__fixed-role {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 28px;
+  border: 1px solid #d5ddd8;
+  border-radius: 6px;
+  background: #f6faf7;
+  color: #55645d;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .agent-flow-llm-prompt-messages__role-select {
+  width: 132px;
   height: 28px;
   padding: 0 28px 0 10px;
   border: 1px solid #d5ddd8;

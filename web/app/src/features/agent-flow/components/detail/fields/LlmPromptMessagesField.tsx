@@ -18,6 +18,10 @@ import {
 } from '../../../lib/llm-prompt-messages';
 import type { FlowSelectorOption } from '../../../lib/selector-options';
 
+const DYNAMIC_PROMPT_MESSAGE_ROLES = LLM_PROMPT_MESSAGE_ROLES.filter(
+  (role) => role !== 'system'
+);
+
 interface LlmPromptMessagesFieldProps {
   value: LlmPromptMessage[];
   options: FlowSelectorOption[];
@@ -68,6 +72,10 @@ export function LlmPromptMessagesField({
   }
 
   function updateRole(index: number, role: LlmPromptMessageRole) {
+    if (index === 0 || role === 'system') {
+      return;
+    }
+
     onChange(updateAt(value, index, { role }));
   }
 
@@ -85,11 +93,15 @@ export function LlmPromptMessagesField({
   }
 
   function removeMessage(index: number) {
+    if (index === 0) {
+      return;
+    }
+
     onChange(value.filter((_, messageIndex) => messageIndex !== index));
   }
 
   function handleDrop(targetIndex: number) {
-    if (draggingIndex === null) {
+    if (draggingIndex === null || draggingIndex === 0 || targetIndex === 0) {
       return;
     }
 
@@ -114,63 +126,76 @@ export function LlmPromptMessagesField({
 
       {value.length > 0 ? (
         <div className="agent-flow-llm-prompt-messages__list">
-          {value.map((message, index) => (
-            <div
-              key={message.id}
-              className="agent-flow-llm-prompt-messages__row"
-              data-testid={`llm-prompt-message-row-${message.id}`}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={() => handleDrop(index)}
-            >
-              <button
-                aria-label={`拖拽排序 ${message.role.toUpperCase()} 消息`}
-                className="agent-flow-llm-prompt-messages__drag-handle"
-                draggable
-                onDragEnd={() => setDraggingIndex(null)}
-                onDragStart={() => setDraggingIndex(index)}
-                type="button"
+          {value.map((message, index) => {
+            const isSystemMessage = index === 0 && message.role === 'system';
+            const roleLabel = message.role.toUpperCase();
+
+            return (
+              <div
+                key={message.id}
+                className="agent-flow-llm-prompt-messages__row"
+                data-testid={`llm-prompt-message-row-${message.id}`}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => handleDrop(index)}
               >
-                <HolderOutlined />
-              </button>
-              <div className="agent-flow-llm-prompt-messages__body">
-                <div className="agent-flow-llm-prompt-messages__role-row">
-                  <select
-                    aria-label={`${message.role.toUpperCase()} 消息角色`}
-                    className="agent-flow-llm-prompt-messages__role-select"
-                    value={message.role}
-                    onChange={(event) =>
-                      updateRole(
-                        index,
-                        event.target.value as LlmPromptMessageRole
-                      )
-                    }
+                {isSystemMessage ? (
+                  <span className="agent-flow-llm-prompt-messages__fixed-role">
+                    SYSTEM
+                  </span>
+                ) : (
+                  <button
+                    aria-label={`拖拽排序 ${roleLabel} 消息`}
+                    className="agent-flow-llm-prompt-messages__drag-handle"
+                    draggable
+                    onDragEnd={() => setDraggingIndex(null)}
+                    onDragStart={() => setDraggingIndex(index)}
+                    type="button"
                   >
-                    {LLM_PROMPT_MESSAGE_ROLES.map((role) => (
-                      <option key={role} value={role}>
-                        {role.toUpperCase()}
-                      </option>
-                    ))}
-                  </select>
-                  <Button
-                    aria-label={`删除 ${message.role.toUpperCase()} 消息`}
-                    danger
-                    icon={<DeleteOutlined />}
-                    size="small"
-                    type="text"
-                    onClick={() => removeMessage(index)}
+                    <HolderOutlined />
+                  </button>
+                )}
+                <div className="agent-flow-llm-prompt-messages__body">
+                  {!isSystemMessage ? (
+                    <div className="agent-flow-llm-prompt-messages__role-row">
+                      <select
+                        aria-label={`${roleLabel} 消息角色`}
+                        className="agent-flow-llm-prompt-messages__role-select"
+                        value={message.role}
+                        onChange={(event) =>
+                          updateRole(
+                            index,
+                            event.target.value as LlmPromptMessageRole
+                          )
+                        }
+                      >
+                        {DYNAMIC_PROMPT_MESSAGE_ROLES.map((role) => (
+                          <option key={role} value={role}>
+                            {role.toUpperCase()}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        aria-label={`删除 ${roleLabel} 消息`}
+                        danger
+                        icon={<DeleteOutlined />}
+                        size="small"
+                        type="text"
+                        onClick={() => removeMessage(index)}
+                      />
+                    </div>
+                  ) : null}
+                  <TemplatedTextField
+                    ariaLabel={`${roleLabel} 消息内容`}
+                    label={roleLabel}
+                    options={options}
+                    placeholder="输入文本，或输入 / 引用变量"
+                    value={message.content.value}
+                    onChange={(nextValue) => updateContent(index, nextValue)}
                   />
                 </div>
-                <TemplatedTextField
-                  ariaLabel={`${message.role.toUpperCase()} 消息内容`}
-                  label={message.role.toUpperCase()}
-                  options={options}
-                  placeholder="输入文本，或输入 / 引用变量"
-                  value={message.content.value}
-                  onChange={(nextValue) => updateContent(index, nextValue)}
-                />
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <Empty

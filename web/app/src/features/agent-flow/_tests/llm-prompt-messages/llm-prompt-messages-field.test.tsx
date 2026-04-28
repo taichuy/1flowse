@@ -62,7 +62,9 @@ function SelectionSeed({ nodeId }: { nodeId: string }) {
   return null;
 }
 
-function llmNodeFrom(document: ReturnType<typeof createDefaultAgentFlowDocument>) {
+function llmNodeFrom(
+  document: ReturnType<typeof createDefaultAgentFlowDocument>
+) {
   const node = document.graph.nodes.find((entry) => entry.id === 'node-llm');
 
   if (!node) {
@@ -85,7 +87,7 @@ function promptMessagesFrom(
 }
 
 describe('LLM prompt messages field', () => {
-  test('renders default prompt messages and writes add role delete and drag changes', async () => {
+  test('keeps system first and only lets dynamic messages switch between user and assistant', async () => {
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
     renderWithProviders(
@@ -107,6 +109,15 @@ describe('LLM prompt messages field', () => {
       '{{node-start.query}}'
     );
 
+    const systemRow = screen.getByTestId('llm-prompt-message-row-system-1');
+    expect(within(systemRow).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(
+      within(systemRow).queryByRole('button', { name: /删除/ })
+    ).not.toBeInTheDocument();
+    expect(
+      within(systemRow).queryByRole('button', { name: /拖拽排序/ })
+    ).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: '添加消息' }));
     expect(screen.getAllByLabelText('USER 消息内容')).toHaveLength(2);
 
@@ -117,23 +128,35 @@ describe('LLM prompt messages field', () => {
       throw new Error('expected appended prompt message row');
     }
 
-    fireEvent.change(
-      within(addedRow).getByRole('combobox', { name: /消息角色/ }),
-      { target: { value: 'assistant' } }
-    );
+    const addedRoleSelect = within(addedRow).getByRole('combobox', {
+      name: /消息角色/
+    });
+    expect(
+      within(addedRoleSelect).queryByRole('option', { name: 'SYSTEM' })
+    ).not.toBeInTheDocument();
+    expect(
+      within(addedRoleSelect).getByRole('option', { name: 'USER' })
+    ).toBeInTheDocument();
+    expect(
+      within(addedRoleSelect).getByRole('option', { name: 'ASSISTANT' })
+    ).toBeInTheDocument();
+
+    fireEvent.change(addedRoleSelect, { target: { value: 'assistant' } });
 
     fireEvent.dragStart(
-      within(rows[0]).getByRole('button', { name: /拖拽排序/ })
+      within(addedRow).getByRole('button', { name: /拖拽排序/ })
     );
-    fireEvent.dragOver(addedRow);
-    fireEvent.drop(addedRow);
+    fireEvent.dragOver(rows[1]);
+    fireEvent.drop(rows[1]);
 
-    fireEvent.click(within(addedRow).getByRole('button', { name: /删除/ }));
+    const latestRows = screen.getAllByTestId(/llm-prompt-message-row-/);
+    fireEvent.click(
+      within(latestRows[1]).getByRole('button', { name: /删除/ })
+    );
 
-    expect(promptMessagesFrom(latestDocument).map((message) => message.role)).toEqual([
-      'user',
-      'system'
-    ]);
+    expect(
+      promptMessagesFrom(latestDocument).map((message) => message.role)
+    ).toEqual(['system', 'user']);
   });
 
   test('renders legacy system and user prompt bindings as prompt messages', async () => {
@@ -166,5 +189,57 @@ describe('LLM prompt messages field', () => {
     expect(await screen.findByLabelText('SYSTEM 消息内容')).toBeInTheDocument();
     expect(screen.getByText('You are helpful.')).toBeInTheDocument();
     expect(screen.getByLabelText('USER 消息内容')).toBeInTheDocument();
+  });
+
+  test('normalizes existing prompt messages so system remains the first fixed row', async () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    document.graph.nodes = document.graph.nodes.map((node) =>
+      node.id === 'node-llm'
+        ? {
+            ...node,
+            bindings: {
+              prompt_messages: {
+                kind: 'prompt_messages',
+                value: [
+                  {
+                    id: 'user-first',
+                    role: 'user',
+                    content: { kind: 'templated_text', value: 'Question' }
+                  },
+                  {
+                    id: 'system-second',
+                    role: 'system',
+                    content: { kind: 'templated_text', value: 'Rules' }
+                  },
+                  {
+                    id: 'assistant-third',
+                    role: 'assistant',
+                    content: { kind: 'templated_text', value: 'Earlier answer' }
+                  }
+                ]
+              }
+            }
+          }
+        : node
+    );
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={createInitialState(document)}>
+        <SelectionSeed nodeId="node-llm" />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(await screen.findByText('Rules')).toBeInTheDocument();
+    const rows = screen.getAllByTestId(/llm-prompt-message-row-/);
+    expect(rows[0]).toHaveAttribute(
+      'data-testid',
+      'llm-prompt-message-row-system-second'
+    );
+    expect(within(rows[0]).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(rows[1]).getByLabelText('USER 消息内容')).toBeInTheDocument();
+    expect(
+      within(rows[2]).getByLabelText('ASSISTANT 消息内容')
+    ).toBeInTheDocument();
   });
 });
