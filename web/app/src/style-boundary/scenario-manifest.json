@@ -81,6 +81,58 @@
     ]
   },
   {
+    "id": "component.agent-flow-node-detail",
+    "kind": "component",
+    "title": "Agent Flow Node Detail",
+    "impactFiles": [
+      "web/app/src/features/agent-flow/components/editor/AgentFlowCanvasFrame.tsx",
+      "web/app/src/features/agent-flow/components/editor/agent-flow-editor.css",
+      "web/app/src/features/agent-flow/components/editor/styles/detail-panel.css",
+      "web/app/src/features/agent-flow/components/detail/NodeDetailPanel.tsx",
+      "web/app/src/features/agent-flow/components/detail/NodeDetailHeader.tsx",
+      "web/app/src/features/agent-flow/components/detail/NodeActionMenu.tsx",
+      "web/app/src/features/agent-flow/components/detail/NodeRunButton.tsx",
+      "web/app/src/features/agent-flow/components/detail/tabs/NodeConfigTab.tsx",
+      "web/app/src/features/agent-flow/components/detail/tabs/NodeLastRunTab.tsx",
+      "web/app/src/features/agent-flow/components/detail/fields/LlmModelField.tsx",
+      "web/app/src/features/agent-flow/components/inspector/NodeInspector.tsx",
+      "web/app/src/features/agent-flow/store/editor/index.ts",
+      "web/app/src/style-boundary/registry.tsx"
+    ],
+    "boundaryNodes": [
+      {
+        "id": "editor-detail-dock",
+        "selector": ".agent-flow-editor__detail-dock",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "flex"
+          }
+        ]
+      },
+      {
+        "id": "editor-detail-content",
+        "selector": ".agent-flow-node-detail",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "flex"
+          }
+        ]
+      },
+      {
+        "id": "editor-model-field-trigger",
+        "selector": ".agent-flow-model-field__trigger",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "flex"
+          }
+        ]
+      }
+    ]
+  },
+  {
     "id": "page.application-detail",
     "kind": "page",
     "title": "Application Detail Page",
@@ -202,26 +254,6 @@
         ]
       },
       {
-        "id": "editor-detail-dock",
-        "selector": ".agent-flow-editor__detail-dock",
-        "propertyAssertions": [
-          {
-            "property": "display",
-            "expected": "flex"
-          }
-        ]
-      },
-      {
-        "id": "editor-detail-content",
-        "selector": ".agent-flow-node-detail",
-        "propertyAssertions": [
-          {
-            "property": "display",
-            "expected": "flex"
-          }
-        ]
-      },
-      {
         "id": "editor-node-model-chip",
         "selector": ".agent-flow-node-card__model-content",
         "propertyAssertions": [
@@ -232,16 +264,6 @@
           {
             "property": "flex-direction",
             "expected": "column"
-          }
-        ]
-      },
-      {
-        "id": "editor-model-field-trigger",
-        "selector": ".agent-flow-model-field__trigger",
-        "propertyAssertions": [
-          {
-            "property": "display",
-            "expected": "flex"
           }
         ]
       }

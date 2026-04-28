@@ -1,3 +1,4 @@
+/* eslint-disable testing-library/no-node-access */
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { Grid } from 'antd';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -128,6 +129,27 @@ vi.mock('../api/file-management', () => fileManagementApi);
 vi.mock('@scalar/api-reference-react', () => ({
   ApiReferenceReact: () => <div data-testid="settings-page-scalar">Scalar</div>
 }));
+vi.mock('@1flowbase/api-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@1flowbase/api-client')>();
+
+  return {
+    ...actual,
+    listConsoleMembers: membersApi.fetchSettingsMembers,
+    createConsoleMember: membersApi.createSettingsMember,
+    disableConsoleMember: membersApi.disableSettingsMember,
+    resetConsoleMemberPassword: membersApi.resetSettingsMemberPassword,
+    replaceConsoleMemberRoles: membersApi.replaceSettingsMemberRoles,
+    listConsoleRoles: rolesApi.fetchSettingsRoles,
+    fetchConsoleRolePermissions: rolesApi.fetchSettingsRolePermissions,
+    createConsoleRole: rolesApi.createSettingsRole,
+    updateConsoleRole: rolesApi.updateSettingsRole,
+    deleteConsoleRole: rolesApi.deleteSettingsRole,
+    replaceConsoleRolePermissions: rolesApi.replaceSettingsRolePermissions,
+    fetchConsolePermissions: permissionsApi.fetchSettingsPermissions,
+    fetchConsoleSystemRuntimeProfile:
+      systemRuntimeApi.fetchSettingsSystemRuntimeProfile
+  };
+});
 
 import { AppProviders } from '../../../app/AppProviders';
 import { AppRouterProvider } from '../../../app/router';
@@ -430,7 +452,7 @@ describe('SettingsPage', () => {
       'section-page-layout--wide'
     );
     expect(
-      screen.getByRole('heading', { name: '用户管理', level: 3 })
+      await screen.findByRole('heading', { name: '用户管理', level: 3 })
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '新建用户' })
@@ -438,7 +460,10 @@ describe('SettingsPage', () => {
   });
 
   test('disables root member write actions while leaving normal members operable', async () => {
-    authenticateWithPermissions([], 'root');
+    authenticateWithPermissions(
+      ['route_page.view.all', 'user.view.all', 'user.manage.all'],
+      'root'
+    );
     membersApi.fetchSettingsMembers.mockResolvedValue([
       {
         id: 'root-user',
@@ -472,8 +497,24 @@ describe('SettingsPage', () => {
 
     renderApp('/settings/members');
 
-    const rootRow = await screen.findByRole('row', { name: /Root/ });
-    const managerRow = await screen.findByRole('row', { name: /Manager 1/ });
+    await screen.findByRole(
+      'heading',
+      { name: '用户管理', level: 3 },
+      { timeout: 10000 }
+    );
+    await waitFor(() => {
+      expect(membersApi.fetchSettingsMembers).toHaveBeenCalled();
+    });
+
+    const rootRow = (
+      await screen.findByText('Root', {}, { timeout: 10000 })
+    ).closest('tr') as HTMLElement;
+    const managerRow = (
+      await screen.findByText('Manager 1', {}, { timeout: 10000 })
+    ).closest('tr') as HTMLElement;
+
+    expect(rootRow).not.toBeNull();
+    expect(managerRow).not.toBeNull();
 
     expect(
       within(rootRow).getByRole('button', { name: /编辑$/ })
@@ -541,7 +582,7 @@ describe('SettingsPage', () => {
     expect(
       await screen.findByRole('heading', { name: '系统运行', level: 3 })
     ).toBeInTheDocument();
-    expect(screen.getByText('部署概览')).toBeInTheDocument();
+    expect(await screen.findByText('部署概览')).toBeInTheDocument();
     expect(screen.getByText('同机部署')).toBeInTheDocument();
     expect(screen.getByText('zh_Hans')).toBeInTheDocument();
     expect(screen.getByText('API Server')).toBeInTheDocument();

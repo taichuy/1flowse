@@ -913,7 +913,6 @@ fn standard_llm_output_payload(
             "content": text,
         }),
     );
-    output.insert("structured_output".to_string(), Value::Null);
     output.insert(
         "tool_calls".to_string(),
         serde_json::to_value(tool_calls).unwrap_or(Value::Null),

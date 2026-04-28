@@ -471,3 +471,116 @@ node_contributions:
         .to_string()
         .contains("contract_version must be 1flowbase.capability/v1 for capability_plugin"));
 }
+
+#[test]
+fn runtime_extension_uses_registered_slot_vocabulary() {
+    let raw = r#"
+manifest_version: 1
+plugin_id: openai_compatible@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: OpenAI Compatible
+description: OpenAI-compatible runtime extension
+source_kind: official_registry
+trust_level: verified_official
+consumption_kind: runtime_extension
+execution_mode: process_per_call
+slot_codes:
+  - model_provider
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.provider/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: outbound_only
+  secrets: provider_instance_only
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/openai-compatible-provider
+"#;
+
+    let manifest = parse_plugin_manifest(raw).expect("manifest should parse");
+    assert_eq!(
+        manifest.consumption_kind,
+        PluginConsumptionKind::RuntimeExtension
+    );
+    assert_eq!(manifest.slot_codes, vec!["model_provider"]);
+}
+
+#[test]
+fn runtime_extension_rejects_provider_as_plugin_type_slot() {
+    let raw = r#"
+manifest_version: 1
+plugin_id: legacy_provider@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Legacy Provider
+description: Legacy provider vocabulary
+source_kind: official_registry
+trust_level: verified_official
+consumption_kind: runtime_extension
+execution_mode: process_per_call
+slot_codes:
+  - provider
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.provider/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: outbound_only
+  secrets: provider_instance_only
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/legacy-provider
+"#;
+
+    let error = parse_plugin_manifest(raw).expect_err("provider is not a runtime slot");
+    assert!(error.to_string().contains("slot_codes"));
+}
+
+#[test]
+fn runtime_extension_accepts_data_import_snapshot_slot() {
+    let raw = r#"
+manifest_version: 1
+plugin_id: snapshot_importer@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Snapshot Importer
+description: Data import snapshot runtime extension
+source_kind: official_registry
+trust_level: verified_official
+consumption_kind: runtime_extension
+execution_mode: process_per_call
+slot_codes:
+  - data_import_snapshot
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.data_source/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: outbound_only
+  secrets: provider_instance_only
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/snapshot-importer
+"#;
+
+    let manifest = parse_plugin_manifest(raw).expect("manifest should parse");
+    assert_eq!(manifest.slot_codes, vec!["data_import_snapshot"]);
+    assert_eq!(manifest.contract_version, "1flowbase.data_source/v1");
+}

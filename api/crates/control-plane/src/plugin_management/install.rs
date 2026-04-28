@@ -426,6 +426,7 @@ where
 
         let installation_result = async {
             let manifest = load_plugin_manifest(&command.package_root)?;
+            let package_kind = route_plugin_package(&manifest)?;
             let plugin_code = plugin_code_from_plugin_id(&manifest.plugin_id)?;
             let package_id = manifest.versioned_plugin_id().map_err(map_framework_error)?;
             let install_path = self
@@ -458,131 +459,203 @@ where
             let manifest_fingerprint =
                 compute_manifest_fingerprint(&install_path.join("manifest.yaml"))
                     .map_err(map_framework_error)?;
-            if is_host_extension_manifest(&manifest) {
-                ensure_root_actor(&actor)?;
-                ensure_uploaded_host_extensions_enabled(self.allow_uploaded_host_extensions)?;
-                let mut metadata_json = json!({});
-                if let Some(install_kind) = detail_json.get("install_kind").cloned() {
-                    metadata_json["install_kind"] = install_kind;
+            match package_kind {
+                RoutedPluginPackageKind::HostExtension => {
+                    ensure_root_actor(&actor)?;
+                    ensure_uploaded_host_extensions_enabled(self.allow_uploaded_host_extensions)?;
+                    let mut metadata_json = json!({});
+                    if let Some(install_kind) = detail_json.get("install_kind").cloned() {
+                        metadata_json["install_kind"] = install_kind;
+                    }
+                    let installation = self
+                        .repository
+                        .upsert_installation(&UpsertPluginInstallationInput {
+                            installation_id: Uuid::now_v7(),
+                            provider_code: plugin_code.clone(),
+                            plugin_id: package_id.clone(),
+                            plugin_version: manifest.version.clone(),
+                            contract_version: manifest.contract_version.clone(),
+                            protocol: manifest.runtime.protocol.clone(),
+                            display_name: manifest.display_name.clone(),
+                            source_kind: source_metadata.source_kind.clone(),
+                            trust_level: source_metadata.trust_level.clone(),
+                            verification_status: domain::PluginVerificationStatus::Valid,
+                            desired_state: domain::PluginDesiredState::PendingRestart,
+                            artifact_status: domain::PluginArtifactStatus::Ready,
+                            runtime_status: domain::PluginRuntimeStatus::Inactive,
+                            availability_status: derive_availability_status(
+                                domain::PluginDesiredState::PendingRestart,
+                                domain::PluginArtifactStatus::Ready,
+                                domain::PluginRuntimeStatus::Inactive,
+                            ),
+                            package_path: source_metadata
+                                .package_bytes
+                                .as_ref()
+                                .map(|_| package_archive_path.display().to_string()),
+                            installed_path: install_path.display().to_string(),
+                            checksum: source_metadata.checksum.clone(),
+                            manifest_fingerprint: Some(manifest_fingerprint),
+                            signature_status: source_metadata.signature_status.clone(),
+                            signature_algorithm: source_metadata.signature_algorithm.clone(),
+                            signing_key_id: source_metadata.signing_key_id.clone(),
+                            last_load_error: None,
+                            metadata_json,
+                            actor_user_id: command.actor_user_id,
+                        })
+                        .await?;
+                    self.repository
+                        .append_audit_log(&audit_log(
+                            Some(actor.current_workspace_id),
+                            Some(command.actor_user_id),
+                            "plugin_installation",
+                            Some(installation.id),
+                            "plugin.installed",
+                            json!({
+                                "provider_code": installation.provider_code,
+                                "plugin_id": installation.plugin_id,
+                                "restart_required": true,
+                            }),
+                        ))
+                        .await?;
+                    Ok::<domain::PluginInstallationRecord, anyhow::Error>(installation)
                 }
-                let installation = self
-                    .repository
-                    .upsert_installation(&UpsertPluginInstallationInput {
-                        installation_id: Uuid::now_v7(),
-                        provider_code: plugin_code.clone(),
-                        plugin_id: package_id.clone(),
-                        plugin_version: manifest.version.clone(),
-                        contract_version: manifest.contract_version.clone(),
-                        protocol: manifest.runtime.protocol.clone(),
-                        display_name: manifest.display_name.clone(),
-                        source_kind: source_metadata.source_kind.clone(),
-                        trust_level: source_metadata.trust_level.clone(),
-                        verification_status: domain::PluginVerificationStatus::Valid,
-                        desired_state: domain::PluginDesiredState::PendingRestart,
-                        artifact_status: domain::PluginArtifactStatus::Ready,
-                        runtime_status: domain::PluginRuntimeStatus::Inactive,
-                        availability_status: derive_availability_status(
-                            domain::PluginDesiredState::PendingRestart,
-                            domain::PluginArtifactStatus::Ready,
-                            domain::PluginRuntimeStatus::Inactive,
-                        ),
-                        package_path: source_metadata.package_bytes.as_ref().map(|_| {
-                            package_archive_path.display().to_string()
-                        }),
-                        installed_path: install_path.display().to_string(),
-                        checksum: source_metadata.checksum.clone(),
-                        manifest_fingerprint: Some(manifest_fingerprint),
-                        signature_status: source_metadata.signature_status.clone(),
-                        signature_algorithm: source_metadata.signature_algorithm.clone(),
-                        signing_key_id: source_metadata.signing_key_id.clone(),
-                        last_load_error: None,
-                        metadata_json,
-                        actor_user_id: command.actor_user_id,
-                    })
-                    .await?;
-                self.repository
-                    .append_audit_log(&audit_log(
-                        Some(actor.current_workspace_id),
-                        Some(command.actor_user_id),
-                        "plugin_installation",
-                        Some(installation.id),
-                        "plugin.installed",
-                        json!({
-                            "provider_code": installation.provider_code,
-                            "plugin_id": installation.plugin_id,
-                            "restart_required": true,
-                        }),
-                    ))
-                    .await?;
-                return Ok::<domain::PluginInstallationRecord, anyhow::Error>(installation);
-            }
-
-            let installed_package = load_provider_package(&install_path)?;
-            let mut metadata_json = json!({
-                "help_url": installed_package.provider.help_url,
-                "default_base_url": installed_package.provider.default_base_url,
-                "model_discovery_mode": format!("{:?}", installed_package.provider.model_discovery_mode).to_ascii_lowercase(),
-                "icon": installed_package.manifest.icon,
-                "supported_model_types": ["llm"],
-            });
-            if let Some(install_kind) = detail_json.get("install_kind").cloned() {
-                metadata_json["install_kind"] = install_kind;
-            }
-            let installation = self
-                .repository
-                .upsert_installation(&UpsertPluginInstallationInput {
-                    installation_id: Uuid::now_v7(),
-                    provider_code: installed_package.provider.provider_code.clone(),
-                    plugin_id: installed_package.identifier(),
-                    plugin_version: installed_package.manifest.version.clone(),
-                    contract_version: installed_package.manifest.contract_version.clone(),
-                    protocol: installed_package.provider.protocol.clone(),
-                    display_name: installed_package.provider.display_name.clone(),
-                    source_kind: source_metadata.source_kind.clone(),
-                    trust_level: source_metadata.trust_level.clone(),
-                    verification_status: domain::PluginVerificationStatus::Valid,
-                    desired_state: domain::PluginDesiredState::Disabled,
-                    artifact_status: domain::PluginArtifactStatus::Ready,
-                    runtime_status: domain::PluginRuntimeStatus::Inactive,
-                    availability_status: derive_availability_status(
-                        domain::PluginDesiredState::Disabled,
-                        domain::PluginArtifactStatus::Ready,
-                        domain::PluginRuntimeStatus::Inactive,
-                    ),
-                    package_path: source_metadata.package_bytes.as_ref().map(|_| {
-                        package_archive_path.display().to_string()
-                    }),
-                    installed_path: install_path.display().to_string(),
-                    checksum: source_metadata.checksum.clone(),
-                    manifest_fingerprint: Some(manifest_fingerprint),
-                    signature_status: source_metadata.signature_status.clone(),
-                    signature_algorithm: source_metadata.signature_algorithm.clone(),
-                    signing_key_id: source_metadata.signing_key_id.clone(),
-                    last_load_error: None,
-                    metadata_json,
-                    actor_user_id: command.actor_user_id,
-                })
-                .await?;
-            let manifest = load_plugin_manifest(&install_path)?;
-            self.repository
-                .replace_installation_node_contributions(
-                    &build_node_contribution_sync_input(&installation, &manifest),
+                RoutedPluginPackageKind::ModelProviderRuntime => {
+                    let installed_package = load_provider_package(&install_path)?;
+                    let mut metadata_json = json!({
+                        "help_url": installed_package.provider.help_url,
+                        "default_base_url": installed_package.provider.default_base_url,
+                        "model_discovery_mode": format!("{:?}", installed_package.provider.model_discovery_mode).to_ascii_lowercase(),
+                        "icon": installed_package.manifest.icon,
+                        "supported_model_types": ["llm"],
+                    });
+                    if let Some(install_kind) = detail_json.get("install_kind").cloned() {
+                        metadata_json["install_kind"] = install_kind;
+                    }
+                    let installation = self
+                        .repository
+                        .upsert_installation(&UpsertPluginInstallationInput {
+                            installation_id: Uuid::now_v7(),
+                            provider_code: installed_package.provider.provider_code.clone(),
+                            plugin_id: installed_package.identifier(),
+                            plugin_version: installed_package.manifest.version.clone(),
+                            contract_version: installed_package.manifest.contract_version.clone(),
+                            protocol: installed_package.provider.protocol.clone(),
+                            display_name: installed_package.provider.display_name.clone(),
+                            source_kind: source_metadata.source_kind.clone(),
+                            trust_level: source_metadata.trust_level.clone(),
+                            verification_status: domain::PluginVerificationStatus::Valid,
+                            desired_state: domain::PluginDesiredState::Disabled,
+                            artifact_status: domain::PluginArtifactStatus::Ready,
+                            runtime_status: domain::PluginRuntimeStatus::Inactive,
+                            availability_status: derive_availability_status(
+                                domain::PluginDesiredState::Disabled,
+                                domain::PluginArtifactStatus::Ready,
+                                domain::PluginRuntimeStatus::Inactive,
+                            ),
+                            package_path: source_metadata
+                                .package_bytes
+                                .as_ref()
+                                .map(|_| package_archive_path.display().to_string()),
+                            installed_path: install_path.display().to_string(),
+                            checksum: source_metadata.checksum.clone(),
+                            manifest_fingerprint: Some(manifest_fingerprint),
+                            signature_status: source_metadata.signature_status.clone(),
+                            signature_algorithm: source_metadata.signature_algorithm.clone(),
+                            signing_key_id: source_metadata.signing_key_id.clone(),
+                            last_load_error: None,
+                            metadata_json,
+                            actor_user_id: command.actor_user_id,
+                        })
+                        .await?;
+                    let manifest = load_plugin_manifest(&install_path)?;
+                    self.repository
+                        .replace_installation_node_contributions(
+                            &build_node_contribution_sync_input(&installation, &manifest),
+                        )
+                        .await?;
+                    self.repository
+                        .append_audit_log(&audit_log(
+                            Some(actor.current_workspace_id),
+                            Some(command.actor_user_id),
+                            "plugin_installation",
+                            Some(installation.id),
+                            "plugin.installed",
+                            json!({
+                                "provider_code": installation.provider_code,
+                                "plugin_id": installation.plugin_id,
+                            }),
+                        ))
+                        .await?;
+                    Ok::<domain::PluginInstallationRecord, anyhow::Error>(installation)
+                }
+                RoutedPluginPackageKind::DataSourceRuntime => {
+                    let installed_package =
+                        plugin_framework::DataSourcePackage::load_from_dir(&install_path)
+                            .map_err(map_framework_error)?;
+                    let mut metadata_json = json!({
+                        "supported_resource_kinds": installed_package.definition.resource_kinds,
+                        "auth_modes": installed_package.definition.auth_modes,
+                        "capabilities": installed_package.definition.capabilities,
+                    });
+                    if let Some(install_kind) = detail_json.get("install_kind").cloned() {
+                        metadata_json["install_kind"] = install_kind;
+                    }
+                    let installation = self
+                        .repository
+                        .upsert_installation(&UpsertPluginInstallationInput {
+                            installation_id: Uuid::now_v7(),
+                            provider_code: installed_package.definition.source_code.clone(),
+                            plugin_id: installed_package.identifier(),
+                            plugin_version: installed_package.manifest.version.clone(),
+                            contract_version: installed_package.manifest.contract_version.clone(),
+                            protocol: "data_source".to_string(),
+                            display_name: installed_package.definition.display_name.clone(),
+                            source_kind: source_metadata.source_kind.clone(),
+                            trust_level: source_metadata.trust_level.clone(),
+                            verification_status: domain::PluginVerificationStatus::Valid,
+                            desired_state: domain::PluginDesiredState::Disabled,
+                            artifact_status: domain::PluginArtifactStatus::Ready,
+                            runtime_status: domain::PluginRuntimeStatus::Inactive,
+                            availability_status: derive_availability_status(
+                                domain::PluginDesiredState::Disabled,
+                                domain::PluginArtifactStatus::Ready,
+                                domain::PluginRuntimeStatus::Inactive,
+                            ),
+                            package_path: source_metadata
+                                .package_bytes
+                                .as_ref()
+                                .map(|_| package_archive_path.display().to_string()),
+                            installed_path: install_path.display().to_string(),
+                            checksum: source_metadata.checksum.clone(),
+                            manifest_fingerprint: Some(manifest_fingerprint),
+                            signature_status: source_metadata.signature_status.clone(),
+                            signature_algorithm: source_metadata.signature_algorithm.clone(),
+                            signing_key_id: source_metadata.signing_key_id.clone(),
+                            last_load_error: None,
+                            metadata_json,
+                            actor_user_id: command.actor_user_id,
+                        })
+                        .await?;
+                    self.repository
+                        .append_audit_log(&audit_log(
+                            Some(actor.current_workspace_id),
+                            Some(command.actor_user_id),
+                            "plugin_installation",
+                            Some(installation.id),
+                            "plugin.installed",
+                            json!({
+                                "provider_code": installation.provider_code,
+                                "plugin_id": installation.plugin_id,
+                            }),
+                        ))
+                        .await?;
+                    Ok::<domain::PluginInstallationRecord, anyhow::Error>(installation)
+                }
+                RoutedPluginPackageKind::CapabilityPlugin => Err(ControlPlaneError::InvalidInput(
+                    "capability_plugin_install_not_supported_yet",
                 )
-                .await?;
-            self.repository
-                .append_audit_log(&audit_log(
-                    Some(actor.current_workspace_id),
-                    Some(command.actor_user_id),
-                    "plugin_installation",
-                    Some(installation.id),
-                    "plugin.installed",
-                    json!({
-                        "provider_code": installation.provider_code,
-                        "plugin_id": installation.plugin_id,
-                    }),
-                ))
-                .await?;
-            Ok::<domain::PluginInstallationRecord, anyhow::Error>(installation)
+                .into()),
+            }
         }
         .await;
 

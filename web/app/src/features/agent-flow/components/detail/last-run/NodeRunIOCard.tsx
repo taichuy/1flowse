@@ -3,11 +3,12 @@ import {
   CopyOutlined,
   FullscreenOutlined
 } from '@ant-design/icons';
-import Editor from '@monaco-editor/react';
 import { Button, Card, Modal, Tooltip, message } from 'antd';
-import { useMemo, useState } from 'react';
+import { Suspense, lazy, useMemo, useState } from 'react';
 
 import type { NodeLastRun } from '../../../api/runtime';
+
+const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 
 function formatJson(payload: Record<string, unknown>) {
   return JSON.stringify(payload, null, 2);
@@ -70,6 +71,28 @@ const EDITOR_OPTIONS = {
   }
 };
 
+function JsonEditorFallback() {
+  return (
+    <div className="agent-flow-node-run-json-viewer__loading">
+      正在加载 JSON 查看器
+    </div>
+  );
+}
+
+function JsonEditor({ height, value }: { height: string; value: string }) {
+  return (
+    <Suspense fallback={<JsonEditorFallback />}>
+      <MonacoEditor
+        defaultLanguage="json"
+        height={height}
+        options={EDITOR_OPTIONS}
+        theme="vs"
+        value={value}
+      />
+    </Suspense>
+  );
+}
+
 function JsonBlock({
   title,
   payload
@@ -117,13 +140,7 @@ function JsonBlock({
         </div>
       </div>
       <div className="agent-flow-node-run-json-viewer__editor">
-        <Editor
-          defaultLanguage="json"
-          height="220px"
-          options={EDITOR_OPTIONS}
-          theme="vs"
-          value={value}
-        />
+        <JsonEditor height="220px" value={value} />
       </div>
       <Modal
         centered
@@ -135,13 +152,7 @@ function JsonBlock({
         width="min(960px, calc(100vw - 48px))"
       >
         <div className="agent-flow-node-run-json-modal__editor">
-          <Editor
-            defaultLanguage="json"
-            height="70vh"
-            options={EDITOR_OPTIONS}
-            theme="vs"
-            value={value}
-          />
+          <JsonEditor height="70vh" value={value} />
         </div>
       </Modal>
     </section>

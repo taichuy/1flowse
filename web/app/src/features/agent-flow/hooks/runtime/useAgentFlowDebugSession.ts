@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAuthStore } from '../../../../state/auth-store';
 import {
@@ -659,9 +659,9 @@ export function useAgentFlowDebugSession({
     setActiveNodeFilter(nodeId);
   }
 
-  function syncSelectedNode(nodeId: string | null) {
+  const syncSelectedNode = useCallback((nodeId: string | null) => {
     setActiveNodeFilter(nodeId);
-  }
+  }, []);
 
   function resetVariableCache() {
     stopPolling();

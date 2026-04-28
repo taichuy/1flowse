@@ -180,6 +180,39 @@ async fn plugin_routes_install_enable_assign_and_query_tasks() {
 }
 
 #[tokio::test]
+async fn plugin_routes_expose_slot_kind_without_breaking_provider_code() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let package_root =
+        std::env::temp_dir().join(format!("plugin-route-slot-{}", uuid::Uuid::now_v7()));
+    create_fixture_provider_package(&package_root, "0.1.0");
+
+    let install = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/plugins/install")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "package_root": package_root.display().to_string() }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(install.status(), StatusCode::CREATED);
+    let payload: Value =
+        serde_json::from_slice(&to_bytes(install.into_body(), usize::MAX).await.unwrap()).unwrap();
+
+    let installation = &payload["data"]["installation"];
+    assert_eq!(installation["provider_code"], "fixture_provider");
+    assert_eq!(installation["runtime_slot"], "model_provider");
+}
+
+#[tokio::test]
 async fn plugin_routes_allow_view_only_users_to_read_but_not_install() {
     let app = test_app().await;
     let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;

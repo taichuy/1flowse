@@ -7,6 +7,7 @@ pub mod base;
 pub mod data_source;
 pub mod file_management;
 pub mod flow;
+pub mod host_extension;
 pub mod model_provider;
 pub mod modeling;
 pub mod node_contribution;
@@ -38,6 +39,9 @@ pub use flow::{
     default_flow_document, FlowChangeKind, FlowDraftRecord, FlowEditorState, FlowRecord,
     FlowVersionRecord, FlowVersionTrigger, FLOW_AUTOSAVE_INTERVAL_SECONDS, FLOW_HISTORY_LIMIT,
     FLOW_SCHEMA_VERSION,
+};
+pub use host_extension::{
+    HostExtensionActivationStatus, HostExtensionInventoryRecord, HostExtensionTrustLevel,
 };
 pub use model_provider::{
     ModelCatalogSyncRunRecord, ModelFailoverQueueItemRecord, ModelFailoverQueueSnapshotRecord,

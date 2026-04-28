@@ -1,17 +1,35 @@
 import { useQuery } from '@tanstack/react-query';
 import { Result } from 'antd';
+import { Suspense, lazy, type ReactNode } from 'react';
 
 import { ApiClientError } from '@1flowbase/api-client';
-import { AgentFlowEditorPage } from '../../agent-flow/pages/AgentFlowEditorPage';
 import { PermissionDeniedState } from '../../../shared/ui/PermissionDeniedState';
 import { SectionPageLayout } from '../../../shared/ui/section-page-layout/SectionPageLayout';
 import { applicationDetailQueryKey, fetchApplicationDetail } from '../api/applications';
-import { ApplicationLogsPage } from './ApplicationLogsPage';
 import { ApplicationSectionState } from '../components/ApplicationSectionState';
 import {
   getApplicationSections,
   type ApplicationSectionKey
 } from '../lib/application-sections';
+
+const AgentFlowEditorPage = lazy(() =>
+  import('../../agent-flow/pages/AgentFlowEditorPage').then((module) => ({
+    default: module.AgentFlowEditorPage
+  }))
+);
+const ApplicationLogsPage = lazy(() =>
+  import('./ApplicationLogsPage').then((module) => ({
+    default: module.ApplicationLogsPage
+  }))
+);
+
+function ApplicationSectionFallback() {
+  return <Result status="info" title="正在加载应用模块" />;
+}
+
+function ApplicationSectionBoundary({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<ApplicationSectionFallback />}>{children}</Suspense>;
+}
 
 export function ApplicationDetailPage({
   applicationId,
@@ -46,12 +64,16 @@ export function ApplicationDetailPage({
   const application = detailQuery.data;
   const content =
     requestedSectionKey === 'orchestration' ? (
-      <AgentFlowEditorPage
-        applicationId={applicationId}
-        applicationName={application.name}
-      />
+      <ApplicationSectionBoundary>
+        <AgentFlowEditorPage
+          applicationId={applicationId}
+          applicationName={application.name}
+        />
+      </ApplicationSectionBoundary>
     ) : requestedSectionKey === 'logs' ? (
-      <ApplicationLogsPage applicationId={applicationId} />
+      <ApplicationSectionBoundary>
+        <ApplicationLogsPage applicationId={applicationId} />
+      </ApplicationSectionBoundary>
     ) : (
       <ApplicationSectionState
         application={application}

@@ -85,6 +85,8 @@
 
 ## 总体架构
 
+> 2026-04-28 HostExtension 更新：文件管理归入 `official.file-management-host`。`storage-object` implementation 由 host 级注册，workspace 只能消费有权限的文件表和文件记录，不能安装或切换系统对象存储实现。
+
 整体拆成三层：
 
 1. `storage-object`

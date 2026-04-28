@@ -40,7 +40,19 @@ function buildBackendCommands({ cargoJobs, cargoTestThreads }) {
   ];
 }
 
-async function runBackend(_argv = [], deps = {}) {
+function usageBackend(writeStdout = (text) => process.stdout.write(text)) {
+  writeStdout(
+    'Usage: node scripts/node/test-backend.js\n'
+      + 'Runs backend cargo workspace tests\n'
+  );
+}
+
+async function runBackend(argv = [], deps = {}) {
+  if (argv.includes('-h') || argv.includes('--help')) {
+    usageBackend(deps.writeStdout);
+    return 0;
+  }
+
   const repoRoot = deps.repoRoot || getRepoRoot();
   const env = deps.env || process.env;
   const runtimeConfig = deps.runtimeConfig || loadVerifyRuntimeConfig({ repoRoot, env });

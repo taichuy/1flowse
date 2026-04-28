@@ -187,6 +187,47 @@ describe('agent flow document transforms', () => {
     ).toBe(true);
   });
 
+  test('duplicates prompt message bindings and rewrites selector tokens', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+
+    if (!llmNode) {
+      throw new Error('expected default LLM node');
+    }
+
+    llmNode.bindings.prompt_messages = {
+      kind: 'prompt_messages',
+      value: [
+        {
+          id: 'system-1',
+          role: 'system',
+          content: {
+            kind: 'templated_text',
+            value: 'Review {{node-llm.output}} before answering.'
+          }
+        }
+      ]
+    };
+
+    const next = duplicateNodeSubgraph(document, {
+      nodeId: 'node-llm'
+    });
+    const duplicatedNode = next.graph.nodes.find(
+      (node) => node.id === 'node-llm-copy'
+    );
+
+    expect(duplicatedNode?.bindings.prompt_messages).toMatchObject({
+      kind: 'prompt_messages',
+      value: [
+        {
+          content: {
+            value: 'Review {{node-llm-copy.output}} before answering.'
+          }
+        }
+      ]
+    });
+  });
+
   test('removes a selected node together with connected edges', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 

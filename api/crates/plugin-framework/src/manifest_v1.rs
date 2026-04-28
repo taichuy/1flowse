@@ -176,6 +176,7 @@ fn validate_plugin_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> 
     )?;
     validate_permission_values(&manifest.permissions)?;
     validate_binding_targets(&manifest.binding_targets)?;
+    validate_slot_codes(manifest)?;
 
     if manifest.consumption_kind == PluginConsumptionKind::HostExtension
         && manifest
@@ -327,6 +328,33 @@ fn validate_binding_targets(binding_targets: &[String]) -> FrameworkResult<()> {
     Ok(())
 }
 
+fn validate_slot_codes(manifest: &PluginManifestV1) -> FrameworkResult<()> {
+    const RUNTIME_EXTENSION_ALLOWED: &[&str] = &[
+        "model_provider",
+        "embedding_provider",
+        "reranker_provider",
+        "data_source",
+        "data_import_snapshot",
+        "file_processor",
+        "record_validator",
+        "field_computed_value",
+    ];
+    const HOST_EXTENSION_ALLOWED: &[&str] = &["host_bootstrap"];
+    const CAPABILITY_PLUGIN_ALLOWED: &[&str] = &["node_contribution"];
+
+    let allowed = match manifest.consumption_kind {
+        PluginConsumptionKind::HostExtension => HOST_EXTENSION_ALLOWED,
+        PluginConsumptionKind::RuntimeExtension => RUNTIME_EXTENSION_ALLOWED,
+        PluginConsumptionKind::CapabilityPlugin => CAPABILITY_PLUGIN_ALLOWED,
+    };
+
+    for slot in &manifest.slot_codes {
+        validate_allowed(slot, "slot_codes[]", allowed)?;
+    }
+
+    Ok(())
+}
+
 fn validate_permission_values(permissions: &PluginPermissionManifest) -> FrameworkResult<()> {
     validate_allowed(
         &permissions.network,
@@ -363,7 +391,11 @@ fn validate_contract_version(manifest: &PluginManifestV1) -> FrameworkResult<()>
     let expected = match manifest.consumption_kind {
         PluginConsumptionKind::HostExtension => "1flowbase.host_extension/v1",
         PluginConsumptionKind::RuntimeExtension => {
-            if manifest.slot_codes.iter().any(|slot| slot == "data_source") {
+            if manifest
+                .slot_codes
+                .iter()
+                .any(|slot| matches!(slot.as_str(), "data_source" | "data_import_snapshot"))
+            {
                 "1flowbase.data_source/v1"
             } else {
                 "1flowbase.provider/v1"

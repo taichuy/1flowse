@@ -88,6 +88,17 @@ function remapBinding(
         ...binding,
         value: binding.value.map((selector) => remapSelector(selector, idMap))
       };
+    case 'prompt_messages':
+      return {
+        ...binding,
+        value: binding.value.map((message) => ({
+          ...message,
+          content: {
+            ...message.content,
+            value: remapTemplateSelectorTokens(message.content.value, idMap)
+          }
+        }))
+      };
     case 'named_bindings':
       return {
         ...binding,

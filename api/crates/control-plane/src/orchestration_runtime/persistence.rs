@@ -61,7 +61,7 @@ where
             node_run_id: None,
             parent_span_id: None,
             kind: domain::RuntimeSpanKind::Flow,
-            name: "debug flow".into(),
+            name: "debug flow".to_string(),
             started_at: base_started_at,
             metadata: json!({
                 "application_id": application_id,

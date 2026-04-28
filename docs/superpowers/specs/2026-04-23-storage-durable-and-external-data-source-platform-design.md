@@ -81,6 +81,8 @@
 
 ## 总体架构
 
+> 2026-04-28 HostExtension 更新：`storage-durable` 与 `storage-ephemeral` 保持原命名，并归入 `official.storage-host` 的 host contract 管理。主仓官方仍只维护 PostgreSQL durable implementation；自托管部署可以通过 HostExtension 注册其他 implementation，但不进入官方支持矩阵。
+
 ### 第一条线：平台主存储
 
 主存储相关 crate 收敛为：

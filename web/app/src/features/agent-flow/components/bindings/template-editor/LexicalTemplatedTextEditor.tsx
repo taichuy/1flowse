@@ -24,6 +24,7 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -91,7 +92,7 @@ function ControlledValuePlugin({
 }) {
   const [editor] = useLexicalComposerContext();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const currentText = editor.getEditorState().read(() => $getRoot().getTextContent());
 
     if (currentText === value) {

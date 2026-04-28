@@ -3,12 +3,47 @@ import { fileURLToPath, URL } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, searchForWorkspaceRoot } from 'vite';
 
+function manualChunks(id: string) {
+  if (!id.includes('/node_modules/')) {
+    return;
+  }
+
+  if (id.includes('/monaco-editor/') || id.includes('/@monaco-editor/')) {
+    return 'monaco-vendor';
+  }
+
+  if (id.includes('/@xyflow/')) {
+    return 'flow-vendor';
+  }
+
+  if (id.includes('/antd/') || id.includes('/@ant-design/') || id.includes('/rc-')) {
+    return 'antd-vendor';
+  }
+
+  if (
+    id.includes('/react/') ||
+    id.includes('/react-dom/') ||
+    id.includes('/scheduler/') ||
+    id.includes('/@tanstack/')
+  ) {
+    return 'react-vendor';
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const apiProxyTarget = (env.VITE_API_BASE_URL || 'http://127.0.0.1:7800').replace(/\/$/, '');
 
   return {
     plugins: [react()],
+    build: {
+      chunkSizeWarningLimit: 3500,
+      rollupOptions: {
+        output: {
+          manualChunks
+        }
+      }
+    },
     server: {
       host: '0.0.0.0',
       port: 3100,

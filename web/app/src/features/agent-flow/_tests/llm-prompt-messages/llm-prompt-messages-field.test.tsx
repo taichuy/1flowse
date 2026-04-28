@@ -114,10 +114,7 @@ describe('LLM prompt messages field', () => {
     expect(systemRow).not.toHaveClass(
       'agent-flow-llm-prompt-messages__row--draggable'
     );
-    expect(
-      systemRow.querySelector('.agent-flow-llm-prompt-messages__drag-spacer')
-    ).toBeNull();
-    expect(within(systemRow).queryByText('SYSTEM')).toBeInTheDocument();
+    expect(within(systemRow).getByText('SYSTEM')).toBeInTheDocument();
     expect(
       within(systemRow).queryByRole('button', { name: /删除/ })
     ).not.toBeInTheDocument();
@@ -141,17 +138,12 @@ describe('LLM prompt messages field', () => {
     const addedRoleSelect = within(addedRow).getByRole('button', {
       name: /消息角色/
     });
-    const addedToolbar = addedRoleSelect.closest(
-      '.agent-flow-templated-text-field__toolbar'
-    );
-
-    expect(addedToolbar).not.toBeNull();
-    expect(addedToolbar).toContainElement(
-      within(addedRow).getByRole('button', { name: /拖拽排序/ })
+    expect(addedRoleSelect).toHaveClass(
+      'agent-flow-llm-prompt-messages__role-trigger'
     );
     expect(
-      addedRow.querySelector('.agent-flow-llm-prompt-messages__role-row')
-    ).toBeNull();
+      within(addedRow).getByRole('button', { name: /拖拽排序/ })
+    ).toBeInTheDocument();
     fireEvent.click(addedRoleSelect);
 
     expect(
@@ -313,7 +305,7 @@ describe('LLM prompt messages field', () => {
       'data-testid',
       'llm-prompt-message-row-system-second'
     );
-    expect(within(rows[0]).queryByText('SYSTEM')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('SYSTEM')).toBeInTheDocument();
     expect(within(rows[1]).getByLabelText('USER 消息内容')).toBeInTheDocument();
     expect(
       within(rows[2]).getByLabelText('ASSISTANT 消息内容')

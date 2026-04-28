@@ -195,7 +195,7 @@ where
             .get_installation(command.installation_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
-        if !is_model_provider_installation(&installation) {
+        if !supports_workspace_assignment(&installation) {
             return Err(ControlPlaneError::Conflict("plugin_assignment_not_supported").into());
         }
         if matches!(
@@ -652,4 +652,11 @@ where
             }
         }
     }
+}
+
+fn supports_workspace_assignment(installation: &domain::PluginInstallationRecord) -> bool {
+    matches!(
+        installation.contract_version.as_str(),
+        "1flowbase.provider/v1" | "1flowbase.data_source/v1"
+    )
 }

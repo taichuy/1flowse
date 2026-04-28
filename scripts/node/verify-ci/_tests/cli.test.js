@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const { buildCommands, main } = require('../../verify-ci.js');
 
-test('buildCommands composes repo full gate and frontend coverage gate', () => {
+test('buildCommands composes repo full gate and all coverage gate', () => {
   const repoRoot = '/repo-root';
 
   assert.deepEqual(buildCommands({ repoRoot }), [
@@ -17,9 +17,9 @@ test('buildCommands composes repo full gate and frontend coverage gate', () => {
       cwd: repoRoot,
     },
     {
-      label: 'ci-coverage-frontend',
+      label: 'ci-coverage-all',
       command: process.execPath,
-      args: [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'coverage', 'frontend'],
+      args: [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'coverage', 'all'],
       cwd: repoRoot,
     },
   ]);
@@ -51,7 +51,7 @@ test('main runs repo and coverage gates in order and captures advisory output', 
     calls.map((call) => call.args),
     [
       [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'repo'],
-      [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'coverage', 'frontend'],
+      [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'coverage', 'all'],
     ]
   );
 
@@ -62,7 +62,7 @@ test('main runs repo and coverage gates in order and captures advisory output', 
   assert.match(warningLog, /warning: coverage advisory/u);
 });
 
-test('main passes the inherited lock token to verify-repo and verify-coverage', async () => {
+test('main passes the inherited lock token to verify-repo and verify-coverage all', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-verify-ci-'));
   const calls = [];
 

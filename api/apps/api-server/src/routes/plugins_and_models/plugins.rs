@@ -55,6 +55,7 @@ pub struct PluginCatalogQuery {
 pub struct PluginInstallationResponse {
     pub id: String,
     pub provider_code: String,
+    pub runtime_slot: Option<String>,
     pub plugin_id: String,
     pub plugin_version: String,
     pub contract_version: String,
@@ -293,6 +294,7 @@ fn to_installation_response(
     PluginInstallationResponse {
         id: installation.id.to_string(),
         provider_code: installation.provider_code,
+        runtime_slot: runtime_slot_for_contract(&installation.contract_version),
         plugin_id: installation.plugin_id,
         plugin_version: installation.plugin_version,
         contract_version: installation.contract_version,
@@ -316,6 +318,14 @@ fn to_installation_response(
         metadata_json: installation.metadata_json,
         created_at: format_time(installation.created_at),
         updated_at: format_time(installation.updated_at),
+    }
+}
+
+fn runtime_slot_for_contract(contract_version: &str) -> Option<String> {
+    match contract_version {
+        "1flowbase.provider/v1" => Some("model_provider".to_string()),
+        "1flowbase.data_source/v1" => Some("data_source".to_string()),
+        _ => None,
     }
 }
 
