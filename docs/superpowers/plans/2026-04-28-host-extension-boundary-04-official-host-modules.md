@@ -31,7 +31,7 @@
 - Create: `api/apps/api-server/src/_tests/host_extensions_builtin_tests.rs`
 - Modify: `api/apps/api-server/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write failing manifest source tests**
+- [x] **Step 1: Write failing manifest source tests**
 
 Create `api/apps/api-server/src/_tests/host_extensions_builtin_tests.rs`:
 
@@ -78,7 +78,7 @@ fn data_and_file_hosts_register_runtime_slots() {
 }
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run:
 
@@ -92,7 +92,7 @@ Expected:
 unresolved import `api_server::host_extensions`
 ```
 
-- [ ] **Step 3: Add builtin manifests**
+- [x] **Step 3: Add builtin manifests**
 
 Create `api/apps/api-server/src/host_extensions/mod.rs`:
 
@@ -289,7 +289,7 @@ Modify `api/apps/api-server/src/lib.rs`:
 pub mod host_extensions;
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -311,7 +311,7 @@ test result: ok
 - Create: `api/crates/control-plane/src/_tests/host_extension_builtin_tests.rs`
 - Modify: `api/crates/control-plane/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write failing registry build test**
+- [x] **Step 1: Write failing registry build test**
 
 Create `api/crates/control-plane/src/_tests/host_extension_builtin_tests.rs`:
 
@@ -369,7 +369,7 @@ load_order: { after: [], before: [] }
 }
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -383,7 +383,7 @@ Expected:
 unresolved import `register_builtin_host_extensions`
 ```
 
-- [ ] **Step 3: Implement registry builder**
+- [x] **Step 3: Implement registry builder**
 
 Create `api/crates/control-plane/src/host_extension_boot/builtin.rs`:
 
@@ -421,7 +421,7 @@ pub mod builtin;
 pub use builtin::register_builtin_host_extensions;
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -441,7 +441,7 @@ test result: ok
 - Modify: `docs/superpowers/specs/2026-04-23-storage-durable-and-external-data-source-platform-design.md`
 - Modify: `docs/superpowers/specs/2026-04-23-file-manager-storage-design.md`
 
-- [ ] **Step 1: Add storage-host ownership note**
+- [x] **Step 1: Add storage-host ownership note**
 
 In `docs/superpowers/specs/2026-04-23-storage-durable-and-external-data-source-platform-design.md`, add after `## 总体架构`:
 
@@ -449,7 +449,7 @@ In `docs/superpowers/specs/2026-04-23-storage-durable-and-external-data-source-p
 > 2026-04-28 HostExtension 更新：`storage-durable` 与 `storage-ephemeral` 保持原命名，并归入 `official.storage-host` 的 host contract 管理。主仓官方仍只维护 PostgreSQL durable implementation；自托管部署可以通过 HostExtension 注册其他 implementation，但不进入官方支持矩阵。
 ```
 
-- [ ] **Step 2: Add file-management-host ownership note**
+- [x] **Step 2: Add file-management-host ownership note**
 
 In `docs/superpowers/specs/2026-04-23-file-manager-storage-design.md`, add after `## 总体架构`:
 
@@ -457,7 +457,7 @@ In `docs/superpowers/specs/2026-04-23-file-manager-storage-design.md`, add after
 > 2026-04-28 HostExtension 更新：文件管理归入 `official.file-management-host`。`storage-object` implementation 由 host 级注册，workspace 只能消费有权限的文件表和文件记录，不能安装或切换系统对象存储实现。
 ```
 
-- [ ] **Step 3: Verify notes**
+- [x] **Step 3: Verify notes**
 
 Run:
 
@@ -477,7 +477,7 @@ docs/superpowers/specs/2026-04-23-file-manager-storage-design.md
 **Files:**
 - All files listed in this plan
 
-- [ ] **Step 1: Run focused tests**
+- [x] **Step 1: Run focused tests**
 
 Run:
 
@@ -492,7 +492,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 Run:
 

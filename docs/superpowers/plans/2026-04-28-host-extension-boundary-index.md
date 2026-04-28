@@ -68,7 +68,7 @@ Why third:
 1. HostExtension 是 boot-time 系统模块，不是普通 runtime enable。
 2. 必须先有确定性加载顺序、override policy 和 failure policy，才能接官方 host modules。
 
-- [ ] **Step 4: Execute Official Host Modules Storage Data File**
+- [x] **Step 4: Execute Official Host Modules Storage Data File**
 
 Plan:
 
