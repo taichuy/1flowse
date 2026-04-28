@@ -128,17 +128,29 @@ export function LlmPromptMessagesField({
         <div className="agent-flow-llm-prompt-messages__list">
           {value.map((message, index) => {
             const isSystemMessage = index === 0 && message.role === 'system';
+            const isDraggableMessage = !isSystemMessage;
+            const rowClassName = [
+              'agent-flow-llm-prompt-messages__row',
+              isSystemMessage
+                ? 'agent-flow-llm-prompt-messages__row--fixed'
+                : null,
+              isDraggableMessage
+                ? 'agent-flow-llm-prompt-messages__row--draggable'
+                : null
+            ]
+              .filter(Boolean)
+              .join(' ');
             const roleLabel = message.role.toUpperCase();
 
             return (
               <div
                 key={message.id}
-                className={`agent-flow-llm-prompt-messages__row${isSystemMessage ? ' agent-flow-llm-prompt-messages__row--fixed' : ''}`}
+                className={rowClassName}
                 data-testid={`llm-prompt-message-row-${message.id}`}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={() => handleDrop(index)}
               >
-                {!isSystemMessage ? (
+                {isDraggableMessage ? (
                   <button
                     aria-label={`拖拽排序 ${roleLabel} 消息`}
                     className="agent-flow-llm-prompt-messages__drag-handle"

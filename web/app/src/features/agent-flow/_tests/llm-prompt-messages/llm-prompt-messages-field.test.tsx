@@ -111,6 +111,9 @@ describe('LLM prompt messages field', () => {
 
     const systemRow = screen.getByTestId('llm-prompt-message-row-system-1');
     expect(systemRow).toHaveClass('agent-flow-llm-prompt-messages__row--fixed');
+    expect(systemRow).not.toHaveClass(
+      'agent-flow-llm-prompt-messages__row--draggable'
+    );
     expect(
       systemRow.querySelector('.agent-flow-llm-prompt-messages__drag-spacer')
     ).toBeNull();
@@ -132,6 +135,9 @@ describe('LLM prompt messages field', () => {
       throw new Error('expected appended prompt message row');
     }
 
+    expect(addedRow).toHaveClass(
+      'agent-flow-llm-prompt-messages__row--draggable'
+    );
     const addedRoleSelect = within(addedRow).getByRole('combobox', {
       name: /消息角色/
     });

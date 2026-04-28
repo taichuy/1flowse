@@ -424,6 +424,11 @@
   gap: 0;
 }
 
+.agent-flow-llm-prompt-messages__row--draggable
+  .agent-flow-templated-text-field__toolbar {
+  padding-left: 0;
+}
+
 .agent-flow-llm-prompt-messages__drag-handle {
   display: inline-flex;
   align-items: center;
