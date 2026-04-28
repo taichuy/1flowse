@@ -139,9 +139,7 @@ export function LlmPromptMessagesField({
                 onDrop={() => handleDrop(index)}
               >
                 {isSystemMessage ? (
-                  <span className="agent-flow-llm-prompt-messages__fixed-role">
-                    SYSTEM
-                  </span>
+                  <span className="agent-flow-llm-prompt-messages__drag-spacer" />
                 ) : (
                   <button
                     aria-label={`拖拽排序 ${roleLabel} 消息`}
@@ -155,38 +153,50 @@ export function LlmPromptMessagesField({
                   </button>
                 )}
                 <div className="agent-flow-llm-prompt-messages__body">
-                  {!isSystemMessage ? (
-                    <div className="agent-flow-llm-prompt-messages__role-row">
-                      <select
-                        aria-label={`${roleLabel} 消息角色`}
-                        className="agent-flow-llm-prompt-messages__role-select"
-                        value={message.role}
-                        onChange={(event) =>
-                          updateRole(
-                            index,
-                            event.target.value as LlmPromptMessageRole
-                          )
-                        }
-                      >
-                        {DYNAMIC_PROMPT_MESSAGE_ROLES.map((role) => (
-                          <option key={role} value={role}>
-                            {role.toUpperCase()}
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        aria-label={`删除 ${roleLabel} 消息`}
-                        danger
-                        icon={<DeleteOutlined />}
-                        size="small"
-                        type="text"
-                        onClick={() => removeMessage(index)}
-                      />
-                    </div>
-                  ) : null}
                   <TemplatedTextField
                     ariaLabel={`${roleLabel} 消息内容`}
                     label={roleLabel}
+                    labelContent={
+                      isSystemMessage ? (
+                        <Typography.Text
+                          strong
+                          className="agent-flow-templated-text-field__label"
+                        >
+                          SYSTEM
+                        </Typography.Text>
+                      ) : (
+                        <select
+                          aria-label={`${roleLabel} 消息角色`}
+                          className="agent-flow-llm-prompt-messages__role-select"
+                          value={message.role}
+                          onChange={(event) =>
+                            updateRole(
+                              index,
+                              event.target.value as LlmPromptMessageRole
+                            )
+                          }
+                        >
+                          {DYNAMIC_PROMPT_MESSAGE_ROLES.map((role) => (
+                            <option key={role} value={role}>
+                              {role.toUpperCase()}
+                            </option>
+                          ))}
+                        </select>
+                      )
+                    }
+                    toolbarExtraActions={
+                      isSystemMessage ? null : (
+                        <Button
+                          aria-label={`删除 ${roleLabel} 消息`}
+                          className="agent-flow-templated-text-field__action"
+                          danger
+                          icon={<DeleteOutlined />}
+                          size="small"
+                          type="text"
+                          onClick={() => removeMessage(index)}
+                        />
+                      )
+                    }
                     options={options}
                     placeholder="输入文本，或输入 / 引用变量"
                     value={message.content.value}

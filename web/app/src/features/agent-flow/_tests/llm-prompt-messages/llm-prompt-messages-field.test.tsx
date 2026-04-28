@@ -110,7 +110,7 @@ describe('LLM prompt messages field', () => {
     );
 
     const systemRow = screen.getByTestId('llm-prompt-message-row-system-1');
-    expect(within(systemRow).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(systemRow).queryByText('SYSTEM')).toBeInTheDocument();
     expect(
       within(systemRow).queryByRole('button', { name: /删除/ })
     ).not.toBeInTheDocument();
@@ -131,6 +131,14 @@ describe('LLM prompt messages field', () => {
     const addedRoleSelect = within(addedRow).getByRole('combobox', {
       name: /消息角色/
     });
+    const addedToolbar = addedRoleSelect.closest(
+      '.agent-flow-templated-text-field__toolbar'
+    );
+
+    expect(addedToolbar).not.toBeNull();
+    expect(
+      addedRow.querySelector('.agent-flow-llm-prompt-messages__role-row')
+    ).toBeNull();
     expect(
       within(addedRoleSelect).queryByRole('option', { name: 'SYSTEM' })
     ).not.toBeInTheDocument();
@@ -236,7 +244,7 @@ describe('LLM prompt messages field', () => {
       'data-testid',
       'llm-prompt-message-row-system-second'
     );
-    expect(within(rows[0]).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(rows[0]).queryByText('SYSTEM')).toBeInTheDocument();
     expect(within(rows[1]).getByLabelText('USER 消息内容')).toBeInTheDocument();
     expect(
       within(rows[2]).getByLabelText('ASSISTANT 消息内容')

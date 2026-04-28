@@ -395,8 +395,7 @@
   gap: 10px;
 }
 
-.agent-flow-llm-prompt-messages__header,
-.agent-flow-llm-prompt-messages__role-row {
+.agent-flow-llm-prompt-messages__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -411,7 +410,7 @@
 
 .agent-flow-llm-prompt-messages__row {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: 24px minmax(0, 1fr);
   align-items: start;
   gap: 8px;
 }
@@ -448,30 +447,26 @@
   gap: 8px;
 }
 
-.agent-flow-llm-prompt-messages__fixed-role {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 72px;
-  height: 28px;
-  border: 1px solid #d5ddd8;
-  border-radius: 6px;
-  background: #f6faf7;
-  color: #55645d;
-  font-size: 12px;
-  font-weight: 700;
+.agent-flow-llm-prompt-messages__drag-spacer {
+  display: block;
+  width: 24px;
+  height: 32px;
 }
 
 .agent-flow-llm-prompt-messages__role-select {
   width: 132px;
   height: 28px;
   padding: 0 28px 0 10px;
-  border: 1px solid #d5ddd8;
+  border: 1px solid rgba(255, 255, 255, 0.44);
   border-radius: 6px;
-  background: #ffffff;
-  color: #16211d;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
   font-size: 12px;
   font-weight: 600;
+}
+
+.agent-flow-llm-prompt-messages__role-select option {
+  color: #16211d;
 }
 
 .agent-flow-llm-prompt-messages__role-select:focus-visible {

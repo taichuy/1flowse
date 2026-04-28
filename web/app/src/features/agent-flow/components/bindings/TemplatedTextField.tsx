@@ -4,18 +4,18 @@ import {
   FullscreenOutlined
 } from '@ant-design/icons';
 import { Button, Modal, Tooltip, Typography, message } from 'antd';
-import { useRef, useState, type MouseEvent } from 'react';
+import { useRef, useState, type MouseEvent, type ReactNode } from 'react';
 
-import {
-  type FlowSelectorOption
-} from '../../lib/selector-options';
+import { type FlowSelectorOption } from '../../lib/selector-options';
 import {
   LexicalTemplatedTextEditor,
-  type LexicalTemplatedTextEditorHandle,
+  type LexicalTemplatedTextEditorHandle
 } from './template-editor/LexicalTemplatedTextEditor';
 
 interface TemplatedTextFieldProps {
   label: string;
+  labelContent?: ReactNode;
+  toolbarExtraActions?: ReactNode;
   ariaLabel: string;
   placeholder?: string;
   options?: FlowSelectorOption[];
@@ -25,6 +25,8 @@ interface TemplatedTextFieldProps {
 
 export function TemplatedTextField({
   label,
+  labelContent,
+  toolbarExtraActions,
   ariaLabel,
   placeholder,
   options = [],
@@ -32,7 +34,9 @@ export function TemplatedTextField({
   onChange
 }: TemplatedTextFieldProps) {
   const editorRef = useRef<LexicalTemplatedTextEditorHandle | null>(null);
-  const expandedEditorRef = useRef<LexicalTemplatedTextEditorHandle | null>(null);
+  const expandedEditorRef = useRef<LexicalTemplatedTextEditorHandle | null>(
+    null
+  );
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -77,10 +81,16 @@ export function TemplatedTextField({
         onMouseDown={handleFrameMouseDown}
       >
         <div className="agent-flow-templated-text-field__toolbar">
-          <Typography.Text strong className="agent-flow-templated-text-field__label">
-            {label}
-          </Typography.Text>
+          {labelContent ?? (
+            <Typography.Text
+              strong
+              className="agent-flow-templated-text-field__label"
+            >
+              {label}
+            </Typography.Text>
+          )}
           <div className="agent-flow-templated-text-field__actions">
+            {toolbarExtraActions}
             <span className="agent-flow-templated-text-field__action agent-flow-templated-text-field__counter">
               {value.length}
             </span>
@@ -89,7 +99,11 @@ export function TemplatedTextField({
                 className="agent-flow-templated-text-field__action"
                 type="text"
                 size="small"
-                icon={<span className="agent-flow-templated-text-field__variable-icon">{'{x}'}</span>}
+                icon={
+                  <span className="agent-flow-templated-text-field__variable-icon">
+                    {'{x}'}
+                  </span>
+                }
                 disabled={options.length === 0}
                 aria-label="插入变量"
                 onClick={() => editorRef.current?.openVariablePicker()}
