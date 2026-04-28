@@ -138,7 +138,7 @@ describe('LLM prompt messages field', () => {
     expect(addedRow).toHaveClass(
       'agent-flow-llm-prompt-messages__row--draggable'
     );
-    const addedRoleSelect = within(addedRow).getByRole('combobox', {
+    const addedRoleSelect = within(addedRow).getByRole('button', {
       name: /消息角色/
     });
     const addedToolbar = addedRoleSelect.closest(
@@ -155,12 +155,12 @@ describe('LLM prompt messages field', () => {
     fireEvent.click(addedRoleSelect);
 
     expect(
-      within(addedRow).queryByRole('option', { name: 'SYSTEM' })
+      screen.queryByRole('menuitem', { name: 'SYSTEM' })
     ).not.toBeInTheDocument();
     expect(
-      within(addedRow).getByRole('option', { name: 'USER' })
+      screen.getByRole('menuitem', { name: 'USER' })
     ).toBeInTheDocument();
-    const assistantOption = within(addedRow).getByRole('option', {
+    const assistantOption = screen.getByRole('menuitem', {
       name: 'ASSISTANT'
     });
     expect(assistantOption).toBeInTheDocument();

@@ -1,6 +1,6 @@
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Typography } from 'antd';
-import { useEffect, useRef, useState } from 'react';
+import { DeleteOutlined, DownOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button, Dropdown, Typography } from 'antd';
+import { useState } from 'react';
 
 import type {
   LlmPromptMessage,
@@ -84,73 +84,33 @@ function PromptMessageRoleSelect({
   value,
   onChange
 }: PromptMessageRoleSelectProps) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const roleLabel = value.toUpperCase();
 
-  useEffect(() => {
-    if (!open) {
-      return undefined;
-    }
-
-    function handlePointerDown(event: PointerEvent) {
-      const target = event.target;
-
-      if (target instanceof Node && rootRef.current?.contains(target)) {
-        return;
-      }
-
-      setOpen(false);
-    }
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-    };
-  }, [open]);
-
   return (
-    <div
-      ref={rootRef}
-      className="agent-flow-llm-prompt-messages__role-select"
+    <Dropdown
+      menu={{
+        className: 'agent-flow-llm-prompt-messages__role-menu',
+        items: DYNAMIC_PROMPT_MESSAGE_ROLES.map((role) => ({
+          key: role,
+          label: role.toUpperCase()
+        })),
+        onClick: ({ key }) => onChange(key as LlmPromptMessageRole),
+        selectedKeys: [value]
+      }}
+      overlayClassName="agent-flow-llm-prompt-messages__role-dropdown"
+      placement="bottomLeft"
+      trigger={['click']}
     >
       <button
-        aria-controls={ariaLabel + '-options'}
-        aria-expanded={open}
-        aria-haspopup="listbox"
         aria-label={ariaLabel}
         className="agent-flow-llm-prompt-messages__role-trigger"
         type="button"
-        role="combobox"
-        onClick={() => setOpen((current) => !current)}
+        onClick={(event) => event.preventDefault()}
       >
-        {roleLabel}
+        <span>{roleLabel}</span>
+        <DownOutlined className="agent-flow-llm-prompt-messages__role-icon" />
       </button>
-      {open ? (
-        <div
-          id={ariaLabel + '-options'}
-          className="agent-flow-llm-prompt-messages__role-options"
-          role="listbox"
-          aria-label={ariaLabel + '选项'}
-        >
-          {DYNAMIC_PROMPT_MESSAGE_ROLES.map((role) => (
-            <button
-              key={role}
-              aria-selected={role === value}
-              className="agent-flow-llm-prompt-messages__role-option"
-              role="option"
-              type="button"
-              onClick={() => {
-                onChange(role);
-                setOpen(false);
-              }}
-            >
-              {role.toUpperCase()}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
+    </Dropdown>
   );
 }
 
