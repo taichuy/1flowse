@@ -151,6 +151,7 @@ describe('node last run runtime', () => {
       />
     );
 
+    fireEvent.click(await screen.findByRole('button', { name: /thunderbolt LLM/ }));
     fireEvent.click(await screen.findByRole('button', { name: '运行当前节点' }));
 
     await waitFor(() => {
@@ -207,6 +208,7 @@ describe('node last run runtime', () => {
       />
     );
 
+    fireEvent.click(await screen.findByRole('button', { name: /thunderbolt LLM/ }));
     fireEvent.click(await screen.findByRole('button', { name: '运行当前节点' }));
 
     expect(await screen.findByText('输入节点引用变量')).toBeInTheDocument();

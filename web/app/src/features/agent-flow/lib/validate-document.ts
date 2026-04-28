@@ -71,6 +71,8 @@ function isMissingRequiredField(
       return binding.value.length === 0;
     case 'selector_list':
       return binding.value.length === 0;
+    case 'prompt_messages':
+      return binding.value.length === 0;
     case 'named_bindings':
       return binding.value.length === 0;
     case 'condition_group':
@@ -88,6 +90,10 @@ function collectBindingSelectors(binding: FlowBinding): string[][] {
       return [binding.value];
     case 'selector_list':
       return binding.value;
+    case 'prompt_messages':
+      return binding.value.flatMap((message) =>
+        parseTemplateSelectorTokens(message.content.value)
+      );
     case 'named_bindings':
       return binding.value.map((entry) => entry.selector);
     case 'condition_group':

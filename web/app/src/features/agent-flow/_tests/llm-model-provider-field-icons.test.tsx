@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { useEffect } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
@@ -10,6 +11,7 @@ import {
 import * as modelProviderOptionsApi from '../api/model-provider-options';
 import { NodeConfigTab } from '../components/detail/tabs/NodeConfigTab';
 import { AgentFlowEditorStoreProvider } from '../store/editor/AgentFlowEditorStoreProvider';
+import { useAgentFlowEditorStore } from '../store/editor/provider';
 
 const primaryProviderOption = modelProviderOptionsProviders[0];
 const fetchModelProviderOptionsSpy = vi.spyOn(
@@ -31,10 +33,24 @@ function createInitialState() {
   };
 }
 
+function SelectionSeed({ nodeId }: { nodeId: string }) {
+  const setSelection = useAgentFlowEditorStore((state) => state.setSelection);
+
+  useEffect(() => {
+    setSelection({
+      selectedNodeId: nodeId,
+      selectedNodeIds: [nodeId]
+    });
+  }, [nodeId, setSelection]);
+
+  return null;
+}
+
 function renderWithProviders() {
   return render(
     <AppProviders>
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     </AppProviders>

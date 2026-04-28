@@ -283,6 +283,10 @@ function extractSelectors(
       return binding.value
         .map((value) => normalizeSelectorPath(value))
         .filter((value): value is readonly [string, string] => value !== null);
+    case 'prompt_messages':
+      return binding.value.flatMap((message) =>
+        extractTemplateSelectors(message.content.value)
+      );
     case 'named_bindings':
       return binding.value
         .map((entry) => normalizeSelectorPath(entry.selector))

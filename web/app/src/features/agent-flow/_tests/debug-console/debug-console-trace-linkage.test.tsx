@@ -141,6 +141,20 @@ function TraceLinkageProbe() {
   );
 }
 
+function SelectionSeed({ nodeId }: { nodeId: string }) {
+  const setSelection = useAgentFlowEditorStore((state) => state.setSelection);
+
+  useEffect(() => {
+    setSelection({
+      selectedNodeId: nodeId,
+      selectedNodeIds: [nodeId],
+      selectedEdgeId: null
+    });
+  }, [nodeId, setSelection]);
+
+  return null;
+}
+
 function renderEditor(ui: ReactNode) {
   return renderReactFlowScene(ui as ReactElement, { width: 1280, height: 800 });
 }
@@ -209,6 +223,7 @@ describe('debug console trace linkage', () => {
   test('locates canvas node when clicking a trace row', async () => {
     renderEditor(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
         <AgentFlowCanvasFrame
           applicationId="app-1"
           applicationName="Support Agent"
@@ -242,6 +257,7 @@ describe('debug console trace linkage', () => {
   test('filters trace rows when a node is selected on canvas', async () => {
     renderEditor(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
         <AgentFlowCanvasFrame
           applicationId="app-1"
           applicationName="Support Agent"

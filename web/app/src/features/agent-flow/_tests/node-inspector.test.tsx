@@ -165,12 +165,13 @@ describe('NodeInspector', () => {
   test('reads config sections through the node schema registry and adapter bridge', async () => {
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeInspector />
       </AgentFlowEditorStoreProvider>
     );
 
     await waitFor(() => {
-      expect(screen.getByLabelText('User Prompt')).toHaveAttribute(
+      expect(screen.getByLabelText('USER 消息内容')).toHaveAttribute(
         'contenteditable',
         'true'
       );
@@ -184,12 +185,13 @@ describe('NodeInspector', () => {
     async () => {
       renderWithProviders(
         <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+          <SelectionSeed nodeId="node-llm" />
           <NodeInspector />
         </AgentFlowEditorStoreProvider>
       );
 
       await waitFor(() => {
-        expect(screen.getByLabelText('User Prompt')).toHaveAttribute(
+        expect(screen.getByLabelText('USER 消息内容')).toHaveAttribute(
           'contenteditable',
           'true'
         );
@@ -197,7 +199,7 @@ describe('NodeInspector', () => {
       expect(screen.queryByRole('button', { name: 'Inputs' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Policy' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Advanced' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('combobox', { name: 'User Prompt' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'USER 消息内容' })).not.toBeInTheDocument();
       expect(screen.queryByText('Basics')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('节点别名')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('节点简介')).not.toBeInTheDocument();
@@ -208,9 +210,9 @@ describe('NodeInspector', () => {
       expect(screen.queryByText('返回格式')).not.toBeInTheDocument();
       expect(screen.getByLabelText('失败重试')).toBeInTheDocument();
       expect(screen.getByRole('combobox', { name: '异常处理' })).toBeInTheDocument();
-      expect(screen.getByLabelText('System Prompt')).toBeInTheDocument();
-      expect(screen.getByLabelText('User Prompt').tagName).toBe('DIV');
-      expect(screen.getByLabelText('User Prompt')).toHaveAttribute('contenteditable', 'true');
+      expect(screen.getByLabelText('SYSTEM 消息内容')).toBeInTheDocument();
+      expect(screen.getByLabelText('USER 消息内容').tagName).toBe('DIV');
+      expect(screen.getByLabelText('USER 消息内容')).toHaveAttribute('contenteditable', 'true');
     },
     10000
   );
@@ -284,6 +286,7 @@ describe('NodeInspector', () => {
 
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={state}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );

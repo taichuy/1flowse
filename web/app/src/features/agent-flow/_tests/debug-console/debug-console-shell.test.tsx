@@ -116,6 +116,7 @@ describe('debug console shell', () => {
       />
     );
 
+    fireEvent.click(await screen.findByRole('button', { name: /thunderbolt LLM/ }));
     fireEvent.click(await screen.findByRole('button', { name: '调试整流' }));
 
     expect(runtimeApi.startFlowDebugRun).not.toHaveBeenCalled();

@@ -498,6 +498,22 @@ async function collectRelationshipMeasurements(page, assertions = []) {
   }, assertions);
 }
 
+async function prepareSceneForAssertions(page, scene) {
+  if (scene.id !== 'page.application-detail') {
+    return;
+  }
+
+  const detailDock = page.locator('.agent-flow-editor__detail-dock').first();
+  if ((await detailDock.count()) > 0 && await detailDock.isVisible().catch(() => false)) {
+    return;
+  }
+
+  await page.locator('.agent-flow-node-card--type-llm').first().click({
+    force: true,
+    timeout: 30000,
+  });
+}
+
 async function runScene(browser, baseUrl, scene) {
   const page = await browser.newPage();
   const cdp = await page.context().newCDPSession(page);
@@ -513,6 +529,7 @@ async function runScene(browser, baseUrl, scene) {
     waitUntil: 'domcontentloaded'
   });
   await page.waitForFunction(() => window.__STYLE_BOUNDARY__?.ready === true);
+  await prepareSceneForAssertions(page, scene);
 
   const nodeResults = [];
 

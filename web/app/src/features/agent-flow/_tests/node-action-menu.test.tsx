@@ -59,11 +59,19 @@ describe('NodeActionMenu', () => {
         return {
           ...actions,
           nodes: useAgentFlowEditorStore((state) => state.workingDocument.graph.nodes),
-          selectedNodeId: useAgentFlowEditorStore((state) => state.selectedNodeId)
+          selectedNodeId: useAgentFlowEditorStore((state) => state.selectedNodeId),
+          setSelection: useAgentFlowEditorStore((state) => state.setSelection)
         };
       },
       { wrapper }
     );
+
+    act(() => {
+      result.current.setSelection({
+        selectedNodeId: 'node-llm',
+        selectedNodeIds: ['node-llm']
+      });
+    });
 
     act(() => {
       result.current.deleteSelectedNode();
