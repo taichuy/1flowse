@@ -116,7 +116,7 @@ Why last:
 
 ## Global Verification
 
-- [ ] **Step 1: Run backend focused tests**
+- [x] **Step 1: Run backend focused tests**
 
 Run:
 
@@ -130,7 +130,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 2: Run route and contract tests when API routes change**
+- [x] **Step 2: Run route and contract tests when API routes change**
 
 Run:
 
@@ -144,7 +144,13 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 3: Run frontend settings tests when UI changes**
+- [x] **Step 3: Run frontend settings tests when UI changes**
+
+No frontend UI changed in this plan execution. Shared contract coverage was verified with:
+
+```bash
+node scripts/node/test-contracts.js
+```
 
 Run:
 
@@ -160,10 +166,10 @@ Test Files ... passed
 
 ## Completion Criteria
 
-- [ ] `HostExtension` manifest and registry exist as first-class backend contracts.
-- [ ] Boot-time host extension lifecycle is separate from runtime extension enable lifecycle.
-- [ ] Official `storage-host` registers `storage-durable / storage-ephemeral / storage-object`.
-- [ ] Official `data-access-host` registers `data_source`.
-- [ ] Official `file-management-host` registers file management and `file_processor`.
-- [ ] Existing provider install path no longer assumes every non-host plugin is a model provider.
-- [ ] Documentation and AGENTS rules use `Boot Core / HostExtension / RuntimeExtension / CapabilityPlugin` consistently.
+- [x] `HostExtension` manifest and registry exist as first-class backend contracts.
+- [x] Boot-time host extension lifecycle is separate from runtime extension enable lifecycle.
+- [x] Official `storage-host` registers `storage-durable / storage-ephemeral / storage-object`.
+- [x] Official `data-access-host` registers `data_source`.
+- [x] Official `file-management-host` registers file management and `file_processor`.
+- [x] Existing provider install path no longer assumes every non-host plugin is a model provider.
+- [x] Documentation and AGENTS rules use `Boot Core / HostExtension / RuntimeExtension / CapabilityPlugin` consistently.

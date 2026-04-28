@@ -176,7 +176,7 @@ fn validate_plugin_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> 
     )?;
     validate_permission_values(&manifest.permissions)?;
     validate_binding_targets(&manifest.binding_targets)?;
-    validate_slot_codes(&manifest.slot_codes)?;
+    validate_slot_codes(manifest)?;
 
     if manifest.consumption_kind == PluginConsumptionKind::HostExtension
         && manifest
@@ -328,8 +328,8 @@ fn validate_binding_targets(binding_targets: &[String]) -> FrameworkResult<()> {
     Ok(())
 }
 
-fn validate_slot_codes(slot_codes: &[String]) -> FrameworkResult<()> {
-    const ALLOWED: &[&str] = &[
+fn validate_slot_codes(manifest: &PluginManifestV1) -> FrameworkResult<()> {
+    const RUNTIME_EXTENSION_ALLOWED: &[&str] = &[
         "model_provider",
         "embedding_provider",
         "reranker_provider",
@@ -337,11 +337,18 @@ fn validate_slot_codes(slot_codes: &[String]) -> FrameworkResult<()> {
         "file_processor",
         "record_validator",
         "field_computed_value",
-        "node_contribution",
     ];
+    const HOST_EXTENSION_ALLOWED: &[&str] = &["host_bootstrap"];
+    const CAPABILITY_PLUGIN_ALLOWED: &[&str] = &["node_contribution"];
 
-    for slot in slot_codes {
-        validate_allowed(slot, "slot_codes[]", ALLOWED)?;
+    let allowed = match manifest.consumption_kind {
+        PluginConsumptionKind::HostExtension => HOST_EXTENSION_ALLOWED,
+        PluginConsumptionKind::RuntimeExtension => RUNTIME_EXTENSION_ALLOWED,
+        PluginConsumptionKind::CapabilityPlugin => CAPABILITY_PLUGIN_ALLOWED,
+    };
+
+    for slot in &manifest.slot_codes {
+        validate_allowed(slot, "slot_codes[]", allowed)?;
     }
 
     Ok(())
