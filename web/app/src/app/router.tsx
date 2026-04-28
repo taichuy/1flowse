@@ -8,22 +8,40 @@ import {
   useRouterState
 } from '@tanstack/react-router';
 import { Result } from 'antd';
+import { Suspense, lazy, type ReactNode } from 'react';
 
 import { AppShellFrame } from '../app-shell/AppShellFrame';
 import { SignInPage } from '../features/auth/pages/SignInPage';
-import { ApplicationDetailPage } from '../features/applications/pages/ApplicationDetailPage';
 import type { ApplicationSectionKey } from '../features/applications/lib/application-sections';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
 import { HomePage } from '../features/home/pages/HomePage';
 import type { MeSectionKey } from '../features/me/lib/me-sections';
 import { MePage } from '../features/me/pages/MePage';
 import type { SettingsSectionKey } from '../features/settings/lib/settings-sections';
-import { SettingsPage } from '../features/settings/pages/SettingsPage';
 import { ToolsPage } from '../features/tools/pages/ToolsPage';
 import { RouteGuard } from '../routes/route-guards';
 
+const ApplicationDetailPage = lazy(() =>
+  import('../features/applications/pages/ApplicationDetailPage').then((module) => ({
+    default: module.ApplicationDetailPage
+  }))
+);
+const SettingsPage = lazy(() =>
+  import('../features/settings/pages/SettingsPage').then((module) => ({
+    default: module.SettingsPage
+  }))
+);
+
 function NotFoundPage() {
   return <Result status="404" title="页面不存在" />;
+}
+
+function RouteLoadingFallback() {
+  return <Result status="info" title="正在加载页面" />;
+}
+
+function LazyRouteBoundary({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<RouteLoadingFallback />}>{children}</Suspense>;
 }
 
 function ShellLayout() {
@@ -59,10 +77,12 @@ function ApplicationSectionRoute({
 }) {
   return (
     <RouteGuard routeId="application-detail">
-      <ApplicationDetailPage
-        applicationId={applicationId}
-        requestedSectionKey={requestedSectionKey}
-      />
+      <LazyRouteBoundary>
+        <ApplicationDetailPage
+          applicationId={applicationId}
+          requestedSectionKey={requestedSectionKey}
+        />
+      </LazyRouteBoundary>
     </RouteGuard>
   );
 }
@@ -179,7 +199,9 @@ const toolsRoute = createRoute({
 function renderSettingsRoute(requestedSectionKey?: SettingsSectionKey) {
   return (
     <RouteGuard routeId="settings">
-      <SettingsPage requestedSectionKey={requestedSectionKey} />
+      <LazyRouteBoundary>
+        <SettingsPage requestedSectionKey={requestedSectionKey} />
+      </LazyRouteBoundary>
     </RouteGuard>
   );
 }

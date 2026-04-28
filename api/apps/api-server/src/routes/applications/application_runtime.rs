@@ -586,32 +586,29 @@ async fn send_debug_run_stream_events(
                 for node_run in &detail.node_runs {
                     let previous_status =
                         node_statuses.insert(node_run.id, node_run.status.as_str().to_string());
-                    if previous_status.is_none() {
-                        if sender
+                    if previous_status.is_none()
+                        && sender
                             .send(debug_stream_event(
                                 "node_started",
                                 stream_node_started_payload(node_run),
                             ))
                             .await
                             .is_err()
-                        {
-                            return;
-                        }
+                    {
+                        return;
                     }
 
                     if node_run.status != domain::NodeRunStatus::Running
                         && previous_status.as_deref() != Some(node_run.status.as_str())
-                    {
-                        if sender
+                        && sender
                             .send(debug_stream_event(
                                 "node_finished",
                                 stream_node_finished_payload(node_run),
                             ))
                             .await
                             .is_err()
-                        {
-                            return;
-                        }
+                    {
+                        return;
                     }
                 }
 

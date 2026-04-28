@@ -165,6 +165,7 @@ describe('NodeInspector', () => {
   test('reads config sections through the node schema registry and adapter bridge', async () => {
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeInspector />
       </AgentFlowEditorStoreProvider>
     );
@@ -184,6 +185,7 @@ describe('NodeInspector', () => {
     async () => {
       renderWithProviders(
         <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+          <SelectionSeed nodeId="node-llm" />
           <NodeInspector />
         </AgentFlowEditorStoreProvider>
       );
@@ -284,6 +286,7 @@ describe('NodeInspector', () => {
 
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={state}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );

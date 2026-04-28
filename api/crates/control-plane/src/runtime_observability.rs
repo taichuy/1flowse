@@ -18,6 +18,16 @@ pub use items::item_kind_for_event;
 
 pub const PROVIDER_DELTA_COALESCE_MAX_BYTES: usize = 4096;
 
+pub struct AppendHostSpanInput {
+    pub flow_run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
+    pub parent_span_id: Option<Uuid>,
+    pub kind: domain::RuntimeSpanKind,
+    pub name: String,
+    pub started_at: OffsetDateTime,
+    pub metadata: Value,
+}
+
 pub fn audit_row_hash(
     prev_hash: Option<&str>,
     fact_table: &str,
@@ -38,31 +48,25 @@ pub fn audit_row_hash(
 
 pub async fn append_host_span<R>(
     repository: &R,
-    flow_run_id: Uuid,
-    node_run_id: Option<Uuid>,
-    parent_span_id: Option<Uuid>,
-    kind: domain::RuntimeSpanKind,
-    name: impl Into<String>,
-    started_at: OffsetDateTime,
-    metadata: Value,
+    input: AppendHostSpanInput,
 ) -> Result<domain::RuntimeSpanRecord>
 where
     R: OrchestrationRuntimeRepository,
 {
     repository
         .append_runtime_span(&AppendRuntimeSpanInput {
-            flow_run_id,
-            node_run_id,
-            parent_span_id,
-            kind,
-            name: name.into(),
+            flow_run_id: input.flow_run_id,
+            node_run_id: input.node_run_id,
+            parent_span_id: input.parent_span_id,
+            kind: input.kind,
+            name: input.name,
             status: domain::RuntimeSpanStatus::Running,
             capability_id: None,
             input_ref: None,
             output_ref: None,
             error_payload: None,
-            metadata,
-            started_at,
+            metadata: input.metadata,
+            started_at: input.started_at,
             finished_at: None,
         })
         .await

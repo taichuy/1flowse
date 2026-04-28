@@ -21,6 +21,25 @@ test('buildCommands uses independent cargo jobs and cargo test threads', () => {
   ]);
 });
 
+test('main prints help without running the backend gate', async () => {
+  let output = '';
+  let ran = false;
+
+  const status = await main(['--help'], {
+    writeStdout(text) {
+      output += text;
+    },
+    managedRunnerImpl() {
+      ran = true;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.equal(ran, false);
+  assert.match(output, /Usage: node scripts\/node\/test-backend\.js/u);
+});
+
 test('main routes backend test execution through the heavy managed gate', async () => {
   let capturedOptions = null;
 

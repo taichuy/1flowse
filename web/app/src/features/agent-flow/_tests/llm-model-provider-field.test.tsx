@@ -59,6 +59,19 @@ function DocumentObserver({
   return null;
 }
 
+function SelectionSeed({ nodeId }: { nodeId: string }) {
+  const setSelection = useAgentFlowEditorStore((state) => state.setSelection);
+
+  useEffect(() => {
+    setSelection({
+      selectedNodeId: nodeId,
+      selectedNodeIds: [nodeId]
+    });
+  }, [nodeId, setSelection]);
+
+  return null;
+}
+
 function renderWithProviders(ui: ReactNode) {
   return render(<AppProviders>{ui}</AppProviders>);
 }
@@ -162,6 +175,7 @@ describe('LlmModelField', () => {
 
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={initialState}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
@@ -257,6 +271,7 @@ describe('LlmModelField', () => {
             latestDocument = document;
           }}
         />
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
@@ -320,6 +335,7 @@ describe('LlmModelField', () => {
     const { container } = renderWithProviders(
       <div className="agent-flow-editor__body">
         <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+          <SelectionSeed nodeId="node-llm" />
           <NodeConfigTab />
         </AgentFlowEditorStoreProvider>
       </div>
@@ -362,6 +378,7 @@ describe('LlmModelField', () => {
       <div className="agent-flow-editor__body">
         <div className="agent-flow-node-detail">
           <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+            <SelectionSeed nodeId="node-llm" />
             <NodeConfigTab />
           </AgentFlowEditorStoreProvider>
         </div>
@@ -409,6 +426,7 @@ describe('LlmModelField', () => {
     const { container } = renderWithProviders(
       <div className="agent-flow-editor__body">
         <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+          <SelectionSeed nodeId="node-llm" />
           <NodeConfigTab />
         </AgentFlowEditorStoreProvider>
       </div>
@@ -515,6 +533,7 @@ describe('LlmModelField', () => {
     const { container } = renderWithProviders(
       <div className="agent-flow-editor__body">
         <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+          <SelectionSeed nodeId="node-llm" />
           <NodeConfigTab />
         </AgentFlowEditorStoreProvider>
       </div>
@@ -588,6 +607,7 @@ describe('LlmModelField', () => {
     const { container } = renderWithProviders(
       <div className="agent-flow-editor__body">
         <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+          <SelectionSeed nodeId="node-llm" />
           <NodeConfigTab />
         </AgentFlowEditorStoreProvider>
       </div>
@@ -706,6 +726,7 @@ describe('LlmModelField', () => {
 
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={state}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
@@ -800,6 +821,7 @@ describe('LlmModelField', () => {
 
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={state}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
@@ -862,6 +884,7 @@ describe('LlmModelField', () => {
 
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
@@ -892,6 +915,7 @@ describe('LlmModelField', () => {
 
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={state}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
@@ -914,6 +938,7 @@ describe('LlmModelField', () => {
             latestDocument = document;
           }}
         />
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );

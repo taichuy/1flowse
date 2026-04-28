@@ -139,6 +139,7 @@ describe('NodeDetailPanel', () => {
   test('builds node detail from the schema registry and node schema adapter', () => {
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeDetailPanel onClose={vi.fn()} onRunNode={undefined} />
       </AgentFlowEditorStoreProvider>
     );
@@ -150,6 +151,7 @@ describe('NodeDetailPanel', () => {
   test('renders header, config tab and last-run tab for the selected node', () => {
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeDetailPanel onClose={vi.fn()} onRunNode={undefined} />
       </AgentFlowEditorStoreProvider>
     );
@@ -167,6 +169,7 @@ describe('NodeDetailPanel', () => {
   test('uses the same node type icon in detail header as the canvas card', () => {
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeDetailPanel onClose={vi.fn()} onRunNode={undefined} />
       </AgentFlowEditorStoreProvider>
     );
@@ -180,6 +183,7 @@ describe('NodeDetailPanel', () => {
   test('renders alias and description editors inside the header exactly once', () => {
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeDetailPanel onClose={vi.fn()} onRunNode={undefined} />
       </AgentFlowEditorStoreProvider>
     );
@@ -195,6 +199,7 @@ describe('NodeDetailPanel', () => {
   test('keeps config tab focused on editable settings and relations without redundant summary cards', () => {
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
@@ -212,6 +217,7 @@ describe('NodeDetailPanel', () => {
   test('does not duplicate identity or summary content inside config tab', () => {
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
@@ -237,6 +243,7 @@ describe('NodeDetailPanel', () => {
   test('renders exception handling as a three-state strategy selector', async () => {
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
@@ -265,6 +272,7 @@ describe('NodeDetailPanel', () => {
             latestDocument = document;
           }}
         />
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
@@ -319,6 +327,7 @@ describe('NodeDetailPanel', () => {
             latestDocument = document;
           }}
         />
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
@@ -400,6 +409,7 @@ describe('NodeDetailPanel', () => {
             latestDocument = document;
           }}
         />
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
@@ -445,6 +455,7 @@ describe('NodeDetailPanel', () => {
 
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={state}>
+        <SelectionSeed nodeId="node-llm" />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );

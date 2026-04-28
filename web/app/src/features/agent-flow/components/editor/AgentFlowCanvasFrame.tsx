@@ -167,6 +167,7 @@ export function AgentFlowCanvasFrame({
     draftId: draftMeta.draftId,
     document: workingDocument
   });
+  const { syncSelectedNode } = debugSession;
   const issues = useMemo(
     () =>
       validateDocument(
@@ -317,8 +318,8 @@ export function AgentFlowCanvasFrame({
   }, [variableCacheOpen]);
 
   useEffect(() => {
-    debugSession.syncSelectedNode(selectedNodeId);
-  }, [selectedNodeId]);
+    syncSelectedNode(selectedNodeId);
+  }, [selectedNodeId, syncSelectedNode]);
 
   useEditorShortcuts();
 

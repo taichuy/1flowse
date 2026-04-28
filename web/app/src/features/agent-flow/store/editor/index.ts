@@ -80,7 +80,7 @@ export interface AgentFlowEditorState
 export function createAgentFlowEditorStore(
   state: ConsoleApplicationOrchestrationState
 ) {
-  const selectedNodeId = getDefaultSelectedNodeId(state);
+  const selectedNodeId = getDefaultSelectedNodeId();
 
   return createStore<AgentFlowEditorState>((set) => ({
     workingDocument: state.draft.document,
@@ -241,7 +241,7 @@ export function createAgentFlowEditorStore(
       });
     },
     replaceFromServerState: (nextState) => {
-      const nextSelectedNodeId = getDefaultSelectedNodeId(nextState);
+      const nextSelectedNodeId = getDefaultSelectedNodeId();
 
       set((current) => ({
         workingDocument: nextState.draft.document,

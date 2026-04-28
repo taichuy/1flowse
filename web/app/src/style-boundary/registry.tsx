@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { Menu } from 'antd';
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 
@@ -6,6 +6,8 @@ import { AppRouterProvider } from '../app/router';
 import { AppShellFrame } from '../app-shell/AppShellFrame';
 import { createAccountMenuItems } from '../app-shell/account-menu-items';
 import { SignInPage } from '../features/auth/pages/SignInPage';
+import { AgentFlowCanvasFrame } from '../features/agent-flow/components/editor/AgentFlowCanvasFrame';
+import { AgentFlowEditorStoreProvider } from '../features/agent-flow/store/editor/AgentFlowEditorStoreProvider';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
 import { ToolsPage } from '../features/tools/pages/ToolsPage';
 import { useAuthStore } from '../state/auth-store';
@@ -15,6 +17,7 @@ import {
   primaryContractProviderEnabledModelIds
 } from '../test/model-provider-contract-fixtures';
 import manifest from './scenario-manifest.json';
+import { StyleBoundarySelectionSeed } from './StyleBoundarySelectionSeed';
 import type {
   StyleBoundaryManifestScene,
   StyleBoundaryRuntimeScene
@@ -242,6 +245,20 @@ function createStyleBoundaryAgentFlowDocument() {
   }
 
   return document;
+}
+
+function createStyleBoundaryOrchestrationState() {
+  return {
+    flow_id: 'flow-1',
+    draft: {
+      id: 'draft-1',
+      flow_id: 'flow-1',
+      updated_at: '2026-04-15T09:00:00Z',
+      document: createStyleBoundaryAgentFlowDocument()
+    },
+    versions: [],
+    autosave_interval_seconds: 30
+  };
 }
 
 function seedStyleBoundarySettingsFetch() {
@@ -680,6 +697,23 @@ function seedStyleBoundaryApplicationFetch() {
 }
 
 const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
+  'component.agent-flow-node-detail': () => {
+    seedStyleBoundaryAuth();
+    seedStyleBoundaryApplicationFetch();
+
+    return (
+      <div style={{ width: 1280, height: 800 }}>
+        <AgentFlowEditorStoreProvider initialState={createStyleBoundaryOrchestrationState()}>
+          <StyleBoundarySelectionSeed nodeId="node-llm" />
+          <AgentFlowCanvasFrame
+            applicationId="app-1"
+            applicationName="Support Agent"
+            nodeContributions={styleBoundaryNodeContributions}
+          />
+        </AgentFlowEditorStoreProvider>
+      </div>
+    );
+  },
   'component.account-popup': () => (
     <div className="app-shell-account-popup">
       <Menu mode="vertical" selectable={false} items={getAccountPopupChildren()} />

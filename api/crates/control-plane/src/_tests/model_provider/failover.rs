@@ -22,15 +22,17 @@ use crate::{
     },
 };
 
+type SharedMap<K, V> = Arc<Mutex<HashMap<K, V>>>;
+type CatalogEntryKey = (Uuid, String, String);
+
 #[derive(Default, Clone)]
 struct MemoryModelCatalogRepository {
-    catalog_sources: Arc<Mutex<HashMap<Uuid, domain::ModelProviderCatalogSourceRecord>>>,
-    catalog_sync_runs: Arc<Mutex<HashMap<Uuid, domain::ModelCatalogSyncRunRecord>>>,
-    catalog_entries:
-        Arc<Mutex<HashMap<(Uuid, String, String), domain::ModelProviderCatalogEntryRecord>>>,
-    queue_templates: Arc<Mutex<HashMap<Uuid, domain::ModelFailoverQueueTemplateRecord>>>,
-    queue_items: Arc<Mutex<HashMap<Uuid, Vec<domain::ModelFailoverQueueItemRecord>>>>,
-    queue_snapshots: Arc<Mutex<HashMap<Uuid, domain::ModelFailoverQueueSnapshotRecord>>>,
+    catalog_sources: SharedMap<Uuid, domain::ModelProviderCatalogSourceRecord>,
+    catalog_sync_runs: SharedMap<Uuid, domain::ModelCatalogSyncRunRecord>,
+    catalog_entries: SharedMap<CatalogEntryKey, domain::ModelProviderCatalogEntryRecord>,
+    queue_templates: SharedMap<Uuid, domain::ModelFailoverQueueTemplateRecord>,
+    queue_items: SharedMap<Uuid, Vec<domain::ModelFailoverQueueItemRecord>>,
+    queue_snapshots: SharedMap<Uuid, domain::ModelFailoverQueueSnapshotRecord>,
 }
 
 #[async_trait]

@@ -204,7 +204,7 @@ export function SystemRuntimePanel() {
     return (
       <SettingsSectionSurface title="系统运行" description={sectionDescription}>
         <Flex justify="center" style={{ padding: '64px 0' }}>
-          <Spin tip="正在读取系统运行信息…" />
+          <Spin />
         </Flex>
       </SettingsSectionSurface>
     );

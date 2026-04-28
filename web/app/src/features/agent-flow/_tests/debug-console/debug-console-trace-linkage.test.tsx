@@ -129,6 +129,18 @@ function TraceLinkageProbe() {
         type="button"
         onClick={() =>
           setSelection({
+            selectedNodeId: 'node-llm',
+            selectedNodeIds: ['node-llm'],
+            selectedEdgeId: null
+          })
+        }
+      >
+        选择 LLM
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          setSelection({
             selectedNodeId: 'node-answer',
             selectedNodeIds: ['node-answer'],
             selectedEdgeId: null
@@ -219,11 +231,6 @@ describe('debug console trace linkage', () => {
     );
 
     await openConsoleAndRun();
-    const tracePanel = screen.getByRole('tabpanel', { name: 'Trace' });
-
-    fireEvent.click(
-      within(tracePanel).getByRole('button', { name: /清除筛选/ })
-    );
     fireEvent.click(screen.getByRole('button', { name: '选择 Answer' }));
 
     await waitFor(() => {
@@ -255,9 +262,13 @@ describe('debug console trace linkage', () => {
 
     const tracePanel = screen.getByRole('tabpanel', { name: 'Trace' });
 
-    expect(screen.getByTestId('trace-linkage-selected-node')).toHaveTextContent(
-      'node-llm'
-    );
+    fireEvent.click(screen.getByRole('button', { name: '选择 LLM' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('trace-linkage-selected-node')).toHaveTextContent(
+        'node-llm'
+      );
+    });
     expect(
       within(tracePanel).getByRole('button', { name: /LLM/ })
     ).toBeInTheDocument();

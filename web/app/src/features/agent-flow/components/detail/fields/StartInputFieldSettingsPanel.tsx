@@ -119,6 +119,7 @@ export function StartInputFieldSettingsPanel({
             aria-label="输入字段类型"
             options={startInputTypeOptions}
             value={field.inputType}
+            virtual={false}
             onChange={handleTypeChange}
           />
         </label>
@@ -234,6 +235,7 @@ export function StartInputFieldSettingsPanel({
                     ? field.defaultValue
                     : undefined
                 }
+                virtual={false}
                 onChange={(defaultValue: boolean) => onChange({ defaultValue })}
               />
             ) : field.inputType === 'select' ? (
@@ -249,6 +251,7 @@ export function StartInputFieldSettingsPanel({
                     ? field.defaultValue
                     : undefined
                 }
+                virtual={false}
                 onChange={(defaultValue?: string) => onChange({ defaultValue })}
               />
             ) : (

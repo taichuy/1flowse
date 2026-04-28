@@ -1,6 +1,43 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
 
+const originalConsoleError = console.error.bind(console);
+const originalConsoleWarn = console.warn.bind(console);
+
+function isKnownThirdPartyTestWarning(args: unknown[]) {
+  const text = args.map((arg) => String(arg)).join(' ');
+
+  if (
+    text.includes('Decorators') &&
+    text.includes('inside a test was not wrapped in act')
+  ) {
+    return true;
+  }
+
+  return args.some(
+    (arg) =>
+      typeof arg === 'string' &&
+      ((arg.includes('rc-virtual-list') && arg.includes('max limitation')) ||
+        arg.includes('An update to Decorators inside a test was not wrapped in act'))
+  );
+}
+
+console.error = (...args: unknown[]) => {
+  if (isKnownThirdPartyTestWarning(args)) {
+    return;
+  }
+
+  originalConsoleError(...args);
+};
+
+console.warn = (...args: unknown[]) => {
+  if (isKnownThirdPartyTestWarning(args)) {
+    return;
+  }
+
+  originalConsoleWarn(...args);
+};
+
 Object.defineProperty(window, 'scrollTo', {
   value: vi.fn(),
   writable: true
@@ -83,6 +120,25 @@ Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
   }
 });
 
+Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+  configurable: true,
+  get() {
+    return this.clientHeight;
+  }
+});
+
+Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+  configurable: true,
+  get() {
+    return this.clientWidth;
+  }
+});
+
+Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+  configurable: true,
+  value: vi.fn()
+});
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
@@ -144,6 +200,18 @@ const originalGetComputedStyle = window.getComputedStyle.bind(window);
 function createCssPixelFallback(target: Element, propertyName: string, value: string) {
   if (value && value !== 'NaN') {
     return value;
+  }
+
+  if (
+    propertyName.startsWith('padding-') ||
+    propertyName.endsWith('-width') ||
+    propertyName === 'width'
+  ) {
+    return '0px';
+  }
+
+  if (propertyName === 'box-sizing') {
+    return 'border-box';
   }
 
   if (propertyName === 'height') {
