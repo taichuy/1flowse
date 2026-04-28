@@ -384,3 +384,83 @@
     grid-template-columns: 1fr;
   }
 }
+
+.agent-flow-llm-prompt-messages {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agent-flow-llm-prompt-messages__header,
+.agent-flow-llm-prompt-messages__role-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agent-flow-llm-prompt-messages__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agent-flow-llm-prompt-messages__row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+
+.agent-flow-llm-prompt-messages__drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #8ca095;
+  cursor: grab;
+}
+
+.agent-flow-llm-prompt-messages__drag-handle:active {
+  cursor: grabbing;
+}
+
+.agent-flow-llm-prompt-messages__drag-handle:hover,
+.agent-flow-llm-prompt-messages__drag-handle:focus-visible {
+  background: #f3f8f3;
+  color: #55645d;
+}
+
+.agent-flow-llm-prompt-messages__body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-flow-llm-prompt-messages__role-select {
+  width: 132px;
+}
+
+.agent-flow-llm-prompt-messages__role-select {
+  height: 28px;
+  padding: 0 28px 0 10px;
+  border: 1px solid #d5ddd8;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #16211d;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.agent-flow-llm-prompt-messages__role-select:focus-visible {
+  border-color: #00d992;
+  outline: 2px solid rgba(0, 217, 146, 0.28);
+  outline-offset: 1px;
+}

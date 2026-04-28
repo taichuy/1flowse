@@ -10,6 +10,7 @@ export type InspectorSectionKey =
 export type NodeEditorKind =
   | 'text'
   | 'llm_model'
+  | 'llm_prompt_messages'
   | 'llm_response_format'
   | 'number'
   | 'selector'

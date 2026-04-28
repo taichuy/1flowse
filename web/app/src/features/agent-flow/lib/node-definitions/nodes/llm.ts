@@ -20,15 +20,9 @@ export const llmNodeDefinition: NodeDefinition = {
           required: true
         },
         {
-          key: 'bindings.system_prompt',
-          label: 'System Prompt',
-          editor: 'templated_text'
-        },
-        {
-          key: 'bindings.user_prompt',
-          label: 'User Prompt',
-          editor: 'templated_text',
-          required: true
+          key: 'bindings.prompt_messages',
+          label: '上下文',
+          editor: 'llm_prompt_messages'
         }
       ]
     },

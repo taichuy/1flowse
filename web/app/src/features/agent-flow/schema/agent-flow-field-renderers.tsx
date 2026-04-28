@@ -13,8 +13,13 @@ import { StateWriteField } from '../components/bindings/StateWriteField';
 import { TemplatedTextField } from '../components/bindings/TemplatedTextField';
 import { OutputContractDefinitionField } from '../components/detail/fields/OutputContractDefinitionField';
 import { LlmModelField } from '../components/detail/fields/LlmModelField';
+import { LlmPromptMessagesField } from '../components/detail/fields/LlmPromptMessagesField';
 import { LlmResponseFormatField } from '../components/detail/fields/LlmResponseFormatField';
 import { StartInputFieldsField } from '../components/detail/fields/StartInputFieldsField';
+import {
+  normalizePromptMessagesBinding,
+  toPromptMessagesBinding
+} from '../lib/llm-prompt-messages';
 import type { FlowSelectorOption } from '../lib/selector-options';
 import { createTemplateSelectorToken } from '../lib/template-binding';
 
@@ -146,6 +151,27 @@ function renderTemplatedTextField({
   );
 }
 
+function renderLlmPromptMessagesField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
+  const messages = normalizePromptMessagesBinding(
+    adapter.getValue(block.path),
+    adapter.getValue('bindings.system_prompt'),
+    adapter.getValue('bindings.user_prompt')
+  );
+
+  return (
+    <LlmPromptMessagesField
+      options={getSelectorOptions(adapter)}
+      value={messages}
+      onChange={(nextValue) =>
+        adapter.setValue(block.path, toPromptMessagesBinding(nextValue))
+      }
+    />
+  );
+}
+
 function renderNamedBindingsField({
   adapter,
   block
@@ -250,6 +276,7 @@ function renderStartInputFieldsField({
 export const agentFlowFieldRenderers = {
   text: renderTextField,
   llm_model: LlmModelField,
+  llm_prompt_messages: renderLlmPromptMessagesField,
   llm_response_format: LlmResponseFormatField,
   number: renderNumberField,
   selector: renderSelectorField,

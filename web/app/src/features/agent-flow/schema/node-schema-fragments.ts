@@ -14,6 +14,7 @@ import {
 const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
   text: 'text',
   llm_model: 'llm_model',
+  llm_prompt_messages: 'llm_prompt_messages',
   llm_response_format: 'llm_response_format',
   number: 'number',
   selector: 'selector',

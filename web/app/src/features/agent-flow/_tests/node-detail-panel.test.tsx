@@ -1,6 +1,6 @@
 /* eslint-disable testing-library/no-node-access */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type PropsWithChildren, type ReactNode } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
@@ -13,10 +13,14 @@ import {
 import { NodeConfigTab } from '../components/detail/tabs/NodeConfigTab';
 import { NodeDetailPanel } from '../components/detail/NodeDetailPanel';
 import * as modelProviderOptionsApi from '../api/model-provider-options';
-import { AgentFlowEditorStoreProvider } from '../store/editor/AgentFlowEditorStoreProvider';
 import * as nodeSchemaAdapterApi from '../schema/node-schema-adapter';
+import { createAgentFlowEditorStore } from '../store/editor';
 import * as nodeSchemaRegistry from '../schema/node-schema-registry';
-import { useAgentFlowEditorStore } from '../store/editor/provider';
+import {
+  AgentFlowEditorStoreContext,
+  useAgentFlowEditorStore,
+  type AgentFlowEditorStore
+} from '../store/editor/provider';
 import { selectWorkingDocument } from '../store/editor/selectors';
 
 const NODE_DETAIL_PANEL_TEST_TIMEOUT = 15_000;
@@ -71,17 +75,30 @@ function DocumentObserver({
   return null;
 }
 
-function SelectionSeed({ nodeId }: { nodeId: string }) {
-  const setSelection = useAgentFlowEditorStore((state) => state.setSelection);
+function SelectedEditorStoreProvider({
+  initialState,
+  nodeId,
+  children
+}: PropsWithChildren<{
+  initialState: ReturnType<typeof createInitialState>;
+  nodeId: string;
+}>) {
+  const storeRef = useRef<AgentFlowEditorStore | null>(null);
 
-  useEffect(() => {
-    setSelection({
+  if (!storeRef.current) {
+    storeRef.current = createAgentFlowEditorStore(initialState);
+    storeRef.current.setState({
       selectedNodeId: nodeId,
-      selectedNodeIds: [nodeId]
+      selectedNodeIds: [nodeId],
+      selectionMode: 'single'
     });
-  }, [nodeId, setSelection]);
+  }
 
-  return null;
+  return (
+    <AgentFlowEditorStoreContext.Provider value={storeRef.current}>
+      {children}
+    </AgentFlowEditorStoreContext.Provider>
+  );
 }
 
 function renderWithProviders(ui: ReactNode) {
@@ -138,9 +155,9 @@ describe('NodeDetailPanel', () => {
 
   test('builds node detail from the schema registry and node schema adapter', () => {
     renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+      <SelectedEditorStoreProvider initialState={createInitialState()} nodeId="node-llm">
         <NodeDetailPanel onClose={vi.fn()} onRunNode={undefined} />
-      </AgentFlowEditorStoreProvider>
+      </SelectedEditorStoreProvider>
     );
 
     expect(resolveAgentFlowNodeSchemaSpy).toHaveBeenCalledWith('llm');
@@ -149,9 +166,9 @@ describe('NodeDetailPanel', () => {
 
   test('renders header, config tab and last-run tab for the selected node', () => {
     renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+      <SelectedEditorStoreProvider initialState={createInitialState()} nodeId="node-llm">
         <NodeDetailPanel onClose={vi.fn()} onRunNode={undefined} />
-      </AgentFlowEditorStoreProvider>
+      </SelectedEditorStoreProvider>
     );
 
     expect(screen.getByRole('tab', { name: /设置|配置/ })).toHaveAttribute(
@@ -166,9 +183,9 @@ describe('NodeDetailPanel', () => {
 
   test('uses the same node type icon in detail header as the canvas card', () => {
     renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+      <SelectedEditorStoreProvider initialState={createInitialState()} nodeId="node-llm">
         <NodeDetailPanel onClose={vi.fn()} onRunNode={undefined} />
-      </AgentFlowEditorStoreProvider>
+      </SelectedEditorStoreProvider>
     );
 
     const header = screen.getByTestId('node-detail-header');
@@ -179,9 +196,9 @@ describe('NodeDetailPanel', () => {
 
   test('renders alias and description editors inside the header exactly once', () => {
     renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+      <SelectedEditorStoreProvider initialState={createInitialState()} nodeId="node-llm">
         <NodeDetailPanel onClose={vi.fn()} onRunNode={undefined} />
-      </AgentFlowEditorStoreProvider>
+      </SelectedEditorStoreProvider>
     );
 
     const header = screen.getByTestId('node-detail-header');
@@ -194,9 +211,9 @@ describe('NodeDetailPanel', () => {
 
   test('keeps config tab focused on editable settings and relations without redundant summary cards', () => {
     renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+      <SelectedEditorStoreProvider initialState={createInitialState()} nodeId="node-llm">
         <NodeConfigTab />
-      </AgentFlowEditorStoreProvider>
+      </SelectedEditorStoreProvider>
     );
 
     expect(screen.queryByText('节点说明')).not.toBeInTheDocument();
@@ -211,9 +228,9 @@ describe('NodeDetailPanel', () => {
 
   test('does not duplicate identity or summary content inside config tab', () => {
     renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+      <SelectedEditorStoreProvider initialState={createInitialState()} nodeId="node-llm">
         <NodeConfigTab />
-      </AgentFlowEditorStoreProvider>
+      </SelectedEditorStoreProvider>
     );
 
     expect(screen.queryByText('节点说明')).not.toBeInTheDocument();
@@ -223,10 +240,9 @@ describe('NodeDetailPanel', () => {
 
   test('hides retry and exception policy controls for the start node', () => {
     renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
-        <SelectionSeed nodeId="node-start" />
+      <SelectedEditorStoreProvider initialState={createInitialState()} nodeId="node-start">
         <NodeConfigTab />
-      </AgentFlowEditorStoreProvider>
+      </SelectedEditorStoreProvider>
     );
 
     expect(screen.queryByRole('switch', { name: '失败重试' })).not.toBeInTheDocument();
@@ -236,9 +252,9 @@ describe('NodeDetailPanel', () => {
 
   test('renders exception handling as a three-state strategy selector', async () => {
     renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+      <SelectedEditorStoreProvider initialState={createInitialState()} nodeId="node-llm">
         <NodeConfigTab />
-      </AgentFlowEditorStoreProvider>
+      </SelectedEditorStoreProvider>
     );
 
     expect(screen.getAllByTestId('node-policy-row')).toHaveLength(2);
@@ -259,14 +275,14 @@ describe('NodeDetailPanel', () => {
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
     renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+      <SelectedEditorStoreProvider initialState={createInitialState()} nodeId="node-llm">
         <DocumentObserver
           onChange={(document) => {
             latestDocument = document;
           }}
         />
         <NodeConfigTab />
-      </AgentFlowEditorStoreProvider>
+      </SelectedEditorStoreProvider>
     );
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '异常处理' }));
@@ -313,14 +329,14 @@ describe('NodeDetailPanel', () => {
     );
 
     renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={state}>
+      <SelectedEditorStoreProvider initialState={state} nodeId="node-llm">
         <DocumentObserver
           onChange={(document) => {
             latestDocument = document;
           }}
         />
         <NodeConfigTab />
-      </AgentFlowEditorStoreProvider>
+      </SelectedEditorStoreProvider>
     );
 
     await openModelSettings();
@@ -394,14 +410,14 @@ describe('NodeDetailPanel', () => {
     );
 
     renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={state}>
+      <SelectedEditorStoreProvider initialState={state} nodeId="node-llm">
         <DocumentObserver
           onChange={(document) => {
             latestDocument = document;
           }}
         />
         <NodeConfigTab />
-      </AgentFlowEditorStoreProvider>
+      </SelectedEditorStoreProvider>
     );
 
     await openModelSettings();
@@ -444,9 +460,9 @@ describe('NodeDetailPanel', () => {
     );
 
     renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={state}>
+      <SelectedEditorStoreProvider initialState={state} nodeId="node-llm">
         <NodeConfigTab />
-      </AgentFlowEditorStoreProvider>
+      </SelectedEditorStoreProvider>
     );
 
     await openModelSettings();
