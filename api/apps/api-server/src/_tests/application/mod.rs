@@ -2,6 +2,7 @@ mod application_delete_routes;
 mod application_orchestration_routes;
 mod application_routes;
 mod application_runtime_routes;
+mod application_runtime_stream_routes;
 mod model_definition_routes;
 mod node_contribution_routes;
 mod runtime_model_routes;

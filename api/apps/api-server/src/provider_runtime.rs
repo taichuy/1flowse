@@ -112,6 +112,27 @@ impl ProviderRuntimePort for ApiProviderRuntime {
             })
             .map_err(map_provider_framework_error)
     }
+
+    async fn invoke_stream_with_live_events(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: ProviderInvocationInput,
+        live_events: Option<
+            tokio::sync::mpsc::UnboundedSender<
+                plugin_framework::provider_contract::ProviderStreamEvent,
+            >,
+        >,
+    ) -> anyhow::Result<ProviderRuntimeInvocationOutput> {
+        self.ensure_provider_loaded(installation).await?;
+        let host = self.services.provider_host.read().await;
+        host.invoke_stream_with_live_events(&installation.plugin_id, input, live_events)
+            .await
+            .map(|output| ProviderRuntimeInvocationOutput {
+                events: output.events,
+                result: output.result,
+            })
+            .map_err(map_provider_framework_error)
+    }
 }
 
 #[async_trait]

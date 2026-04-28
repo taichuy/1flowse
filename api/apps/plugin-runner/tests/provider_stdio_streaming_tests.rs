@@ -60,6 +60,7 @@ printf '%s\n' '{"type":"result","result":{"final_content":"hello","usage":{"inpu
         &script,
         &invoke_request(),
         &limits(),
+        None,
     )
     .await
     .unwrap();
@@ -82,6 +83,7 @@ printf '%s\n' '{not-json'
         &script,
         &invoke_request(),
         &limits(),
+        None,
     )
     .await
     .unwrap_err();

@@ -27,8 +27,8 @@ use crate::{
 
 use super::{
     compile_context::ensure_compiled_plan_runnable, inputs::build_compiled_plan_input,
-    CancelFlowRunCommand, ContinueFlowDebugRunCommand, OrchestrationRuntimeService,
-    StartFlowDebugRunCommand,
+    CancelFlowRunCommand, ContinueFlowDebugRunCommand, LiveProviderStreamEventSender,
+    OrchestrationRuntimeService, StartFlowDebugRunCommand,
 };
 
 pub(super) async fn start_flow_debug_run<R, H>(
@@ -307,7 +307,52 @@ where
         + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
         + Clone,
 {
-    let result = continue_flow_debug_run_inner(service, &command).await;
+    continue_flow_debug_run_with_optional_live_provider_events(service, command, None).await
+}
+
+pub(super) async fn continue_flow_debug_run_with_live_provider_events<R, H>(
+    service: &OrchestrationRuntimeService<R, H>,
+    command: ContinueFlowDebugRunCommand,
+    live_provider_events: LiveProviderStreamEventSender,
+) -> Result<domain::ApplicationRunDetail>
+where
+    R: crate::ports::ApplicationRepository
+        + crate::ports::FlowRepository
+        + OrchestrationRuntimeRepository
+        + crate::ports::ModelProviderRepository
+        + crate::ports::NodeContributionRepository
+        + crate::ports::PluginRepository
+        + Clone,
+    H: crate::ports::ProviderRuntimePort
+        + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
+        + Clone,
+{
+    continue_flow_debug_run_with_optional_live_provider_events(
+        service,
+        command,
+        Some(live_provider_events),
+    )
+    .await
+}
+
+async fn continue_flow_debug_run_with_optional_live_provider_events<R, H>(
+    service: &OrchestrationRuntimeService<R, H>,
+    command: ContinueFlowDebugRunCommand,
+    live_provider_events: Option<LiveProviderStreamEventSender>,
+) -> Result<domain::ApplicationRunDetail>
+where
+    R: crate::ports::ApplicationRepository
+        + crate::ports::FlowRepository
+        + OrchestrationRuntimeRepository
+        + crate::ports::ModelProviderRepository
+        + crate::ports::NodeContributionRepository
+        + crate::ports::PluginRepository
+        + Clone,
+    H: crate::ports::ProviderRuntimePort
+        + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
+        + Clone,
+{
+    let result = continue_flow_debug_run_inner(service, &command, live_provider_events).await;
 
     match result {
         Ok(detail) => Ok(detail),
@@ -380,6 +425,7 @@ where
 async fn continue_flow_debug_run_inner<R, H>(
     service: &OrchestrationRuntimeService<R, H>,
     command: &ContinueFlowDebugRunCommand,
+    live_provider_events: Option<LiveProviderStreamEventSender>,
 ) -> Result<domain::ApplicationRunDetail>
 where
     R: crate::ports::ApplicationRepository
@@ -413,7 +459,14 @@ where
         .ok_or_else(|| anyhow!("compiled plan not found"))?;
     let compiled_plan: orchestration_runtime::compiled_plan::CompiledPlan =
         serde_json::from_value(compiled_record.plan)?;
-    let invoker = service.runtime_invoker(application.workspace_id);
+    let invoker = if let Some(live_provider_events) = live_provider_events {
+        service.runtime_invoker_with_live_provider_events(
+            application.workspace_id,
+            live_provider_events,
+        )
+    } else {
+        service.runtime_invoker(application.workspace_id)
+    };
     let mut variable_pool = flow_run
         .input_payload
         .as_object()
@@ -503,11 +556,12 @@ where
                     .await?;
             }
             "llm" => {
+                let llm_invoker = invoker.for_live_llm_node(node.node_id.clone(), node_run.id);
                 let execution = orchestration_runtime::execution_engine::execute_llm_node(
                     node,
                     &resolved_inputs,
                     &rendered_templates,
-                    &invoker,
+                    &llm_invoker,
                 )
                 .await?;
                 last_output_payload = execution.output_payload.clone();

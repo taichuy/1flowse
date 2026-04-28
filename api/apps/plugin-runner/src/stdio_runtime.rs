@@ -68,6 +68,7 @@ pub async fn call_executable_streaming(
     executable_path: &Path,
     request: &ProviderStdioRequest,
     limits: &PluginRuntimeLimits,
+    live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
 ) -> FrameworkResult<StreamingProviderOutput> {
     let mut command = Command::new(executable_path);
     command
@@ -142,6 +143,9 @@ pub async fn call_executable_streaming(
                 }
                 other => {
                     if let Some(event) = other.into_stream_event() {
+                        if let Some(live_events) = &live_events {
+                            let _ = live_events.send(event.clone());
+                        }
                         events.push(event);
                     }
                 }

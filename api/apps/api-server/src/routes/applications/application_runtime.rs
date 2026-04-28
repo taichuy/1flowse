@@ -12,8 +12,8 @@ use control_plane::{
     errors::ControlPlaneError,
     orchestration_runtime::{
         CancelFlowRunCommand, CompleteCallbackTaskCommand, ContinueFlowDebugRunCommand,
-        OrchestrationRuntimeService, ResumeFlowRunCommand, StartFlowDebugRunCommand,
-        StartNodeDebugPreviewCommand,
+        LiveProviderStreamEvent, OrchestrationRuntimeService, ResumeFlowRunCommand,
+        StartFlowDebugRunCommand, StartNodeDebugPreviewCommand,
     },
     ports::OrchestrationRuntimeRepository,
 };
@@ -423,43 +423,33 @@ fn stream_node_finished_payload(node_run: &domain::NodeRunRecord) -> serde_json:
     })
 }
 
-fn stream_run_event_payload(
-    event: &domain::RunEventRecord,
-    node_ids_by_run_id: &BTreeMap<Uuid, String>,
+fn stream_live_provider_event_payload(
+    event: &LiveProviderStreamEvent,
 ) -> Option<(&'static str, serde_json::Value)> {
-    let node_id = event
-        .node_run_id
-        .and_then(|node_run_id| node_ids_by_run_id.get(&node_run_id))
-        .cloned()
-        .or_else(|| {
-            event
-                .payload
-                .get("node_id")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string)
-        })
-        .unwrap_or_default();
-    let node_run_id = event.node_run_id.map(|value| value.to_string());
-
-    match event.event_type.as_str() {
-        "text_delta" => Some((
+    match &event.event {
+        plugin_framework::provider_contract::ProviderStreamEvent::TextDelta { delta } => Some((
             "text_delta",
             serde_json::json!({
                 "type": "text_delta",
-                "node_run_id": node_run_id,
-                "node_id": node_id,
-                "text": event.payload.get("delta").or_else(|| event.payload.get("text")).and_then(serde_json::Value::as_str).unwrap_or_default(),
+                "node_run_id": event.node_run_id,
+                "node_id": event.node_id,
+                "text": delta,
             }),
         )),
-        "usage_snapshot" => Some((
-            "usage_snapshot",
-            serde_json::json!({
-                "type": "usage_snapshot",
-                "node_run_id": node_run_id,
-                "node_id": node_id,
-                "usage": event.payload,
-            }),
-        )),
+        plugin_framework::provider_contract::ProviderStreamEvent::UsageSnapshot { usage } => {
+            Some((
+                "usage_snapshot",
+                serde_json::json!({
+                    "type": "usage_snapshot",
+                    "node_run_id": event.node_run_id,
+                    "node_id": event.node_id,
+                    "usage": {
+                        "type": "usage_snapshot",
+                        "usage": usage,
+                    },
+                }),
+            ))
+        }
         _ => None,
     }
 }
@@ -529,6 +519,7 @@ async fn send_debug_run_stream_events(
         ))
         .await;
 
+    let (live_provider_sender, mut live_provider_receiver) = mpsc::unbounded_channel();
     let background_state = state.clone();
     tokio::spawn(async move {
         let background_service = OrchestrationRuntimeService::new(
@@ -537,11 +528,14 @@ async fn send_debug_run_stream_events(
             background_state.provider_secret_master_key.clone(),
         );
         if let Err(error) = background_service
-            .continue_flow_debug_run(ContinueFlowDebugRunCommand {
-                application_id,
-                flow_run_id,
-                workspace_id,
-            })
+            .continue_flow_debug_run_with_live_provider_events(
+                ContinueFlowDebugRunCommand {
+                    application_id,
+                    flow_run_id,
+                    workspace_id,
+                },
+                live_provider_sender,
+            )
             .await
         {
             error!(
@@ -554,77 +548,78 @@ async fn send_debug_run_stream_events(
     });
 
     let mut node_statuses = BTreeMap::<Uuid, String>::new();
-    let mut node_ids_by_run_id = BTreeMap::<Uuid, String>::new();
-    let mut last_event_sequence = 0_i64;
     let mut interval = tokio::time::interval(Duration::from_millis(100));
+    let mut live_provider_stream_open = true;
 
     loop {
-        interval.tick().await;
-        let Ok(Some(detail)) =
-            <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
-                &state.store,
-                application_id,
-                flow_run_id,
-            )
-            .await
-        else {
-            break;
-        };
-
-        for node_run in &detail.node_runs {
-            node_ids_by_run_id.insert(node_run.id, node_run.node_id.clone());
-            let previous_status =
-                node_statuses.insert(node_run.id, node_run.status.as_str().to_string());
-            if previous_status.is_none() {
-                if sender
-                    .send(debug_stream_event(
-                        "node_started",
-                        stream_node_started_payload(node_run),
-                    ))
-                    .await
-                    .is_err()
-                {
-                    return;
+        tokio::select! {
+            maybe_live_event = live_provider_receiver.recv(), if live_provider_stream_open => {
+                match maybe_live_event {
+                    Some(live_event) => {
+                        if let Some((event_name, payload)) = stream_live_provider_event_payload(&live_event) {
+                            if sender
+                                .send(debug_stream_event(event_name, payload))
+                                .await
+                                .is_err()
+                            {
+                                return;
+                            }
+                        }
+                    }
+                    None => {
+                        live_provider_stream_open = false;
+                    }
                 }
             }
-
-            if node_run.status != domain::NodeRunStatus::Running
-                && previous_status.as_deref() != Some(node_run.status.as_str())
-            {
-                if sender
-                    .send(debug_stream_event(
-                        "node_finished",
-                        stream_node_finished_payload(node_run),
-                    ))
+            _ = interval.tick() => {
+                let Ok(Some(detail)) =
+                    <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+                        &state.store,
+                        application_id,
+                        flow_run_id,
+                    )
                     .await
-                    .is_err()
-                {
-                    return;
+                else {
+                    break;
+                };
+
+                for node_run in &detail.node_runs {
+                    let previous_status =
+                        node_statuses.insert(node_run.id, node_run.status.as_str().to_string());
+                    if previous_status.is_none() {
+                        if sender
+                            .send(debug_stream_event(
+                                "node_started",
+                                stream_node_started_payload(node_run),
+                            ))
+                            .await
+                            .is_err()
+                        {
+                            return;
+                        }
+                    }
+
+                    if node_run.status != domain::NodeRunStatus::Running
+                        && previous_status.as_deref() != Some(node_run.status.as_str())
+                    {
+                        if sender
+                            .send(debug_stream_event(
+                                "node_finished",
+                                stream_node_finished_payload(node_run),
+                            ))
+                            .await
+                            .is_err()
+                        {
+                            return;
+                        }
+                    }
+                }
+
+                if let Some((event_name, payload)) = stream_flow_terminal_payload(&detail) {
+                    let _ = sender.send(debug_stream_event(event_name, payload)).await;
+                    break;
                 }
             }
-        }
-
-        for event in &detail.events {
-            if event.sequence <= last_event_sequence {
-                continue;
-            }
-            last_event_sequence = event.sequence;
-            if let Some((event_name, payload)) =
-                stream_run_event_payload(event, &node_ids_by_run_id)
-            {
-                if sender
-                    .send(debug_stream_event(event_name, payload))
-                    .await
-                    .is_err()
-                {
-                    return;
-                }
-            }
-        }
-
-        if let Some((event_name, payload)) = stream_flow_terminal_payload(&detail) {
-            let _ = sender.send(debug_stream_event(event_name, payload)).await;
-            break;
         }
     }
 }

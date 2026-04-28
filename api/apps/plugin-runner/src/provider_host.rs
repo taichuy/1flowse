@@ -127,6 +127,16 @@ impl ProviderHost {
         plugin_id: &str,
         input: ProviderInvocationInput,
     ) -> FrameworkResult<ProviderInvokeStreamOutput> {
+        self.invoke_stream_with_live_events(plugin_id, input, None)
+            .await
+    }
+
+    pub async fn invoke_stream_with_live_events(
+        &self,
+        plugin_id: &str,
+        input: ProviderInvocationInput,
+        live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
+    ) -> FrameworkResult<ProviderInvokeStreamOutput> {
         let loaded = self.loaded_package(plugin_id)?;
         let request = ProviderStdioRequest {
             method: ProviderStdioMethod::Invoke,
@@ -136,6 +146,7 @@ impl ProviderHost {
             &loaded.runtime_executable,
             &request,
             &loaded.package.manifest.runtime.limits,
+            live_events,
         )
         .await?;
         Ok(ProviderInvokeStreamOutput {

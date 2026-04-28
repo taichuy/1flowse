@@ -491,6 +491,15 @@ pub trait ProviderRuntimePort: Send + Sync {
         installation: &domain::PluginInstallationRecord,
         input: ProviderInvocationInput,
     ) -> anyhow::Result<ProviderRuntimeInvocationOutput>;
+    async fn invoke_stream_with_live_events(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: ProviderInvocationInput,
+        live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
+    ) -> anyhow::Result<ProviderRuntimeInvocationOutput> {
+        let _ = live_events;
+        self.invoke_stream(installation, input).await
+    }
 }
 
 #[async_trait]

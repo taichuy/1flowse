@@ -1,11 +1,13 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use plugin_framework::{
-    provider_contract::ProviderInvocationInput, provider_package::ProviderPackage,
+    provider_contract::{ProviderInvocationInput, ProviderStreamEvent},
+    provider_package::ProviderPackage,
     ProviderConfigField,
 };
 use serde_json::{json, Value};
 use time::OffsetDateTime;
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::{
@@ -61,6 +63,15 @@ pub struct ContinueFlowDebugRunCommand {
     pub workspace_id: Uuid,
 }
 
+#[derive(Debug, Clone)]
+pub struct LiveProviderStreamEvent {
+    pub node_id: String,
+    pub node_run_id: Uuid,
+    pub event: ProviderStreamEvent,
+}
+
+pub type LiveProviderStreamEventSender = mpsc::UnboundedSender<LiveProviderStreamEvent>;
+
 pub struct CancelFlowRunCommand {
     pub actor_user_id: Uuid,
     pub application_id: Uuid,
@@ -88,6 +99,9 @@ struct RuntimeProviderInvoker<R, H> {
     runtime: H,
     workspace_id: Uuid,
     provider_secret_master_key: String,
+    live_provider_events: Option<LiveProviderStreamEventSender>,
+    active_node_id: Option<String>,
+    active_node_run_id: Option<Uuid>,
 }
 
 pub struct OrchestrationRuntimeService<R, H> {
@@ -121,6 +135,25 @@ where
             runtime: self.runtime.clone(),
             workspace_id,
             provider_secret_master_key: self.provider_secret_master_key.clone(),
+            live_provider_events: None,
+            active_node_id: None,
+            active_node_run_id: None,
+        }
+    }
+
+    fn runtime_invoker_with_live_provider_events(
+        &self,
+        workspace_id: Uuid,
+        live_provider_events: LiveProviderStreamEventSender,
+    ) -> RuntimeProviderInvoker<R, H> {
+        RuntimeProviderInvoker {
+            repository: self.repository.clone(),
+            runtime: self.runtime.clone(),
+            workspace_id,
+            provider_secret_master_key: self.provider_secret_master_key.clone(),
+            live_provider_events: Some(live_provider_events),
+            active_node_id: None,
+            active_node_run_id: None,
         }
     }
 
@@ -258,6 +291,19 @@ where
         command: ContinueFlowDebugRunCommand,
     ) -> Result<domain::ApplicationRunDetail> {
         live_debug_run::continue_flow_debug_run(self, command).await
+    }
+
+    pub async fn continue_flow_debug_run_with_live_provider_events(
+        &self,
+        command: ContinueFlowDebugRunCommand,
+        live_provider_events: LiveProviderStreamEventSender,
+    ) -> Result<domain::ApplicationRunDetail> {
+        live_debug_run::continue_flow_debug_run_with_live_provider_events(
+            self,
+            command,
+            live_provider_events,
+        )
+        .await
     }
 
     pub async fn cancel_flow_run(
@@ -477,8 +523,28 @@ where
         )
         .await?;
 
+        let live_provider_events = if let (Some(sender), Some(node_id), Some(node_run_id)) = (
+            self.live_provider_events.clone(),
+            self.active_node_id.clone(),
+            self.active_node_run_id,
+        ) {
+            let (provider_sender, mut provider_receiver) = mpsc::unbounded_channel();
+            tokio::spawn(async move {
+                while let Some(event) = provider_receiver.recv().await {
+                    let _ = sender.send(LiveProviderStreamEvent {
+                        node_id: node_id.clone(),
+                        node_run_id,
+                        event,
+                    });
+                }
+            });
+            Some(provider_sender)
+        } else {
+            None
+        };
+
         self.runtime
-            .invoke_stream(&installation, input)
+            .invoke_stream_with_live_events(&installation, input, live_provider_events)
             .await
             .map(
                 |output| orchestration_runtime::execution_engine::ProviderInvocationOutput {
@@ -494,6 +560,18 @@ where
     R: ModelProviderRepository + PluginRepository + Clone + Send + Sync,
     H: ProviderRuntimePort + Clone + Send + Sync,
 {
+    fn for_live_llm_node(&self, node_id: String, node_run_id: Uuid) -> Self {
+        Self {
+            repository: self.repository.clone(),
+            runtime: self.runtime.clone(),
+            workspace_id: self.workspace_id,
+            provider_secret_master_key: self.provider_secret_master_key.clone(),
+            live_provider_events: self.live_provider_events.clone(),
+            active_node_id: Some(node_id),
+            active_node_run_id: Some(node_run_id),
+        }
+    }
+
     async fn resolve_llm_instance(
         &self,
         runtime: &orchestration_runtime::compiled_plan::CompiledLlmRuntime,
