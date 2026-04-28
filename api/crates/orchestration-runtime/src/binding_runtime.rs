@@ -31,7 +31,7 @@ pub fn render_templated_bindings(
     node.bindings
         .iter()
         .filter_map(|(binding_key, binding)| {
-            (binding.kind == "templated_text")
+            matches!(binding.kind.as_str(), "templated_text" | "prompt_messages")
                 .then(|| {
                     resolved_inputs
                         .get(binding_key)
@@ -94,6 +94,38 @@ fn resolve_binding(binding: &CompiledBinding, variable_pool: &Map<String, Value>
             .as_str()
             .map(|value| Value::String(render_template(value, variable_pool)))
             .ok_or_else(|| anyhow!("templated_text raw_value must be a string")),
+        "prompt_messages" => {
+            let entries = binding
+                .raw_value
+                .as_array()
+                .ok_or_else(|| anyhow!("prompt_messages raw_value must be an array"))?;
+            let mut messages = Vec::with_capacity(entries.len());
+
+            for entry in entries {
+                let role = entry.get("role").and_then(Value::as_str).unwrap_or("user");
+                let content = entry
+                    .get("content")
+                    .and_then(|content| content.get("value"))
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        anyhow!("prompt_messages entry content.value must be a string")
+                    })?;
+                let mut message = Map::new();
+
+                if let Some(id) = entry.get("id").and_then(Value::as_str) {
+                    message.insert("id".to_string(), Value::String(id.to_string()));
+                }
+
+                message.insert("role".to_string(), Value::String(role.to_string()));
+                message.insert(
+                    "content".to_string(),
+                    Value::String(render_template(content, variable_pool)),
+                );
+                messages.push(Value::Object(message));
+            }
+
+            Ok(Value::Array(messages))
+        }
         "condition_group" | "state_write" => Ok(binding.raw_value.clone()),
         other => bail!("unsupported binding kind: {other}"),
     }

@@ -9,7 +9,8 @@ use plugin_framework::{
     error::PluginFrameworkError,
     provider_contract::{
         ProviderFinishReason, ProviderInvocationInput, ProviderInvocationResult,
-        ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderStreamEvent, ProviderUsage,
+        ProviderMessageRole, ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderStreamEvent,
+        ProviderUsage,
     },
 };
 use serde_json::{json, Value};
@@ -369,6 +370,84 @@ async fn llm_node_outputs_include_hidden_route_projection_and_attempt_ids() {
     assert!(output["__context_projection_id"].as_str().is_some());
     assert!(output["__attempt_ids"].as_array().is_some());
     assert!(output["__winner_attempt_id"].as_str().is_some());
+}
+
+#[tokio::test]
+async fn llm_runtime_sends_rendered_prompt_messages_to_provider() {
+    let mut plan = base_plan();
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.bindings = BTreeMap::from([(
+        "prompt_messages".to_string(),
+        CompiledBinding {
+            kind: "prompt_messages".to_string(),
+            selector_paths: vec![vec!["node-start".to_string(), "query".to_string()]],
+            raw_value: json!([
+                {
+                    "id": "system-1",
+                    "role": "system",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "You are concise."
+                    }
+                },
+                {
+                    "id": "user-1",
+                    "role": "user",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "Question: {{ node-start.query }}"
+                    }
+                },
+                {
+                    "id": "assistant-1",
+                    "role": "assistant",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "Prior answer."
+                    }
+                }
+            ]),
+        },
+    )]);
+    let captured_input = Arc::new(Mutex::new(None));
+    let invoker = StubProviderInvoker {
+        fail: false,
+        captured_input: captured_input.clone(),
+        final_content: "ok".to_string(),
+    };
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let input = captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+    assert_eq!(input.system, Some("You are concise.".to_string()));
+    assert_eq!(input.messages.len(), 2);
+    assert_eq!(input.messages[0].role, ProviderMessageRole::User);
+    assert_eq!(input.messages[0].content, "Question: hello");
+    assert_eq!(input.messages[1].role, ProviderMessageRole::Assistant);
+    assert_eq!(input.messages[1].content, "Prior answer.");
+
+    let trace = outcome
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("llm trace should exist");
+    assert_eq!(
+        trace.input_payload["prompt_messages"][1]["content"],
+        json!("Question: hello")
+    );
 }
 
 #[tokio::test]
@@ -737,10 +816,10 @@ async fn llm_runtime_sends_enabled_model_parameters_and_keeps_text_output_for_js
         outcome.node_traces[1].output_payload["text"],
         json!("{\"ok\":true}")
     );
-    assert!(outcome.node_traces[1]
-        .output_payload
-        .get("structured_output")
-        .is_none());
+    assert_eq!(
+        outcome.node_traces[1].output_payload["structured_output"],
+        Value::Null
+    );
 }
 
 #[tokio::test]

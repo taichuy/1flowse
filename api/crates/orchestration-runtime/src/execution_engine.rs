@@ -626,15 +626,21 @@ fn build_provider_invocation_input(
     resolved_inputs: &Map<String, Value>,
     rendered_templates: &Map<String, Value>,
 ) -> ProviderInvocationInput {
-    let system = binding_text(rendered_templates, resolved_inputs, "system_prompt");
-    let messages = binding_text(rendered_templates, resolved_inputs, "user_prompt")
-        .map(|content| {
-            vec![ProviderMessage {
-                role: ProviderMessageRole::User,
-                content,
-            }]
-        })
-        .unwrap_or_default();
+    let (system, messages) = binding_prompt_messages(rendered_templates, resolved_inputs)
+        .map(provider_messages_from_prompt_messages)
+        .unwrap_or_else(|| {
+            let system = binding_text(rendered_templates, resolved_inputs, "system_prompt");
+            let messages = binding_text(rendered_templates, resolved_inputs, "user_prompt")
+                .map(|content| {
+                    vec![ProviderMessage {
+                        role: ProviderMessageRole::User,
+                        content,
+                    }]
+                })
+                .unwrap_or_default();
+
+            (system, messages)
+        });
 
     let trace_context = BTreeMap::from([
         ("node_id".to_string(), node.node_id.clone()),
@@ -673,6 +679,59 @@ fn build_response_format(config: &Value) -> Option<Value> {
     }
 
     Some(response_format.clone())
+}
+
+fn binding_prompt_messages<'a>(
+    rendered_templates: &'a Map<String, Value>,
+    resolved_inputs: &'a Map<String, Value>,
+) -> Option<&'a [Value]> {
+    rendered_templates
+        .get("prompt_messages")
+        .or_else(|| resolved_inputs.get("prompt_messages"))
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+}
+
+fn provider_messages_from_prompt_messages(
+    prompt_messages: &[Value],
+) -> (Option<String>, Vec<ProviderMessage>) {
+    let mut system_parts = Vec::new();
+    let mut messages = Vec::new();
+
+    for message in prompt_messages {
+        let content = message
+            .get("content")
+            .and_then(value_to_text)
+            .unwrap_or_default();
+
+        if content.trim().is_empty() {
+            continue;
+        }
+
+        let role = message
+            .get("role")
+            .and_then(Value::as_str)
+            .map(provider_message_role)
+            .unwrap_or(ProviderMessageRole::User);
+
+        if role == ProviderMessageRole::System {
+            system_parts.push(content);
+        } else {
+            messages.push(ProviderMessage { role, content });
+        }
+    }
+
+    let system = (!system_parts.is_empty()).then(|| system_parts.join("\n\n"));
+
+    (system, messages)
+}
+
+fn provider_message_role(role: &str) -> ProviderMessageRole {
+    match role {
+        "system" => ProviderMessageRole::System,
+        "assistant" => ProviderMessageRole::Assistant,
+        _ => ProviderMessageRole::User,
+    }
 }
 
 fn binding_text(

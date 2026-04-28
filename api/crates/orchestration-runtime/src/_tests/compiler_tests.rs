@@ -209,6 +209,42 @@ fn compile_flow_document_emits_topology_selector_dependencies_and_provider_runti
 }
 
 #[test]
+fn compile_prompt_messages_extracts_selector_dependencies_from_message_content() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["bindings"] = json!({
+        "prompt_messages": {
+            "kind": "prompt_messages",
+            "value": [
+                {
+                    "id": "system-1",
+                    "role": "system",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "You are helpful."
+                    }
+                },
+                {
+                    "id": "user-1",
+                    "role": "user",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "Question: {{ node-start.query }}"
+                    }
+                }
+            ]
+        }
+    });
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert_eq!(
+        plan.nodes["node-llm"].bindings["prompt_messages"].selector_paths,
+        vec![vec!["node-start".to_string(), "query".to_string()]]
+    );
+}
+
+#[test]
 fn compile_rejects_edge_that_targets_unknown_node() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);

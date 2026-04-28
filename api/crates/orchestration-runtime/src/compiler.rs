@@ -788,6 +788,25 @@ fn extract_selector_paths(kind: &str, raw_value: &Value) -> Result<Vec<Vec<Strin
             .iter()
             .map(|entry| selector_path(entry.get("selector").unwrap_or(&Value::Null)))
             .collect(),
+        "prompt_messages" => {
+            let entries = raw_value
+                .as_array()
+                .ok_or_else(|| anyhow!("prompt_messages value must be an array"))?;
+            let mut selectors = Vec::new();
+
+            for entry in entries {
+                let content = entry
+                    .get("content")
+                    .and_then(|content| content.get("value"))
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        anyhow!("prompt_messages entry content.value must be a string")
+                    })?;
+                selectors.extend(parse_template_selector_tokens(content));
+            }
+
+            Ok(selectors)
+        }
         "condition_group" => {
             let conditions = raw_value
                 .get("conditions")
