@@ -56,15 +56,37 @@ function updateAt(
   );
 }
 
+function normalizeMessageGroups(messages: LlmPromptMessage[]) {
+  const systemMessage =
+    messages[0]?.role === 'system'
+      ? messages[0]
+      : createPromptMessage('system', 0);
+  const dynamicMessages =
+    messages[0]?.role === 'system'
+      ? messages.slice(1)
+      : messages.filter((message) => message.role !== 'system');
+
+  return {
+    systemMessage,
+    dynamicMessages,
+    orderedMessages: [systemMessage, ...dynamicMessages]
+  };
+}
+
 export function LlmPromptMessagesField({
   value,
   options,
   onChange
 }: LlmPromptMessagesFieldProps) {
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const { systemMessage, dynamicMessages, orderedMessages } =
+    normalizeMessageGroups(value);
 
   function addMessage() {
-    onChange([...value, createPromptMessage('user', value.length)]);
+    onChange([
+      ...orderedMessages,
+      createPromptMessage('user', orderedMessages.length)
+    ]);
   }
 
   function updateRole(index: number, role: LlmPromptMessageRole) {
@@ -72,12 +94,12 @@ export function LlmPromptMessagesField({
       return;
     }
 
-    onChange(updateAt(value, index, { role }));
+    onChange(updateAt(orderedMessages, index, { role }));
   }
 
   function updateContent(index: number, nextValue: string) {
     onChange(
-      value.map((message, messageIndex) =>
+      orderedMessages.map((message, messageIndex) =>
         messageIndex === index
           ? {
               ...message,
@@ -93,16 +115,100 @@ export function LlmPromptMessagesField({
       return;
     }
 
-    onChange(value.filter((_, messageIndex) => messageIndex !== index));
+    onChange(
+      orderedMessages.filter((_, messageIndex) => messageIndex !== index)
+    );
   }
 
   function handleDrop(targetIndex: number) {
     if (draggingIndex === null || draggingIndex === 0 || targetIndex === 0) {
+      setDraggingIndex(null);
       return;
     }
 
-    onChange(moveItem(value, draggingIndex, targetIndex));
+    onChange(moveItem(orderedMessages, draggingIndex, targetIndex));
     setDraggingIndex(null);
+  }
+
+  function renderPromptMessage(message: LlmPromptMessage, index: number) {
+    const isSystemMessage = index === 0 && message.role === 'system';
+    const isDraggableMessage = !isSystemMessage;
+    const rowClassName = [
+      'agent-flow-llm-prompt-messages__row',
+      isSystemMessage ? 'agent-flow-llm-prompt-messages__row--fixed' : null,
+      isDraggableMessage
+        ? 'agent-flow-llm-prompt-messages__row--draggable'
+        : null
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const roleLabel = message.role.toUpperCase();
+
+    return (
+      <div
+        key={message.id}
+        className={rowClassName}
+        data-testid={`llm-prompt-message-row-${message.id}`}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={() => handleDrop(index)}
+      >
+        <div className="agent-flow-llm-prompt-messages__body">
+          <TemplatedTextField
+            ariaLabel={`${roleLabel} 消息内容`}
+            draggable={isDraggableMessage}
+            dragLabel={`拖拽排序 ${roleLabel} 消息`}
+            label={roleLabel}
+            labelContent={
+              isSystemMessage ? (
+                <Typography.Text
+                  strong
+                  className="agent-flow-templated-text-field__label"
+                >
+                  SYSTEM
+                </Typography.Text>
+              ) : (
+                <select
+                  aria-label={`${roleLabel} 消息角色`}
+                  className="agent-flow-llm-prompt-messages__role-select"
+                  value={message.role}
+                  onChange={(event) =>
+                    updateRole(
+                      index,
+                      event.target.value as LlmPromptMessageRole
+                    )
+                  }
+                >
+                  {DYNAMIC_PROMPT_MESSAGE_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {role.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              )
+            }
+            toolbarExtraActions={
+              isSystemMessage ? null : (
+                <Button
+                  aria-label={`删除 ${roleLabel} 消息`}
+                  className="agent-flow-templated-text-field__action"
+                  danger
+                  icon={<DeleteOutlined />}
+                  size="small"
+                  type="text"
+                  onClick={() => removeMessage(index)}
+                />
+              )
+            }
+            options={options}
+            placeholder="输入文本，或输入 / 引用变量"
+            value={message.content.value}
+            onChange={(nextValue) => updateContent(index, nextValue)}
+            onDragEnd={() => setDraggingIndex(null)}
+            onDragStart={() => setDraggingIndex(index)}
+          />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -120,97 +226,24 @@ export function LlmPromptMessagesField({
         />
       </div>
 
-      {value.length > 0 ? (
-        <div className="agent-flow-llm-prompt-messages__list">
-          {value.map((message, index) => {
-            const isSystemMessage = index === 0 && message.role === 'system';
-            const isDraggableMessage = !isSystemMessage;
-            const rowClassName = [
-              'agent-flow-llm-prompt-messages__row',
-              isSystemMessage
-                ? 'agent-flow-llm-prompt-messages__row--fixed'
-                : null,
-              isDraggableMessage
-                ? 'agent-flow-llm-prompt-messages__row--draggable'
-                : null
-            ]
-              .filter(Boolean)
-              .join(' ');
-            const roleLabel = message.role.toUpperCase();
-
-            return (
-              <div
-                key={message.id}
-                className={rowClassName}
-                data-testid={`llm-prompt-message-row-${message.id}`}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={() => handleDrop(index)}
-              >
-                <div className="agent-flow-llm-prompt-messages__body">
-                  <TemplatedTextField
-                    ariaLabel={`${roleLabel} 消息内容`}
-                    draggable={isDraggableMessage}
-                    dragLabel={`拖拽排序 ${roleLabel} 消息`}
-                    label={roleLabel}
-                    labelContent={
-                      isSystemMessage ? (
-                        <Typography.Text
-                          strong
-                          className="agent-flow-templated-text-field__label"
-                        >
-                          SYSTEM
-                        </Typography.Text>
-                      ) : (
-                        <select
-                          aria-label={`${roleLabel} 消息角色`}
-                          className="agent-flow-llm-prompt-messages__role-select"
-                          value={message.role}
-                          onChange={(event) =>
-                            updateRole(
-                              index,
-                              event.target.value as LlmPromptMessageRole
-                            )
-                          }
-                        >
-                          {DYNAMIC_PROMPT_MESSAGE_ROLES.map((role) => (
-                            <option key={role} value={role}>
-                              {role.toUpperCase()}
-                            </option>
-                          ))}
-                        </select>
-                      )
-                    }
-                    toolbarExtraActions={
-                      isSystemMessage ? null : (
-                        <Button
-                          aria-label={`删除 ${roleLabel} 消息`}
-                          className="agent-flow-templated-text-field__action"
-                          danger
-                          icon={<DeleteOutlined />}
-                          size="small"
-                          type="text"
-                          onClick={() => removeMessage(index)}
-                        />
-                      )
-                    }
-                    options={options}
-                    placeholder="输入文本，或输入 / 引用变量"
-                    value={message.content.value}
-                    onChange={(nextValue) => updateContent(index, nextValue)}
-                    onDragEnd={() => setDraggingIndex(null)}
-                    onDragStart={() => setDraggingIndex(index)}
-                  />
-                </div>
-              </div>
-            );
-          })}
+      <div className="agent-flow-llm-prompt-messages__list">
+        {renderPromptMessage(systemMessage, 0)}
+        <div
+          className="agent-flow-llm-prompt-messages__dynamic-list"
+          data-testid="llm-prompt-message-dynamic-list"
+        >
+          {dynamicMessages.length > 0 ? (
+            dynamicMessages.map((message, dynamicIndex) =>
+              renderPromptMessage(message, dynamicIndex + 1)
+            )
+          ) : (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="暂无消息"
+            />
+          )}
         </div>
-      ) : (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="暂无上下文消息"
-        />
-      )}
+      </div>
     </div>
   );
 }

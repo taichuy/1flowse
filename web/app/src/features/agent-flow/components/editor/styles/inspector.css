@@ -467,6 +467,12 @@
   gap: 10px;
 }
 
+.agent-flow-llm-prompt-messages__dynamic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .agent-flow-llm-prompt-messages__row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

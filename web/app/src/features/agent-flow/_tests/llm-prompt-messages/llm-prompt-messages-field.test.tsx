@@ -180,6 +180,56 @@ describe('LLM prompt messages field', () => {
     ).toEqual(['system', 'user']);
   });
 
+  test('renders dynamic messages as an addable group after the fixed system prompt', async () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    document.graph.nodes = document.graph.nodes.map((node) =>
+      node.id === 'node-llm'
+        ? {
+            ...node,
+            bindings: {
+              prompt_messages: {
+                kind: 'prompt_messages',
+                value: [
+                  {
+                    id: 'system-only',
+                    role: 'system',
+                    content: { kind: 'templated_text', value: '' }
+                  }
+                ]
+              }
+            }
+          }
+        : node
+    );
+    let latestDocument = document;
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={createInitialState(document)}>
+        <SelectionSeed nodeId="node-llm" />
+        <DocumentObserver
+          onChange={(nextDocument) => {
+            latestDocument = nextDocument;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(await screen.findByLabelText('SYSTEM 消息内容')).toBeInTheDocument();
+    expect(screen.queryByLabelText('USER 消息内容')).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId('llm-prompt-message-dynamic-list')
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '添加消息' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加消息' }));
+
+    expect(screen.getAllByLabelText('USER 消息内容')).toHaveLength(2);
+    expect(
+      promptMessagesFrom(latestDocument).map((message) => message.role)
+    ).toEqual(['system', 'user', 'user']);
+  });
+
   test('renders legacy system and user prompt bindings as prompt messages', async () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     document.graph.nodes = document.graph.nodes.map((node) =>
