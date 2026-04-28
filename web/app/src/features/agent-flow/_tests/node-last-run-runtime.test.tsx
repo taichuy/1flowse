@@ -62,7 +62,8 @@ function sampleNodeLastRun() {
       },
       error_payload: null,
       metrics_payload: {
-        output_contract_count: 1
+        output_contract_count: 1,
+        total_tokens: 128
       },
       started_at: '2026-04-17T09:00:00Z',
       finished_at: '2026-04-17T09:00:01Z'
@@ -172,8 +173,12 @@ describe('node last run runtime', () => {
     fireEvent.click(screen.getByRole('tab', { name: '上次运行' }));
 
     expect(await screen.findByText('运行摘要')).toBeInTheDocument();
-    expect(await screen.findByText('debug_node_preview')).toBeInTheDocument();
     expect(await screen.findByLabelText('输入 JSON')).toHaveTextContent('总结退款政策');
+    expect(screen.queryByText('运行模式')).not.toBeInTheDocument();
+    expect(screen.queryByText('目标节点')).not.toBeInTheDocument();
+    expect(screen.getByText('token')).toBeInTheDocument();
+    expect(screen.getByText('耗时(ms)')).toBeInTheDocument();
+    expect(screen.getByText('128')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /查看缓存/ }));
 

@@ -1,4 +1,4 @@
-import { Card, Descriptions, Tag } from 'antd';
+import { Card, Table, Tag } from 'antd';
 
 import type { NodeLastRun } from '../../../api/runtime';
 
@@ -16,7 +16,21 @@ function formatDuration(startedAt: string, finishedAt: string | null) {
   const durationMs =
     new Date(finishedAt).getTime() - new Date(startedAt).getTime();
 
-  return `${Math.max(durationMs, 0)} ms`;
+  return `${Math.max(durationMs, 0)}`;
+}
+
+function summarizeTokenUsage(lastRun: NodeLastRun) {
+  const value = lastRun.node_run.metrics_payload.total_tokens;
+
+  if (typeof value === 'number') {
+    return `${value}`;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
+  }
+
+  return '—';
 }
 
 export function NodeRunSummaryCard({
@@ -24,45 +38,44 @@ export function NodeRunSummaryCard({
 }: {
   lastRun: NodeLastRun;
 }) {
+  const row = {
+    key: 'summary',
+    status: lastRun.flow_run.status,
+    duration: formatDuration(
+      lastRun.flow_run.started_at,
+      lastRun.flow_run.finished_at
+    ),
+    tokens: summarizeTokenUsage(lastRun)
+  };
+
+  const columns = [
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => (
+        <Tag color={STATUS_COLOR[status] ?? 'default'}>{status}</Tag>
+      )
+    },
+    {
+      title: '耗时(ms)',
+      dataIndex: 'duration',
+      key: 'duration'
+    },
+    {
+      title: 'token',
+      dataIndex: 'tokens',
+      key: 'tokens'
+    }
+  ];
+
   return (
     <Card title="运行摘要">
-      <Descriptions
-        column={1}
+      <Table
+        columns={columns}
+        dataSource={[row]}
+        pagination={false}
         size="small"
-        items={[
-          {
-            key: 'status',
-            label: '状态',
-            children: (
-              <Tag color={STATUS_COLOR[lastRun.flow_run.status] ?? 'default'}>
-                {lastRun.flow_run.status}
-              </Tag>
-            )
-          },
-          {
-            key: 'mode',
-            label: '运行模式',
-            children: lastRun.flow_run.run_mode
-          },
-          {
-            key: 'target',
-            label: '目标节点',
-            children: lastRun.flow_run.target_node_id ?? lastRun.node_run.node_id
-          },
-          {
-            key: 'duration',
-            label: '运行时间',
-            children: formatDuration(
-              lastRun.flow_run.started_at,
-              lastRun.flow_run.finished_at
-            )
-          },
-          {
-            key: 'events',
-            label: '事件数',
-            children: lastRun.events.length
-          }
-        ]}
       />
     </Card>
   );

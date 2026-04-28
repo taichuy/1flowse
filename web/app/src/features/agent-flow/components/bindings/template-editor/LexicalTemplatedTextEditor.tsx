@@ -1,5 +1,10 @@
 import type { LexicalEditor } from 'lexical';
-import type { FocusEvent, KeyboardEvent, MutableRefObject, Ref } from 'react';
+import type {
+  FocusEvent,
+  KeyboardEvent,
+  MutableRefObject,
+  Ref
+} from 'react';
 import type { FlowSelectorOption } from '../../../lib/selector-options';
 
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
@@ -233,6 +238,7 @@ export const LexicalTemplatedTextEditor = forwardRef<
   const editorRef = useRef<LexicalEditor | null>(null);
   const apiRef = useRef<LexicalTemplatedTextEditorHandle | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const blurCloseTimerRef = useRef<number | null>(null);
   const [typeaheadOpen, setTypeaheadOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -278,6 +284,12 @@ export const LexicalTemplatedTextEditor = forwardRef<
     setActiveIndex(filteredOptions.length > 0 ? 0 : -1);
   }, [filteredOptions.length, query, typeaheadOpen]);
 
+  useEffect(() => () => {
+    if (blurCloseTimerRef.current !== null) {
+      window.clearTimeout(blurCloseTimerRef.current);
+    }
+  }, []);
+
   function openTypeahead(
     nextQuery = '',
     nextPosition: TypeaheadPosition = DEFAULT_TYPEAHEAD_POSITION
@@ -313,7 +325,12 @@ export const LexicalTemplatedTextEditor = forwardRef<
       return;
     }
 
-    window.setTimeout(() => {
+    if (blurCloseTimerRef.current !== null) {
+      window.clearTimeout(blurCloseTimerRef.current);
+    }
+
+    blurCloseTimerRef.current = window.setTimeout(() => {
+      blurCloseTimerRef.current = null;
       closeTypeahead();
     }, 120);
   }
@@ -453,6 +470,7 @@ export const LexicalTemplatedTextEditor = forwardRef<
         onOpenVariablePicker={handleOpenVariablePicker}
       />
       <OnChangePlugin
+        ignoreSelectionChange
         onChange={(editorState) => {
           onChange(editorStateToText(editorState));
         }}

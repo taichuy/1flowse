@@ -1,10 +1,74 @@
-import { Card, Divider, Typography } from 'antd';
+import {
+  CheckOutlined,
+  CopyOutlined,
+  FullscreenOutlined
+} from '@ant-design/icons';
+import Editor from '@monaco-editor/react';
+import { Button, Card, Modal, Tooltip, message } from 'antd';
+import { useMemo, useState } from 'react';
 
 import type { NodeLastRun } from '../../../api/runtime';
 
 function formatJson(payload: Record<string, unknown>) {
   return JSON.stringify(payload, null, 2);
 }
+
+function getRuntimeMetadata(lastRun: NodeLastRun) {
+  const metrics = lastRun.node_run.metrics_payload ?? {};
+  const errorPayload =
+    lastRun.node_run.error_payload &&
+    typeof lastRun.node_run.error_payload === 'object'
+      ? lastRun.node_run.error_payload
+      : {};
+
+  return {
+    created_by: lastRun.flow_run.created_by,
+    compiled_plan_id: lastRun.flow_run.compiled_plan_id,
+    output_contract_count: metrics.output_contract_count,
+    provider_instance_id:
+      (metrics.provider_instance_id as unknown) ??
+      (errorPayload as Record<string, unknown>).provider_instance_id,
+    provider_code:
+      (metrics.provider_code as unknown) ??
+      (errorPayload as Record<string, unknown>).provider_code,
+    protocol:
+      (metrics.protocol as unknown) ??
+      (errorPayload as Record<string, unknown>).protocol,
+    finish_reason:
+      (metrics.finish_reason as unknown) ??
+      (errorPayload as Record<string, unknown>).finish_reason
+  };
+}
+
+function getOutputPayload(lastRun: NodeLastRun) {
+  return {
+    ...lastRun.node_run.output_payload,
+    run_metadata: getRuntimeMetadata(lastRun)
+  };
+}
+
+const EDITOR_OPTIONS = {
+  readOnly: true,
+  domReadOnly: true,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  wordWrap: 'on' as const,
+  lineNumbersMinChars: 2,
+  fontSize: 12,
+  lineHeight: 18,
+  folding: true,
+  renderLineHighlight: 'none' as const,
+  overviewRulerBorder: false,
+  automaticLayout: true,
+  padding: {
+    top: 8,
+    bottom: 8
+  },
+  scrollbar: {
+    verticalScrollbarSize: 8,
+    horizontalScrollbarSize: 8
+  }
+};
 
 function JsonBlock({
   title,
@@ -13,15 +77,73 @@ function JsonBlock({
   title: string;
   payload: Record<string, unknown>;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const value = useMemo(() => formatJson(payload), [payload]);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    message.success('已复制');
+    window.setTimeout(() => setCopied(false), 1600);
+  };
+
   return (
-    <section className="agent-flow-node-run-json">
-      <Typography.Text strong>{title}</Typography.Text>
-      <pre
-        aria-label={`${title} JSON`}
-        className="agent-flow-node-run-json__code"
-      >
-        <code>{formatJson(payload)}</code>
+    <section className="agent-flow-node-run-json-viewer">
+      <pre aria-label={`${title} JSON`} className="agent-flow-node-run-json__a11y">
+        {value}
       </pre>
+      <div className="agent-flow-node-run-json-viewer__header">
+        <span className="agent-flow-node-run-json-viewer__title">{title}</span>
+        <div className="agent-flow-node-run-json-viewer__actions">
+          <Tooltip title="复制 JSON">
+            <Button
+              aria-label={`复制${title} JSON`}
+              icon={copied ? <CheckOutlined /> : <CopyOutlined />}
+              onClick={handleCopy}
+              size="small"
+              type="text"
+            />
+          </Tooltip>
+          <Tooltip title="放大查看">
+            <Button
+              aria-label={`放大查看${title} JSON`}
+              icon={<FullscreenOutlined />}
+              onClick={() => setExpanded(true)}
+              size="small"
+              type="text"
+            />
+          </Tooltip>
+        </div>
+      </div>
+      <div className="agent-flow-node-run-json-viewer__editor">
+        <Editor
+          defaultLanguage="json"
+          height="220px"
+          options={EDITOR_OPTIONS}
+          theme="vs"
+          value={value}
+        />
+      </div>
+      <Modal
+        centered
+        className="agent-flow-node-run-json-modal"
+        footer={null}
+        onCancel={() => setExpanded(false)}
+        open={expanded}
+        title={`${title} JSON`}
+        width="min(960px, calc(100vw - 48px))"
+      >
+        <div className="agent-flow-node-run-json-modal__editor">
+          <Editor
+            defaultLanguage="json"
+            height="70vh"
+            options={EDITOR_OPTIONS}
+            theme="vs"
+            value={value}
+          />
+        </div>
+      </Modal>
     </section>
   );
 }
@@ -33,9 +155,10 @@ export function NodeRunIOCard({
 }) {
   return (
     <Card title="节点输入输出">
-      <JsonBlock payload={lastRun.node_run.input_payload} title="输入" />
-      <Divider />
-      <JsonBlock payload={lastRun.node_run.output_payload} title="输出" />
+      <div className="agent-flow-node-run-json-list">
+        <JsonBlock payload={lastRun.node_run.input_payload} title="输入" />
+        <JsonBlock payload={getOutputPayload(lastRun)} title="输出" />
+      </div>
     </Card>
   );
 }

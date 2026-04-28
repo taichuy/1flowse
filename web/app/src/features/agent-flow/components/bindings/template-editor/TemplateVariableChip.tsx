@@ -30,7 +30,9 @@ export function TemplateVariableChip({
     event.stopPropagation();
     clearSelection();
     setSelected(true);
-  }, [clearSelection, setSelected]);
+    editor.focus();
+    editor.getRootElement()?.focus();
+  }, [clearSelection, editor, setSelected]);
 
   useEffect(() => {
     function handleDelete(event: KeyboardEvent) {

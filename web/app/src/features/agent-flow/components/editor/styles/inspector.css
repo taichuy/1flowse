@@ -128,18 +128,88 @@
 
 .agent-flow-templated-text-field {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+}
+
+.agent-flow-templated-text-field__frame {
+  overflow: hidden;
+  border: 1px solid #d9e3dc;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.agent-flow-templated-text-field__frame:focus-within {
+  border-color: #4b8bff;
+  box-shadow: 0 0 0 2px rgba(75, 139, 255, 0.12);
 }
 
 .agent-flow-templated-text-field__toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 24px;
+  height: 34px;
+  padding: 5px 8px 5px 12px;
+  border-bottom: 1px solid rgba(22, 119, 255, 0.42);
+  background: linear-gradient(180deg, rgba(22, 119, 255, 0.68), rgb(22 130 255 / 52%));
+  backdrop-filter: blur(10px) saturate(140%);
+  line-height: 24px;
+}
+
+.agent-flow-templated-text-field__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+}
+
+.agent-flow-templated-text-field__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+  color: #fff;
+  line-height: 22px;
+  vertical-align: top;
+}
+
+.agent-flow-templated-text-field__action.ant-btn {
+  padding: 0;
+}
+
+.agent-flow-templated-text-field__action .anticon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  line-height: 1;
+}
+
+.agent-flow-templated-text-field__counter {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.agent-flow-templated-text-field__variable-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
 }
 
 .agent-flow-templated-text-field__label.ant-typography {
   font-size: 13px;
+  line-height: 24px;
 }
 
 .agent-flow-templated-text-field__editor-shell {
@@ -150,10 +220,10 @@
   min-height: 104px;
   max-height: 320px;
   overflow-y: auto;
-  padding: 8px 12px;
-  border: 1px solid #d9e3dc;
-  border-radius: 12px;
-  background: #fff;
+  padding: 4px 12px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   font-size: 13px;
   line-height: 20px;
   outline: none;
@@ -168,13 +238,13 @@
 }
 
 .agent-flow-templated-text-field__editor:focus {
-  border-color: #4b8bff;
-  box-shadow: 0 0 0 2px rgba(75, 139, 255, 0.12);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .agent-flow-templated-text-field__placeholder {
   position: absolute;
-  top: 8px;
+  top: 4px;
   left: 12px;
   color: #97a39b;
   font-size: 13px;
@@ -192,17 +262,23 @@
   align-items: center;
   margin: 0 2px;
   padding: 1px 8px;
-  border: 1px solid #d5e4d2;
+  border: 1px solid rgba(22, 119, 255, 0.24);
   border-radius: 999px;
-  color: #24513b;
-  background: #f3f8f1;
+  color: var(--ant-color-primary);
+  background: rgba(22, 119, 255, 0.08);
   cursor: pointer;
 }
 
 .agent-flow-templated-text-field__chip--selected {
-  border-color: #4b8bff;
-  background: #eaf2ff;
-  color: #204e9b;
+  border-color: var(--ant-color-primary);
+  background: rgba(22, 119, 255, 0.14);
+  color: var(--ant-color-primary-active);
+}
+
+.agent-flow-templated-text-field__modal
+  .agent-flow-templated-text-field__editor {
+  min-height: min(60vh, 560px);
+  max-height: min(60vh, 560px);
 }
 
 .agent-flow-templated-text-field__typeahead {

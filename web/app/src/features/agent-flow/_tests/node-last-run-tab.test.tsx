@@ -63,6 +63,7 @@ describe('NodeLastRunTab', () => {
         error_payload: null,
         metrics_payload: {
           output_contract_count: 1,
+          total_tokens: 72,
           provider_instance_id: 'provider-openai-prod',
           provider_code: 'openai_compatible',
           protocol: 'openai_responses',
@@ -82,12 +83,22 @@ describe('NodeLastRunTab', () => {
     );
 
     expect(await screen.findByText('运行摘要')).toBeInTheDocument();
-    expect(screen.getByText('debug_node_preview')).toBeInTheDocument();
+    expect(screen.queryByText('运行模式')).not.toBeInTheDocument();
+    expect(screen.queryByText('目标节点')).not.toBeInTheDocument();
+    expect(screen.getByText('token')).toBeInTheDocument();
+    expect(screen.getByText('耗时(ms)')).toBeInTheDocument();
+    expect(screen.getByText('72')).toBeInTheDocument();
     expect(screen.getByLabelText('输入 JSON')).toHaveTextContent('user_prompt');
     expect(screen.getByLabelText('输入 JSON')).toHaveTextContent('总结退款政策');
-    expect(screen.getByText('provider-openai-prod')).toBeInTheDocument();
-    expect(screen.getByText('openai_compatible')).toBeInTheDocument();
-    expect(screen.getByText('stop')).toBeInTheDocument();
+    const outputJson = screen.getByLabelText('输出 JSON');
+    expect(outputJson).not.toHaveTextContent('event_details');
+    expect(outputJson).toHaveTextContent('run_metadata');
+    expect(outputJson).toHaveTextContent('provider-openai-prod');
+    expect(outputJson).toHaveTextContent('openai_compatible');
+    expect(outputJson).toHaveTextContent('stop');
+    expect(screen.queryByText('执行人')).not.toBeInTheDocument();
+    expect(screen.queryByText('Compiled Plan')).not.toBeInTheDocument();
+    expect(screen.queryByText('输出契约数')).not.toBeInTheDocument();
   });
 
   test('renders warning state when runtime payload is malformed', async () => {
