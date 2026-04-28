@@ -20,7 +20,8 @@ describe('agent flow editor store', () => {
     });
 
     expect(store.getState().workingDocument.meta.flowId).toBe('flow-1');
-    expect(store.getState().selectedNodeId).toBe('node-llm');
+    expect(store.getState().selectedNodeId).toBe(null);
+    expect(store.getState().selectedNodeIds).toEqual([]);
     expect(store.getState().issuesOpen).toBe(false);
     expect(store.getState().autosaveStatus).toBe('idle');
   });

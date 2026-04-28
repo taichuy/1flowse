@@ -12,14 +12,8 @@ import type { ViewportSlice } from './slices/viewport-slice';
 
 const DEBUG_CONSOLE_DEFAULT_WIDTH = 420;
 
-function getDefaultSelectedNodeId(
-  state: ConsoleApplicationOrchestrationState
-) {
-  if (state.draft.document.graph.nodes.some((node) => node.id === 'node-llm')) {
-    return 'node-llm';
-  }
-
-  return state.draft.document.graph.nodes.at(0)?.id ?? null;
+function getDefaultSelectedNodeId() {
+  return null;
 }
 
 function hasDocumentChanged(

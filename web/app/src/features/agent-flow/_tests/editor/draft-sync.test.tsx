@@ -126,7 +126,7 @@ describe('useDraftSync', () => {
     expect(result.current.activeContainerPath).toEqual([]);
     expect(result.current.nodePickerOpen).toBe(false);
     expect(result.current.focusedFieldKey).toBe(null);
-    expect(result.current.selectedNodeId).toBe('node-llm');
+    expect(result.current.selectedNodeId).toBe(null);
   });
 
   test('manual save reads the latest viewport from the provided getter', async () => {

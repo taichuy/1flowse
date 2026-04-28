@@ -27,6 +27,12 @@ type MockViewport = {
 
 type MockReactFlowProps = {
   children?: ReactNode;
+  nodes?: Array<{
+    id: string;
+    data?: {
+      onSelectNode?: (nodeId: string) => void;
+    };
+  }>;
   edges?: Array<{
     id: string;
     selected?: boolean;
@@ -446,10 +452,16 @@ describe('AgentFlowCanvas interactions', () => {
     );
   });
 
-  test('keeps node detail open when clicking the pane', () => {
-    const { getState } = renderCanvas();
+  test('does not close node detail when clicking the pane after a node is selected', () => {
+    renderCanvas();
 
-    expect(getState().selectedNodeId).toBe('node-llm');
+    const llmNode = latestReactFlowProps?.nodes?.find((node) => node.id === 'node-llm');
+    expect(llmNode?.data?.onSelectNode).toBeTypeOf('function');
+
+    act(() => {
+      llmNode?.data?.onSelectNode?.('node-llm');
+    });
+
     expect(latestReactFlowProps?.onPaneClick).not.toBeDefined();
   });
 });
