@@ -125,7 +125,7 @@ describe('LLM prompt messages field', () => {
       within(systemRow).queryByRole('button', { name: /拖拽排序/ })
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '添加消息' }));
+    fireEvent.click(screen.getByRole('button', { name: '新增消息' }));
     expect(screen.getAllByLabelText('USER 消息内容')).toHaveLength(2);
 
     const rows = screen.getAllByTestId(/llm-prompt-message-row-/);
@@ -217,12 +217,14 @@ describe('LLM prompt messages field', () => {
 
     expect(await screen.findByLabelText('SYSTEM 消息内容')).toBeInTheDocument();
     expect(screen.queryByLabelText('USER 消息内容')).not.toBeInTheDocument();
+    const dynamicList = screen.getByTestId('llm-prompt-message-dynamic-list');
+    expect(dynamicList).toBeInTheDocument();
     expect(
-      screen.getByTestId('llm-prompt-message-dynamic-list')
+      within(dynamicList).getByRole('button', { name: '新增消息' })
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '添加消息' }));
-    fireEvent.click(screen.getByRole('button', { name: '添加消息' }));
+    fireEvent.click(screen.getByRole('button', { name: '新增消息' }));
+    fireEvent.click(screen.getByRole('button', { name: '新增消息' }));
 
     expect(screen.getAllByLabelText('USER 消息内容')).toHaveLength(2);
     expect(

@@ -217,13 +217,6 @@ export function LlmPromptMessagesField({
         <Typography.Text className="agent-flow-node-detail__section-subtitle">
           按顺序发送给模型的上下文消息
         </Typography.Text>
-        <Button
-          aria-label="添加消息"
-          icon={<PlusOutlined />}
-          size="small"
-          type="text"
-          onClick={addMessage}
-        />
       </div>
 
       <div className="agent-flow-llm-prompt-messages__list">
@@ -242,6 +235,16 @@ export function LlmPromptMessagesField({
               description="暂无消息"
             />
           )}
+          <Button
+            aria-label="新增消息"
+            className="agent-flow-llm-prompt-messages__add-message"
+            icon={<PlusOutlined />}
+            size="small"
+            type="dashed"
+            onClick={addMessage}
+          >
+            新增消息
+          </Button>
         </div>
       </div>
     </div>

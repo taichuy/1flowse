@@ -473,6 +473,11 @@
   gap: 10px;
 }
 
+.agent-flow-llm-prompt-messages__add-message {
+  width: 100%;
+  justify-content: center;
+}
+
 .agent-flow-llm-prompt-messages__row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
