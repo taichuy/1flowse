@@ -42,7 +42,7 @@ Why first:
 1. 后续所有代码都依赖同一组 enum、常量、manifest 字段和 AGENTS 规则。
 2. 先把 `provider` 从插件主类型降级为 `model_provider` runtime slot，避免继续扩大命名债。
 
-- [ ] **Step 2: Execute HostExtension Manifest and Registry**
+- [x] **Step 2: Execute HostExtension Manifest and Registry**
 
 Plan:
 

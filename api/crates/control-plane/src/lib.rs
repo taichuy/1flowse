@@ -12,6 +12,7 @@ pub mod external_agent_bridge;
 pub mod file_management;
 pub mod flow;
 pub mod host_extension;
+pub mod host_extension_inventory;
 pub mod i18n;
 pub mod member;
 pub mod model_definition;

@@ -34,7 +34,7 @@
 - Create: `api/crates/plugin-framework/src/_tests/host_extension_manifest_tests.rs`
 - Modify: `api/crates/plugin-framework/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write failing manifest parser tests**
+- [x] **Step 1: Write failing manifest parser tests**
 
 Create `api/crates/plugin-framework/src/_tests/host_extension_manifest_tests.rs`:
 
@@ -116,7 +116,7 @@ mod host_extension_manifest_tests;
 
 Keep existing modules and insert this line with the other host extension tests.
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run:
 
@@ -130,7 +130,7 @@ Expected:
 unresolved imports `plugin_framework::parse_host_extension_manifest`
 ```
 
-- [ ] **Step 3: Implement manifest parser**
+- [x] **Step 3: Implement manifest parser**
 
 Create `api/crates/plugin-framework/src/host_extension_manifest.rs`:
 
@@ -291,7 +291,7 @@ pub use host_extension_manifest::{
 };
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -313,7 +313,7 @@ test result: ok
 - Create: `api/crates/plugin-framework/src/_tests/host_extension_registry_tests.rs`
 - Modify: `api/crates/plugin-framework/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write failing registry tests**
+- [x] **Step 1: Write failing registry tests**
 
 Create `api/crates/plugin-framework/src/_tests/host_extension_registry_tests.rs`:
 
@@ -376,7 +376,7 @@ fn registry_allows_explicit_contract_override() {
 }
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run:
 
@@ -390,7 +390,7 @@ Expected:
 unresolved imports `plugin_framework::HostExtensionRegistry`
 ```
 
-- [ ] **Step 3: Implement registry**
+- [x] **Step 3: Implement registry**
 
 Create `api/crates/plugin-framework/src/host_extension_registry.rs`:
 
@@ -473,7 +473,7 @@ pub mod host_extension_registry;
 pub use host_extension_registry::{HostExtensionRegistry, RegisteredHostExtension};
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -495,7 +495,7 @@ test result: ok
 - Create: `api/crates/domain/src/_tests/host_extension_tests.rs`
 - Modify: `api/crates/domain/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write failing inventory tests**
+- [x] **Step 1: Write failing inventory tests**
 
 Create `api/crates/domain/src/_tests/host_extension_tests.rs`:
 
@@ -517,7 +517,7 @@ Modify `api/crates/domain/src/_tests/mod.rs`:
 mod host_extension_tests;
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -531,7 +531,7 @@ Expected:
 unresolved imports
 ```
 
-- [ ] **Step 3: Implement domain types**
+- [x] **Step 3: Implement domain types**
 
 Create `api/crates/domain/src/host_extension.rs`:
 
@@ -609,7 +609,7 @@ pub use host_extension::{
 };
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -630,7 +630,7 @@ test result: ok
 - Create: `api/crates/control-plane/src/host_extension_inventory.rs`
 - Modify: `api/crates/control-plane/src/lib.rs`
 
-- [ ] **Step 1: Add repository port**
+- [x] **Step 1: Add repository port**
 
 Append to `api/crates/control-plane/src/ports/plugin.rs`:
 
@@ -663,7 +663,7 @@ pub trait HostExtensionInventoryRepository: Send + Sync {
 }
 ```
 
-- [ ] **Step 2: Add read service**
+- [x] **Step 2: Add read service**
 
 Create `api/crates/control-plane/src/host_extension_inventory.rs`:
 
@@ -698,7 +698,7 @@ Modify `api/crates/control-plane/src/lib.rs`:
 pub mod host_extension_inventory;
 ```
 
-- [ ] **Step 3: Run compile check**
+- [x] **Step 3: Run compile check**
 
 Run:
 
@@ -717,7 +717,7 @@ test result: ok
 **Files:**
 - All files listed in this plan
 
-- [ ] **Step 1: Run focused tests**
+- [x] **Step 1: Run focused tests**
 
 Run:
 
@@ -733,7 +733,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 Run:
 
