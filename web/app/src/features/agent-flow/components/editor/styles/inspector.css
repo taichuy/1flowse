@@ -501,22 +501,45 @@
 .agent-flow-llm-prompt-messages__role-select {
   position: relative;
   display: inline-flex;
-  min-width: 96px;
+  min-width: 72px;
   height: 28px;
   align-items: center;
 }
 
 .agent-flow-llm-prompt-messages__role-trigger {
+  position: relative;
   display: inline-flex;
   align-items: center;
   height: 28px;
-  padding: 0;
+  padding: 0 18px 0 8px;
   border: 0;
-  background: transparent;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 600;
+  border-radius: 6px;
+  background: #eef1f5;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
+}
+
+.agent-flow-llm-prompt-messages__role-trigger::before,
+.agent-flow-llm-prompt-messages__role-trigger::after {
+  position: absolute;
+  right: 7px;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid #667085;
+  border-bottom: 1.5px solid #667085;
+  content: "";
+}
+
+.agent-flow-llm-prompt-messages__role-trigger::before {
+  top: 8px;
+  transform: rotate(225deg);
+}
+
+.agent-flow-llm-prompt-messages__role-trigger::after {
+  bottom: 8px;
+  transform: rotate(45deg);
 }
 
 .agent-flow-llm-prompt-messages__role-trigger:focus-visible {
@@ -525,27 +548,28 @@
 
 .agent-flow-llm-prompt-messages__role-options {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 8px);
   left: 0;
   z-index: 20;
   display: grid;
-  min-width: 112px;
-  padding: 0;
+  min-width: 176px;
+  padding: 10px 0;
   border: 0;
-  background: transparent;
-  box-shadow: none;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
 }
 
 .agent-flow-llm-prompt-messages__role-option {
   display: flex;
   align-items: center;
-  height: 36px;
-  padding: 0;
+  height: 48px;
+  padding: 0 24px;
   border: 0;
   background: transparent;
-  color: rgb(22, 119, 255);
-  font-size: 12px;
-  font-weight: 600;
+  color: #344054;
+  font-size: 16px;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
@@ -553,6 +577,6 @@
 .agent-flow-llm-prompt-messages__role-option:hover,
 .agent-flow-llm-prompt-messages__role-option:focus-visible {
   background: transparent;
-  color: rgb(22, 119, 255);
+  color: #344054;
   outline: none;
 }
