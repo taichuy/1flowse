@@ -6,6 +6,7 @@ pub mod capability_kind;
 pub mod data_source_contract;
 pub mod data_source_package;
 pub mod error;
+pub mod host_contract;
 pub mod host_extension_dropin;
 pub mod installation;
 pub mod manifest_v1;
@@ -20,6 +21,7 @@ pub use capability_kind::*;
 pub use data_source_contract::*;
 pub use data_source_package::*;
 pub use error::*;
+pub use host_contract::{HostContractCode, RuntimeSlotCode, StorageImplementationKind};
 pub use host_extension_dropin::*;
 pub use installation::*;
 pub use manifest_v1::{

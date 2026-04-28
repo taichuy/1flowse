@@ -9,6 +9,8 @@
 - [2026-04-19-rust-provider-plugin-runtime-distribution-design.md](./2026-04-19-rust-provider-plugin-runtime-distribution-design.md)
 - [2026-04-19-plugin-trust-source-install-design.md](./2026-04-19-plugin-trust-source-install-design.md)
 
+> 2026-04-28 更新：`HostExtension` 边界已上调为内核级 host 模块。后续以 [HostExtension 内核级插件边界设计](../2026-04-28-host-extension-boundary-design.md) 为准；本文中 `provider` 相关内容应理解为 `model_provider` runtime slot，而不是插件主类型。
+
 ## 1. 文档目标
 
 本文档用于把 `1flowbase` 当前关于插件体系的关键讨论收口成一套初期可执行的统一规则，重点明确：

@@ -176,6 +176,7 @@ fn validate_plugin_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> 
     )?;
     validate_permission_values(&manifest.permissions)?;
     validate_binding_targets(&manifest.binding_targets)?;
+    validate_slot_codes(&manifest.slot_codes)?;
 
     if manifest.consumption_kind == PluginConsumptionKind::HostExtension
         && manifest
@@ -324,6 +325,25 @@ fn validate_binding_targets(binding_targets: &[String]) -> FrameworkResult<()> {
             &["workspace", "model", "tenant"],
         )?;
     }
+    Ok(())
+}
+
+fn validate_slot_codes(slot_codes: &[String]) -> FrameworkResult<()> {
+    const ALLOWED: &[&str] = &[
+        "model_provider",
+        "embedding_provider",
+        "reranker_provider",
+        "data_source",
+        "file_processor",
+        "record_validator",
+        "field_computed_value",
+        "node_contribution",
+    ];
+
+    for slot in slot_codes {
+        validate_allowed(slot, "slot_codes[]", ALLOWED)?;
+    }
+
     Ok(())
 }
 

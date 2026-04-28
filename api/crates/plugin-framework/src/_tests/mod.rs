@@ -2,6 +2,7 @@ mod artifact_reconcile_tests;
 mod assignment_tests;
 mod data_source_contract_tests;
 mod data_source_package_tests;
+mod host_contract_tests;
 mod host_extension_dropin_tests;
 mod manifest_v1_tests;
 mod package_intake_tests;

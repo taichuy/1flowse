@@ -29,7 +29,7 @@
 
 ## Required Execution Order
 
-- [ ] **Step 1: Execute Terminology and Contract Baseline**
+- [x] **Step 1: Execute Terminology and Contract Baseline**
 
 Plan:
 

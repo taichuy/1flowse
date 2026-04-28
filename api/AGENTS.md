@@ -50,9 +50,12 @@
 - 成员、角色、权限、模型、会话等关键动作必须写审计日志。
 - 会影响 session 安全边界的写动作必须经过显式 service。
 - 需要 CSRF 保护的写接口必须校验 `x-csrf-token`。
-- `runtime extension` 与 `capability plugin` 禁止注册 HTTP 接口。
-- 插件能力只能挂到宿主白名单槽位。
-- system 插件只允许 host 安装。
+- `Boot Core` 只负责启动、加载、deployment policy、root/system bootstrap、extension inventory、health/reconcile，不承载完整业务能力面。
+- `HostExtension` 是 system/root 级可信 host 模块，可定义、替换、增强 host contract；只能 boot-time 激活，不给 workspace 用户安装或热卸载。
+- `RuntimeExtension` 只能实现已注册 runtime slot，例如 `model_provider`、`data_source`、`file_processor`；禁止注册 HTTP 接口、resource、auth provider 或直接写平台主存储。
+- `CapabilityPlugin` 只能贡献 workspace 用户显式选择的能力，例如 canvas node、tool、trigger、publisher；禁止注册系统接口。
+- `provider`、`data source`、`file processor` 不是插件主类型，分别是 runtime slot 或 host capability。
+- `storage-durable`、`storage-ephemeral`、`storage-object` 是 host contract / implementation kind，不改名为 cache，不新增 `Driver` 层级。
 - workspace / tenant 只允许配置、绑定或消费宿主已安装能力。
 - `runtime extension` 的绑定目标只能是 `workspace` 或 `model`。
 - runtime 模型或字段对应物理表/列缺失时，必须标记不可用；不健康元数据不得继续进入 runtime registry。

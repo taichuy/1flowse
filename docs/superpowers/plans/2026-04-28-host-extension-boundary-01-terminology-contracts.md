@@ -30,7 +30,7 @@
 - Create: `api/crates/plugin-framework/src/_tests/host_contract_tests.rs`
 - Modify: `api/crates/plugin-framework/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `api/crates/plugin-framework/src/_tests/host_contract_tests.rs`:
 
@@ -80,7 +80,7 @@ mod provider_package_tests;
 mod runtime_target_tests;
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -94,7 +94,7 @@ Expected:
 unresolved imports `plugin_framework::HostContractCode`
 ```
 
-- [ ] **Step 3: Add contract types**
+- [x] **Step 3: Add contract types**
 
 Create `api/crates/plugin-framework/src/host_contract.rs`:
 
@@ -185,7 +185,7 @@ pub use host_contract::{HostContractCode, RuntimeSlotCode, StorageImplementation
 
 Keep existing exports in `lib.rs`; add these lines without removing current public API.
 
-- [ ] **Step 4: Run test**
+- [x] **Step 4: Run test**
 
 Run:
 
@@ -205,7 +205,7 @@ test result: ok
 - Modify: `api/crates/plugin-framework/src/manifest_v1.rs`
 - Modify: `api/crates/plugin-framework/src/_tests/manifest_v1_tests.rs`
 
-- [ ] **Step 1: Add failing tests for slot vocabulary**
+- [x] **Step 1: Add failing tests for slot vocabulary**
 
 Append to `api/crates/plugin-framework/src/_tests/manifest_v1_tests.rs`:
 
@@ -286,7 +286,7 @@ runtime:
 }
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -300,7 +300,7 @@ Expected:
 FAIL
 ```
 
-- [ ] **Step 3: Add slot validation**
+- [x] **Step 3: Add slot validation**
 
 Modify `validate_plugin_manifest` in `api/crates/plugin-framework/src/manifest_v1.rs` after `validate_binding_targets(&manifest.binding_targets)?;`:
 
@@ -330,7 +330,7 @@ fn validate_slot_codes(slot_codes: &[String]) -> FrameworkResult<()> {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -350,7 +350,7 @@ test result: ok
 - Modify: `api/AGENTS.md`
 - Modify: `docs/superpowers/specs/1flowbase/2026-04-20-plugin-architecture-and-node-contribution-design.md`
 
-- [ ] **Step 1: Update `api/AGENTS.md` plugin rules**
+- [x] **Step 1: Update `api/AGENTS.md` plugin rules**
 
 In `api/AGENTS.md`, replace the current plugin boundary bullets with this block:
 
@@ -363,7 +363,7 @@ In `api/AGENTS.md`, replace the current plugin boundary bullets with this block:
 - `storage-durable`、`storage-ephemeral`、`storage-object` 是 host contract / implementation kind，不改名为 cache，不新增 `Driver` 层级。
 ```
 
-- [ ] **Step 2: Update 2026-04-20 spec status note**
+- [x] **Step 2: Update 2026-04-20 spec status note**
 
 At the top of `docs/superpowers/specs/1flowbase/2026-04-20-plugin-architecture-and-node-contribution-design.md`, after the header metadata, add:
 
@@ -371,7 +371,7 @@ At the top of `docs/superpowers/specs/1flowbase/2026-04-20-plugin-architecture-a
 > 2026-04-28 更新：`HostExtension` 边界已上调为内核级 host 模块。后续以 [HostExtension 内核级插件边界设计](../2026-04-28-host-extension-boundary-design.md) 为准；本文中 `provider` 相关内容应理解为 `model_provider` runtime slot，而不是插件主类型。
 ```
 
-- [ ] **Step 3: Verify text**
+- [x] **Step 3: Verify text**
 
 Run:
 
@@ -398,7 +398,7 @@ docs/superpowers/specs/1flowbase/2026-04-20-plugin-architecture-and-node-contrib
 - `api/crates/plugin-framework/src/_tests/mod.rs`
 - `docs/superpowers/specs/1flowbase/2026-04-20-plugin-architecture-and-node-contribution-design.md`
 
-- [ ] **Step 1: Run final verification**
+- [x] **Step 1: Run final verification**
 
 Run:
 
@@ -412,7 +412,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 Run:
 
