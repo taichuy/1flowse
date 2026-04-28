@@ -152,17 +152,20 @@ describe('LLM prompt messages field', () => {
     expect(
       addedRow.querySelector('.agent-flow-llm-prompt-messages__role-row')
     ).toBeNull();
+    fireEvent.click(addedRoleSelect);
+
     expect(
-      within(addedRoleSelect).queryByRole('option', { name: 'SYSTEM' })
+      within(addedRow).queryByRole('option', { name: 'SYSTEM' })
     ).not.toBeInTheDocument();
     expect(
-      within(addedRoleSelect).getByRole('option', { name: 'USER' })
+      within(addedRow).getByRole('option', { name: 'USER' })
     ).toBeInTheDocument();
-    expect(
-      within(addedRoleSelect).getByRole('option', { name: 'ASSISTANT' })
-    ).toBeInTheDocument();
+    const assistantOption = within(addedRow).getByRole('option', {
+      name: 'ASSISTANT'
+    });
+    expect(assistantOption).toBeInTheDocument();
 
-    fireEvent.change(addedRoleSelect, { target: { value: 'assistant' } });
+    fireEvent.click(assistantOption);
 
     fireEvent.dragStart(
       within(addedRow).getByRole('button', { name: /拖拽排序/ })
