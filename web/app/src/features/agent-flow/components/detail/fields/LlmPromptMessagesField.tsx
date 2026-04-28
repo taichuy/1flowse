@@ -1,5 +1,5 @@
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Empty, Typography } from 'antd';
+import { Button, Typography } from 'antd';
 import { useState } from 'react';
 
 import type {
@@ -225,15 +225,8 @@ export function LlmPromptMessagesField({
           className="agent-flow-llm-prompt-messages__dynamic-list"
           data-testid="llm-prompt-message-dynamic-list"
         >
-          {dynamicMessages.length > 0 ? (
-            dynamicMessages.map((message, dynamicIndex) =>
-              renderPromptMessage(message, dynamicIndex + 1)
-            )
-          ) : (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="暂无消息"
-            />
+          {dynamicMessages.map((message, dynamicIndex) =>
+            renderPromptMessage(message, dynamicIndex + 1)
           )}
           <Button
             aria-label="新增消息"

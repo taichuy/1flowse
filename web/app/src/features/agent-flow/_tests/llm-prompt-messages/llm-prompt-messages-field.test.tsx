@@ -222,6 +222,7 @@ describe('LLM prompt messages field', () => {
     expect(
       within(dynamicList).getByRole('button', { name: '新增消息' })
     ).toBeInTheDocument();
+    expect(within(dynamicList).queryByText('暂无消息')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '新增消息' }));
     fireEvent.click(screen.getByRole('button', { name: '新增消息' }));
