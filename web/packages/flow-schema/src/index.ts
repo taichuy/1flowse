@@ -56,10 +56,25 @@ export interface FlowPluginContributionRef {
   schema_version: string;
 }
 
+export type LlmPromptMessageRole = 'system' | 'user' | 'assistant';
+
+export interface LlmPromptMessage {
+  id: string;
+  role: LlmPromptMessageRole;
+  content: {
+    kind: 'templated_text';
+    value: string;
+  };
+}
+
 export type FlowBinding =
   | { kind: 'templated_text'; value: string }
   | { kind: 'selector'; value: string[] }
   | { kind: 'selector_list'; value: string[][] }
+  | {
+      kind: 'prompt_messages';
+      value: LlmPromptMessage[];
+    }
   | {
       kind: 'named_bindings';
       value: Array<{ name: string; selector: string[] }>;
@@ -188,7 +203,24 @@ export function createDefaultAgentFlowDocument({
             }
           },
           bindings: {
-            user_prompt: { kind: 'selector', value: ['node-start', 'query'] }
+            prompt_messages: {
+              kind: 'prompt_messages',
+              value: [
+                {
+                  id: 'system-1',
+                  role: 'system',
+                  content: { kind: 'templated_text', value: '' }
+                },
+                {
+                  id: 'user-1',
+                  role: 'user',
+                  content: {
+                    kind: 'templated_text',
+                    value: '{{node-start.query}}'
+                  }
+                }
+              ]
+            }
           },
           outputs: [{ key: 'text', title: '模型输出', valueType: 'string' }]
         },

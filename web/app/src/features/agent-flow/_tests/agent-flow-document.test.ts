@@ -40,6 +40,31 @@ describe('agent flow document helpers', () => {
     );
   });
 
+  test('seeds default LLM prompt messages with Start query user context', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+
+    expect(llmNode?.bindings.prompt_messages).toEqual({
+      kind: 'prompt_messages',
+      value: [
+        {
+          id: 'system-1',
+          role: 'system',
+          content: { kind: 'templated_text', value: '' }
+        },
+        {
+          id: 'user-1',
+          role: 'user',
+          content: {
+            kind: 'templated_text',
+            value: '{{node-start.query}}'
+          }
+        }
+      ]
+    });
+    expect(llmNode?.bindings).not.toHaveProperty('user_prompt');
+  });
+
   test('treats viewport-only edits as layout changes', () => {
     const before = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const viewportOnly = {

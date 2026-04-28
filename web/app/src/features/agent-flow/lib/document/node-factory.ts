@@ -107,6 +107,27 @@ function defaultConfig(nodeType: BuiltinFlowNodeType): Record<string, unknown> {
   }
 }
 
+function defaultBindings(
+  nodeType: BuiltinFlowNodeType
+): FlowNodeDocument['bindings'] {
+  if (nodeType !== 'llm') {
+    return {};
+  }
+
+  return {
+    prompt_messages: {
+      kind: 'prompt_messages',
+      value: [
+        {
+          id: 'system-1',
+          role: 'system',
+          content: { kind: 'templated_text', value: '' }
+        }
+      ]
+    }
+  };
+}
+
 function isNodePickerOption(value: NodeFactoryInput): value is NodePickerOption {
   return typeof value === 'object' && value !== null && 'kind' in value;
 }
@@ -161,7 +182,7 @@ export function createNodeDocument(
     position: { x, y },
     configVersion: 1,
     config: defaultConfig(nodeTypeOrOption),
-    bindings: {},
+    bindings: defaultBindings(nodeTypeOrOption),
     outputs: defaultOutputs(nodeTypeOrOption)
   };
 }
