@@ -16,6 +16,10 @@ fn host_contract_codes_are_stable() {
 fn runtime_slot_codes_are_stable() {
     assert_eq!(RuntimeSlotCode::ModelProvider.as_str(), "model_provider");
     assert_eq!(RuntimeSlotCode::DataSource.as_str(), "data_source");
+    assert_eq!(
+        RuntimeSlotCode::DataImportSnapshot.as_str(),
+        "data_import_snapshot"
+    );
     assert_eq!(RuntimeSlotCode::FileProcessor.as_str(), "file_processor");
 }
 
