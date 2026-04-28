@@ -537,17 +537,17 @@
   .agent-flow-llm-prompt-messages__role-menu {
   padding: 0;
   border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
 }
 
 .agent-flow-llm-prompt-messages__role-dropdown
   .agent-flow-llm-prompt-messages__role-menu
   .ant-dropdown-menu-item {
   min-height: 36px;
-  padding: 0;
-  color: #ffffff;
+  padding: 0 16px;
+  color: #101828;
   font-size: 14px;
   font-weight: 500;
   background: transparent;
@@ -560,5 +560,5 @@
   .agent-flow-llm-prompt-messages__role-menu
   .ant-dropdown-menu-item-selected {
   background: transparent;
-  color: #ffffff;
+  color: #101828;
 }
