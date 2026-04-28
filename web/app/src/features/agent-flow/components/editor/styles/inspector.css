@@ -133,6 +133,29 @@
   gap: 8px;
 }
 
+.agent-flow-node-config-field {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+}
+
+.agent-flow-node-config-field__frame {
+  width: 100%;
+  min-width: 0;
+}
+
+.agent-flow-node-config-field__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.agent-flow-node-config-field__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .agent-flow-templated-text-field__frame {
   width: 100%;
   overflow: hidden;
@@ -160,6 +183,38 @@
   );
   backdrop-filter: blur(10px) saturate(140%);
   line-height: 24px;
+}
+
+.agent-flow-node-config-field__heading {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 2px;
+}
+
+.agent-flow-node-config-field__drag-handle {
+  display: inline-flex;
+  width: 16px;
+  height: 24px;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
+  cursor: grab;
+}
+
+.agent-flow-node-config-field__drag-handle:active {
+  cursor: grabbing;
+}
+
+.agent-flow-node-config-field__drag-handle:hover,
+.agent-flow-node-config-field__drag-handle:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
 }
 
 .agent-flow-templated-text-field__actions {
@@ -414,43 +469,14 @@
 
 .agent-flow-llm-prompt-messages__row {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr);
-  align-items: start;
-  gap: 2px;
-}
-
-.agent-flow-llm-prompt-messages__row--fixed {
   grid-template-columns: minmax(0, 1fr);
+  align-items: start;
   gap: 0;
 }
 
 .agent-flow-llm-prompt-messages__row--draggable
   .agent-flow-templated-text-field__toolbar {
   padding-left: 0;
-}
-
-.agent-flow-llm-prompt-messages__drag-handle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: #8ca095;
-  cursor: grab;
-}
-
-.agent-flow-llm-prompt-messages__drag-handle:active {
-  cursor: grabbing;
-}
-
-.agent-flow-llm-prompt-messages__drag-handle:hover,
-.agent-flow-llm-prompt-messages__drag-handle:focus-visible {
-  background: #f3f8f3;
-  color: #55645d;
 }
 
 .agent-flow-llm-prompt-messages__body {

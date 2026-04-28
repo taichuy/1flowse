@@ -1,8 +1,4 @@
-import {
-  DeleteOutlined,
-  HolderOutlined,
-  PlusOutlined
-} from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Empty, Typography } from 'antd';
 import { useState } from 'react';
 
@@ -150,21 +146,11 @@ export function LlmPromptMessagesField({
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={() => handleDrop(index)}
               >
-                {isDraggableMessage ? (
-                  <button
-                    aria-label={`拖拽排序 ${roleLabel} 消息`}
-                    className="agent-flow-llm-prompt-messages__drag-handle"
-                    draggable
-                    onDragEnd={() => setDraggingIndex(null)}
-                    onDragStart={() => setDraggingIndex(index)}
-                    type="button"
-                  >
-                    <HolderOutlined />
-                  </button>
-                ) : null}
                 <div className="agent-flow-llm-prompt-messages__body">
                   <TemplatedTextField
                     ariaLabel={`${roleLabel} 消息内容`}
+                    draggable={isDraggableMessage}
+                    dragLabel={`拖拽排序 ${roleLabel} 消息`}
                     label={roleLabel}
                     labelContent={
                       isSystemMessage ? (
@@ -211,6 +197,8 @@ export function LlmPromptMessagesField({
                     placeholder="输入文本，或输入 / 引用变量"
                     value={message.content.value}
                     onChange={(nextValue) => updateContent(index, nextValue)}
+                    onDragEnd={() => setDraggingIndex(null)}
+                    onDragStart={() => setDraggingIndex(index)}
                   />
                 </div>
               </div>

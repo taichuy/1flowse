@@ -3,7 +3,7 @@ import {
   CopyOutlined,
   FullscreenOutlined
 } from '@ant-design/icons';
-import { Button, Modal, Tooltip, Typography, message } from 'antd';
+import { Button, Modal, Tooltip, message } from 'antd';
 import { useRef, useState, type MouseEvent, type ReactNode } from 'react';
 
 import { type FlowSelectorOption } from '../../lib/selector-options';
@@ -11,27 +11,36 @@ import {
   LexicalTemplatedTextEditor,
   type LexicalTemplatedTextEditorHandle
 } from './template-editor/LexicalTemplatedTextEditor';
+import { NodeConfigFieldContainer } from '../field-container/NodeConfigFieldContainer';
 
 interface TemplatedTextFieldProps {
   label: string;
   labelContent?: ReactNode;
   toolbarExtraActions?: ReactNode;
+  draggable?: boolean;
+  dragLabel?: string;
   ariaLabel: string;
   placeholder?: string;
   options?: FlowSelectorOption[];
   value: string;
   onChange: (value: string) => void;
+  onDragEnd?: () => void;
+  onDragStart?: () => void;
 }
 
 export function TemplatedTextField({
   label,
   labelContent,
   toolbarExtraActions,
+  draggable = false,
+  dragLabel,
   ariaLabel,
   placeholder,
   options = [],
   value,
-  onChange
+  onChange,
+  onDragEnd,
+  onDragStart
 }: TemplatedTextFieldProps) {
   const editorRef = useRef<LexicalTemplatedTextEditorHandle | null>(null);
   const expandedEditorRef = useRef<LexicalTemplatedTextEditorHandle | null>(
@@ -76,20 +85,18 @@ export function TemplatedTextField({
 
   return (
     <div className="agent-flow-templated-text-field">
-      <div
-        className="agent-flow-templated-text-field__frame"
-        onMouseDown={handleFrameMouseDown}
-      >
-        <div className="agent-flow-templated-text-field__toolbar">
-          {labelContent ?? (
-            <Typography.Text
-              strong
-              className="agent-flow-templated-text-field__label"
-            >
-              {label}
-            </Typography.Text>
-          )}
-          <div className="agent-flow-templated-text-field__actions">
+      <NodeConfigFieldContainer
+        ariaLabel={ariaLabel}
+        classNames={{
+          frame: 'agent-flow-templated-text-field__frame',
+          toolbar: 'agent-flow-templated-text-field__toolbar',
+          label: 'agent-flow-templated-text-field__label',
+          actions: 'agent-flow-templated-text-field__actions'
+        }}
+        draggable={draggable}
+        dragLabel={dragLabel}
+        headerActions={
+          <>
             {toolbarExtraActions}
             <span className="agent-flow-templated-text-field__action agent-flow-templated-text-field__counter">
               {value.length}
@@ -129,8 +136,14 @@ export function TemplatedTextField({
                 onClick={() => setExpanded(true)}
               />
             </Tooltip>
-          </div>
-        </div>
+          </>
+        }
+        label={label}
+        labelContent={labelContent}
+        onDragEnd={onDragEnd}
+        onDragStart={onDragStart}
+        onFrameMouseDown={handleFrameMouseDown}
+      >
         <LexicalTemplatedTextEditor
           ref={editorRef}
           value={value}
@@ -139,7 +152,7 @@ export function TemplatedTextField({
           placeholder={placeholder}
           onChange={onChange}
         />
-      </div>
+      </NodeConfigFieldContainer>
       <Modal
         centered
         className="agent-flow-templated-text-field__modal"

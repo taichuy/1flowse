@@ -146,6 +146,9 @@ describe('LLM prompt messages field', () => {
     );
 
     expect(addedToolbar).not.toBeNull();
+    expect(addedToolbar).toContainElement(
+      within(addedRow).getByRole('button', { name: /拖拽排序/ })
+    );
     expect(
       addedRow.querySelector('.agent-flow-llm-prompt-messages__role-row')
     ).toBeNull();
