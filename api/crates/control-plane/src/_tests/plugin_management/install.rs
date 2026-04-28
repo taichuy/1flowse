@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fs, path::PathBuf, sync::Arc};
 
 use crate::{
     plugin_management::{
@@ -285,4 +285,96 @@ async fn plugin_management_service_labels_local_install_with_current_install_kin
         result.installation.metadata_json["install_kind"].as_str(),
         Some("uploaded_manual_install")
     );
+}
+
+#[tokio::test]
+async fn plugin_management_service_does_not_route_data_source_package_as_model_provider() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let runtime = MemoryProviderRuntime::default();
+    let service = PluginManagementService::new(
+        repository.clone(),
+        runtime,
+        Arc::new(MemoryOfficialPluginSource::default()),
+        std::env::temp_dir().join(format!("plugin-data-source-installed-{}", Uuid::now_v7())),
+    );
+    let package_root = create_data_source_fixture_package("http_source", "0.1.0");
+
+    let result = service
+        .install_plugin(InstallPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            package_root: package_root.display().to_string(),
+        })
+        .await
+        .expect("data source package should install");
+
+    assert_eq!(
+        result.installation.contract_version,
+        "1flowbase.data_source/v1"
+    );
+    assert_eq!(result.installation.provider_code, "http_source");
+}
+
+fn create_data_source_fixture_package(source_code: &str, version: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!(
+        "plugin-data-source-source-{}-{}",
+        source_code,
+        Uuid::now_v7()
+    ));
+    fs::create_dir_all(root.join("bin")).unwrap();
+    fs::create_dir_all(root.join("datasource")).unwrap();
+    fs::write(
+        root.join("manifest.yaml"),
+        format!(
+            r#"
+manifest_version: 1
+plugin_id: {source_code}@{version}
+version: {version}
+vendor: acme
+display_name: HTTP Source
+description: HTTP source runtime extension
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: runtime_extension
+execution_mode: process_per_call
+slot_codes: [data_source]
+binding_targets: [workspace]
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.data_source/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: outbound_only
+  secrets: provider_instance_only
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/{source_code}
+"#
+        ),
+    )
+    .unwrap();
+    fs::write(root.join("bin").join(source_code), "#!/bin/sh\n").unwrap();
+    fs::write(
+        root.join("datasource").join(format!("{source_code}.yaml")),
+        format!(
+            r#"
+source_code: {source_code}
+display_name: HTTP Source
+auth_modes: [api_key]
+capabilities: [preview_read]
+supports_sync: false
+supports_webhook: false
+resource_kinds: [table]
+config_schema: []
+"#
+        ),
+    )
+    .unwrap();
+    root
 }

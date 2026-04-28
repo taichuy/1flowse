@@ -31,7 +31,7 @@
 - Create: `api/crates/control-plane/src/_tests/plugin_management/package_router.rs`
 - Modify: `api/crates/control-plane/src/_tests/plugin_management/mod.rs`
 
-- [ ] **Step 1: Write failing package router tests**
+- [x] **Step 1: Write failing package router tests**
 
 Create `api/crates/control-plane/src/_tests/plugin_management/package_router.rs`:
 
@@ -100,7 +100,7 @@ Modify `api/crates/control-plane/src/_tests/plugin_management/mod.rs`:
 mod package_router;
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run:
 
@@ -114,7 +114,7 @@ Expected:
 unresolved import `route_plugin_package`
 ```
 
-- [ ] **Step 3: Implement router**
+- [x] **Step 3: Implement router**
 
 Create `api/crates/control-plane/src/plugin_management/package_router.rs`:
 
@@ -158,7 +158,7 @@ mod package_router;
 pub use package_router::{route_plugin_package, RoutedPluginPackageKind};
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -178,7 +178,7 @@ test result: ok
 - Modify: `api/crates/control-plane/src/plugin_management/install.rs`
 - Modify: `api/crates/control-plane/src/_tests/plugin_management/install.rs`
 
-- [ ] **Step 1: Add failing data-source install test**
+- [x] **Step 1: Add failing data-source install test**
 
 Append to `api/crates/control-plane/src/_tests/plugin_management/install.rs`:
 
@@ -267,7 +267,7 @@ config_schema: []
 }
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -281,7 +281,7 @@ Expected:
 FAIL with provider package validation error
 ```
 
-- [ ] **Step 3: Dispatch by routed package kind**
+- [x] **Step 3: Dispatch by routed package kind**
 
 Modify `install_plugin_with_metadata` in `api/crates/control-plane/src/plugin_management/install.rs`:
 
@@ -353,7 +353,7 @@ match package_kind {
 
 Adjust the code to preserve existing audit/task behavior. Do not duplicate task transition code.
 
-- [ ] **Step 4: Run test**
+- [x] **Step 4: Run test**
 
 Run:
 
@@ -373,7 +373,7 @@ test result: ok
 - Modify: `api/crates/control-plane/src/plugin_management/family.rs`
 - Modify: `api/crates/control-plane/src/_tests/plugin_management/family.rs`
 
-- [ ] **Step 1: Add failing assignment test**
+- [x] **Step 1: Add failing assignment test**
 
 Append to `api/crates/control-plane/src/_tests/plugin_management/family.rs`:
 
@@ -414,7 +414,7 @@ artifact_status: PluginArtifactStatus::Ready
 runtime_status: PluginRuntimeStatus::Inactive
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -428,7 +428,7 @@ Expected:
 FAIL with plugin_assignment_not_supported
 ```
 
-- [ ] **Step 3: Replace model-provider-only assignment guard**
+- [x] **Step 3: Replace model-provider-only assignment guard**
 
 In `api/crates/control-plane/src/plugin_management/family.rs`, replace:
 
@@ -457,7 +457,7 @@ fn supports_workspace_assignment(installation: &domain::PluginInstallationRecord
 }
 ```
 
-- [ ] **Step 4: Run test**
+- [x] **Step 4: Run test**
 
 Run:
 
@@ -477,7 +477,7 @@ test result: ok
 - Modify: `api/apps/api-server/src/routes/plugins_and_models/plugins.rs`
 - Modify: `api/apps/api-server/src/_tests/plugin_routes/install_and_access.rs`
 
-- [ ] **Step 1: Add response contract test**
+- [x] **Step 1: Add response contract test**
 
 Append to `api/apps/api-server/src/_tests/plugin_routes/install_and_access.rs`:
 
@@ -517,7 +517,7 @@ async fn plugin_routes_expose_slot_kind_without_breaking_provider_code() {
 
 Use the existing route test helper names in this module. If the route path differs, use the existing list installation test path.
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -531,7 +531,7 @@ Expected:
 FAIL because runtime_slot is missing
 ```
 
-- [ ] **Step 3: Add runtime_slot to route DTO**
+- [x] **Step 3: Add runtime_slot to route DTO**
 
 In `api/apps/api-server/src/routes/plugins_and_models/plugins.rs`, add to installation response DTO:
 
@@ -557,7 +557,7 @@ fn runtime_slot_for_contract(contract_version: &str) -> Option<String> {
 }
 ```
 
-- [ ] **Step 4: Run test**
+- [x] **Step 4: Run test**
 
 Run:
 
@@ -576,7 +576,7 @@ test result: ok
 **Files:**
 - All files listed in this plan
 
-- [ ] **Step 1: Run focused regression**
+- [x] **Step 1: Run focused regression**
 
 Run:
 
@@ -591,7 +591,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 Run:
 

@@ -2,6 +2,7 @@ mod catalog;
 mod family;
 mod filesystem;
 mod install;
+mod package_router;
 
 use std::{
     cmp::Ordering,
@@ -26,7 +27,7 @@ use crate::{
     errors::ControlPlaneError,
     host_extension::{
         ensure_root_actor, ensure_uploaded_host_extensions_enabled, is_host_extension_installation,
-        is_host_extension_manifest, is_model_provider_installation, plugin_code_from_plugin_id,
+        is_model_provider_installation, plugin_code_from_plugin_id,
     },
     i18n::{
         merge_i18n_catalog, plugin_namespace, trim_json_bundles, trim_provider_bundles,
@@ -48,6 +49,7 @@ use crate::{
 pub use catalog::*;
 pub use family::*;
 pub use install::*;
+pub use package_router::{route_plugin_package, RoutedPluginPackageKind};
 
 pub struct PluginManagementService<R, H> {
     repository: R,

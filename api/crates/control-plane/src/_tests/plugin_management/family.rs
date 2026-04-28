@@ -1,4 +1,5 @@
 use std::{
+    fs,
     path::PathBuf,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -19,10 +20,13 @@ use crate::{
     ports::{
         CreatePluginAssignmentInput, DownloadedOfficialPluginPackage, ModelProviderRepository,
         OfficialPluginCatalogSnapshot, OfficialPluginCatalogSource, OfficialPluginSourceEntry,
-        OfficialPluginSourcePort, PluginRepository,
+        OfficialPluginSourcePort, PluginRepository, UpsertPluginInstallationInput,
     },
 };
-use domain::{PluginDesiredState, PluginTaskKind, PluginTaskStatus};
+use domain::{
+    PluginArtifactStatus, PluginAvailabilityStatus, PluginDesiredState, PluginRuntimeStatus,
+    PluginTaskKind, PluginTaskStatus, PluginVerificationStatus,
+};
 
 use super::support::{
     actor_with_permissions, create_provider_fixture, requested_locales, seed_test_installation,
@@ -470,4 +474,95 @@ async fn plugin_management_service_installs_enables_assigns_and_lists_tasks() {
         repository.audit_events().await,
         vec!["plugin.installed", "plugin.enabled", "plugin.assigned"]
     );
+}
+
+#[tokio::test]
+async fn assign_plugin_allows_data_source_runtime_installation() {
+    let (service, repository, actor_user_id, installation_id, workspace_id) =
+        seed_data_source_runtime_installation().await;
+
+    service
+        .enable_plugin(EnablePluginCommand {
+            actor_user_id,
+            installation_id,
+        })
+        .await
+        .expect("data source runtime should enable");
+
+    service
+        .assign_plugin(AssignPluginCommand {
+            actor_user_id,
+            installation_id,
+        })
+        .await
+        .expect("data source runtime should assign");
+
+    let assignments = repository.list_assignments(workspace_id).await.unwrap();
+    assert!(assignments
+        .iter()
+        .any(|item| item.installation_id == installation_id));
+}
+
+async fn seed_data_source_runtime_installation() -> (
+    PluginManagementService<MemoryPluginManagementRepository, MemoryProviderRuntime>,
+    MemoryPluginManagementRepository,
+    Uuid,
+    Uuid,
+    Uuid,
+) {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let actor_user_id = repository.actor.user_id;
+    let runtime = MemoryProviderRuntime::default();
+    let install_root =
+        std::env::temp_dir().join(format!("plugin-data-source-assignment-{}", Uuid::now_v7()));
+    let installed_path = install_root.join("installed/http_source/0.1.0");
+    fs::create_dir_all(&installed_path).unwrap();
+    let service = PluginManagementService::new(
+        repository.clone(),
+        runtime,
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &install_root,
+    );
+    let installation_id = repository
+        .upsert_installation(&UpsertPluginInstallationInput {
+            installation_id: Uuid::now_v7(),
+            provider_code: "http_source".into(),
+            plugin_id: "http_source@0.1.0".into(),
+            plugin_version: "0.1.0".into(),
+            contract_version: "1flowbase.data_source/v1".into(),
+            protocol: "data_source".into(),
+            display_name: "HTTP Source".into(),
+            source_kind: "uploaded".into(),
+            trust_level: "checksum_only".into(),
+            verification_status: PluginVerificationStatus::Valid,
+            desired_state: PluginDesiredState::Disabled,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: PluginRuntimeStatus::Inactive,
+            availability_status: PluginAvailabilityStatus::Disabled,
+            package_path: None,
+            installed_path: installed_path.display().to_string(),
+            checksum: None,
+            manifest_fingerprint: None,
+            signature_status: None,
+            signature_algorithm: None,
+            signing_key_id: None,
+            last_load_error: None,
+            metadata_json: serde_json::json!({}),
+            actor_user_id,
+        })
+        .await
+        .unwrap()
+        .id;
+
+    (
+        service,
+        repository,
+        actor_user_id,
+        installation_id,
+        workspace_id,
+    )
 }

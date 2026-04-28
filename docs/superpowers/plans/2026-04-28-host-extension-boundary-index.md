@@ -81,7 +81,7 @@ Why fourth:
 1. `storage-durable / storage-ephemeral / storage-object` 应由官方 `storage-host` 注册和管理。
 2. data source、file management、model provider 都要从 hard-coded core 语义迁到 host capabilities。
 
-- [ ] **Step 5: Execute Slot-Aware Plugin Management**
+- [x] **Step 5: Execute Slot-Aware Plugin Management**
 
 Plan:
 
