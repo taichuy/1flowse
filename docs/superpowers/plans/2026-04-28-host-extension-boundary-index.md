@@ -55,7 +55,7 @@ Why second:
 1. 没有 manifest 和 registry，Boot loader 只能硬编码官方模块。
 2. inventory 是后续 deployment policy、health、UI 展示和 self-hosted override 的事实来源。
 
-- [ ] **Step 3: Execute Boot Loader Policy Lifecycle**
+- [x] **Step 3: Execute Boot Loader Policy Lifecycle**
 
 Plan:
 

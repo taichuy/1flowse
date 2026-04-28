@@ -31,7 +31,7 @@
 - Create: `api/crates/control-plane/src/_tests/host_extension_boot_tests.rs`
 - Modify: `api/crates/control-plane/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write failing policy tests**
+- [x] **Step 1: Write failing policy tests**
 
 Create `api/crates/control-plane/src/_tests/host_extension_boot_tests.rs`:
 
@@ -88,7 +88,7 @@ fn policy_rejects_denied_contract_override() {
 }
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run:
 
@@ -102,7 +102,7 @@ Expected:
 unresolved import `control_plane::host_extension_boot`
 ```
 
-- [ ] **Step 3: Implement policy module**
+- [x] **Step 3: Implement policy module**
 
 Create `api/crates/control-plane/src/host_extension_boot/mod.rs`:
 
@@ -173,7 +173,7 @@ Modify `api/crates/control-plane/src/lib.rs`:
 pub mod host_extension_boot;
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -193,7 +193,7 @@ test result: ok
 - Create: `api/crates/control-plane/src/host_extension_boot/loader.rs`
 - Modify: `api/crates/control-plane/src/_tests/host_extension_boot_tests.rs`
 
-- [ ] **Step 1: Add failing load order tests**
+- [x] **Step 1: Add failing load order tests**
 
 Append to `api/crates/control-plane/src/_tests/host_extension_boot_tests.rs`:
 
@@ -230,7 +230,7 @@ fn load_plan_rejects_missing_dependency() {
 }
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -244,7 +244,7 @@ Expected:
 unresolved import or failing assertion
 ```
 
-- [ ] **Step 3: Implement load planner**
+- [x] **Step 3: Implement load planner**
 
 Create `api/crates/control-plane/src/host_extension_boot/loader.rs`:
 
@@ -306,7 +306,7 @@ fn visit(
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -327,7 +327,7 @@ test result: ok
 - Modify: `api/apps/api-server/src/lib.rs`
 - Create: `api/apps/api-server/src/_tests/host_extension_boot_tests.rs`
 
-- [ ] **Step 1: Write route-host assembly test**
+- [x] **Step 1: Write route-host assembly test**
 
 Create `api/apps/api-server/src/_tests/host_extension_boot_tests.rs`:
 
@@ -350,7 +350,7 @@ Ensure `api/apps/api-server/src/_tests/mod.rs` includes:
 mod host_extension_boot_tests;
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -364,7 +364,7 @@ Expected:
 unresolved import `api_server::host_extension_boot`
 ```
 
-- [ ] **Step 3: Add boot module**
+- [x] **Step 3: Add boot module**
 
 Create `api/apps/api-server/src/host_extension_boot.rs`:
 
@@ -390,7 +390,7 @@ Modify `api/apps/api-server/src/lib.rs`:
 pub mod host_extension_boot;
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -409,7 +409,7 @@ test result: ok
 **Files:**
 - All files listed in this plan
 
-- [ ] **Step 1: Run focused tests**
+- [x] **Step 1: Run focused tests**
 
 Run:
 
@@ -424,7 +424,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 Run:
 
