@@ -17,7 +17,7 @@ use crate::{
     runtime_observability::{
         append_host_event, append_host_span, coalesce_provider_stream_events,
         projection::{estimate_tokens_for_text, model_input_hash},
-        provider_stream_event_type, PROVIDER_DELTA_COALESCE_MAX_BYTES,
+        provider_stream_event_type, AppendHostSpanInput, PROVIDER_DELTA_COALESCE_MAX_BYTES,
     },
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
@@ -56,17 +56,19 @@ where
     } = input;
     let flow_span = append_host_span(
         repository,
-        flow_run.id,
-        None,
-        None,
-        domain::RuntimeSpanKind::Flow,
-        "debug flow",
-        base_started_at,
-        json!({
-            "application_id": application_id,
-            "run_mode": flow_run.run_mode.as_str(),
-            "trigger_event_type": trigger_event_type,
-        }),
+        AppendHostSpanInput {
+            flow_run_id: flow_run.id,
+            node_run_id: None,
+            parent_span_id: None,
+            kind: domain::RuntimeSpanKind::Flow,
+            name: "debug flow".into(),
+            started_at: base_started_at,
+            metadata: json!({
+                "application_id": application_id,
+                "run_mode": flow_run.run_mode.as_str(),
+                "trigger_event_type": trigger_event_type,
+            }),
+        },
     )
     .await?;
     repository
@@ -728,16 +730,18 @@ where
         };
         let node_span = append_host_span(
             repository,
-            flow_run_id,
-            Some(node_run.id),
-            flow_span_id,
-            span_kind,
-            trace.node_alias.clone(),
-            started_at,
-            json!({
-                "node_id": trace.node_id,
-                "node_type": trace.node_type,
-            }),
+            AppendHostSpanInput {
+                flow_run_id,
+                node_run_id: Some(node_run.id),
+                parent_span_id: flow_span_id,
+                kind: span_kind,
+                name: trace.node_alias.clone(),
+                started_at,
+                metadata: json!({
+                    "node_id": trace.node_id,
+                    "node_type": trace.node_type,
+                }),
+            },
         )
         .await?;
         let (status, finished_at) = match waiting_node_id {

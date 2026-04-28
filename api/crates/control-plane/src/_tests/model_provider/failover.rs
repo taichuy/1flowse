@@ -22,12 +22,14 @@ use crate::{
     },
 };
 
+type CatalogEntryCache =
+    Arc<Mutex<HashMap<(Uuid, String, String), domain::ModelProviderCatalogEntryRecord>>>;
+
 #[derive(Default, Clone)]
 struct MemoryModelCatalogRepository {
     catalog_sources: Arc<Mutex<HashMap<Uuid, domain::ModelProviderCatalogSourceRecord>>>,
     catalog_sync_runs: Arc<Mutex<HashMap<Uuid, domain::ModelCatalogSyncRunRecord>>>,
-    catalog_entries:
-        Arc<Mutex<HashMap<(Uuid, String, String), domain::ModelProviderCatalogEntryRecord>>>,
+    catalog_entries: CatalogEntryCache,
     queue_templates: Arc<Mutex<HashMap<Uuid, domain::ModelFailoverQueueTemplateRecord>>>,
     queue_items: Arc<Mutex<HashMap<Uuid, Vec<domain::ModelFailoverQueueItemRecord>>>>,
     queue_snapshots: Arc<Mutex<HashMap<Uuid, domain::ModelFailoverQueueSnapshotRecord>>>,
