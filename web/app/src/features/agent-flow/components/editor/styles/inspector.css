@@ -515,7 +515,7 @@
 }
 
 .agent-flow-llm-prompt-messages__role-select option {
-  background: rgb(99, 169, 255);
+  background: transparent;
   color: #ffffff;
   font-weight: 600;
 }
