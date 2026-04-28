@@ -410,16 +410,16 @@
 
 .agent-flow-llm-prompt-messages__row {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 20px minmax(0, 1fr);
   align-items: start;
-  gap: 8px;
+  gap: 4px;
 }
 
 .agent-flow-llm-prompt-messages__drag-handle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
+  width: 20px;
   height: 32px;
   padding: 0;
   border: none;
@@ -449,7 +449,7 @@
 
 .agent-flow-llm-prompt-messages__drag-spacer {
   display: block;
-  width: 24px;
+  width: 20px;
   height: 32px;
 }
 
