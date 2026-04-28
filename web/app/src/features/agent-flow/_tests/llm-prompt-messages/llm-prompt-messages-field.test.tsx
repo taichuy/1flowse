@@ -110,6 +110,10 @@ describe('LLM prompt messages field', () => {
     );
 
     const systemRow = screen.getByTestId('llm-prompt-message-row-system-1');
+    expect(systemRow).toHaveClass('agent-flow-llm-prompt-messages__row--fixed');
+    expect(
+      systemRow.querySelector('.agent-flow-llm-prompt-messages__drag-spacer')
+    ).toBeNull();
     expect(within(systemRow).queryByText('SYSTEM')).toBeInTheDocument();
     expect(
       within(systemRow).queryByRole('button', { name: /删除/ })

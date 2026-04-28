@@ -133,14 +133,12 @@ export function LlmPromptMessagesField({
             return (
               <div
                 key={message.id}
-                className="agent-flow-llm-prompt-messages__row"
+                className={`agent-flow-llm-prompt-messages__row${isSystemMessage ? ' agent-flow-llm-prompt-messages__row--fixed' : ''}`}
                 data-testid={`llm-prompt-message-row-${message.id}`}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={() => handleDrop(index)}
               >
-                {isSystemMessage ? (
-                  <span className="agent-flow-llm-prompt-messages__drag-spacer" />
-                ) : (
+                {!isSystemMessage ? (
                   <button
                     aria-label={`拖拽排序 ${roleLabel} 消息`}
                     className="agent-flow-llm-prompt-messages__drag-handle"
@@ -151,7 +149,7 @@ export function LlmPromptMessagesField({
                   >
                     <HolderOutlined />
                   </button>
-                )}
+                ) : null}
                 <div className="agent-flow-llm-prompt-messages__body">
                   <TemplatedTextField
                     ariaLabel={`${roleLabel} 消息内容`}

@@ -153,7 +153,11 @@
   height: 34px;
   padding: 5px 8px 5px 12px;
   border-bottom: 1px solid rgba(22, 119, 255, 0.42);
-  background: linear-gradient(180deg, rgba(22, 119, 255, 0.68), rgb(22 130 255 / 52%));
+  background: linear-gradient(
+    180deg,
+    rgba(22, 119, 255, 0.68),
+    rgb(22 130 255 / 52%)
+  );
   backdrop-filter: blur(10px) saturate(140%);
   line-height: 24px;
 }
@@ -410,16 +414,21 @@
 
 .agent-flow-llm-prompt-messages__row {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-columns: 14px minmax(0, 1fr);
   align-items: start;
-  gap: 4px;
+  gap: 2px;
+}
+
+.agent-flow-llm-prompt-messages__row--fixed {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
 }
 
 .agent-flow-llm-prompt-messages__drag-handle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
+  width: 14px;
   height: 32px;
   padding: 0;
   border: none;
@@ -445,12 +454,6 @@
   min-width: 0;
   flex-direction: column;
   gap: 8px;
-}
-
-.agent-flow-llm-prompt-messages__drag-spacer {
-  display: block;
-  width: 20px;
-  height: 32px;
 }
 
 .agent-flow-llm-prompt-messages__role-select {
