@@ -502,19 +502,24 @@
   width: auto;
   min-width: 96px;
   height: 28px;
-  padding: 0 22px 0 0;
+  padding: 0;
   border: 0;
   background: transparent;
   color: #ffffff;
   font-size: 12px;
   font-weight: 600;
+  appearance: none;
+  -webkit-appearance: none;
+  box-shadow: none;
+  cursor: pointer;
 }
 
 .agent-flow-llm-prompt-messages__role-select option {
-  color: #16211d;
+  background: rgb(99, 169, 255);
+  color: #ffffff;
+  font-weight: 600;
 }
 
 .agent-flow-llm-prompt-messages__role-select:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.42);
-  outline-offset: 1px;
+  outline: none;
 }
