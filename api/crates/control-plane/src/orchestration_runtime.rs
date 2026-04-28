@@ -100,6 +100,7 @@ struct RuntimeProviderInvoker<R, H> {
     workspace_id: Uuid,
     provider_secret_master_key: String,
     live_provider_events: Option<LiveProviderStreamEventSender>,
+    persist_events: Option<mpsc::UnboundedSender<ProviderStreamEvent>>,
     active_node_id: Option<String>,
     active_node_run_id: Option<Uuid>,
 }
@@ -118,7 +119,10 @@ where
         + ModelProviderRepository
         + NodeContributionRepository
         + PluginRepository
-        + Clone,
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     H: ProviderRuntimePort + CapabilityPluginRuntimePort + Clone,
 {
     pub fn new(repository: R, runtime: H, provider_secret_master_key: impl Into<String>) -> Self {
@@ -136,6 +140,7 @@ where
             workspace_id,
             provider_secret_master_key: self.provider_secret_master_key.clone(),
             live_provider_events: None,
+            persist_events: None,
             active_node_id: None,
             active_node_run_id: None,
         }
@@ -152,6 +157,7 @@ where
             workspace_id,
             provider_secret_master_key: self.provider_secret_master_key.clone(),
             live_provider_events: Some(live_provider_events),
+            persist_events: None,
             active_node_id: None,
             active_node_run_id: None,
         }
@@ -528,14 +534,20 @@ where
             self.active_node_id.clone(),
             self.active_node_run_id,
         ) {
-            let (provider_sender, mut provider_receiver) = mpsc::unbounded_channel();
+            let live_sender = sender.clone();
+            let persist_sender = self.persist_events.clone();
+            let (provider_sender, mut provider_receiver) =
+                mpsc::unbounded_channel::<ProviderStreamEvent>();
             tokio::spawn(async move {
                 while let Some(event) = provider_receiver.recv().await {
-                    let _ = sender.send(LiveProviderStreamEvent {
+                    let _ = live_sender.send(LiveProviderStreamEvent {
                         node_id: node_id.clone(),
                         node_run_id,
-                        event,
+                        event: event.clone(),
                     });
+                    if let Some(persist) = &persist_sender {
+                        let _ = persist.send(event);
+                    }
                 }
             });
             Some(provider_sender)
@@ -543,15 +555,25 @@ where
             None
         };
 
-        self.runtime
+        let has_live_provider_events = live_provider_events.is_some();
+        let invocation_output = self
+            .runtime
             .invoke_stream_with_live_events(&installation, input, live_provider_events)
-            .await
-            .map(
-                |output| orchestration_runtime::execution_engine::ProviderInvocationOutput {
-                    events: output.events,
-                    result: output.result,
-                },
-            )
+            .await?;
+        if let Some(persist) = &self.persist_events {
+            if !has_live_provider_events {
+                for event in invocation_output.events.iter().cloned() {
+                    let _ = persist.send(event);
+                }
+            }
+        }
+
+        Ok(
+            orchestration_runtime::execution_engine::ProviderInvocationOutput {
+                events: invocation_output.events,
+                result: invocation_output.result,
+            },
+        )
     }
 }
 
@@ -560,13 +582,19 @@ where
     R: ModelProviderRepository + PluginRepository + Clone + Send + Sync,
     H: ProviderRuntimePort + Clone + Send + Sync,
 {
-    fn for_live_llm_node(&self, node_id: String, node_run_id: Uuid) -> Self {
+    fn for_live_llm_node_with_persist(
+        &self,
+        node_id: String,
+        node_run_id: Uuid,
+        persist_events: mpsc::UnboundedSender<ProviderStreamEvent>,
+    ) -> Self {
         Self {
             repository: self.repository.clone(),
             runtime: self.runtime.clone(),
             workspace_id: self.workspace_id,
             provider_secret_master_key: self.provider_secret_master_key.clone(),
             live_provider_events: self.live_provider_events.clone(),
+            persist_events: Some(persist_events),
             active_node_id: Some(node_id),
             active_node_run_id: Some(node_run_id),
         }
@@ -845,6 +873,10 @@ mod tests {
             runtime: test_support::InMemoryProviderRuntime::default(),
             workspace_id: Uuid::nil(),
             provider_secret_master_key: "test-master-key".to_string(),
+            live_provider_events: None,
+            persist_events: None,
+            active_node_id: None,
+            active_node_run_id: None,
         };
 
         let error = invoker
@@ -880,6 +912,10 @@ mod tests {
             runtime: test_support::InMemoryProviderRuntime::default(),
             workspace_id: Uuid::nil(),
             provider_secret_master_key: "test-master-key".to_string(),
+            live_provider_events: None,
+            persist_events: None,
+            active_node_id: None,
+            active_node_run_id: None,
         };
 
         let error = invoker
@@ -911,6 +947,10 @@ mod tests {
             runtime: test_support::InMemoryProviderRuntime::default(),
             workspace_id: Uuid::nil(),
             provider_secret_master_key: "test-master-key".to_string(),
+            live_provider_events: None,
+            persist_events: None,
+            active_node_id: None,
+            active_node_run_id: None,
         };
 
         let resolved = invoker
@@ -952,6 +992,10 @@ mod tests {
             runtime: test_support::InMemoryProviderRuntime::default(),
             workspace_id: Uuid::nil(),
             provider_secret_master_key: "test-master-key".to_string(),
+            live_provider_events: None,
+            persist_events: None,
+            active_node_id: None,
+            active_node_run_id: None,
         };
 
         let error = invoker

@@ -6,7 +6,7 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::ports::{
-    AppendRuntimeEventInput, AppendRuntimeItemInput, AppendRuntimeSpanInput,
+    AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeItemInput, AppendRuntimeSpanInput,
     OrchestrationRuntimeRepository,
 };
 
@@ -181,6 +181,40 @@ pub fn coalesce_provider_stream_events(
     Ok(coalesced)
 }
 
+pub async fn append_provider_stream_event<R>(
+    repository: &R,
+    flow_run_id: Uuid,
+    node_run_id: Option<Uuid>,
+    span_id: Option<Uuid>,
+    event: &ProviderStreamEvent,
+) -> Result<domain::RunEventRecord>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    let event_type = provider_stream_event_type(event);
+    let payload = serde_json::to_value(event)?;
+    let record = repository
+        .append_run_event(&AppendRunEventInput {
+            flow_run_id,
+            node_run_id,
+            event_type: event_type.to_string(),
+            payload: payload.clone(),
+        })
+        .await?;
+    append_host_event(
+        repository,
+        flow_run_id,
+        node_run_id,
+        span_id,
+        event_type,
+        domain::RuntimeEventLayer::ProviderRaw,
+        payload,
+    )
+    .await?;
+
+    Ok(record)
+}
+
 pub fn provider_stream_event_type(event: &ProviderStreamEvent) -> &'static str {
     match event {
         ProviderStreamEvent::TextDelta { .. } => "text_delta",
@@ -230,5 +264,68 @@ fn push_runtime_bus_delta(
             coalesced.push(ProviderStreamEvent::ReasoningDelta { delta });
         }
         _ => {}
+    }
+}
+
+/// Streaming coalescer that merges consecutive text/reasoning deltas as events arrive.
+pub struct LiveEventCoalescer {
+    coalescer: DeltaCoalescer,
+}
+
+impl LiveEventCoalescer {
+    pub fn new(max_bytes: usize) -> Self {
+        Self {
+            coalescer: DeltaCoalescer::new(max_bytes),
+        }
+    }
+
+    /// Push a single event through the coalescer. Returns zero or more coalesced events
+    /// that are ready to be persisted.
+    pub fn push(&mut self, event: ProviderStreamEvent) -> Vec<ProviderStreamEvent> {
+        let mut ready = Vec::new();
+        match &event {
+            ProviderStreamEvent::TextDelta { delta } => {
+                self.flush_reasoning(&mut ready);
+                if let Some(RuntimeBusEvent::TextDelta { delta: d }) =
+                    self.coalescer.push_text(delta)
+                {
+                    ready.push(ProviderStreamEvent::TextDelta { delta: d });
+                }
+            }
+            ProviderStreamEvent::ReasoningDelta { delta } => {
+                self.flush_text(&mut ready);
+                if let Some(RuntimeBusEvent::ReasoningDelta { delta: d }) =
+                    self.coalescer.push_reasoning(delta)
+                {
+                    ready.push(ProviderStreamEvent::ReasoningDelta { delta: d });
+                }
+            }
+            other => {
+                self.flush_text(&mut ready);
+                self.flush_reasoning(&mut ready);
+                ready.push(other.clone());
+            }
+        }
+        ready
+    }
+
+    /// Drain remaining coalesced deltas. Call this when the event stream ends.
+    pub fn finish(&mut self) -> Vec<ProviderStreamEvent> {
+        let mut ready = Vec::new();
+        self.flush_text(&mut ready);
+        self.flush_reasoning(&mut ready);
+        ready
+    }
+
+    fn flush_text(&mut self, ready: &mut Vec<ProviderStreamEvent>) {
+        if let Some(RuntimeBusEvent::TextDelta { delta }) = self.coalescer.flush_text() {
+            ready.push(ProviderStreamEvent::TextDelta { delta });
+        }
+    }
+
+    fn flush_reasoning(&mut self, ready: &mut Vec<ProviderStreamEvent>) {
+        if let Some(RuntimeBusEvent::ReasoningDelta { delta }) = self.coalescer.flush_reasoning() {
+            ready.push(ProviderStreamEvent::ReasoningDelta { delta });
+        }
     }
 }

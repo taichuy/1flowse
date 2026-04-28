@@ -251,6 +251,16 @@ impl InMemoryOrchestrationRuntimeRepository {
         self.default_provider_instance_id
     }
 
+    pub(crate) fn events_for_flow_run(&self, flow_run_id: Uuid) -> Vec<domain::RunEventRecord> {
+        self.inner
+            .lock()
+            .expect("runtime repo mutex poisoned")
+            .events_by_flow_run_id
+            .get(&flow_run_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
     pub(crate) fn seed_provider_instance(
         &self,
         provider_code: &str,
@@ -1241,6 +1251,21 @@ impl ProviderRuntimePort for InMemoryProviderRuntime {
                 ..plugin_framework::provider_contract::ProviderInvocationResult::default()
             },
         })
+    }
+
+    async fn invoke_stream_with_live_events(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: ProviderInvocationInput,
+        live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
+    ) -> Result<crate::ports::ProviderRuntimeInvocationOutput> {
+        let output = self.invoke_stream(installation, input).await?;
+        if let Some(live_events) = live_events {
+            for event in output.events.iter().cloned() {
+                let _ = live_events.send(event);
+            }
+        }
+        Ok(output)
     }
 }
 

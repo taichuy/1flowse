@@ -555,6 +555,10 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         .expect("runtime events should be readable")
     }
 
+    pub fn list_run_events(&self, flow_run_id: Uuid) -> Vec<domain::RunEventRecord> {
+        self.repository.events_for_flow_run(flow_run_id)
+    }
+
     pub async fn list_runtime_items(&self, flow_run_id: Uuid) -> Vec<domain::RuntimeItemRecord> {
         OrchestrationRuntimeRepository::list_runtime_items(&self.repository, flow_run_id)
             .await

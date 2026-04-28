@@ -1,7 +1,9 @@
 use control_plane::orchestration_runtime::{
     ContinueFlowDebugRunCommand, OrchestrationRuntimeService, StartFlowDebugRunCommand,
 };
-use control_plane::runtime_observability::{coalesce_provider_stream_events, item_kind_for_event};
+use control_plane::runtime_observability::{
+    coalesce_provider_stream_events, item_kind_for_event, provider_stream_event_type,
+};
 use observability::{RuntimeBusEvent, RuntimeEventBus};
 use plugin_framework::provider_contract::{ProviderMcpCall, ProviderStreamEvent, ProviderToolCall};
 use time::OffsetDateTime;
@@ -114,6 +116,95 @@ async fn flow_debug_run_shadow_writes_runtime_spans_and_provider_events() {
     assert!(events
         .iter()
         .any(|event| event.layer == domain::RuntimeEventLayer::ProviderRaw));
+}
+
+#[tokio::test]
+async fn provider_events_returned_by_runtime_are_persisted_before_debug_run_finishes() {
+    let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
+        ProviderStreamEvent::TextDelta {
+            delta: "hello ".into(),
+        },
+        ProviderStreamEvent::TextDelta {
+            delta: "world".into(),
+        },
+        ProviderStreamEvent::UsageSnapshot {
+            usage: plugin_framework::provider_contract::ProviderUsage {
+                input_tokens: Some(2),
+                output_tokens: Some(3),
+                total_tokens: Some(5),
+                ..Default::default()
+            },
+        },
+        ProviderStreamEvent::Finish {
+            reason: plugin_framework::provider_contract::ProviderFinishReason::Stop,
+        },
+    ]);
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({
+                "node-start": { "query": "请总结退款政策" }
+            }),
+            document_snapshot: None,
+        })
+        .await
+        .unwrap();
+    let detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let run_events = service.list_run_events(detail.flow_run.id);
+    let runtime_events = service.list_runtime_events(detail.flow_run.id, 0).await;
+    let provider_run_event_types: Vec<_> = run_events
+        .iter()
+        .filter(|event| {
+            ["text_delta", "usage_snapshot", "finish"].contains(&event.event_type.as_str())
+        })
+        .map(|event| event.event_type.as_str())
+        .collect();
+    let provider_runtime_event_types: Vec<_> = runtime_events
+        .iter()
+        .filter(|event| event.layer == domain::RuntimeEventLayer::ProviderRaw)
+        .map(|event| event.event_type.as_str())
+        .collect();
+
+    assert_eq!(provider_runtime_event_types, provider_run_event_types);
+    assert_eq!(detail.flow_run.status, domain::FlowRunStatus::Succeeded);
+    assert!(detail
+        .node_runs
+        .iter()
+        .all(|node_run| node_run.status == domain::NodeRunStatus::Succeeded));
+    assert_eq!(
+        provider_run_event_types,
+        vec![
+            provider_stream_event_type(&ProviderStreamEvent::TextDelta {
+                delta: String::new()
+            }),
+            provider_stream_event_type(&ProviderStreamEvent::UsageSnapshot {
+                usage: plugin_framework::provider_contract::ProviderUsage {
+                    input_tokens: None,
+                    output_tokens: None,
+                    total_tokens: None,
+                    ..Default::default()
+                }
+            }),
+            provider_stream_event_type(&ProviderStreamEvent::Finish {
+                reason: plugin_framework::provider_contract::ProviderFinishReason::Stop,
+            }),
+        ]
+    );
+    assert_eq!(provider_runtime_event_types, provider_run_event_types);
+    assert!(run_events.iter().any(|event| {
+        event.event_type == "text_delta" && event.payload["delta"] == "hello world"
+    }));
 }
 
 #[tokio::test]

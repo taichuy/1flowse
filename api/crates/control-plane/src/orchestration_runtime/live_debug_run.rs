@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Result};
-use observability::RuntimeEventBus;
 use plugin_framework::provider_contract::ProviderStreamEvent;
 use serde_json::{json, Value};
 use time::OffsetDateTime;
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::{
@@ -18,9 +18,9 @@ use crate::{
         UpdateFlowRunInput, UpdateNodeRunInput,
     },
     runtime_observability::{
-        append_host_event, append_host_span, coalesce_provider_stream_events,
+        append_host_event, append_host_span, append_provider_stream_event,
         projection::{estimate_tokens_for_text, model_input_hash},
-        provider_stream_event_type, PROVIDER_DELTA_COALESCE_MAX_BYTES,
+        LiveEventCoalescer, PROVIDER_DELTA_COALESCE_MAX_BYTES,
     },
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
@@ -42,7 +42,10 @@ where
         + crate::ports::ModelProviderRepository
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
-        + Clone,
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     H: crate::ports::ProviderRuntimePort
         + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
         + Clone,
@@ -302,7 +305,10 @@ where
         + crate::ports::ModelProviderRepository
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
-        + Clone,
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     H: crate::ports::ProviderRuntimePort
         + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
         + Clone,
@@ -322,7 +328,10 @@ where
         + crate::ports::ModelProviderRepository
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
-        + Clone,
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     H: crate::ports::ProviderRuntimePort
         + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
         + Clone,
@@ -347,7 +356,10 @@ where
         + crate::ports::ModelProviderRepository
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
-        + Clone,
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     H: crate::ports::ProviderRuntimePort
         + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
         + Clone,
@@ -373,7 +385,10 @@ where
         + crate::ports::ModelProviderRepository
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
-        + Clone,
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     H: crate::ports::ProviderRuntimePort
         + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
         + Clone,
@@ -434,7 +449,10 @@ where
         + crate::ports::ModelProviderRepository
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
-        + Clone,
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     H: crate::ports::ProviderRuntimePort
         + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
         + Clone,
@@ -556,14 +574,32 @@ where
                     .await?;
             }
             "llm" => {
-                let llm_invoker = invoker.for_live_llm_node(node.node_id.clone(), node_run.id);
-                let execution = orchestration_runtime::execution_engine::execute_llm_node(
+                let (persist_sender, persist_receiver) = mpsc::unbounded_channel();
+                let persist_handle = tokio::spawn(run_live_event_persister(
+                    service.repository.clone(),
+                    flow_run.id,
+                    node_run.id,
+                    node_span.id,
+                    persist_receiver,
+                ));
+                let llm_invoker = invoker.for_live_llm_node_with_persist(
+                    node.node_id.clone(),
+                    node_run.id,
+                    persist_sender,
+                );
+                let execution_result = orchestration_runtime::execution_engine::execute_llm_node(
                     node,
                     &resolved_inputs,
                     &rendered_templates,
                     &llm_invoker,
                 )
-                .await?;
+                .await;
+                drop(llm_invoker);
+                persist_handle
+                    .await
+                    .map_err(|e| anyhow!("persist task panicked: {e}"))??;
+                let execution = execution_result?;
+
                 last_output_payload = execution.output_payload.clone();
                 let node_status = if execution.error_payload.is_some() {
                     domain::NodeRunStatus::Failed
@@ -594,14 +630,6 @@ where
                     Value::Object(resolved_inputs.clone()),
                     &execution.metrics_payload,
                     execution.error_payload.as_ref(),
-                )
-                .await?;
-                append_provider_stream_events(
-                    &service.repository,
-                    flow_run.id,
-                    Some(node_run.id),
-                    Some(node_span.id),
-                    &execution.provider_events,
                 )
                 .await?;
 
@@ -950,7 +978,10 @@ where
         + crate::ports::ModelProviderRepository
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
-        + Clone,
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     H: crate::ports::ProviderRuntimePort
         + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
         + Clone,
@@ -1014,43 +1045,57 @@ where
         .unwrap_or(false))
 }
 
-async fn append_provider_stream_events<R>(
-    repository: &R,
+async fn run_live_event_persister<R>(
+    repository: R,
     flow_run_id: Uuid,
-    node_run_id: Option<Uuid>,
-    span_id: Option<Uuid>,
-    events: &[ProviderStreamEvent],
+    node_run_id: Uuid,
+    span_id: Uuid,
+    mut receiver: mpsc::UnboundedReceiver<ProviderStreamEvent>,
 ) -> Result<()>
 where
     R: OrchestrationRuntimeRepository,
 {
-    let runtime_bus = RuntimeEventBus::new((events.len() + 4).max(16));
-    let events =
-        coalesce_provider_stream_events(&runtime_bus, events, PROVIDER_DELTA_COALESCE_MAX_BYTES)?;
-    for event in &events {
-        let event_type = provider_stream_event_type(event);
-        let payload = serde_json::to_value(event)?;
-        repository
-            .append_run_event(&AppendRunEventInput {
+    let mut coalescer = LiveEventCoalescer::new(PROVIDER_DELTA_COALESCE_MAX_BYTES);
+
+    while let Some(event) = receiver.recv().await {
+        for ready in coalescer.push(event) {
+            write_single_provider_event(
+                &repository,
                 flow_run_id,
-                node_run_id,
-                event_type: event_type.to_string(),
-                payload: payload.clone(),
-            })
+                Some(node_run_id),
+                Some(span_id),
+                &ready,
+            )
             .await?;
-        append_host_event(
-            repository,
+        }
+    }
+
+    for remaining in coalescer.finish() {
+        write_single_provider_event(
+            &repository,
             flow_run_id,
-            node_run_id,
-            span_id,
-            event_type,
-            domain::RuntimeEventLayer::ProviderRaw,
-            payload,
+            Some(node_run_id),
+            Some(span_id),
+            &remaining,
         )
         .await?;
-        append_provider_capability_intent(repository, flow_run_id, node_run_id, span_id, event)
-            .await?;
     }
+
+    Ok(())
+}
+
+async fn write_single_provider_event<R>(
+    repository: &R,
+    flow_run_id: Uuid,
+    node_run_id: Option<Uuid>,
+    span_id: Option<Uuid>,
+    event: &ProviderStreamEvent,
+) -> Result<()>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    append_provider_stream_event(repository, flow_run_id, node_run_id, span_id, event).await?;
+    append_provider_capability_intent(repository, flow_run_id, node_run_id, span_id, event).await?;
 
     Ok(())
 }
