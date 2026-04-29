@@ -1,6 +1,6 @@
 ---
 name: frontend-logic-design
-description: "前端逻辑化设计审查与修正。当用户觉得界面'不对劲'、'没逻辑'、'不符合直觉'、'交互不一致'、'信息层级混乱'时使用。运用 MECE、渐进式披露、施耐德曼法则等方法论系统性诊断和修正前端信息架构。"
+description: "Use when 1flowbase frontend/UI structure feels illogical, unintuitive, inconsistent, hard to navigate, or has unclear information hierarchy, entry points, drill-down paths, or same-object behavior."
 ---
 
 # 前端逻辑化设计（Frontend Logic Design）

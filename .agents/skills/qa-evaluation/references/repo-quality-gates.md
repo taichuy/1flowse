@@ -29,6 +29,7 @@
 - 需要给“仓库级基线是否通过”下结论时，优先 `verify-repo`；需要给“CI 是否可过”下结论时，优先 `verify-ci`。
 - 需要讨论覆盖率缺口时，再补 `verify-coverage`；不要拿 coverage 结果替代功能结论。
 - 需要运行态页面证据时，优先 `runtime-gate` 或直接 `page-debug`，不要只靠静态阅读代码。
+- 证据已经足够支撑当前任务 QA 结论时停止；不要为了显得全面继续叠加无新增覆盖面的门禁。
 
 ## Hard Stops
 

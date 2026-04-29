@@ -20,3 +20,6 @@
 4.如果对应子目录下有AGENTS.md，需要先介绍阅读再做处理
 5.所有AGENTS.md，目标是提供短、硬、稳定的本地执行规则，尽可能精准，清晰，简短，最多不得超过200行。
 6.`docs/superpowers/plans` 和早期 `docs/superpowers/specs` 属于历史计划/规格归档，允许按时间保留旧文件；引用前必须优先核对最新 AGENTS、README 和 superseded 标记。
+
+# 规则编写约定
+新增或调整 AGENTS / skills 时，优先写目标、验收证据、预算和停止条件；绝对词只用于真不变量，不把可判断事项写成冗长固定流程。

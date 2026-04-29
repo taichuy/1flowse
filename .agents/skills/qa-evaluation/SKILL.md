@@ -45,6 +45,7 @@ description: Use when evaluating 1flowbase task outcomes or current project qual
 - 只要评估范围涉及后端 API、状态入口、插件边界、runtime、`Resource Action Kernel`、HostExtension registry 或 `route / service / repository / domain / mapper` 分层，就必须加载后端专项检查
 - 后端任务必查：三平面、接口包装、状态写入口、`HostExtension / RuntimeExtension / CapabilityPlugin` 边界、HostExtension manifest contribution、pre-state infra provider、route/worker/migration registry、`storage-durable/postgres` 内 `storage-postgres` 的 repository/mapper 拆分、`storage-durable / storage-object` 边界、`workspace/system` 命名面、`SYSTEM_SCOPE_ID`、runtime `scope_id`、无 legacy alias、验证命令与 blast radius
 - 同一工作区内执行后端 `cargo` 验证命令时默认串行，不要为了加速 QA 并发启动多条 `cargo test / check / clippy` 导致锁等待和结论失真
+- 验证预算：先跑最能覆盖当前风险的最小证据链；证据足够回答核心验收问题后停止，除非用户要求全量、CI、coverage 或发现高 blast radius
 - 前端层级、入口、L0 / L1 / L2 / L3 问题：联动 `frontend-logic-design`
 - 后端契约、状态入口、边界污染问题：联动 `backend-development`
 - 无法验证时必须明确写：`未验证，不下确定结论`
