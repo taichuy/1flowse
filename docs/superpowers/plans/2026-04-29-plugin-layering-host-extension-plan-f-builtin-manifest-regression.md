@@ -41,7 +41,7 @@
 **Files:**
 - Create all `api/plugins/host-extensions/official.*` manifest pairs listed above.
 
-- [ ] **Step 1: Add official host manifests**
+- [x] **Step 1: Add official host manifests**
 
 For each host extension, create `manifest.yaml` with this shape:
 
@@ -75,7 +75,7 @@ runtime:
 
 Use each extension's own `plugin_id`, `display_name`, and `description`.
 
-- [ ] **Step 2: Add host-extension.yaml files**
+- [x] **Step 2: Add host-extension.yaml files**
 
 For `official.local-infra-host`, include:
 
@@ -116,7 +116,7 @@ migrations: []
 
 For other official host extensions, set `bootstrap_phase: boot`, empty infrastructure providers, and their owned/extended resources according to current builtin manifest intent.
 
-- [ ] **Step 3: Validate YAML paths**
+- [x] **Step 3: Validate YAML paths**
 
 Run:
 
@@ -126,7 +126,7 @@ find api/plugins/host-extensions -maxdepth 2 -name '*.yaml' -print | sort
 
 Expected: every created directory has both `manifest.yaml` and `host-extension.yaml`.
 
-- [ ] **Step 4: Commit workspace entries**
+- [x] **Step 4: Commit workspace entries**
 
 ```bash
 git add api/plugins/host-extensions
@@ -140,7 +140,7 @@ git commit -m "feat: add builtin host extension source manifests"
 - Create: `api/plugins/sets/default.yaml`
 - Modify: `api/plugins/README.md`
 
-- [ ] **Step 1: Add minimal set**
+- [x] **Step 1: Add minimal set**
 
 Create:
 
@@ -156,7 +156,7 @@ runtime_extensions: []
 capability_plugins: []
 ```
 
-- [ ] **Step 2: Add default set**
+- [x] **Step 2: Add default set**
 
 Create:
 
@@ -174,7 +174,7 @@ runtime_extensions: []
 capability_plugins: []
 ```
 
-- [ ] **Step 3: Document sets in plugin README**
+- [x] **Step 3: Document sets in plugin README**
 
 Add:
 
@@ -182,7 +182,7 @@ Add:
 `sets/minimal.yaml` and `sets/default.yaml` select package sources for deployment assembly. They do not make plugin source code part of `api-server`; selected plugins still move through package/install/load lifecycle.
 ```
 
-- [ ] **Step 4: Commit plugin sets**
+- [x] **Step 4: Commit plugin sets**
 
 ```bash
 git add api/plugins/sets api/plugins/README.md
@@ -198,7 +198,7 @@ git commit -m "feat: add builtin plugin set manifests"
 - Modify: `api/crates/control-plane/src/host_extension_boot/builtin.rs`
 - Modify: `api/crates/control-plane/src/_tests/host_extension_builtin_tests.rs`
 
-- [ ] **Step 1: Add RED tests**
+- [x] **Step 1: Add RED tests**
 
 Tests must assert:
 
@@ -209,7 +209,7 @@ default set contains local-infra-host before boot-phase modules
 missing manifest path fails with a clear load error
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -221,7 +221,7 @@ cargo test -p control-plane host_extension_builtin -- --nocapture
 
 Expected: FAIL while loader still reads hard-coded YAML constants.
 
-- [ ] **Step 3: Implement file-backed builtin loading**
+- [x] **Step 3: Implement file-backed builtin loading**
 
 Change `builtin.rs` from full YAML constants to a path list:
 
@@ -240,7 +240,7 @@ pub fn builtin_host_extension_manifest_paths() -> Vec<&'static str> {
 
 Resolve paths from `api/` workspace root in tests and from configured install/source root in runtime.
 
-- [ ] **Step 4: Re-run builtin tests**
+- [x] **Step 4: Re-run builtin tests**
 
 Run:
 
@@ -252,7 +252,7 @@ cargo test -p control-plane host_extension_builtin -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit loader rewire**
+- [x] **Step 5: Commit loader rewire**
 
 ```bash
 git add api/apps/api-server/src/host_extensions/builtin.rs api/apps/api-server/src/host_extension_boot.rs api/apps/api-server/src/_tests/host_extensions_builtin_tests.rs api/crates/control-plane/src/host_extension_boot/builtin.rs api/crates/control-plane/src/_tests/host_extension_builtin_tests.rs
@@ -266,7 +266,7 @@ git commit -m "refactor: load builtin host manifests from plugin workspace"
 - Modify: `api/README.md`
 - Modify: `README.md`
 
-- [ ] **Step 1: Remove old builtin ownership claims**
+- [x] **Step 1: Remove old builtin ownership claims**
 
 Search:
 
@@ -276,7 +276,7 @@ rg -n "builtin host manifest|API_EPHEMERAL_BACKEND|RedisBackedSessionStore|stora
 
 Expected before edit: any stale matches are reviewed.
 
-- [ ] **Step 2: Update docs**
+- [x] **Step 2: Update docs**
 
 Docs must state:
 
@@ -287,7 +287,7 @@ runtime-extension packages continue to use plugin-runner
 capability-plugin packages are workspace-selectable abilities
 ```
 
-- [ ] **Step 3: Verify stale claims are gone**
+- [x] **Step 3: Verify stale claims are gone**
 
 Run:
 
@@ -297,7 +297,7 @@ rg -n "API_EPHEMERAL_BACKEND|RedisBackedSessionStore|storage-redis|only data-sou
 
 Expected: no stale target-architecture matches.
 
-- [ ] **Step 4: Commit docs cleanup**
+- [x] **Step 4: Commit docs cleanup**
 
 ```bash
 git add README.md api/README.md api/plugins/README.md api/AGENTS.md
