@@ -251,7 +251,7 @@ git commit -m "feat: bootstrap api state from host infrastructure"
 - Modify: `api/apps/api-server/Cargo.toml`
 - Modify: `api/Cargo.toml` if Redis workspace dependency is now unused.
 
-- [ ] **Step 1: Update storage-ephemeral tests**
+- [x] **Step 1: Update storage-ephemeral tests**
 
 Change backend-kind tests to expect only `memory` or remove backend-kind tests if the enum no longer exists.
 
@@ -264,11 +264,11 @@ fn memory_store_type_remains_public() {
 }
 ```
 
-- [ ] **Step 2: Remove Redis startup exports**
+- [x] **Step 2: Remove Redis startup exports**
 
 Stop exporting `RedisBackedSessionStore` from `storage-ephemeral` public API used by api-server startup. Keep Redis module only if another test or package still owns it as implementation detail; otherwise delete the module and dependency in this plan.
 
-- [ ] **Step 3: Run targeted tests**
+- [x] **Step 3: Run targeted tests**
 
 Run:
 
@@ -280,7 +280,7 @@ cargo test -p api-server config_tests -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit Redis startup removal**
+- [x] **Step 4: Commit Redis startup removal**
 
 ```bash
 git add api/crates/storage-ephemeral api/apps/api-server/Cargo.toml api/Cargo.toml

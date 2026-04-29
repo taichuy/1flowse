@@ -1,5 +1,5 @@
 use serde_json::json;
-use storage_ephemeral::{EphemeralBackendKind, EphemeralKvStore, MemoryKvStore};
+use storage_ephemeral::{EphemeralKvStore, MemoryKvStore};
 use time::Duration;
 
 #[tokio::test]
@@ -64,26 +64,14 @@ async fn memory_kv_store_prefixes_namespace_and_extends_ttl() {
 }
 
 #[test]
-fn backend_kind_parses_memory_and_redis() {
-    assert_eq!(
-        EphemeralBackendKind::from_env_value("memory")
-            .unwrap()
-            .as_str(),
-        "memory"
-    );
-    assert_eq!(
-        EphemeralBackendKind::from_env_value("redis")
-            .unwrap()
-            .as_str(),
-        "redis"
-    );
+fn public_exports_match_capability_names() {
+    use storage_ephemeral::{EphemeralKvStore, MemoryKvStore};
+
+    let _ = std::any::type_name::<MemoryKvStore>();
+    let _ = std::any::type_name::<&dyn EphemeralKvStore>();
 }
 
 #[test]
-fn public_exports_match_capability_names() {
-    use storage_ephemeral::{EphemeralBackendKind, EphemeralKvStore, MemoryKvStore};
-
-    assert_eq!(EphemeralBackendKind::Memory.as_str(), "memory");
-    let _ = std::any::type_name::<MemoryKvStore>();
-    let _ = std::any::type_name::<&dyn EphemeralKvStore>();
+fn memory_store_type_remains_public() {
+    let _ = storage_ephemeral::MemorySessionStore::new("test");
 }
