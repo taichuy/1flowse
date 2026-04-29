@@ -5,7 +5,7 @@ use crate::host_extension_contribution::{
     HostExtensionBootstrapPhase, HostInfrastructureProviderManifest,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RegisteredHostExtension {
     pub extension_id: String,
     pub bootstrap_phase: HostExtensionBootstrapPhase,

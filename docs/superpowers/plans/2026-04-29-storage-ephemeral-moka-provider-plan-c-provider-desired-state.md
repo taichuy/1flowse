@@ -49,7 +49,7 @@
 - Modify: `api/crates/plugin-framework/src/_tests/host_extension_registry_tests.rs`
 - Modify: `api/plugins/host-extensions/*/host-extension.yaml`
 
-- [ ] **Step 1: Write RED parser tests**
+ **Step 1: Write RED parser tests**
 
 Add:
 
@@ -114,7 +114,7 @@ migrations: []
 }
 ```
 
-- [ ] **Step 2: Run RED verification**
+ **Step 2: Run RED verification**
 
 Run:
 
@@ -125,7 +125,7 @@ cargo test -p plugin-framework host_extension_contribution -- --nocapture
 
 Expected: FAIL because `config_schema`, `display_name`, and `description` are not in `HostInfrastructureProviderManifest`.
 
-- [ ] **Step 3: Implement parser fields and derive fixes**
+ **Step 3: Implement parser fields and derive fixes**
 
 Update `HostInfrastructureProviderManifest`:
 
@@ -177,7 +177,7 @@ fn infrastructure_provider(
 }
 ```
 
-- [ ] **Step 4: Update existing host extension manifests**
+ **Step 4: Update existing host extension manifests**
 
 For every entry under `api/plugins/host-extensions/*/host-extension.yaml`, add:
 
@@ -189,7 +189,7 @@ For every entry under `api/plugins/host-extensions/*/host-extension.yaml`, add:
 
 Use provider-specific display text where the provider is not `local`, for example `Plugin Host`, `Identity Host`, or `File Management Host`.
 
-- [ ] **Step 5: Re-run parser and registry tests**
+ **Step 5: Re-run parser and registry tests**
 
 Run:
 
@@ -213,7 +213,7 @@ Expected: PASS.
 - Create: `api/crates/storage-durable/postgres/src/_tests/host_infrastructure_config_repository_tests.rs`
 - Modify: `api/crates/storage-durable/postgres/src/_tests/mod.rs`
 
-- [ ] **Step 1: Add domain and port types**
+ **Step 1: Add domain and port types**
 
 Add to `domain/src/host_extension.rs`:
 
@@ -280,7 +280,7 @@ pub trait HostInfrastructureConfigRepository: Send + Sync {
 }
 ```
 
-- [ ] **Step 2: Add migration**
+ **Step 2: Add migration**
 
 Create:
 
@@ -309,11 +309,11 @@ create index host_infra_provider_configs_contracts_idx
     on host_infrastructure_provider_configs using gin (enabled_contracts);
 ```
 
-- [ ] **Step 3: Add repository test**
+ **Step 3: Add repository test**
 
 Add a test that creates one host extension installation and upserts `provider_code = redis` with `enabled_contracts = ['storage-ephemeral', 'cache-store']`. Assert the returned record has `status = PendingRestart`, then list all configs and assert exactly one record exists for Redis.
 
-- [ ] **Step 4: Implement repository and run tests**
+ **Step 4: Implement repository and run tests**
 
 Run:
 
@@ -332,7 +332,7 @@ Expected: PASS.
 - Create: `api/crates/control-plane/src/_tests/host_infrastructure_config_tests.rs`
 - Modify: `api/crates/control-plane/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write service tests**
+ **Step 1: Write service tests**
 
 Add tests:
 
@@ -446,7 +446,7 @@ async fn save_rejects_enabled_contract_not_declared_by_provider() {
 
 The fixture `host-extension.yaml` must include two Redis provider entries with the same `provider_code` and `config_ref`: `storage-ephemeral` and `cache-store`.
 
-- [ ] **Step 2: Implement service DTOs**
+ **Step 2: Implement service DTOs**
 
 Create:
 
@@ -521,7 +521,7 @@ do not update runtime_status to Active.
 do not mutate HostInfrastructureRegistry or active provider trait objects.
 ```
 
-- [ ] **Step 3: Run service tests**
+ **Step 3: Run service tests**
 
 Run:
 
@@ -542,7 +542,7 @@ Expected: PASS.
 - Create: `api/apps/api-server/src/_tests/host_infrastructure_config_routes.rs`
 - Modify: `api/apps/api-server/src/_tests/mod.rs`
 
-- [ ] **Step 1: Add route tests**
+ **Step 1: Add route tests**
 
 Add tests for:
 
@@ -557,7 +557,7 @@ PUT does not return runtime_status=active and does not activate provider in-proc
 
 Use a fixture installed host extension with `manifest.yaml` and `host-extension.yaml` in a temp directory. The fixture `host-extension.yaml` must include `config_schema` fields `host`, `port`, and `password_ref`.
 
-- [ ] **Step 2: Add route module**
+ **Step 2: Add route module**
 
 Expose:
 
@@ -608,7 +608,7 @@ pub struct SaveHostInfrastructureProviderConfigResponse {
 
 Reuse the existing `PluginFormFieldSchemaResponse` mapping from `routes/plugins_and_models/model_providers.rs`; if it is private, move the schema response DTO and mapper into a shared route helper module instead of returning raw `PluginFormFieldSchema`.
 
-- [ ] **Step 3: Export and mount route**
+ **Step 3: Export and mount route**
 
 Update `api/apps/api-server/src/routes/settings/mod.rs`:
 
@@ -631,7 +631,7 @@ Update `api/apps/api-server/src/lib.rs` inside `console_router`:
 .nest("/api/console", routes::host_infrastructure::router())
 ```
 
-- [ ] **Step 4: Run route tests**
+ **Step 4: Run route tests**
 
 Run:
 
@@ -649,7 +649,7 @@ Expected: PASS.
 - Modify: `web/packages/api-client/src/index.ts`
 - Modify: `web/app/src/features/settings/api/_tests/settings-api.test.ts`
 
-- [ ] **Step 1: Add client types and tests**
+ **Step 1: Add client types and tests**
 
 Add to `console-plugins.ts`:
 
@@ -711,7 +711,7 @@ export function saveConsoleHostInfrastructureProviderConfig(
 
 Export these symbols from `web/packages/api-client/src/index.ts`.
 
-- [ ] **Step 2: Run api-client targeted test**
+ **Step 2: Run api-client targeted test**
 
 Run:
 
@@ -721,7 +721,7 @@ node scripts/node/test-frontend.js fast -- settings-api
 
 Expected: PASS.
 
-- [ ] **Step 3: Format and commit Plan C**
+ **Step 3: Format and commit Plan C**
 
 Run:
 

@@ -6,7 +6,10 @@ use std::{collections::BTreeMap, sync::Arc};
 use anyhow::{anyhow, Result};
 use control_plane::ports::SessionStore;
 
-pub use contracts::{CacheStore, DistributedLock, EventBus, RateLimitStore, TaskQueue};
+pub use contracts::{
+    CacheStore, ClaimedTask, DistributedLock, EventBus, RateLimitDecision, RateLimitStore,
+    TaskQueue,
+};
 pub use local::build_local_host_infrastructure;
 
 pub const SESSION_STORE_NAMESPACE: &str = "flowbase:console:session";

@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use control_plane::ports::SessionStore;
-use storage_ephemeral::MemorySessionStore;
+use storage_ephemeral::{
+    MemoryDistributedLock, MemoryEventBus, MemoryTaskQueue, MokaCacheStore, MokaRateLimitStore,
+    MokaSessionStore,
+};
 
 use super::{
     CacheStore, DistributedLock, EventBus, HostInfrastructureRegistry, RateLimitStore, TaskQueue,
@@ -10,51 +13,11 @@ use super::{
 
 const LOCAL_PROVIDER_CODE: &str = "local";
 const LOCAL_PROVIDER_SOURCE: &str = "local-infra-host";
-
-#[derive(Debug, Default)]
-pub struct LocalCacheStore;
-
-impl CacheStore for LocalCacheStore {
-    fn provider_code(&self) -> &'static str {
-        LOCAL_PROVIDER_CODE
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct LocalDistributedLock;
-
-impl DistributedLock for LocalDistributedLock {
-    fn provider_code(&self) -> &'static str {
-        LOCAL_PROVIDER_CODE
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct LocalEventBus;
-
-impl EventBus for LocalEventBus {
-    fn provider_code(&self) -> &'static str {
-        LOCAL_PROVIDER_CODE
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct LocalTaskQueue;
-
-impl TaskQueue for LocalTaskQueue {
-    fn provider_code(&self) -> &'static str {
-        LOCAL_PROVIDER_CODE
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct LocalRateLimitStore;
-
-impl RateLimitStore for LocalRateLimitStore {
-    fn provider_code(&self) -> &'static str {
-        LOCAL_PROVIDER_CODE
-    }
-}
+const CACHE_STORE_NAMESPACE: &str = "flowbase:cache";
+const RATE_LIMIT_STORE_NAMESPACE: &str = "flowbase:rate-limit";
+const LOCK_NAMESPACE: &str = "flowbase:lock";
+const TASK_QUEUE_NAMESPACE: &str = "flowbase:task";
+const LOCAL_CACHE_MAX_CAPACITY: u64 = 10_000;
 
 pub fn build_local_host_infrastructure() -> HostInfrastructureRegistry {
     let mut registry = HostInfrastructureRegistry::default();
@@ -89,14 +52,24 @@ pub fn build_local_host_infrastructure() -> HostInfrastructureRegistry {
         )
         .expect("local rate-limit-store provider registration should be unique");
 
-    registry.set_session_store(
-        Arc::new(MemorySessionStore::new(SESSION_STORE_NAMESPACE)) as Arc<dyn SessionStore>
+    registry.set_session_store(Arc::new(MokaSessionStore::new(
+        SESSION_STORE_NAMESPACE,
+        LOCAL_CACHE_MAX_CAPACITY,
+    )) as Arc<dyn SessionStore>);
+    registry.set_cache_store(Arc::new(MokaCacheStore::new(
+        CACHE_STORE_NAMESPACE,
+        LOCAL_CACHE_MAX_CAPACITY,
+    )) as Arc<dyn CacheStore>);
+    registry.set_distributed_lock(
+        Arc::new(MemoryDistributedLock::new(LOCK_NAMESPACE)) as Arc<dyn DistributedLock>
     );
-    registry.set_cache_store(Arc::new(LocalCacheStore));
-    registry.set_distributed_lock(Arc::new(LocalDistributedLock));
-    registry.set_event_bus(Arc::new(LocalEventBus));
-    registry.set_task_queue(Arc::new(LocalTaskQueue));
-    registry.set_rate_limit_store(Arc::new(LocalRateLimitStore));
+    registry.set_event_bus(Arc::new(MemoryEventBus::new()) as Arc<dyn EventBus>);
+    registry
+        .set_task_queue(Arc::new(MemoryTaskQueue::new(TASK_QUEUE_NAMESPACE)) as Arc<dyn TaskQueue>);
+    registry.set_rate_limit_store(Arc::new(MokaRateLimitStore::new(
+        RATE_LIMIT_STORE_NAMESPACE,
+        LOCAL_CACHE_MAX_CAPACITY,
+    )) as Arc<dyn RateLimitStore>);
 
     registry
 }

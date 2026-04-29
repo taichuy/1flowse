@@ -16,7 +16,9 @@ extends_resources: []
 infrastructure_providers:
   - contract: storage-ephemeral
     provider_code: redis
+    display_name: Redis
     config_ref: secret://system/redis-infra-host/config
+    config_schema: []
 routes: []
 workers: []
 migrations: []
@@ -29,6 +31,72 @@ migrations: []
     assert_eq!(
         manifest.infrastructure_providers[0].contract,
         "storage-ephemeral"
+    );
+}
+
+#[test]
+fn parses_infrastructure_provider_config_schema_before_runtime_activation() {
+    let raw = r#"
+schema_version: 1flowbase.host-extension/v1
+extension_id: redis-infra-host
+version: 0.1.0
+bootstrap_phase: pre_state
+native:
+  abi_version: 1flowbase.host.native/v1
+  library: lib/redis_infra_host
+  entry_symbol: oneflowbase_host_extension_entry_v1
+owned_resources: []
+extends_resources: []
+infrastructure_providers:
+  - contract: storage-ephemeral
+    provider_code: redis
+    display_name: Redis
+    description: Redis backed host infrastructure.
+    config_ref: secret://system/redis-infra-host/config
+    config_schema:
+      - key: host
+        label: Host
+        type: string
+        required: true
+      - key: port
+        label: Port
+        type: number
+        required: true
+        default_value: 6379
+      - key: password_ref
+        label: Password Secret Ref
+        type: string
+        send_mode: secret_ref
+  - contract: cache-store
+    provider_code: redis
+    display_name: Redis
+    description: Redis backed host infrastructure.
+    config_ref: secret://system/redis-infra-host/config
+    config_schema:
+      - key: host
+        label: Host
+        type: string
+        required: true
+routes: []
+workers: []
+migrations: []
+"#;
+
+    let manifest = parse_host_extension_contribution_manifest(raw).unwrap();
+    assert_eq!(manifest.infrastructure_providers.len(), 2);
+    let provider = &manifest.infrastructure_providers[0];
+
+    assert_eq!(provider.contract, "storage-ephemeral");
+    assert_eq!(provider.provider_code, "redis");
+    assert_eq!(provider.display_name, "Redis");
+    assert_eq!(
+        provider.description.as_deref(),
+        Some("Redis backed host infrastructure.")
+    );
+    assert_eq!(provider.config_schema[0].key, "host");
+    assert_eq!(
+        provider.config_schema[2].send_mode.as_deref(),
+        Some("secret_ref")
     );
 }
 

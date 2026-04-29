@@ -27,7 +27,10 @@ fn infrastructure_provider(
     HostInfrastructureProviderManifest {
         contract: contract.into(),
         provider_code: provider_code.into(),
+        display_name: provider_code.to_string(),
+        description: None,
         config_ref: format!("secret://system/{provider_code}/config"),
+        config_schema: vec![],
     }
 }
 

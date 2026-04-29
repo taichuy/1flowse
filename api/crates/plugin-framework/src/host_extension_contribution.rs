@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
 use crate::error::{FrameworkResult, PluginFrameworkError};
+use crate::provider_contract::PluginFormFieldSchema;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -26,12 +27,17 @@ pub struct HostExtensionNativeEntrypointManifest {
     pub entry_symbol: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HostInfrastructureProviderManifest {
     pub contract: String,
     pub provider_code: String,
+    pub display_name: String,
+    #[serde(default)]
+    pub description: Option<String>,
     pub config_ref: String,
+    #[serde(default)]
+    pub config_schema: Vec<PluginFormFieldSchema>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -65,7 +71,7 @@ pub struct HostExtensionMigrationManifest {
     pub path: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HostExtensionContributionManifest {
     pub schema_version: String,
@@ -114,10 +120,25 @@ fn validate_host_extension_contribution_manifest(
             &provider.provider_code,
             "infrastructure_providers[].provider_code",
         )?;
+        validate_non_empty(
+            &provider.display_name,
+            "infrastructure_providers[].display_name",
+        )?;
         if !provider.config_ref.starts_with("secret://system/") {
             return Err(PluginFrameworkError::invalid_provider_package(
                 "infrastructure_providers[].config_ref must start with secret://system/",
             ));
+        }
+        for field in &provider.config_schema {
+            validate_non_empty(&field.key, "infrastructure_providers[].config_schema[].key")?;
+            validate_non_empty(
+                &field.label,
+                "infrastructure_providers[].config_schema[].label",
+            )?;
+            validate_non_empty(
+                &field.field_type,
+                "infrastructure_providers[].config_schema[].type",
+            )?;
         }
     }
     for route in &manifest.routes {

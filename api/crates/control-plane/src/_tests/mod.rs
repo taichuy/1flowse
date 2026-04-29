@@ -11,6 +11,8 @@ mod host_extension_boot_tests;
 mod host_extension_builtin_tests;
 mod host_extension_inventory_tests;
 mod host_extension_service_tests;
+mod host_infrastructure_config_tests;
+mod host_infrastructure_contract_tests;
 mod member;
 mod model_definition_acl_tests;
 mod model_definition_runtime_sync_tests;

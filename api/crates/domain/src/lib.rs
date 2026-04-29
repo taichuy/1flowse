@@ -42,6 +42,7 @@ pub use flow::{
 };
 pub use host_extension::{
     HostExtensionActivationStatus, HostExtensionInventoryRecord, HostExtensionTrustLevel,
+    HostInfrastructureConfigStatus, HostInfrastructureProviderConfigRecord,
 };
 pub use model_provider::{
     ModelCatalogSyncRunRecord, ModelFailoverQueueItemRecord, ModelFailoverQueueSnapshotRecord,

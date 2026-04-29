@@ -21,13 +21,13 @@ This plan also depends on the completed HostExtension realignment plans:
 
 ## Execution Plans
 
-1. [ ] [Plan A: Host Infrastructure Contracts](./2026-04-29-storage-ephemeral-moka-provider-plan-a-contracts.md)
+1. [x] [Plan A: Host Infrastructure Contracts](./2026-04-29-storage-ephemeral-moka-provider-plan-a-contracts.md)
    Moves `CacheStore`, `DistributedLock`, `EventBus`, `TaskQueue`, and `RateLimitStore` from api-server placeholder identity traits into control-plane ports with real async operations, then rewires `HostInfrastructureRegistry` to depend on those contracts.
-2. [ ] [Plan B: Local Moka Providers](./2026-04-29-storage-ephemeral-moka-provider-plan-b-local-moka.md)
+2. [x] [Plan B: Local Moka Providers](./2026-04-29-storage-ephemeral-moka-provider-plan-b-local-moka.md)
    Adds `moka` to `storage-ephemeral`, implements `MokaCacheStore`, `MokaSessionStore`, `MokaRateLimitStore`, memory-backed lock/event/task providers, and registers them in `local-infra-host`.
-3. [ ] [Plan C: Provider Desired State And Config API](./2026-04-29-storage-ephemeral-moka-provider-plan-c-provider-desired-state.md)
+3. [x] [Plan C: Provider Desired State And Config API](./2026-04-29-storage-ephemeral-moka-provider-plan-c-provider-desired-state.md)
    Adds host infrastructure provider config schema parsing, stores desired provider config/default-contract selection as restart-scoped system state, and exposes console APIs that work from installed package manifest/schema before provider runtime activation.
-4. [ ] [Plan D: Settings Infrastructure Provider UI](./2026-04-29-storage-ephemeral-moka-provider-plan-d-settings-ui.md)
+4. [x] [Plan D: Settings Infrastructure Provider UI](./2026-04-29-storage-ephemeral-moka-provider-plan-d-settings-ui.md)
    Adds `/settings/host-infrastructure` with installed provider discovery, schema-generated config forms, contract selection, save-and-enable in one action, and a single restart-required state.
 
 ## Scope Boundaries

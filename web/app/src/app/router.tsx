@@ -235,6 +235,13 @@ const settingsSystemRuntimeRoute = createRoute({
   component: () => renderSettingsRoute('system-runtime')
 });
 
+const settingsHostInfrastructureRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/settings/host-infrastructure',
+  notFoundComponent: NotFoundPage,
+  component: () => renderSettingsRoute('host-infrastructure')
+});
+
 const settingsFilesRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: '/settings/files',
@@ -307,6 +314,7 @@ const routeTree = rootRoute.addChildren([
     settingsIndexRoute,
     settingsDocsRoute,
     settingsSystemRuntimeRoute,
+    settingsHostInfrastructureRoute,
     settingsFilesRoute,
     settingsModelProvidersRoute,
     settingsMembersRoute,

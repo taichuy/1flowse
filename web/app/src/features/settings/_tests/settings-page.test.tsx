@@ -118,6 +118,16 @@ const fileManagementApi = vi.hoisted(() => ({
   updateSettingsFileTableBinding: vi.fn()
 }));
 
+const hostInfrastructureApi = vi.hoisted(() => ({
+  settingsHostInfrastructureProvidersQueryKey: [
+    'settings',
+    'host-infrastructure',
+    'providers'
+  ],
+  fetchSettingsHostInfrastructureProviders: vi.fn(),
+  saveSettingsHostInfrastructureProviderConfig: vi.fn()
+}));
+
 vi.mock('../api/members', () => membersApi);
 vi.mock('../api/roles', () => rolesApi);
 vi.mock('../api/permissions', () => permissionsApi);
@@ -126,6 +136,7 @@ vi.mock('../api/model-providers', () => modelProvidersApi);
 vi.mock('../api/plugins', () => pluginsApi);
 vi.mock('../api/system-runtime', () => systemRuntimeApi);
 vi.mock('../api/file-management', () => fileManagementApi);
+vi.mock('../api/host-infrastructure', () => hostInfrastructureApi);
 vi.mock('@scalar/api-reference-react', () => ({
   ApiReferenceReact: () => <div data-testid="settings-page-scalar">Scalar</div>
 }));
@@ -391,6 +402,9 @@ describe('SettingsPage', () => {
         status: 'active'
       }
     ]);
+    hostInfrastructureApi.fetchSettingsHostInfrastructureProviders.mockResolvedValue(
+      []
+    );
   });
 
   test('shows API 文档 only for root or api_reference.view.all', async () => {
@@ -590,6 +604,22 @@ describe('SettingsPage', () => {
     expect(
       systemRuntimeApi.fetchSettingsSystemRuntimeProfile
     ).toHaveBeenCalled();
+  });
+
+  test('shows 基础设施 when plugin_config.view.all is the only visible settings section', async () => {
+    authenticateWithPermissions([
+      'route_page.view.all',
+      'plugin_config.view.all'
+    ]);
+
+    renderApp('/settings');
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/settings/host-infrastructure');
+    });
+    expect(
+      await screen.findByRole('heading', { name: '基础设施', level: 3 })
+    ).toBeInTheDocument();
   });
 
   test('shows 文件管理 when file_table.view.own is the only visible settings section', async () => {

@@ -39,7 +39,7 @@
 - Create: `api/crates/storage-ephemeral/src/_tests/moka_cache_store_tests.rs`
 - Modify: `api/crates/storage-ephemeral/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write RED tests**
+ **Step 1: Write RED tests**
 
 Add:
 
@@ -126,7 +126,7 @@ async fn moka_cache_store_supports_ephemeral_set_if_absent() {
 
 Add `mod moka_cache_store_tests;` to `_tests/mod.rs`.
 
-- [ ] **Step 2: Run RED verification**
+ **Step 2: Run RED verification**
 
 Run:
 
@@ -146,7 +146,7 @@ Expected: FAIL because `MokaCacheStore` and the `moka` dependency do not exist.
 - Create: `api/crates/storage-ephemeral/src/local/moka_cache_store.rs`
 - Modify: `api/crates/storage-ephemeral/src/lib.rs`
 
-- [ ] **Step 1: Add dependency**
+ **Step 1: Add dependency**
 
 In `api/Cargo.toml` under `[workspace.dependencies]` add:
 
@@ -160,7 +160,7 @@ In `api/crates/storage-ephemeral/Cargo.toml` add:
 moka.workspace = true
 ```
 
-- [ ] **Step 2: Implement cache store**
+ **Step 2: Implement cache store**
 
 Create `api/crates/storage-ephemeral/src/local/moka_cache_store.rs` with these required details:
 
@@ -267,7 +267,7 @@ pub mod local;
 pub use local::MokaCacheStore;
 ```
 
-- [ ] **Step 3: Re-run cache tests**
+ **Step 3: Re-run cache tests**
 
 Run:
 
@@ -289,7 +289,7 @@ Expected: PASS.
 - Create: `api/crates/storage-ephemeral/src/_tests/moka_rate_limit_store_tests.rs`
 - Modify: `api/crates/storage-ephemeral/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write RED tests**
+ **Step 1: Write RED tests**
 
 Add session tests:
 
@@ -349,7 +349,7 @@ async fn moka_rate_limit_store_counts_inside_window() {
 }
 ```
 
-- [ ] **Step 2: Implement stores**
+ **Step 2: Implement stores**
 
 Implement `MokaSessionStore` by composing `MokaCacheStore` and the existing `session_ttl` / `is_session_expired` helpers from `storage-ephemeral/src/session_store.rs`.
 
@@ -365,7 +365,7 @@ struct RateLimitWindow {
 
 On `consume`, reset the window when `reset_at <= now`, increment only when below `limit`, and return `RateLimitDecision { allowed, remaining, reset_after_ms }`.
 
-- [ ] **Step 3: Run targeted tests**
+ **Step 3: Run targeted tests**
 
 Run:
 
@@ -388,7 +388,7 @@ Expected: PASS.
 - Create: `api/crates/storage-ephemeral/src/_tests/local_infrastructure_tests.rs`
 - Modify: `api/crates/storage-ephemeral/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write RED tests**
+ **Step 1: Write RED tests**
 
 Add:
 
@@ -445,7 +445,7 @@ async fn memory_task_queue_idempotency_claim_ack_and_fail_are_worker_checked() {
 }
 ```
 
-- [ ] **Step 2: Implement providers**
+ **Step 2: Implement providers**
 
 `MemoryDistributedLock` delegates to the existing `MemoryLeaseStore`.
 
@@ -466,7 +466,7 @@ struct TaskEntry {
 
 Use `uuid::Uuid::now_v7().to_string()` for `task_id`. Maintain a secondary `HashMap<(String, String), String>` mapping `(queue, idempotency_key)` to `task_id` for non-empty idempotency keys. `enqueue` with the same queue and idempotency key returns the existing task id while the task is pending or claimed. `claim` may reclaim entries whose `claim_expires_at <= now`, sets `claimed_by`, and sets `claim_expires_at = now + visibility_timeout`. `ack` removes only when `claimed_by == worker` and must remove the idempotency index entry. `fail` clears claim only when `claimed_by == worker`.
 
-- [ ] **Step 3: Run targeted tests**
+ **Step 3: Run targeted tests**
 
 Run:
 
@@ -483,7 +483,7 @@ Expected: PASS.
 - Modify: `api/apps/api-server/src/host_infrastructure/local.rs`
 - Modify: `api/apps/api-server/src/_tests/host_infrastructure_tests.rs`
 
-- [ ] **Step 1: Replace temporary structs**
+ **Step 1: Replace temporary structs**
 
 Replace api-server local placeholder structs with imports:
 
@@ -504,7 +504,7 @@ const TASK_QUEUE_NAMESPACE: &str = "flowbase:task";
 const LOCAL_CACHE_MAX_CAPACITY: u64 = 10_000;
 ```
 
-- [ ] **Step 2: Strengthen api-server tests**
+ **Step 2: Strengthen api-server tests**
 
 Update `local_infra_host_exposes_operation_contracts` so cache set/get, event publish/poll, and task idempotency are real:
 
@@ -541,7 +541,7 @@ let second = tasks
 assert_eq!(first, second);
 ```
 
-- [ ] **Step 3: Run registry and storage tests**
+ **Step 3: Run registry and storage tests**
 
 Run:
 
@@ -553,7 +553,7 @@ cargo test -p api-server host_infrastructure -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 4: Run formatting and commit Plan B**
+ **Step 4: Run formatting and commit Plan B**
 
 Run:
 

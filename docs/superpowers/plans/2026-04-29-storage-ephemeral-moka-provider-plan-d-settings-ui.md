@@ -35,7 +35,7 @@
 - Create: `web/app/src/features/settings/api/host-infrastructure.ts`
 - Modify: `web/app/src/features/settings/api/_tests/settings-api.test.ts`
 
-- [ ] **Step 1: Add wrapper tests**
+ **Step 1: Add wrapper tests**
 
 Extend the existing api-client mock with:
 
@@ -88,7 +88,7 @@ test('forwards host infrastructure provider helpers', async () => {
 });
 ```
 
-- [ ] **Step 2: Implement wrapper**
+ **Step 2: Implement wrapper**
 
 Create:
 
@@ -131,7 +131,7 @@ export function saveSettingsHostInfrastructureProviderConfig(
 }
 ```
 
-- [ ] **Step 3: Run wrapper test**
+ **Step 3: Run wrapper test**
 
 Run:
 
@@ -150,7 +150,7 @@ Expected: PASS.
 - Modify: `web/app/src/features/settings/pages/settings-page/SettingsSectionBody.tsx`
 - Modify: `web/app/src/features/settings/_tests/settings-page.test.tsx`
 
-- [ ] **Step 1: Write route tests**
+ **Step 1: Write route tests**
 
 Add:
 
@@ -169,7 +169,7 @@ test('shows 基础设施 when plugin_config.view.all is the only visible setting
 });
 ```
 
-- [ ] **Step 2: Add section definition**
+ **Step 2: Add section definition**
 
 Update `SettingsSectionKey`:
 
@@ -188,7 +188,7 @@ Add section after `system-runtime`:
 }
 ```
 
-- [ ] **Step 3: Add router entry**
+ **Step 3: Add router entry**
 
 Add:
 
@@ -203,7 +203,7 @@ const settingsHostInfrastructureRoute = createRoute({
 
 Add it to `routeTree` next to settings routes.
 
-- [ ] **Step 4: Lazy-load panel**
+ **Step 4: Lazy-load panel**
 
 In `SettingsPage.tsx`, compute:
 
@@ -235,7 +235,7 @@ case 'host-infrastructure':
   );
 ```
 
-- [ ] **Step 5: Run route tests**
+ **Step 5: Run route tests**
 
 Run:
 
@@ -253,7 +253,7 @@ Expected: PASS.
 - Create: `web/app/src/features/settings/components/host-infrastructure/host-infrastructure-panel.css`
 - Create: `web/app/src/features/settings/components/host-infrastructure/_tests/HostInfrastructurePanel.test.tsx`
 
-- [ ] **Step 1: Write component tests**
+ **Step 1: Write component tests**
 
 Add:
 
@@ -350,7 +350,7 @@ describe('HostInfrastructurePanel', () => {
 });
 ```
 
-- [ ] **Step 2: Implement panel**
+ **Step 2: Implement panel**
 
 Use existing settings section surface:
 
@@ -408,7 +408,7 @@ action button "配置"
 
 Use `Table`, `Tag`, `Button`, and `Space`. Do not use nested cards.
 
-- [ ] **Step 3: Run component test**
+ **Step 3: Run component test**
 
 Run:
 
@@ -426,7 +426,7 @@ Expected: PASS.
 - Modify: `web/app/src/features/settings/components/host-infrastructure/HostInfrastructurePanel.tsx`
 - Modify: `web/app/src/features/settings/components/host-infrastructure/_tests/HostInfrastructurePanel.test.tsx`
 
-- [ ] **Step 1: Write save-flow tests**
+ **Step 1: Write save-flow tests**
 
 Add:
 
@@ -489,7 +489,7 @@ test('saves config and contract selection as one pending restart change', async 
 
 Use the existing auth store test helper pattern to seed `csrfToken: "csrf-123"`.
 
-- [ ] **Step 2: Implement drawer controls**
+ **Step 2: Implement drawer controls**
 
 Drawer behavior:
 
@@ -540,7 +540,7 @@ queryClient.invalidateQueries({
 });
 ```
 
-- [ ] **Step 3: Run drawer tests**
+ **Step 3: Run drawer tests**
 
 Run:
 
@@ -555,7 +555,7 @@ Expected: PASS.
 **Files:**
 - Modify only files touched by Tasks 1-4 if failures show route, import, or type mismatches.
 
-- [ ] **Step 1: Run targeted settings tests**
+ **Step 1: Run targeted settings tests**
 
 Run:
 
@@ -567,7 +567,7 @@ node scripts/node/test-frontend.js fast -- settings-api
 
 Expected: PASS.
 
-- [ ] **Step 2: Run type/build verification**
+ **Step 2: Run type/build verification**
 
 Run:
 
@@ -577,7 +577,7 @@ node scripts/node/test-frontend.js fast
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit Plan D**
+ **Step 3: Commit Plan D**
 
 ```bash
 git add web/packages/api-client/src web/app/src/app/router.tsx web/app/src/features/settings

@@ -135,6 +135,7 @@ fn console_router(state: Arc<ApiState>) -> Router {
         .nest("/api/console", routes::files::router())
         .nest("/api/console", routes::file_storages::router())
         .nest("/api/console", routes::file_tables::router())
+        .nest("/api/console", routes::host_infrastructure::router())
         .nest("/api/console", routes::me::router())
         .nest("/api/console", routes::workspace::router())
         .nest("/api/console", routes::members::router())

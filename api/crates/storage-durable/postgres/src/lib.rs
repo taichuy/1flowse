@@ -7,6 +7,7 @@ pub mod data_source_repository;
 pub mod file_management_repository;
 pub mod flow_repository;
 pub mod host_extension_migration_repository;
+pub mod host_infrastructure_config_repository;
 pub mod mappers;
 pub mod member_repository;
 pub mod model_definition_repository;

@@ -1,0 +1,12 @@
+.host-infrastructure-panel {
+  width: 100%;
+  min-width: 0;
+}
+
+.host-infrastructure-drawer {
+  width: 100%;
+}
+
+.host-infrastructure-drawer__number {
+  width: 100%;
+}

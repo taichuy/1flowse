@@ -193,6 +193,12 @@ vi.mock('@1flowbase/api-client', () => ({
   getConsolePluginTask: vi.fn().mockResolvedValue({
     id: 'task-1'
   }),
+  listConsoleHostInfrastructureProviders: vi.fn().mockResolvedValue([]),
+  saveConsoleHostInfrastructureProviderConfig: vi.fn().mockResolvedValue({
+    restart_required: true,
+    installation_desired_state: 'pending_restart',
+    provider_config_status: 'pending_restart'
+  }),
   fetchConsoleSystemRuntimeProfile: vi.fn().mockResolvedValue({
     topology: { relationship: 'same_host' },
     hosts: []
@@ -239,7 +245,9 @@ import {
   uploadConsolePluginPackage,
   upgradeConsolePluginFamilyLatest,
   switchConsolePluginFamilyVersion,
-  getConsolePluginTask
+  getConsolePluginTask,
+  listConsoleHostInfrastructureProviders,
+  saveConsoleHostInfrastructureProviderConfig
 } from '@1flowbase/api-client';
 import type { ConsoleModelProviderInstance } from '@1flowbase/api-client';
 
@@ -329,6 +337,11 @@ import {
   createSettingsFileTable,
   updateSettingsFileTableBinding
 } from '../file-management';
+import {
+  fetchSettingsHostInfrastructureProviders,
+  saveSettingsHostInfrastructureProviderConfig,
+  settingsHostInfrastructureProvidersQueryKey
+} from '../host-infrastructure';
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -911,6 +924,36 @@ describe('settings api wrappers', () => {
       'csrf-123'
     );
     expect(getConsolePluginTask).toHaveBeenCalledWith('task-1');
+  });
+
+  test('forwards host infrastructure provider helpers', async () => {
+    expect(settingsHostInfrastructureProvidersQueryKey).toEqual([
+      'settings',
+      'host-infrastructure',
+      'providers'
+    ]);
+
+    await fetchSettingsHostInfrastructureProviders();
+    await saveSettingsHostInfrastructureProviderConfig(
+      'installation-1',
+      'redis',
+      {
+        enabled_contracts: ['storage-ephemeral'],
+        config_json: { host: 'localhost', port: 6379 }
+      },
+      'csrf-123'
+    );
+
+    expect(listConsoleHostInfrastructureProviders).toHaveBeenCalledTimes(1);
+    expect(saveConsoleHostInfrastructureProviderConfig).toHaveBeenCalledWith(
+      'installation-1',
+      'redis',
+      {
+        enabled_contracts: ['storage-ephemeral'],
+        config_json: { host: 'localhost', port: 6379 }
+      },
+      'csrf-123'
+    );
   });
 
   test('forwards file management query keys and request helpers', async () => {

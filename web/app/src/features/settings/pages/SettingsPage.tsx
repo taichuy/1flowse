@@ -31,6 +31,8 @@ export function SettingsPage({
       'state_model.manage.all',
       'state_model.manage.own'
     ]);
+  const canManageHostInfrastructure =
+    isRoot || permissionSet.has('plugin_config.configure.all');
   const { activeSection, redirectSection, visibleSections } =
     useSettingsSections({
       requestedSectionKey,
@@ -55,6 +57,7 @@ export function SettingsPage({
           canManageMembers={canManageMembers}
           canManageRoles={canManageRoles}
           canManageModelProviders={canManageModelProviders}
+          canManageHostInfrastructure={canManageHostInfrastructure}
         />
       ) : null}
     </SettingsRouteShell>

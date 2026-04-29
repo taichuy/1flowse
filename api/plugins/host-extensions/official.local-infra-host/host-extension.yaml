@@ -11,22 +11,40 @@ extends_resources: []
 infrastructure_providers:
   - contract: storage-ephemeral
     provider_code: local
+    display_name: Local
+    description: Local in-process host infrastructure provider.
     config_ref: secret://system/official.local-infra-host/config
+    config_schema: []
   - contract: cache-store
     provider_code: local
+    display_name: Local
+    description: Local in-process host infrastructure provider.
     config_ref: secret://system/official.local-infra-host/config
+    config_schema: []
   - contract: distributed-lock
     provider_code: local
+    display_name: Local
+    description: Local in-process host infrastructure provider.
     config_ref: secret://system/official.local-infra-host/config
+    config_schema: []
   - contract: event-bus
     provider_code: local
+    display_name: Local
+    description: Local in-process host infrastructure provider.
     config_ref: secret://system/official.local-infra-host/config
+    config_schema: []
   - contract: task-queue
     provider_code: local
+    display_name: Local
+    description: Local in-process host infrastructure provider.
     config_ref: secret://system/official.local-infra-host/config
+    config_schema: []
   - contract: rate-limit-store
     provider_code: local
+    display_name: Local
+    description: Local in-process host infrastructure provider.
     config_ref: secret://system/official.local-infra-host/config
+    config_schema: []
 routes: []
 workers: []
 migrations: []

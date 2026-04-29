@@ -21,6 +21,13 @@ const SettingsModelProvidersSection = lazy(() =>
     default: module.SettingsModelProvidersSection
   }))
 );
+const HostInfrastructurePanel = lazy(() =>
+  import('../../components/host-infrastructure/HostInfrastructurePanel').then(
+    (module) => ({
+      default: module.HostInfrastructurePanel
+    })
+  )
+);
 
 function SettingsSectionFallback() {
   return <Result status="info" title="正在加载设置模块" />;
@@ -36,7 +43,8 @@ export function SettingsSectionBody({
   permissions,
   canManageMembers,
   canManageRoles,
-  canManageModelProviders
+  canManageModelProviders,
+  canManageHostInfrastructure
 }: {
   sectionKey: SettingsSectionKey;
   isRoot: boolean;
@@ -44,6 +52,7 @@ export function SettingsSectionBody({
   canManageMembers: boolean;
   canManageRoles: boolean;
   canManageModelProviders: boolean;
+  canManageHostInfrastructure: boolean;
 }) {
   switch (sectionKey) {
     case 'members':
@@ -65,6 +74,12 @@ export function SettingsSectionBody({
       return (
         <SettingsSectionBoundary>
           <SettingsModelProvidersSection canManage={canManageModelProviders} />
+        </SettingsSectionBoundary>
+      );
+    case 'host-infrastructure':
+      return (
+        <SettingsSectionBoundary>
+          <HostInfrastructurePanel canManage={canManageHostInfrastructure} />
         </SettingsSectionBoundary>
       );
     case 'roles':

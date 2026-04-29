@@ -15,5 +15,6 @@ pub use plugins_and_models_group::{
     data_sources, model_definitions, model_providers, node_contributions, plugins, runtime_models,
 };
 pub use settings_group::{
-    docs, file_storages, file_tables, members, permissions, roles, system, workspace, workspaces,
+    docs, file_storages, file_tables, host_infrastructure, members, permissions, roles, system,
+    workspace, workspaces,
 };

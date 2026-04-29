@@ -30,7 +30,7 @@
 - Create: `api/crates/control-plane/src/_tests/host_infrastructure_contract_tests.rs`
 - Modify: `api/crates/control-plane/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write RED tests**
+ **Step 1: Write RED tests**
 
 Add:
 
@@ -185,7 +185,7 @@ async fn infrastructure_contracts_are_object_safe_and_async() {
 
 Add `mod host_infrastructure_contract_tests;` to `api/crates/control-plane/src/_tests/mod.rs`.
 
-- [ ] **Step 2: Run RED verification**
+ **Step 2: Run RED verification**
 
 Run:
 
@@ -202,7 +202,7 @@ Expected: FAIL because the new traits and DTOs are not exported by `control_plan
 - Create: `api/crates/control-plane/src/ports/infrastructure.rs`
 - Modify: `api/crates/control-plane/src/ports/mod.rs`
 
-- [ ] **Step 1: Add operation contracts**
+ **Step 1: Add operation contracts**
 
 Create `api/crates/control-plane/src/ports/infrastructure.rs`:
 
@@ -310,7 +310,7 @@ pub use infrastructure::{
 };
 ```
 
-- [ ] **Step 2: Re-run contract tests**
+ **Step 2: Re-run contract tests**
 
 Run:
 
@@ -328,7 +328,7 @@ Expected: PASS.
 - Modify: `api/apps/api-server/src/host_infrastructure/mod.rs`
 - Modify: `api/apps/api-server/src/host_infrastructure/local.rs`
 
-- [ ] **Step 1: Replace local traits with re-exports**
+ **Step 1: Replace local traits with re-exports**
 
 Change `api/apps/api-server/src/host_infrastructure/contracts.rs` to:
 
@@ -341,7 +341,7 @@ pub use control_plane::ports::{
 
 Keep the existing `HostInfrastructureRegistry` accessors in `mod.rs`, but make every trait object resolve to the re-exported control-plane trait.
 
-- [ ] **Step 2: Add temporary local provider async implementations**
+ **Step 2: Add temporary local provider async implementations**
 
 Until Plan B replaces these with storage-ephemeral providers, make current api-server local structs compile with deterministic non-error behavior:
 
@@ -452,7 +452,7 @@ impl RateLimitStore for LocalRateLimitStore {
 }
 ```
 
-- [ ] **Step 3: Run api-server host infrastructure tests**
+ **Step 3: Run api-server host infrastructure tests**
 
 Run:
 
@@ -468,7 +468,7 @@ Expected: PASS.
 **Files:**
 - Modify: `api/apps/api-server/src/_tests/host_infrastructure_tests.rs`
 
-- [ ] **Step 1: Add operation assertions**
+ **Step 1: Add operation assertions**
 
 Append:
 
@@ -504,7 +504,7 @@ async fn local_infra_host_exposes_operation_contracts() {
 }
 ```
 
-- [ ] **Step 2: Run targeted tests**
+ **Step 2: Run targeted tests**
 
 Run:
 
@@ -515,7 +515,7 @@ cargo test -p api-server host_infrastructure -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit Plan A**
+ **Step 3: Commit Plan A**
 
 ```bash
 git add api/crates/control-plane/src/ports api/crates/control-plane/src/_tests api/apps/api-server/src/host_infrastructure api/apps/api-server/src/_tests/host_infrastructure_tests.rs

@@ -1,4 +1,8 @@
 mod kv_store_contract_tests;
 mod lease_store_tests;
+mod local_infrastructure_tests;
+mod moka_cache_store_tests;
+mod moka_rate_limit_store_tests;
+mod moka_session_store_tests;
 mod session_store_tests;
 mod wakeup_signal_tests;

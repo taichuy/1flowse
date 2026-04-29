@@ -1,4 +1,5 @@
 import { apiFetch } from './transport';
+import type { ConsolePluginFormFieldSchema } from './console-model-providers';
 
 export interface ConsolePluginCatalogFilter {
   plugin_type?: string;
@@ -152,6 +153,27 @@ export interface InstallConsoleOfficialPluginInput {
 export interface InstallConsolePluginResult {
   installation: ConsolePluginInstallation;
   task: ConsolePluginTask;
+}
+
+export interface ConsoleHostInfrastructureProviderConfig {
+  installation_id: string;
+  extension_id: string;
+  provider_code: string;
+  display_name: string;
+  description: string | null;
+  runtime_status: string;
+  desired_state: string;
+  config_ref: string;
+  contracts: string[];
+  enabled_contracts: string[];
+  config_schema: ConsolePluginFormFieldSchema[];
+  config_json: Record<string, unknown>;
+  restart_required: boolean;
+}
+
+export interface SaveConsoleHostInfrastructureProviderConfigInput {
+  enabled_contracts: string[];
+  config_json: Record<string, unknown>;
 }
 
 function buildPluginCatalogPath(
@@ -332,6 +354,33 @@ export function listConsolePluginTasks(baseUrl?: string) {
 export function getConsolePluginTask(taskId: string, baseUrl?: string) {
   return apiFetch<ConsolePluginTask>({
     path: `/api/console/plugins/tasks/${taskId}`,
+    baseUrl
+  });
+}
+
+export function listConsoleHostInfrastructureProviders(baseUrl?: string) {
+  return apiFetch<ConsoleHostInfrastructureProviderConfig[]>({
+    path: '/api/console/settings/host-infrastructure/providers',
+    baseUrl
+  });
+}
+
+export function saveConsoleHostInfrastructureProviderConfig(
+  installationId: string,
+  providerCode: string,
+  input: SaveConsoleHostInfrastructureProviderConfigInput,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<{
+    restart_required: boolean;
+    installation_desired_state: string;
+    provider_config_status: string;
+  }>({
+    path: `/api/console/settings/host-infrastructure/providers/${installationId}/${providerCode}/config`,
+    method: 'PUT',
+    body: input,
+    csrfToken,
     baseUrl
   });
 }
