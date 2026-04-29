@@ -171,7 +171,9 @@ route
 
 ```text
 api/apps/api-server
+  -> pre-state infra provider bootstrap
   -> boot assembly
+  -> host infrastructure registry
   -> host route registry
   -> generated or mounted resource/action routes
   -> middleware / response / OpenAPI
@@ -183,12 +185,14 @@ api/crates/control-plane
   -> action pipeline
   -> cache policy registry
   -> infrastructure contract registry
+  -> domain event outbox semantics
   -> service command
   -> domain event / audit
   -> repository trait
 
 api/crates/plugin-framework
   -> HostExtension manifest
+  -> trusted native host entrypoint manifest
   -> resource contribution manifest
   -> action contribution manifest
   -> infrastructure implementation manifest
@@ -433,6 +437,10 @@ enterprise-identity-host
 
 缓存不作为一个泛化插件层级处理，应拆成多个宿主基础设施 contract。Redis 是这些 contract 的一种实现，不是业务 resource owner。
 
+本轮目标按完整架构落地，不保留 `API_EPHEMERAL_BACKEND=redis` 这类 Core 内置 Redis 过渡路径作为目标形态。早期启动依赖的 session、ephemeral kv、lock、queue 和 event provider 必须先通过 `pre-state infra provider bootstrap` 注册，再构造 `ApiState` 和 control-plane service。
+
+单机默认实现也按官方可信 `local-infra-host` 处理；它可以随发行包内置，但仍走同一套 host infrastructure registry，不再把 Redis vocabulary 写进 Core。
+
 建议固定以下 contract：
 
 ```text
@@ -449,7 +457,7 @@ event-bus
   -> 跨实例事件广播、缓存失效通知、轻量异步事件
 
 task-queue
-  -> 后台任务队列、工作流加速队列、导入同步任务
+  -> 后台任务队列、工作流加速队列、导入同步任务；默认 at-least-once + idempotency key + visibility timeout
 
 rate-limit-store
   -> 限流计数、配额窗口、短期用量统计
@@ -485,6 +493,16 @@ rate-limit-store = redis
 4. `RuntimeExtension` 不能直连 Redis，只能通过宿主提供的 runtime context 使用受控 cache。
 5. `CapabilityPlugin` 不能拥有 Redis 连接，只能声明 workflow node output 是否允许被缓存。
 6. 缓存数据不能成为核心业务真值，失效或丢失后必须能从 durable resource 重建。
+7. 持久化到数据库的 catalog snapshot / read model 归 durable resource owner，不归 `cache-store`。
+
+事件与队列语义：
+
+1. `task-queue` 默认语义为 at-least-once delivery。
+2. 队列任务必须携带 idempotency key、claim owner、visibility timeout、retry policy 和 dead-letter policy。
+3. `distributed-lock` 必须支持 lease ttl、renew、release 和 fencing token，不能只表达互斥。
+4. domain event 必须先进入 durable outbox，再由 `event-bus` 投递。
+5. 纯 runtime live event 可以走 local channel、broadcast 或非持久 event-bus，不承担业务一致性。
+6. cache invalidation event 可以异步投递，但丢失后必须能通过 version / updated_at / durable outbox 重建一致性。
 
 Redis HostExtension 示例：
 
@@ -498,9 +516,10 @@ redis-infra-host
     task-queue
     rate-limit-store
   activation: boot
+  bootstrap_phase: pre_state
   lifecycle: restart_required
   config:
-    url: redis://...
+    url_ref: secret://system/redis-infra-host/url
     key_prefix: 1flowbase:{deployment_id}
 ```
 
@@ -524,10 +543,12 @@ plugin_marketplace.catalog
   invalidate_on: marketplace.synced
 
 data_sources.discover_catalog
-  cache key: workspace + data_source + schema fingerprint
+  durable snapshot key: workspace + data_source + schema fingerprint
+  optional cache key: workspace + data_source + schema fingerprint + snapshot version
   adapter: RuntimeExtension
   policy owner: data-source platform
-  implementation: cache-store HostExtension
+  durable owner: data-source platform repository
+  optional acceleration: cache-store HostExtension
 ```
 
 判断方式：
@@ -537,6 +558,7 @@ data_sources.discover_catalog
 需要决定某个业务 action 是否缓存和如何失效：resource/action owner。
 需要保存业务真值：durable resource owner，不能放缓存。
 需要 RuntimeExtension 使用缓存：通过 runtime context，不直连 Redis。
+需要保存 catalog snapshot / read model：control-plane 定义语义，storage-durable/postgres 实现持久化。
 ```
 
 ## 7. 各层定义
@@ -667,7 +689,7 @@ HostExtension 可以拥有内核级系统模块，但必须通过宿主治理边
 
 1. 注册系统接口。
 2. 直接写平台主数据库。
-3. 拥有平台 secret / preview session / import job / catalog cache 主状态。
+3. 拥有平台 secret / preview session / import job / catalog snapshot / read model 主状态。
 4. 直接连接 Redis、NATS、RabbitMQ 等宿主基础设施。
 
 ### 7.6 CapabilityPlugin
@@ -752,10 +774,11 @@ source workspace
 
 运行约束：
 
-1. 随主进程内加载
-2. 不走 `plugin-runner`
-3. 不做 Rust `so/dll` 热卸载
-4. 需要可重复卸载时优先声明式、Lua、WASM
+1. 随主进程内加载。
+2. 不走 `plugin-runner`。
+3. 本阶段先做 native in-process HostExtension，只面向可信官方插件和部署级插件。
+4. 不做 Rust `so/dll` 热卸载，启停和升级通过 desired state + 重启生效。
+5. 第三方可重复加载 / 卸载运行时后续再评估声明式、Lua 或 WASM，本阶段不维护多套 HostExtension runtime。
 
 ### 9.2 RuntimeExtension
 
@@ -886,9 +909,9 @@ Core 负责定义：
 9. task queue claim semantics
 10. rate limit window semantics
 
-默认单机实现可以是 in-memory / local / PostgreSQL lease。未来分布式实现可以由 `redis-infra-host`、`nats-event-bus-host`、`rabbitmq-task-queue-host` 这类 HostExtension 提供。
+默认单机实现可以是 in-memory / local / PostgreSQL lease，但按官方可信 `local-infra-host` 注册到 host infrastructure registry。分布式实现由 `redis-infra-host`、`nats-event-bus-host`、`rabbitmq-task-queue-host` 这类可信官方或部署级 HostExtension 提供。
 
-它是宿主基础设施，不是业务插件能力；缓存数据不能成为核心业务真值。
+它是宿主基础设施，不是业务插件能力；缓存数据不能成为核心业务真值。domain event 必须先进入 durable outbox，业务一致性不能依赖非持久 event-bus。
 
 ### 11.4 数据源
 
@@ -903,8 +926,10 @@ Core 负责定义：
 1. instance
 2. secret
 3. preview session
-4. catalog cache
+4. catalog snapshot / read model
 5. import job
+
+`catalog snapshot / read model` 如果持久化到数据库，应由 control-plane 定义语义，并由 `storage-durable/postgres` 的 repository / mapper 实现。`cache-store` 只能作为读取加速层，不能拥有 catalog 主状态。
 
 插件侧只实现：
 
@@ -997,16 +1022,18 @@ Core 负责定义：
 
 建议按以下顺序推进：
 
-1. 更新 `api/AGENTS.md`，把四层落点、Resource Action Kernel 和 HostExtension 约束写死。
-2. 在 `control-plane` 补 resource catalog、action registry、action pipeline、hook registry 和 domain event 边界。
-3. 扩展 `plugin-framework` 的 HostExtension manifest，加入 owned resources、extends resources、contributed actions、hooks、routes、workers、migrations。
-4. 定义 `storage-ephemeral`、`cache-store`、`distributed-lock`、`event-bus`、`task-queue`、`rate-limit-store` contract，并保留 local 默认实现。
-5. 预留 `redis-infra-host` 作为这些 contract 的可选分布式实现。
-6. 在 `api-server` 引入 host route registry 与 resource/action route mount 约束，保持 route 只做协议层。
-7. 在 `api/plugins/` 下建立三类插件源码工作区和模板目录。
-8. 把现有 `api-server` 中的 builtin host manifest 迁到 `api/plugins/host-extensions/*` 源码工作区。
-9. 保留 `api-server` 只做 loader、policy、inventory、route mount 和 boot assembly。
-10. 后续再逐步补 `HostExtension` runtime、extension migration runner 和 `CapabilityPlugin` install chain。
+1. 更新 `api/AGENTS.md`，把四层落点、Resource Action Kernel、HostExtension、pre-state infra bootstrap 和基础设施 contract 约束写死。
+2. 在 `api-server` 启动链路补 `pre-state infra provider bootstrap` 和 host infrastructure registry，先让 session、cache、lock、queue、event provider 能在 `ApiState` 构造前注册。
+3. 在 `plugin-framework` 扩展 HostExtension manifest，加入 native trusted entrypoint、bootstrap phase、owned resources、extends resources、contributed actions、hooks、routes、workers、migrations、infrastructure providers。
+4. 在 `control-plane` 补 resource catalog、action registry、action pipeline、hook registry、domain event outbox 和 cache policy registry。
+5. 定义 `storage-ephemeral`、`cache-store`、`distributed-lock`、`event-bus`、`task-queue`、`rate-limit-store` contract，并通过官方可信 `local-infra-host` 提供 local 默认实现。
+6. 定义 `task-queue` at-least-once、idempotency key、visibility timeout、retry、dead-letter；定义 `distributed-lock` lease/fencing token；定义 domain event durable outbox。
+7. 预留并实现可信官方或部署级 `redis-infra-host`、`nats-event-bus-host`、`rabbitmq-task-queue-host` 作为这些 contract 的分布式实现。
+8. 在 `api-server` 引入 host route registry 与 resource/action route mount 约束，保持 route 只做协议层。
+9. 在 `api/plugins/` 下建立三类插件源码工作区和模板目录。
+10. 把现有 `api-server` 中的 builtin host manifest 迁到 `api/plugins/host-extensions/*` 源码工作区。
+11. 保留 `api-server` 只做 loader、policy、inventory、infra bootstrap、route mount 和 boot assembly。
+12. 后续再逐步补第三方可重复加载 / 卸载 runtime 和 `CapabilityPlugin` install chain。
 
 ## 16. 自检
 
@@ -1017,7 +1044,10 @@ Core 负责定义：
 3. 已明确 Resource 不等于数据库表，Action 是稳定动作入口。
 4. 已把 HostExtension 横向扩展限定到显式 hook、policy、sidecar、受控 action 和 domain event。
 5. 已区分缓存策略 owner 和缓存实现 owner，Redis 只作为 HostExtension 实现。
-6. 已明确 RuntimeExtension 与 CapabilityPlugin 不能直接持有 Redis 等基础设施连接。
-7. 没有把 `RuntimeExtension` 和 `CapabilityPlugin` 混成同一类插件。
-8. 没有要求把插件源码移出主仓。
-9. 没有把 Rust native `so/dll` 热卸载作为 `HostExtension` 目标方案。
+6. 已明确早期基础设施 provider 必须在 `ApiState` 构造前通过 pre-state bootstrap 注册。
+7. 已明确 `task-queue` at-least-once、idempotency key、visibility timeout 与 durable outbox 边界。
+8. 已明确持久化 catalog snapshot / read model 归 durable resource owner，不归 `cache-store`。
+9. 已明确 RuntimeExtension 与 CapabilityPlugin 不能直接持有 Redis 等基础设施连接。
+10. 没有把 `RuntimeExtension` 和 `CapabilityPlugin` 混成同一类插件。
+11. 没有要求把插件源码移出主仓。
+12. 没有把 Rust native `so/dll` 热卸载作为 `HostExtension` 目标方案；native HostExtension 第一阶段只面向可信官方插件和部署级插件。

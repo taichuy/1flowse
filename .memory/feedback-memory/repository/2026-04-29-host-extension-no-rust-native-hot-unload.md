@@ -15,7 +15,7 @@ keywords:
 match_when:
   - 讨论 HostExtension 运行时、native plugin、动态库加载、插件启停或插件生命周期时
 created_at: 2026-04-29 07
-updated_at: 2026-04-29 07
+updated_at: 2026-04-29 09
 last_verified_at: 无
 decision_policy: direct_reference
 scope:
@@ -33,6 +33,8 @@ scope:
 ## 规则
 
 不要建议用 Rust `so/dll` 做可重复加载 / 卸载的 HostExtension 插件机制。HostExtension 如果走 native in-process，只能按主应用进程生命周期加载；启用、禁用、升级通过 desired state 管理，并在重启后生效。需要真正可重复卸载的扩展运行时，应优先考虑 WASM 或 Lua/mlua。
+
+2026-04-29 09 用户拍板：第一阶段先做 native in-process HostExtension，只面向可信官方插件和部署级插件；第三方可重复加载 / 卸载运行时后续再考虑，项目前期不维护多套 HostExtension runtime。
 
 ## 原因
 

@@ -2,7 +2,7 @@
 memory_type: project
 title: Host extension plugin packaging boundary
 created_at: 2026-04-29 07
-updated_at: 2026-04-29 07
+updated_at: 2026-04-29 09
 decision_policy: verify_before_decision
 scope:
   - api
@@ -40,3 +40,5 @@ status: active
 2026-04-29 07 继续修正：后端需要补 `Resource Action Kernel` 作为 HostExtension 扩展核心业务的稳定面。`Resource` 不是数据库表，`Action` 是可治理动作入口，`Hook` 是显式横向扩展点。HostExtension 可以对现有核心业务注册 action hook、policy、validator、sidecar table、受控 action、worker 和 domain event，但不能直接改核心资源真值表、隐式包裹 service 或绕过 repository 边界。
 
 2026-04-29 07 缓存与分布式基础设施补充：当前单机阶段可以保留 in-memory / local / PostgreSQL lease 默认实现，但未来 Redis 等分布式能力应作为 HostExtension 实现 Core 定义的 `storage-ephemeral`、`cache-store`、`distributed-lock`、`event-bus`、`task-queue`、`rate-limit-store` contract。Core 拥有缓存语义、失效规则、任务 claim、事件投递和限流窗口；HostExtension 只负责实现；RuntimeExtension 与 CapabilityPlugin 不能直接持有 Redis 等基础设施连接。
+
+2026-04-29 09 用户进一步拍板：下一步按完整目标架构落地，不保留 Core 内置 Redis 过渡目标；`task-queue` 默认语义采用 at-least-once + idempotency key + visibility timeout；domain event 走 durable outbox，纯 runtime live event 可非持久；持久化到数据库的 `catalog snapshot / read model` 归持久化层实现，不归 `cache-store`；HostExtension 第一阶段先做 native in-process，只面向可信官方插件和部署级插件，第三方多运行时后置。
