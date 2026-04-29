@@ -22,6 +22,7 @@ api/plugins/
 - `host-extensions/*` packages are system/root HostExtension sources and are not statically linked into `api-server`.
 - `runtime-extensions/*` packages implement registered runtime slots through plugin-runner.
 - `capability-plugins/*` packages contribute workspace-selected app/workflow capabilities.
+- `sets/minimal.yaml` and `sets/default.yaml` select package sources for deployment assembly. They do not make plugin source code part of `api-server`; selected plugins still move through package/install/load lifecycle.
 
 ## Data Source Plugin Rules
 

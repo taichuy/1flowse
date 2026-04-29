@@ -1,0 +1,9 @@
+schema_version: 1flowbase.plugin-set/v1
+set_id: minimal
+host_extensions:
+  - official.identity-host
+  - official.workspace-host
+  - official.plugin-host
+  - official.local-infra-host
+runtime_extensions: []
+capability_plugins: []

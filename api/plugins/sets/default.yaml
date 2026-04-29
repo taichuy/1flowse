@@ -1,0 +1,11 @@
+schema_version: 1flowbase.plugin-set/v1
+set_id: default
+host_extensions:
+  - official.identity-host
+  - official.workspace-host
+  - official.plugin-host
+  - official.local-infra-host
+  - official.file-management-host
+  - official.runtime-orchestration-host
+runtime_extensions: []
+capability_plugins: []
