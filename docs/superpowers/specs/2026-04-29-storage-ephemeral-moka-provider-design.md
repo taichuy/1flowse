@@ -48,7 +48,7 @@
 
 1. 不实现 Redis HostExtension。
 2. 不要求本地启动 Redis。
-3. 不设计 provider 热切换。
+3. 不设计 provider 实例运行时热切换。
 4. 不把可靠任务队列改成 memory queue。
 5. 不把 cache miss 当成业务错误。
 
@@ -298,16 +298,29 @@ Core 不根据 env 分支直连 Redis。
 
 ## 9. 生效语义
 
-v1 固定为 restart-scoped：
+v1 固定为 restart-scoped，但安装、配置和启用可以合并为一次待应用变更，最终只需要重启一次。
 
-1. 后台保存 provider 配置。
-2. 后台启用 HostExtension，写 desired state。
-3. 系统提示重启后生效。
-4. 重启 `api-server`。
-5. Boot Core 在 `ApiState`、session store、control-plane service、runtime engine 和 HTTP router 构造前完成 pre-state infra provider bootstrap。
-6. Host infrastructure registry 注入 Redis provider。
+推荐流程：
 
-不做运行时热切换，避免 session store、lock、queue 等基础设施在请求处理中被换掉。
+1. 安装 Redis HostExtension 包。
+2. 系统读取已安装包里的 manifest、配置 schema 和 capability 声明。
+3. 后台展示 Redis provider 配置页；配置页不要求 Redis provider 已经运行。
+4. 用户保存 provider 配置，例如 host、port、db、tls、`password_ref`。
+5. 用户启用 HostExtension，并选择哪些 infrastructure contract 默认使用 Redis。
+6. 系统写入 desired state，并提示重启后生效。
+7. 重启 `api-server` 一次。
+8. Boot Core 在 `ApiState`、session store、control-plane service、runtime engine 和 HTTP router 构造前完成 pre-state infra provider bootstrap。
+9. Host infrastructure registry 注入 Redis provider。
+
+不做 provider 实例运行时热切换，避免 session store、lock、queue 等基础设施在请求处理中被换掉。manifest、配置 schema、provider 配置和 desired state 可以在运行时保存和编辑；真正接管 host infrastructure contract 只在下一次启动时发生。
+
+禁止把流程做成：
+
+```text
+启用插件 -> 重启 -> 插件运行后才出现配置页 -> 配置 Redis -> 再重启
+```
+
+配置页必须基于已安装 manifest / schema 生成，而不是基于已激活 provider 生成。
 
 ## 10. 加速场景
 
