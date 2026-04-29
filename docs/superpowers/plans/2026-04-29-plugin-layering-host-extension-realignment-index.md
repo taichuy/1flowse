@@ -27,7 +27,7 @@ Use these documents as the source of truth:
    Replaces Core Redis env selection with a `HostInfrastructureRegistry` and a default `local-infra-host` provider before `ApiState` construction.
 4. [x] [Plan D: Resource Action Kernel v1](./2026-04-29-plugin-layering-host-extension-plan-d-resource-action-kernel-v1.md)
    Adds resource/action definitions, hook ordering, transaction pipeline semantics, and migrates `plugins.install` plus `files.upload` as the first two governed actions.
-5. [ ] [Plan E: HostExtension Route Worker Migration Namespace](./2026-04-29-plugin-layering-host-extension-plan-e-route-worker-migration.md)
+5. [x] [Plan E: HostExtension Route Worker Migration Namespace](./2026-04-29-plugin-layering-host-extension-plan-e-route-worker-migration.md)
    Adds controlled route registration, worker registry, and extension-owned PostgreSQL migration namespace.
 6. [ ] [Plan F: Builtin Host Manifest Migration And Regression](./2026-04-29-plugin-layering-host-extension-plan-f-builtin-manifest-regression.md)
    Moves builtin host manifests into `api/plugins/host-extensions/*`, introduces plugin sets, removes long-term api-server builtin manifest ownership, and closes with regression.

@@ -8,6 +8,9 @@
 
 **Tech Stack:** Rust, Axum route registry, control-plane/plugin-framework manifest validation, storage-durable PostgreSQL migration runner, targeted tests.
 
+**Status:** Complete on 2026-04-29. Implementation commits:
+`a7351a82`, `c8fade1c`, `1a8dbac4`, `6d4d8d48`.
+
 ---
 
 ## File Structure
@@ -34,7 +37,7 @@
 - Modify: `api/crates/plugin-framework/src/host_extension_contribution.rs`
 - Modify: `api/crates/plugin-framework/src/_tests/host_extension_contribution_tests.rs`
 
-- [ ] **Step 1: Write RED manifest tests**
+- [x] **Step 1: Write RED manifest tests**
 
 Add tests parsing:
 
@@ -63,7 +66,7 @@ worker_id without extension-owned prefix is rejected
 migration path outside migrations/postgres/ is rejected
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -74,7 +77,7 @@ cargo test -p plugin-framework host_extension_contribution -- --nocapture
 
 Expected: FAIL until structured declarations exist.
 
-- [ ] **Step 3: Implement declarations**
+- [x] **Step 3: Implement declarations**
 
 Add structs:
 
@@ -109,7 +112,7 @@ migration id is non-empty
 migration path starts with migrations/postgres/ and ends with .sql
 ```
 
-- [ ] **Step 4: Re-run manifest tests**
+- [x] **Step 4: Re-run manifest tests**
 
 Run:
 
@@ -120,7 +123,7 @@ cargo test -p plugin-framework host_extension_contribution -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit contribution declarations**
+- [x] **Step 5: Commit contribution declarations**
 
 ```bash
 git add api/crates/plugin-framework/src/host_extension_contribution.rs api/crates/plugin-framework/src/_tests/host_extension_contribution_tests.rs
@@ -135,7 +138,7 @@ git commit -m "feat: declare host extension routes workers and migrations"
 - Modify: `api/apps/api-server/src/lib.rs`
 - Modify: `api/apps/api-server/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write RED route registry tests**
+- [x] **Step 1: Write RED route registry tests**
 
 Add tests:
 
@@ -156,7 +159,7 @@ fn registry_rejects_uncontrolled_path() {
 }
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -167,7 +170,7 @@ cargo test -p api-server host_route_registry -- --nocapture
 
 Expected: FAIL because route registry does not exist.
 
-- [ ] **Step 3: Implement registry**
+- [x] **Step 3: Implement registry**
 
 Create:
 
@@ -193,7 +196,7 @@ resource/action target is non-empty
 
 Do not mount actual Axum handlers that bypass Resource Action Kernel.
 
-- [ ] **Step 4: Re-run route registry tests**
+- [x] **Step 4: Re-run route registry tests**
 
 Run:
 
@@ -204,7 +207,7 @@ cargo test -p api-server host_route_registry -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit route registry**
+- [x] **Step 5: Commit route registry**
 
 ```bash
 git add api/apps/api-server/src/host_route_registry.rs api/apps/api-server/src/_tests/host_route_registry_tests.rs api/apps/api-server/src/lib.rs api/apps/api-server/src/_tests/mod.rs
@@ -219,7 +222,7 @@ git commit -m "feat: add controlled host route registry"
 - Modify: `api/apps/api-server/src/lib.rs`
 - Modify: `api/apps/api-server/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write RED worker registry tests**
+- [x] **Step 1: Write RED worker registry tests**
 
 Add tests proving:
 
@@ -229,7 +232,7 @@ worker queue required
 worker definitions are frozen before startup completes
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -240,7 +243,7 @@ cargo test -p api-server host_worker_registry -- --nocapture
 
 Expected: FAIL because worker registry does not exist.
 
-- [ ] **Step 3: Implement registry**
+- [x] **Step 3: Implement registry**
 
 Create:
 
@@ -263,7 +266,7 @@ workers()
 
 After `freeze()`, `register()` must return an error.
 
-- [ ] **Step 4: Re-run tests**
+- [x] **Step 4: Re-run tests**
 
 Run:
 
@@ -274,7 +277,7 @@ cargo test -p api-server host_worker_registry -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit worker registry**
+- [x] **Step 5: Commit worker registry**
 
 ```bash
 git add api/apps/api-server/src/host_worker_registry.rs api/apps/api-server/src/_tests/host_worker_registry_tests.rs api/apps/api-server/src/lib.rs api/apps/api-server/src/_tests/mod.rs
@@ -290,7 +293,7 @@ git commit -m "feat: add host worker registry"
 - Modify: `api/crates/storage-durable/postgres/src/_tests/mod.rs`
 - Create: new SQL migration under `api/crates/storage-durable/postgres/migrations/`
 
-- [ ] **Step 1: Write RED repository tests**
+- [x] **Step 1: Write RED repository tests**
 
 Test:
 
@@ -301,7 +304,7 @@ does not apply the same migration twice
 checksum mismatch returns error
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -312,7 +315,7 @@ cargo test -p storage-postgres host_extension_migration -- --nocapture
 
 Expected: FAIL because table and repository do not exist.
 
-- [ ] **Step 3: Add migration table**
+- [x] **Step 3: Add migration table**
 
 Create SQL migration:
 
@@ -329,7 +332,7 @@ CREATE TABLE IF NOT EXISTS host_extension_migrations (
 );
 ```
 
-- [ ] **Step 4: Implement repository**
+- [x] **Step 4: Implement repository**
 
 Implement functions:
 
@@ -341,7 +344,7 @@ ensure_extension_table_name(extension_id, table_name)
 
 Normalize extension id by replacing non `[a-z0-9_]` with `_`.
 
-- [ ] **Step 5: Re-run migration tests**
+- [x] **Step 5: Re-run migration tests**
 
 Run with an isolated database schema as required by `api/AGENTS.md`:
 
@@ -352,7 +355,7 @@ cargo test -p storage-postgres host_extension_migration -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit migration namespace**
+- [x] **Step 6: Commit migration namespace**
 
 ```bash
 git add api/crates/storage-durable/postgres/src api/crates/storage-durable/postgres/migrations
@@ -364,7 +367,7 @@ git commit -m "feat: track host extension migrations"
 **Files:**
 - Verify only.
 
-- [ ] **Step 1: Format**
+- [x] **Step 1: Format**
 
 Run:
 
@@ -373,7 +376,7 @@ cd api
 cargo fmt
 ```
 
-- [ ] **Step 2: Run focused tests**
+- [x] **Step 2: Run focused tests**
 
 Run:
 
@@ -387,7 +390,7 @@ cargo test -p storage-postgres host_extension_migration -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit formatting if needed**
+- [x] **Step 3: Commit formatting if needed**
 
 ```bash
 git add api
