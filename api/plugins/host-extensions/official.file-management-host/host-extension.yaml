@@ -1,0 +1,14 @@
+schema_version: 1flowbase.host-extension/v1
+extension_id: official.file-management-host
+version: 0.1.0
+bootstrap_phase: boot
+native:
+  abi_version: 1flowbase.host.native/v1
+  library: builtin://official.file-management-host
+  entry_symbol: builtin_file_management_host
+owned_resources: [files]
+extends_resources: []
+infrastructure_providers: []
+routes: []
+workers: []
+migrations: []

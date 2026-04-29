@@ -1,0 +1,14 @@
+schema_version: 1flowbase.host-extension/v1
+extension_id: official.runtime-orchestration-host
+version: 0.1.0
+bootstrap_phase: boot
+native:
+  abi_version: 1flowbase.host.native/v1
+  library: builtin://official.runtime-orchestration-host
+  entry_symbol: builtin_runtime_orchestration_host
+owned_resources: [runtime_orchestration]
+extends_resources: []
+infrastructure_providers: []
+routes: []
+workers: []
+migrations: []

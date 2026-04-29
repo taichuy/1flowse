@@ -1,0 +1,14 @@
+schema_version: 1flowbase.host-extension/v1
+extension_id: official.plugin-host
+version: 0.1.0
+bootstrap_phase: boot
+native:
+  abi_version: 1flowbase.host.native/v1
+  library: builtin://official.plugin-host
+  entry_symbol: builtin_plugin_host
+owned_resources: [plugins]
+extends_resources: [identity]
+infrastructure_providers: []
+routes: []
+workers: []
+migrations: []

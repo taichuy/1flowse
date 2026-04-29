@@ -1,5 +1,9 @@
 *
 !.gitignore
 !README.md
+!host-extensions/
+!host-extensions/**
+!sets/
+!sets/**
 !templates/
 !templates/**

@@ -1,0 +1,32 @@
+schema_version: 1flowbase.host-extension/v1
+extension_id: official.local-infra-host
+version: 0.1.0
+bootstrap_phase: pre_state
+native:
+  abi_version: 1flowbase.host.native/v1
+  library: builtin://official.local-infra-host
+  entry_symbol: builtin_local_infra_host
+owned_resources: []
+extends_resources: []
+infrastructure_providers:
+  - contract: storage-ephemeral
+    provider_code: local
+    config_ref: secret://system/official.local-infra-host/config
+  - contract: cache-store
+    provider_code: local
+    config_ref: secret://system/official.local-infra-host/config
+  - contract: distributed-lock
+    provider_code: local
+    config_ref: secret://system/official.local-infra-host/config
+  - contract: event-bus
+    provider_code: local
+    config_ref: secret://system/official.local-infra-host/config
+  - contract: task-queue
+    provider_code: local
+    config_ref: secret://system/official.local-infra-host/config
+  - contract: rate-limit-store
+    provider_code: local
+    config_ref: secret://system/official.local-infra-host/config
+routes: []
+workers: []
+migrations: []

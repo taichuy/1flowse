@@ -1,0 +1,25 @@
+schema_version: 1flowbase.plugin.manifest/v1
+manifest_version: 1
+plugin_id: official.workspace-host@0.1.0
+version: 0.1.0
+vendor: 1flowbase
+display_name: Workspace Host
+description: Builtin workspace host module.
+source_kind: official_registry
+trust_level: verified_official
+consumption_kind: host_extension
+execution_mode: in_process
+slot_codes: [host_bootstrap]
+binding_targets: []
+selection_mode: auto_activate
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.host_extension/v1
+permissions:
+  network: none
+  secrets: host_managed
+  storage: host_managed
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: native_host
+  entry: host-extension.yaml
