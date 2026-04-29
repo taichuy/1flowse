@@ -3,6 +3,7 @@ mod crate_smoke_tests;
 mod data_source_repository_tests;
 mod file_management_repository_tests;
 mod flow_repository_tests;
+mod host_extension_migration_tests;
 mod member_mapper_tests;
 mod migration_smoke;
 mod model_definition_repository_tests;
