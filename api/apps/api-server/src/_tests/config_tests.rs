@@ -25,27 +25,21 @@ fn base_env_without_ephemeral_backend() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
-fn base_env_with_backend(backend: &'static str) -> Vec<(&'static str, &'static str)> {
-    let mut env = base_env_without_ephemeral_backend();
-    env.push(("API_EPHEMERAL_BACKEND", backend));
-    env
-}
-
 #[test]
-fn api_config_defaults_ephemeral_backend_to_memory() {
+fn api_config_does_not_require_ephemeral_backend_env() {
     let env = base_env_without_ephemeral_backend();
     let config = ApiConfig::from_env_map(&env).unwrap();
 
-    assert_eq!(config.ephemeral_backend.as_str(), "memory");
-    assert_eq!(config.ephemeral_redis_url, None);
+    assert_eq!(config.cookie_name, "flowbase_console_session");
 }
 
 #[test]
-fn api_config_requires_redis_url_when_ephemeral_backend_is_redis() {
-    let env = base_env_with_backend("redis");
-    let error = ApiConfig::from_env_map(&env).unwrap_err();
+fn api_config_ignores_legacy_ephemeral_redis_env_selection() {
+    let mut env = base_env_without_ephemeral_backend();
+    env.push(("API_EPHEMERAL_BACKEND", "redis"));
+    let config = ApiConfig::from_env_map(&env).unwrap();
 
-    assert!(error.to_string().contains("API_EPHEMERAL_REDIS_URL"));
+    assert_eq!(config.cookie_name, "flowbase_console_session");
 }
 
 #[test]

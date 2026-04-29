@@ -177,7 +177,7 @@ git commit -m "feat: add local host infrastructure registry"
 - Modify: `api/apps/api-server/src/lib.rs`
 - Modify: `api/apps/api-server/src/_tests/config_tests.rs`
 
-- [ ] **Step 1: Write RED config tests**
+- [x] **Step 1: Write RED config tests**
 
 Update config tests so:
 
@@ -189,7 +189,7 @@ ApiConfig contains no ephemeral_backend field
 
 If the config parser does not reject unknown env keys, verify that `ApiConfig::from_env_map` never reads those keys.
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -200,7 +200,7 @@ cargo test -p api-server config_tests -- --nocapture
 
 Expected: FAIL while code still requires or reads ephemeral backend fields.
 
-- [ ] **Step 3: Rewire state construction**
+- [x] **Step 3: Rewire state construction**
 
 Change startup from:
 
@@ -223,7 +223,7 @@ pub infrastructure: Arc<HostInfrastructureRegistry>
 
 Keep `session_store` as a direct field only if existing middleware needs it; source it from the registry.
 
-- [ ] **Step 4: Re-run api-server config and health tests**
+- [x] **Step 4: Re-run api-server config and health tests**
 
 Run:
 
@@ -235,7 +235,7 @@ cargo test -p api-server health_routes -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit startup rewire**
+- [x] **Step 5: Commit startup rewire**
 
 ```bash
 git add api/apps/api-server/src/app_state.rs api/apps/api-server/src/config.rs api/apps/api-server/src/lib.rs api/apps/api-server/src/_tests/config_tests.rs

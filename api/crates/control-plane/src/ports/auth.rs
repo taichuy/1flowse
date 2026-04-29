@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::Arc;
 
 #[async_trait]
 pub trait SessionStore: Send + Sync {
@@ -6,6 +7,28 @@ pub trait SessionStore: Send + Sync {
     async fn get(&self, session_id: &str) -> anyhow::Result<Option<SessionRecord>>;
     async fn delete(&self, session_id: &str) -> anyhow::Result<()>;
     async fn touch(&self, session_id: &str, expires_at_unix: i64) -> anyhow::Result<()>;
+}
+
+#[async_trait]
+impl<T> SessionStore for Arc<T>
+where
+    T: SessionStore + ?Sized,
+{
+    async fn put(&self, session: SessionRecord) -> anyhow::Result<()> {
+        (**self).put(session).await
+    }
+
+    async fn get(&self, session_id: &str) -> anyhow::Result<Option<SessionRecord>> {
+        (**self).get(session_id).await
+    }
+
+    async fn delete(&self, session_id: &str) -> anyhow::Result<()> {
+        (**self).delete(session_id).await
+    }
+
+    async fn touch(&self, session_id: &str, expires_at_unix: i64) -> anyhow::Result<()> {
+        (**self).touch(session_id, expires_at_unix).await
+    }
 }
 
 #[async_trait]

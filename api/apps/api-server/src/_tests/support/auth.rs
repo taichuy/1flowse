@@ -6,7 +6,6 @@ use super::plugins::InMemoryOfficialPluginSource;
 use super::*;
 use control_plane::ports::FileManagementRepository;
 use control_plane::ports::SessionStore;
-use storage_ephemeral::MemorySessionStore;
 
 #[derive(Clone)]
 struct StaticApiRuntimeProfileCollector {
@@ -40,9 +39,6 @@ impl PluginRunnerSystemPort for StubPluginRunnerSystemClient {
 fn default_test_config() -> ApiConfig {
     let database_url = std::env::var("API_DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase".into());
-    let ephemeral_backend =
-        std::env::var("API_EPHEMERAL_BACKEND").unwrap_or_else(|_| "memory".into());
-    let ephemeral_redis_url = std::env::var("API_EPHEMERAL_REDIS_URL").ok();
     let root_account = std::env::var("BOOTSTRAP_ROOT_ACCOUNT").unwrap_or_else(|_| "root".into());
     let root_email =
         std::env::var("BOOTSTRAP_ROOT_EMAIL").unwrap_or_else(|_| "root@example.com".into());
@@ -50,12 +46,8 @@ fn default_test_config() -> ApiConfig {
         std::env::var("BOOTSTRAP_ROOT_PASSWORD").unwrap_or_else(|_| "change-me".into());
     let workspace_name =
         std::env::var("BOOTSTRAP_WORKSPACE_NAME").unwrap_or_else(|_| "1flowbase".into());
-    let mut entries = vec![
+    let entries = vec![
         ("API_DATABASE_URL".to_string(), database_url),
-        (
-            "API_EPHEMERAL_BACKEND".to_string(),
-            ephemeral_backend.clone(),
-        ),
         (
             "API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS".to_string(),
             "true".to_string(),
@@ -65,13 +57,6 @@ fn default_test_config() -> ApiConfig {
         ("BOOTSTRAP_ROOT_PASSWORD".to_string(), root_password),
         ("BOOTSTRAP_WORKSPACE_NAME".to_string(), workspace_name),
     ];
-
-    if ephemeral_backend.eq_ignore_ascii_case("redis") {
-        entries.push((
-            "API_EPHEMERAL_REDIS_URL".to_string(),
-            ephemeral_redis_url.unwrap_or_else(|| "redis://:1flowbase@127.0.0.1:36379".to_string()),
-        ));
-    }
 
     let refs = entries
         .iter()
@@ -168,10 +153,15 @@ async fn test_state_with_runtime_profile_state(
         crate::openapi_docs::build_default_api_docs_registry_with_cookie_name(&config.cookie_name)
             .unwrap(),
     );
+    let infrastructure = Arc::new(build_local_host_infrastructure());
+    let session_store = infrastructure
+        .session_store()
+        .expect("local test infrastructure must provide session store");
 
     (
         Arc::new(ApiState {
             store,
+            infrastructure,
             file_storage_registry,
             runtime_engine,
             provider_runtime: Arc::new(ApiRuntimeServices::new(
@@ -194,9 +184,7 @@ async fn test_state_with_runtime_profile_state(
             host_extension_dropin_root: config.host_extension_dropin_root.clone(),
             allow_unverified_filesystem_dropins: config.allow_unverified_filesystem_dropins,
             allow_uploaded_host_extensions: config.allow_uploaded_host_extensions,
-            session_store: SessionStoreHandle::Memory(MemorySessionStore::new(
-                "flowbase:console:session",
-            )),
+            session_store,
             api_docs,
             cookie_name: config.cookie_name.clone(),
             session_ttl_days: config.session_ttl_days,

@@ -1,8 +1,9 @@
 use api_server::{
     app,
-    app_state::{ApiState, SessionStoreHandle},
+    app_state::ApiState,
     app_with_state_and_config,
     config::{ApiConfig, ApiEnvironment},
+    host_infrastructure::build_local_host_infrastructure,
     provider_runtime::ApiRuntimeServices,
     runtime_profile_client::{HostApiRuntimeProfileCollector, PluginRunnerSystemPort},
 };
@@ -23,7 +24,6 @@ use control_plane::ports::{
 };
 use serde_json::Value;
 use sqlx::PgPool;
-use storage_ephemeral::{EphemeralBackendKind, MemorySessionStore};
 use time::OffsetDateTime;
 use tokio::sync::RwLock;
 use tower::ServiceExt;
@@ -128,10 +128,15 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
     ));
     let api_docs =
         std::sync::Arc::new(api_server::openapi_docs::build_default_api_docs_registry().unwrap());
+    let infrastructure = std::sync::Arc::new(build_local_host_infrastructure());
+    let session_store = infrastructure
+        .session_store()
+        .expect("local health test infrastructure must provide session store");
 
     app_with_state_and_config(
         std::sync::Arc::new(ApiState {
             store,
+            infrastructure,
             file_storage_registry: std::sync::Arc::new(storage_object::builtin_driver_registry()),
             runtime_engine,
             provider_runtime: std::sync::Arc::new(ApiRuntimeServices::new(
@@ -154,9 +159,7 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
             host_extension_dropin_root: config.host_extension_dropin_root.clone(),
             allow_unverified_filesystem_dropins: config.allow_unverified_filesystem_dropins,
             allow_uploaded_host_extensions: config.allow_uploaded_host_extensions,
-            session_store: SessionStoreHandle::Memory(MemorySessionStore::new(
-                "flowbase:console:session",
-            )),
+            session_store,
             api_docs,
             cookie_name: config.cookie_name.clone(),
             session_ttl_days: config.session_ttl_days,
@@ -265,11 +268,9 @@ async fn health_route_returns_ok_payload() {
 }
 
 #[tokio::test]
-async fn app_from_config_supports_memory_ephemeral_backend() {
+async fn app_from_config_uses_local_host_infrastructure_session_store() {
     let mut config = default_test_config();
     config.database_url = isolated_database_url(&config.database_url).await;
-    config.ephemeral_backend = EphemeralBackendKind::Memory;
-    config.ephemeral_redis_url = None;
 
     let app = api_server::app_from_config(&config).await.unwrap();
     let response = app

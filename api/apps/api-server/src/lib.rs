@@ -29,7 +29,6 @@ use control_plane::bootstrap::{BootstrapConfig, BootstrapService};
 use rand_core::OsRng;
 use serde::Serialize;
 use storage_durable::build_main_durable_postgres;
-use storage_ephemeral::{EphemeralBackendKind, MemorySessionStore, RedisBackedSessionStore};
 use time::OffsetDateTime;
 use tokio::sync::RwLock;
 use tower_http::{
@@ -41,16 +40,16 @@ use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
-    app_state::{ApiState, SessionStoreHandle},
+    app_state::ApiState,
     config::{ApiConfig, ApiEnvironment},
     host_extension_loader::load_host_extensions_at_startup,
+    host_infrastructure::build_local_host_infrastructure,
     provider_runtime::ApiProviderRuntime,
     provider_runtime::ApiRuntimeServices,
     runtime_profile_client::{HostApiRuntimeProfileCollector, HttpPluginRunnerSystemClient},
 };
 
 pub const DEFAULT_API_SERVER_ADDR: &str = "0.0.0.0:7800";
-const SESSION_STORE_NAMESPACE: &str = "flowbase:console:session";
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct HealthResponse {
@@ -166,18 +165,10 @@ pub async fn app_from_env() -> Result<Router> {
 pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
     let durable = build_main_durable_postgres(&config.database_url).await?;
     let store = durable.store.clone();
-    let session_store = match config.ephemeral_backend {
-        EphemeralBackendKind::Memory => {
-            SessionStoreHandle::Memory(MemorySessionStore::new(SESSION_STORE_NAMESPACE))
-        }
-        EphemeralBackendKind::Redis => SessionStoreHandle::Redis(Box::new(
-            RedisBackedSessionStore::new(
-                config.ephemeral_redis_url.as_deref().unwrap(),
-                SESSION_STORE_NAMESPACE,
-            )
-            .await?,
-        )),
-    };
+    let infrastructure = Arc::new(build_local_host_infrastructure());
+    let session_store = infrastructure
+        .session_store()
+        .expect("storage-ephemeral default provider must provide session store");
     let salt = SaltString::generate(&mut OsRng);
     let root_password_hash = Argon2::default()
         .hash_password(config.bootstrap_root_password.as_bytes(), &salt)
@@ -239,6 +230,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
 
     let state = Arc::new(ApiState {
         store,
+        infrastructure,
         file_storage_registry,
         runtime_engine,
         provider_runtime: Arc::new(ApiRuntimeServices::new(
