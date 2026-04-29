@@ -27,11 +27,11 @@
 
 1. 插件是否成立，判断标准是是否走独立 `package / install / enable-disable / load` 生命周期，而不是源码是否位于主仓。
 2. 主仓可以预留统一插件源码工作区，CLI 创建插件可以直接生成到主仓。
-3. `HostExtension` 是宿主级系统能力扩展，只负责 host contract、boot-time bridge、slot family、health/reconcile 和系统级 adapter。
-4. `HostExtension` 不是业务资源 owner，不负责平台主数据库表、核心 repository、核心 service、核心 route。
+3. `HostExtension` 是受治理的内核级系统插件，可以实现或替换 host contract，也可以拥有自己命名空间下的系统资源、migration、service 和受控 route。
+4. `HostExtension` 不能绕过 Boot Core 的治理边界：不能改写核心安装状态、权限、审计、主存储连接、安全策略，不能裸开任意 HTTP route，不能直接篡改其他模块的表。
 5. `RuntimeExtension` 是某个 runtime slot 的具体实现，例如 `model_provider`、`data_source`、`file_processor`。
 6. `CapabilityPlugin` 是用户在 workflow / app / canvas 中显式选择的一项能力，例如 node、tool、trigger、publisher。
-7. 文件管理、主存储、临时缓存、数据源平台、工作流平台仍然属于 `Core`；只有它们的外部协议适配器或用户可贡献能力才插件化。
+7. 平台最小内核和跨模块一致性属于 `Core`；文件管理、数据源平台、工作流平台这类系统模块可以先在核心实现，也可以逐步迁为官方 `HostExtension`。
 8. `HostExtension` 随主进程内加载，启用、停用、升级通过 `desired_state` 管理，并在重启后生效。
 9. 禁止为 `HostExtension` 设计 Rust `so/dll` 可重复热加载 / 热卸载；需要可重复卸载的运行时优先考虑声明式、Lua 或 WASM。
 
@@ -113,53 +113,80 @@ plugin-runner
 
 ### 5.2 Core Platform
 
-`Core Platform` 是平台自己的资源与状态 owner。
+`Core Platform` 是平台最小内核和跨模块一致性的 owner。
 
 它负责：
 
-1. 平台主数据库 schema。
-2. migration。
-3. repository / mapper。
-4. 业务 service、权限、审计、状态机。
-5. 工作流编译与执行平台。
-6. 文件管理平台。
-7. 数据源平台。
-8. 插件安装、任务、信任、inventory、registry metadata。
+1. Boot Core schema，以及当前尚未迁出的核心模块 schema。
+2. Boot Core migration 链，以及当前核心模块 migrations。
+3. Boot Core repository / mapper，以及当前核心模块 repository / mapper。
+4. 核心权限、审计、状态机。
+5. 插件安装、任务、信任、inventory、registry metadata。
+6. 跨模块必须一致的事务边界。
+7. 当前尚未插件化的系统模块实现。
 
 一句话：
 
 ```text
-只要是平台自己的资源、事务和状态一致性，默认都属于 Core。
+只要是 Boot Core 治理、安全、安装、权限、审计和跨模块一致性，默认都属于 Core。
 ```
 
 ### 5.3 HostExtension
 
-`HostExtension` 是宿主级系统能力扩展。
+`HostExtension` 是受治理的内核级系统插件。
 
 它负责：
 
-1. host contract 的实现、替换或桥接。
-2. boot-time 系统 adapter。
+1. host contract 的定义、实现、替换或增强。
+2. boot-time 系统 module。
 3. runtime slot family 的系统级声明。
 4. health / reconcile / bootstrap hook。
 5. observability、auth、gateway、secret manager 一类宿主桥接器。
+6. 自己命名空间下的系统资源、migration、repository、service。
+7. 通过 host route registry 注册的受控 route / callback / worker。
 
 它不负责：
 
-1. 平台主业务表。
-2. 核心 migration。
-3. 核心 repository / service / route。
-4. 文件管理主逻辑。
-5. 数据源平台主逻辑。
-6. 工作流平台主逻辑。
+1. Boot Core 自身的启动、安装、权限、审计和安全策略。
+2. `plugin_installations`、`plugin_tasks` 等核心插件生命周期表。
+3. 直接修改其他模块拥有的表或状态。
+4. 绕过 `control-plane`、权限、审计和 route registry。
+5. 裸开任意 HTTP route。
+6. workspace 用户可安装的普通能力。
 
 一句话：
 
 ```text
-HostExtension 接宿主，不拥有业务资源。
+HostExtension 可以拥有内核级系统模块，但必须通过宿主治理边界扩展。
 ```
 
-### 5.4 RuntimeExtension
+### 5.4 HostExtension 资源所有权
+
+`HostExtension` 可以拥有系统资源，但资源必须归属到插件命名空间。
+
+允许：
+
+1. `extension_id` 命名空间下的系统表。
+2. 插件自有 migration。
+3. 插件自有 service 和 repository。
+4. 通过宿主 route registry 注册的系统 API。
+5. 通过宿主 worker registry 注册的后台任务。
+
+禁止：
+
+1. 直接改写 Boot Core 的核心表。
+2. 直接抢占其他 `HostExtension` 的资源命名空间。
+3. 绕过宿主权限、审计、CSRF、OpenAPI 和健康检查。
+4. 在运行中热替换 Rust native 代码。
+
+判断方式：
+
+```text
+如果它是一个可随部署启用或替换的系统模块，并且资源可以清晰归属到 extension namespace，可以做 HostExtension。
+如果它是 Boot Core 自身维持系统可治理所必需的元数据，必须留在 Core。
+```
+
+### 5.5 RuntimeExtension
 
 `RuntimeExtension` 是已注册 runtime slot 的具体实现。
 
@@ -186,7 +213,7 @@ HostExtension 接宿主，不拥有业务资源。
 2. 直接写平台主数据库。
 3. 拥有平台 secret / preview session / import job / catalog cache 主状态。
 
-### 5.5 CapabilityPlugin
+### 5.6 CapabilityPlugin
 
 `CapabilityPlugin` 是用户显式选择的一项应用能力。
 
@@ -359,7 +386,7 @@ source workspace
 
 ### 9.1 文件管理
 
-文件管理平台本身属于 `Core`。
+文件管理平台当前实现属于 `Core`；目标架构中可以作为官方 `HostExtension` 系统模块迁出。
 
 包括：
 
@@ -369,11 +396,11 @@ source workspace
 4. 文件记录
 5. 绑定关系
 
-只有对象存储实现桥接这一层可由 `HostExtension` 承接。
+如果作为 `HostExtension` 迁出，它可以拥有文件管理命名空间下的系统表、service、route 和 worker；Boot Core 仍只保留插件治理、权限、审计和主存储连接。
 
 ### 9.2 主存储
 
-平台主存储属于 `Core`。
+平台主存储治理属于 `Core`。
 
 包括：
 
@@ -382,7 +409,7 @@ source workspace
 3. migration
 4. repository
 
-`HostExtension` 不应成为平台主数据库 schema owner。
+`HostExtension` 可以注册 storage implementation，也可以拥有自己命名空间下的系统表；但不能拥有 Boot Core 的全局 migration 链、主存储连接、核心插件生命周期表和跨模块一致性边界。
 
 ### 9.3 临时缓存层
 
@@ -399,12 +426,13 @@ source workspace
 
 ### 9.4 数据源
 
-数据源拆成两半：
+数据源拆成三层：
 
-1. 数据源平台：`Core`
-2. 具体外部源适配器：`RuntimeExtension`
+1. 数据源平台当前实现：`Core`
+2. 数据源平台目标形态：可迁为官方 `HostExtension` 系统模块
+3. 具体外部源适配器：`RuntimeExtension`
 
-平台侧包括：
+平台侧或 HostExtension 系统模块侧包括：
 
 1. instance
 2. secret
@@ -421,7 +449,7 @@ source workspace
 
 ### 9.5 工作流
 
-工作流平台属于 `Core`。
+工作流平台当前实现属于 `Core`；目标架构中，工作流平台本体可以作为官方 `HostExtension` 系统模块，但单个用户可选节点仍属于 `CapabilityPlugin`。
 
 包括：
 
@@ -431,13 +459,13 @@ source workspace
 4. run persistence
 5. debug runtime
 
-只有 workflow 中用户可选择的能力才属于 `CapabilityPlugin`。
+工作流 engine、run persistence、debug runtime 如果迁出，应作为工作流 HostExtension 的 extension-owned resource；workflow 中用户可选择的节点、工具、触发器属于 `CapabilityPlugin`。
 
 ### 9.6 插件市场与安装元数据
 
-插件市场、官方 registry metadata、安装状态、任务、信任策略都属于 `Core`。
+插件安装状态、任务、信任策略、loader inventory 属于 `Core`。
 
-它们是宿主自己的 `system/root` 资源，不属于 `HostExtension`。
+插件市场 catalog、registry source、推荐位、分类、缓存和同步任务可以作为官方 `HostExtension` 系统模块；但它必须通过 Core 提供的安装、信任、审计和任务边界工作。
 
 ## 10. HostExtension 可扩展内容示例
 
@@ -448,39 +476,41 @@ source workspace
 3. 把 observability 接到公司内部 metrics / tracing 平台。
 4. 在 boot-time 增加宿主健康校验或 reconcile worker。
 5. 声明宿主开放 `data_source`、`file_processor`、`model_provider` 这些 runtime slot family。
+6. 实现插件市场系统模块，拥有 marketplace catalog/cache/source 表和 route，但复用 Core 安装与信任边界。
+7. 实现文件管理系统模块，拥有 file management namespace 下的表、service 和 route。
 
 ### 10.2 不适合 HostExtension 的例子
 
-1. 新增 `plugin_marketplace_entries` 系统表。
-2. 新增 `file_folders`、`file_shares` 业务表。
-3. 新增数据源实例、secret、preview session 的平台主逻辑。
-4. 新增 workflow run 表、node run 表、debug event 表。
-5. 新增平台系统 route、repository、service。
+1. 直接修改 `plugin_installations`、`plugin_tasks` 等 Core 生命周期表。
+2. 绕过 Core 安装、信任、审计、权限和任务系统。
+3. 直接改写其他 HostExtension 拥有的表。
+4. 裸开不经过 host route registry 的 HTTP route。
+5. 给 workspace 用户安装可注册系统接口的插件。
 
 ## 11. 新需求落点判断表
 
 | 需求类型 | 落点 | 判断标准 | 例子 |
 | --- | --- | --- | --- |
-| 平台核心资源 | `Core` | 需要主数据库表、migration、repository、service、route、审计、权限、事务一致性 | 插件市场、文件表、数据源实例、工作流运行记录 |
-| 宿主级系统能力 | `HostExtension` | `root/system` 级，boot-time 生效，接宿主 contract / bridge / policy，不拥有核心业务资源 | 对象存储桥接、SSO bridge、observability bridge |
+| Core 内核资源 | `Core` | 维持系统可启动、可治理、可审计、可安装、可授权的全局元数据和跨模块一致性 | 插件安装状态、任务、信任策略、权限、审计、主存储连接 |
+| Host 系统模块 | `HostExtension` | `root/system` 级，boot-time 生效，可拥有 extension namespace 下的表、migration、service、route、worker | 插件市场、文件管理模块、SSO bridge、observability bridge |
 | 外部协议适配器 | `RuntimeExtension` | 是已注册 runtime slot 的具体实现，供 workspace / model 绑定 | OpenAI provider、MySQL 数据源、文件处理器 |
 | 用户显式选择能力 | `CapabilityPlugin` | 是 workflow / app / canvas 中可选择的一项能力 | workflow node、tool、trigger、publisher |
 
 快速判断规则：
 
-1. 需要新增平台主库表：`Core`
-2. 需要宿主启动时挂接系统 bridge：`HostExtension`
-3. 需要实现某个 slot：`RuntimeExtension`
+1. 需要修改 Boot Core 治理、权限、审计、安装状态：`Core`
+2. 需要新增可独立启停的 root/system 系统模块：`HostExtension`
+3. 需要实现某个 runtime slot：`RuntimeExtension`
 4. 需要新增 workflow / app 中的可选能力块：`CapabilityPlugin`
 
 ## 12. 对现有 spec 的收敛
 
-本设计收敛并修正 [2026-04-28-host-extension-boundary-design.md](./2026-04-28-host-extension-boundary-design.md) 中以下过宽定义：
+本设计收敛并修正 [2026-04-28-host-extension-boundary-design.md](./2026-04-28-host-extension-boundary-design.md) 中以下不够精确的定义：
 
-1. `HostExtension` 不再作为系统主资源 owner。
-2. `HostExtension` 不再承诺拥有核心 migration 和系统表。
-3. `HostExtension` 不再被设计成可注册整套系统 API / route 的主方式。
-4. `HostExtension` 改为宿主系统 bridge 与 boot-time adapter。
+1. `HostExtension` 可以作为系统模块 owner，但必须拥有清晰 extension namespace。
+2. `HostExtension` 可以拥有自有 migration 和系统表，但不能改写 Boot Core 与其他模块资源。
+3. `HostExtension` 可以注册受控系统 API / route，但必须经过 host route registry、权限、审计和 OpenAPI 治理。
+4. `HostExtension` 不只是 bridge，也可以是可启停的内核级系统模块实现。
 5. 主仓插件源码目录不按官方和第三方拆分，而按插件层级拆分。
 
 ## 13. 迁移建议
@@ -497,7 +527,8 @@ source workspace
 
 本文已检查：
 
-1. 没有把 `HostExtension` 和 `Core` 的资源 owner 关系写混。
-2. 没有把 `RuntimeExtension` 和 `CapabilityPlugin` 混成同一类插件。
-3. 没有要求把插件源码移出主仓。
-4. 没有把 Rust native `so/dll` 热卸载作为 `HostExtension` 目标方案。
+1. 已区分 Boot Core 全局治理资源和 HostExtension 命名空间资源。
+2. 已允许 HostExtension 拥有受治理的系统模块实现、migration、service 和 route。
+3. 没有把 `RuntimeExtension` 和 `CapabilityPlugin` 混成同一类插件。
+4. 没有要求把插件源码移出主仓。
+5. 没有把 Rust native `so/dll` 热卸载作为 `HostExtension` 目标方案。
