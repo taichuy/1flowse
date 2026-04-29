@@ -43,6 +43,7 @@ description: Use when building or changing backend APIs, state transitions, modu
 - AI-friendly API rules: `references/api-design.md`
 - State and consistency review: `references/state-and-consistency.md`
 - Stable core vs adapter rules: `references/boundary-design.md`
+- Local implementation rules: `references/implementation-rules.md`
 - Anti-decay patterns: `references/anti-patterns.md`
 - Pressure scenarios: `references/examples.md`
 

@@ -106,6 +106,7 @@ cargo test -p <crate-name>
 - `storage-durable/postgres`、`storage-durable`、`storage-object` 或持久化层调整后，service、route、tests 是否仍成立
 - runtime 或插件相关改动后，白名单槽位与消费方式是否仍成立
 - HostExtension 相关改动后，manifest contribution、load plan、route / worker / migration namespace 和 infrastructure provider 是否仍成立
+- `storage-durable/postgres/migrations` 是否仍是顺序追加历史迁移链；修改历史 migration 时是否使用独立 schema 避免 checksum 污染
 - `workspace/system`、`SYSTEM_SCOPE_ID` 与 runtime `scope_id` 约束是否贯穿 route / service / repository / tests
 - `_tests`、文件大小、目录收纳和最小验证命令是否仍遵守质量门禁
 
