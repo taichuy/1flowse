@@ -1,5 +1,7 @@
 # HostExtension 内核级插件边界设计
 
+> Superseded on 2026-04-29 by [插件分层与 HostExtension 收敛设计](./2026-04-29-plugin-layering-and-host-extension-realignment-design.md).
+
 日期：2026-04-28
 状态：待用户审阅
 
