@@ -44,6 +44,11 @@ async fn plugin_routes_install_enable_assign_and_query_tasks() {
         .unwrap()
         .to_string();
     assert_eq!(
+        install_payload["data"]["installation"]["plugin_id"],
+        "fixture_provider@0.1.0"
+    );
+    assert!(install_payload["data"]["task"]["id"].as_str().is_some());
+    assert_eq!(
         install_payload["data"]["installation"]["source_kind"],
         "uploaded"
     );

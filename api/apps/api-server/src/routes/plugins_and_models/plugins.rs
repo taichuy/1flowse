@@ -13,6 +13,10 @@ use control_plane::plugin_management::{
     PluginCatalogEntry, PluginCatalogFilter, PluginFamilyView, PluginInstalledVersionView,
     PluginManagementService, SwitchPluginVersionCommand, UpgradeLatestPluginFamilyCommand,
 };
+use control_plane::resource_action::{
+    ActionDefinition, ResourceActionKernel, ResourceActionRegistry, ResourceDefinition,
+    ResourceScopeKind,
+};
 use serde::{Deserialize, Serialize};
 use storage_durable::MainDurableStore;
 use time::format_description::well_known::Rfc3339;
@@ -50,7 +54,7 @@ pub struct PluginCatalogQuery {
     pub locale: Option<String>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[schema(description = "Installation record returned by the plugin API.")]
 pub struct PluginInstallationResponse {
     pub id: String,
@@ -188,7 +192,7 @@ pub struct PluginFamilyCatalogResponse {
     pub entries: Vec<PluginFamilyResponse>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PluginTaskResponse {
     pub id: String,
     pub installation_id: Option<String>,
@@ -204,10 +208,16 @@ pub struct PluginTaskResponse {
     pub finished_at: Option<String>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct InstallPluginResponse {
     pub installation: PluginInstallationResponse,
     pub task: PluginTaskResponse,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct InstallPluginActionInput {
+    actor_user_id: Uuid,
+    package_root: String,
 }
 
 pub fn router() -> Router<Arc<ApiState>> {
@@ -241,6 +251,34 @@ fn service(state: &ApiState) -> PluginManagementService<MainDurableStore, ApiPro
         state.provider_install_root.clone(),
     )
     .with_allow_uploaded_host_extensions(state.allow_uploaded_host_extensions)
+}
+
+fn install_plugin_action_kernel(state: Arc<ApiState>) -> Result<ResourceActionKernel, ApiError> {
+    let mut registry = ResourceActionRegistry::default();
+    registry.register_resource(ResourceDefinition::core(
+        "plugins",
+        ResourceScopeKind::System,
+    ))?;
+    registry.register_action(ActionDefinition::core("plugins", "install"))?;
+
+    let mut kernel = ResourceActionKernel::new(registry);
+    kernel.register_json_handler("plugins", "install", move |input| {
+        let state = state.clone();
+        async move {
+            let input: InstallPluginActionInput = serde_json::from_value(input).map_err(|_| {
+                control_plane::errors::ControlPlaneError::InvalidInput("plugin_install_action")
+            })?;
+            let result = service(&state)
+                .install_plugin(InstallPluginCommand {
+                    actor_user_id: input.actor_user_id,
+                    package_root: input.package_root,
+                })
+                .await?;
+            Ok(serde_json::to_value(to_install_response(result))?)
+        }
+    })?;
+
+    Ok(kernel)
 }
 
 fn format_time(value: time::OffsetDateTime) -> String {
@@ -610,16 +648,23 @@ pub async fn install_plugin(
 ) -> Result<(StatusCode, Json<ApiSuccess<InstallPluginResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
-    let result = service(&state)
-        .install_plugin(InstallPluginCommand {
-            actor_user_id: context.user.id,
-            package_root: body.package_root,
-        })
+    let output = install_plugin_action_kernel(state.clone())?
+        .dispatch_json(
+            "plugins",
+            "install",
+            serde_json::json!({
+                "actor_user_id": context.user.id,
+                "package_root": body.package_root,
+            }),
+        )
         .await?;
+    let response = serde_json::from_value(output).map_err(|_| {
+        control_plane::errors::ControlPlaneError::InvalidInput("plugin_install_result")
+    })?;
 
     Ok((
         StatusCode::CREATED,
-        Json(ApiSuccess::new(to_install_response(result))),
+        Json(ApiSuccess::new(response)),
     ))
 }
 

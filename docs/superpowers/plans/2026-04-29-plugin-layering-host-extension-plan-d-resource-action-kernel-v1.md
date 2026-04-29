@@ -276,11 +276,11 @@ git commit -m "feat: add resource action dispatch shell"
 - Modify: `api/apps/api-server/src/routes/plugins_and_models/plugins.rs`
 - Modify: `api/apps/api-server/src/_tests/plugin_routes/install_and_access.rs`
 
-- [ ] **Step 1: Add route regression expectation**
+- [x] **Step 1: Add route regression expectation**
 
 Extend plugin install route tests to assert the response still contains installation data and that invalid upload/trust cases still return their existing error codes.
 
-- [ ] **Step 2: Run baseline tests**
+- [x] **Step 2: Run baseline tests**
 
 Run:
 
@@ -291,7 +291,7 @@ cargo test -p api-server plugin_routes -- --nocapture
 
 Expected: PASS before migration, establishing baseline behavior.
 
-- [ ] **Step 3: Register Core action**
+- [x] **Step 3: Register Core action**
 
 Register:
 
@@ -310,7 +310,7 @@ resource_action_kernel.dispatch_json("plugins", "install", input_json)
 
 Do not remove `PluginManagementService`; it remains the handler.
 
-- [ ] **Step 4: Re-run plugin route tests**
+- [x] **Step 4: Re-run plugin route tests**
 
 Run:
 
@@ -322,7 +322,7 @@ cargo test -p control-plane resource_action -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit plugins.install migration**
+- [x] **Step 5: Commit plugins.install migration**
 
 ```bash
 git add api/crates/control-plane/src api/apps/api-server/src/routes/plugins_and_models/plugins.rs api/apps/api-server/src/_tests/plugin_routes/install_and_access.rs
