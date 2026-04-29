@@ -68,7 +68,22 @@ function resolveComposeCommand({ resetCache = false, runCommandImpl = runCommand
     return cachedComposeCommand;
   }
 
-  throw new Error('缺少 `docker compose` 命令');
+  const standaloneComposeResult = runCommandImpl('docker-compose', ['version'], {
+    captureOutput: true,
+  });
+  const standaloneComposeOutput = `${standaloneComposeResult.stdout || ''}\n${
+    standaloneComposeResult.stderr || ''
+  }`;
+  if (
+    !standaloneComposeResult.error &&
+    standaloneComposeResult.status === 0 &&
+    /\bCompose version v?2\./iu.test(standaloneComposeOutput)
+  ) {
+    cachedComposeCommand = { command: 'docker-compose', baseArgs: [] };
+    return cachedComposeCommand;
+  }
+
+  throw new Error('缺少 `docker compose` 命令或 Docker Compose v2 版 `docker-compose` 命令');
 }
 
 function ensureMiddlewareEnv(repoRoot, { logImpl = log } = {}) {

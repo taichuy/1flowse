@@ -335,37 +335,35 @@ test('ensureServiceEnvFile leaves existing api-server env values untouched even 
   assert.equal(env.BOOTSTRAP_ROOT_PASSWORD, 'change-me');
 });
 
-test('resolveComposeCommand no longer falls back to docker-compose', () => {
-  assert.throws(
-    () =>
-      resolveComposeCommand({
-        resetCache: true,
-        runCommandImpl(command, args) {
-          if (command === 'docker' && args[0] === 'compose') {
-            return {
-              status: 1,
-              stdout: '',
-              stderr: 'docker compose plugin missing\n',
-            };
-          }
+test('resolveComposeCommand falls back to standalone docker-compose v2', () => {
+  const command = resolveComposeCommand({
+    resetCache: true,
+    runCommandImpl(command, args) {
+      if (command === 'docker' && args[0] === 'compose') {
+        return {
+          status: 1,
+          stdout: '',
+          stderr: 'docker compose plugin missing\n',
+        };
+      }
 
-          if (command === 'docker-compose') {
-            return {
-              status: 0,
-              stdout: 'docker-compose version 1.29.2\n',
-              stderr: '',
-            };
-          }
+      if (command === 'docker-compose') {
+        return {
+          status: 0,
+          stdout: 'Docker Compose version v2.33.1\n',
+          stderr: '',
+        };
+      }
 
-          return {
-            status: 1,
-            stdout: '',
-            stderr: '',
-          };
-        },
-      }),
-    /docker compose/u
-  );
+      return {
+        status: 1,
+        stdout: '',
+        stderr: '',
+      };
+    },
+  });
+
+  assert.deepEqual(command, { command: 'docker-compose', baseArgs: [] });
 });
 
 test('getServicePrestartCommands resets api root password in development mode', () => {
