@@ -36,6 +36,37 @@ pub struct HostInfrastructureProviderManifest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct HostExtensionRouteActionManifest {
+    pub resource: String,
+    pub action: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostExtensionRouteManifest {
+    pub route_id: String,
+    pub method: String,
+    pub path: String,
+    pub action: HostExtensionRouteActionManifest,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostExtensionWorkerManifest {
+    pub worker_id: String,
+    pub queue: String,
+    pub handler: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostExtensionMigrationManifest {
+    pub id: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HostExtensionContributionManifest {
     pub schema_version: String,
     pub extension_id: String,
@@ -45,9 +76,9 @@ pub struct HostExtensionContributionManifest {
     pub owned_resources: Vec<String>,
     pub extends_resources: Vec<String>,
     pub infrastructure_providers: Vec<HostInfrastructureProviderManifest>,
-    pub routes: Vec<String>,
-    pub workers: Vec<String>,
-    pub migrations: Vec<String>,
+    pub routes: Vec<HostExtensionRouteManifest>,
+    pub workers: Vec<HostExtensionWorkerManifest>,
+    pub migrations: Vec<HostExtensionMigrationManifest>,
 }
 
 pub fn parse_host_extension_contribution_manifest(
@@ -89,8 +120,58 @@ fn validate_host_extension_contribution_manifest(
             ));
         }
     }
+    for route in &manifest.routes {
+        validate_non_empty(&route.route_id, "routes[].route_id")?;
+        validate_route_method(&route.method)?;
+        if !is_controlled_host_route_path(&route.path) {
+            return Err(PluginFrameworkError::invalid_provider_package(
+                "routes[].path must start with /api/system/ or /api/callbacks/",
+            ));
+        }
+        validate_non_empty(&route.action.resource, "routes[].action.resource")?;
+        validate_non_empty(&route.action.action, "routes[].action.action")?;
+    }
+    for worker in &manifest.workers {
+        validate_non_empty(&worker.worker_id, "workers[].worker_id")?;
+        if !is_extension_owned_id(&manifest.extension_id, &worker.worker_id) {
+            return Err(PluginFrameworkError::invalid_provider_package(
+                "workers[].worker_id must equal extension_id or start with <extension_id>.",
+            ));
+        }
+        validate_non_empty(&worker.queue, "workers[].queue")?;
+        validate_non_empty(&worker.handler, "workers[].handler")?;
+    }
+    for migration in &manifest.migrations {
+        validate_non_empty(&migration.id, "migrations[].id")?;
+        if !migration.path.starts_with("migrations/postgres/") || !migration.path.ends_with(".sql")
+        {
+            return Err(PluginFrameworkError::invalid_provider_package(
+                "migrations[].path must start with migrations/postgres/ and end with .sql",
+            ));
+        }
+    }
 
     Ok(())
+}
+
+fn validate_route_method(method: &str) -> FrameworkResult<()> {
+    match method {
+        "GET" | "POST" | "PUT" | "PATCH" | "DELETE" => Ok(()),
+        _ => Err(PluginFrameworkError::invalid_provider_package(
+            "routes[].method must be GET, POST, PUT, PATCH, or DELETE",
+        )),
+    }
+}
+
+fn is_controlled_host_route_path(path: &str) -> bool {
+    path.starts_with("/api/system/") || path.starts_with("/api/callbacks/")
+}
+
+fn is_extension_owned_id(extension_id: &str, candidate: &str) -> bool {
+    candidate == extension_id
+        || candidate
+            .strip_prefix(extension_id)
+            .is_some_and(|suffix| suffix.starts_with('.'))
 }
 
 fn validate_non_empty(value: &str, field: &str) -> FrameworkResult<()> {
