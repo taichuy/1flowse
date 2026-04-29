@@ -19,7 +19,9 @@
 3. 三层插件的生命周期、启停语义和打包方式。
 4. `HostExtension` 到底能扩展什么，不能扩展什么。
 5. 现有能力如文件管理、主存储、临时缓存、数据源、工作流分别属于哪一层。
-6. 新增需求时如何快速判断应该写到哪一层。
+6. 现有后端结构和调整后的后端结构。
+7. `Resource / Action / Hook` 如何成为 HostExtension 横向扩展核心业务的稳定入口。
+8. 新增需求时如何快速判断应该写到哪一层。
 
 ## 2. 结论摘要
 
@@ -34,6 +36,8 @@
 7. 平台最小内核和跨模块一致性属于 `Core`；文件管理、数据源平台、工作流平台这类系统模块可以先在核心实现，也可以逐步迁为官方 `HostExtension`。
 8. `HostExtension` 随主进程内加载，启用、停用、升级通过 `desired_state` 管理，并在重启后生效。
 9. 禁止为 `HostExtension` 设计 Rust `so/dll` 可重复热加载 / 热卸载；需要可重复卸载的运行时优先考虑声明式、Lua 或 WASM。
+10. 需要补一层 `Resource Action Kernel`，让核心业务通过 `Resource / Action / Hook` 暴露稳定扩展点。
+11. `HostExtension` 可以扩展现有核心业务，但必须通过 resource action、显式 hook、sidecar table、受控 route 和 domain event；不能直接改写核心表。
 
 ## 3. 范围与非目标
 
@@ -45,7 +49,9 @@
 2. 三层插件与核心代码的边界。
 3. 三层插件的生命周期与打包语义。
 4. 现有核心能力的归属判断。
-5. 后续新增需求的落点判断规则。
+5. 后端现有结构与目标结构。
+6. HostExtension 扩展现有核心业务的写法。
+7. 后续新增需求的落点判断规则。
 
 ### 3.2 非目标
 
@@ -90,9 +96,328 @@ plugin-runner
   -> RuntimeExtension / CapabilityPlugin execution host
 ```
 
-## 5. 各层定义
+## 5. 现有后端结构
 
-### 5.1 Boot Core
+当前后端更接近直接分层结构：
+
+```text
+api/apps/api-server
+  -> route / middleware / response / OpenAPI / app assembly
+
+api/crates/control-plane
+  -> service command / state write entry / audit / repository trait
+
+api/crates/domain
+  -> stable domain model / scope semantics / core value object
+
+api/crates/runtime-core
+  -> runtime registry / runtime resource descriptor / runtime ACL / runtime engine
+
+api/crates/plugin-framework
+  -> plugin manifest / host extension manifest / host contract / runtime slot contract
+
+api/crates/storage-durable/postgres
+  -> migration / repository impl / mapper / SQL
+
+api/crates/storage-ephemeral
+  -> session / short-lived coordination
+
+api/crates/storage-object
+  -> object storage implementation boundary
+
+api/apps/plugin-runner
+  -> RuntimeExtension / CapabilityPlugin execution host
+
+api/plugins
+  -> plugin source workspace / package / installed / fixture
+```
+
+当前核心写路径通常是：
+
+```text
+route
+-> service command
+-> repository trait
+-> storage implementation
+-> table
+```
+
+当前已经具备的基础：
+
+1. `ResourceDescriptor / ResourceRegistry` 已经存在，但主要用于 runtime resource 描述和信任等级约束。
+2. `HostExtensionManifest / HostExtensionRegistry` 已经存在，但目前主要表达 contract、slot、storage 和 interface 注册。
+3. `control-plane` 已经承担 service command 和状态写入口。
+4. `api-server` 已经按 route 调 service 的模式组织控制面 HTTP API。
+
+当前缺口：
+
+1. 还没有类似 NocoBase 的全局 `Resource -> Action -> Middleware / Hook` 内核。
+2. `Resource` 还没有成为所有系统业务的统一治理单元。
+3. `Action` 还没有成为可注册、可审计、可 hook 的稳定动作入口。
+4. `HostExtension` 还不能声明式扩展已有核心 resource/action。
+5. 横向扩展目前只能靠新增 route、service 或内部改代码，不适合作为长期插件扩展面。
+
+## 6. 调整后的后端结构
+
+目标后端结构应补齐 `Resource Action Kernel`，让核心业务和 HostExtension 都通过同一套 resource/action 入口被治理。
+
+```text
+api/apps/api-server
+  -> boot assembly
+  -> host route registry
+  -> generated or mounted resource/action routes
+  -> middleware / response / OpenAPI
+
+api/crates/control-plane
+  -> resource kernel
+  -> resource catalog
+  -> action registry
+  -> action pipeline
+  -> service command
+  -> domain event / audit
+  -> repository trait
+
+api/crates/plugin-framework
+  -> HostExtension manifest
+  -> resource contribution manifest
+  -> action contribution manifest
+  -> hook / policy / worker / route declaration
+
+api/crates/storage-durable
+  -> main durable store boundary
+  -> extension migration runner boundary
+
+api/crates/storage-durable/postgres
+  -> Core migrations
+  -> extension-owned namespace migrations
+  -> repository impl / mapper
+
+api/plugins/host-extensions/<extension_id>
+  -> manifest.yaml
+  -> host-extension.yaml
+  -> migrations/
+  -> src/ or package payload
+
+api/plugins/runtime-extensions/<extension_id>
+  -> runtime slot implementation package source
+
+api/plugins/capability-plugins/<plugin_id>
+  -> workspace-selectable capability package source
+```
+
+目标核心写路径变为：
+
+```text
+route or internal caller
+-> Resource Action Kernel
+-> action policy
+-> action validator
+-> explicit hook pipeline
+-> action handler / service command
+-> repository trait
+-> transaction commit
+-> domain event / after_commit hook
+```
+
+### 6.1 Resource 定义
+
+`Resource` 不是数据库表。
+
+```text
+Resource = 一个可被权限、审计、扩展、API 暴露统一管理的业务资源。
+Action = 这个资源上允许执行的稳定动作入口。
+Table = resource 的一种存储实现细节，不直接暴露给插件。
+```
+
+示例：
+
+```text
+Resource: plugins
+Actions: install / enable / disable / upgrade / uninstall
+Core tables: plugin_installations / plugin_tasks
+Owner: Core
+
+Resource: files
+Actions: upload / bind / delete / scan / share
+Tables: file_records / file_tables / extension sidecar tables
+Owner: Core now, file-management HostExtension later
+
+Resource: workflows
+Actions: create / publish / start_run / cancel_run
+Tables: workflows / workflow_runs / debug_events / extension sidecar tables
+Owner: Core now, workflow HostExtension later
+```
+
+### 6.2 Action Pipeline
+
+这里解决的是类似 AOP/AOC 的横向扩展诉求。
+
+横向扩展不做隐式 monkey patch，也不让插件任意包 service。
+
+统一使用显式 action pipeline：
+
+```text
+before_validate
+-> before_authorize
+-> before_execute
+-> execute
+-> after_execute
+-> commit
+-> after_commit
+-> on_failed
+```
+
+阶段约束：
+
+1. `before_validate` 可以补参数、拒绝请求，不能写核心表。
+2. `before_authorize` 可以补充策略判断，不能绕过宿主权限。
+3. `before_execute` 可以阻断动作或准备 extension-owned 上下文，不能直接改核心资源真值。
+4. `after_execute` 可以读取动作结果，写 extension-owned sidecar 需要纳入宿主事务策略。
+5. `after_commit` 可以发事件、启动 worker、同步外部系统。
+6. `on_failed` 只能记录失败、清理扩展上下文或发补偿任务。
+
+### 6.3 HostExtension 扩展现有核心业务
+
+`HostExtension` 可以扩展已有 `Core Resource`，但必须通过声明式 contribution 进入 resource action kernel。
+
+允许：
+
+1. 新增 extension-owned resource。
+2. 为已有 resource 新增受控 action。
+3. 为已有 action 注册显式 hook。
+4. 为已有 action 注册 policy / validator。
+5. 注册 extension-owned sidecar table 和 migration。
+6. 注册受控 route、worker、callback 和 projection。
+7. 在 deployment policy 允许时，显式 override 某个 resource owner 或 action handler。
+
+禁止：
+
+1. 直接改写 Core resource 的真值表。
+2. 隐式包裹或替换 service command。
+3. 绕过 resource action kernel 调 repository impl。
+4. 在 hook 中裸写其他模块表。
+5. 把 workspace 用户安装的普通插件提升成 system action contributor。
+
+判断方式：
+
+```text
+需要改变核心资源真值：调用 Core action。
+需要增加横向策略：注册 action hook / policy。
+需要保存扩展状态：写 extension-owned sidecar table。
+需要对外暴露专属接口：注册受控 route，并最终调用 resource action。
+需要替换系统模块实现：声明 override，并由 deployment policy 显式允许。
+```
+
+### 6.4 HostExtension 场景写法
+
+#### 文件安全扩展
+
+```text
+file-security-host
+  extends resource: files
+  hooks:
+    after files.upload -> enqueue scan worker
+    before files.download -> block when scan_failed
+  owns resources:
+    file_scan_reports
+    file_security_policies
+  owns routes:
+    GET /api/system/file-security/files/{file_id}/scan-report
+```
+
+写法：
+
+1. `files.upload` 仍由文件资源 owner 执行。
+2. 插件在 `after_commit` 创建扫描任务。
+3. 扫描结果写入 `file_scan_reports`。
+4. 下载前通过 `before_execute` 或 `before_authorize` 判断是否阻断。
+
+#### 工作流审批扩展
+
+```text
+workflow-approval-host
+  extends resource: workflows
+  hooks:
+    before workflows.start_run -> require approval when policy matched
+  owns resources:
+    workflow_approval_policies
+    workflow_approval_records
+  owns routes:
+    POST /api/system/workflow-approval/approvals/{approval_id}/approve
+```
+
+写法：
+
+1. `workflows.start_run` 是唯一启动入口。
+2. 插件只在 action pipeline 中决定是否要求审批。
+3. 审批记录写插件自有表。
+4. 审批通过后再次调用 `workflows.start_run` 或调用 Core 暴露的 resume action。
+
+#### 插件市场许可证扩展
+
+```text
+marketplace-license-host
+  extends resource: plugins
+  hooks:
+    before plugins.install -> check license and trust source
+  owns resources:
+    marketplace_catalog
+    marketplace_license_cache
+  owns workers:
+    sync_marketplace_catalog
+```
+
+写法：
+
+1. `plugin_installations`、`plugin_tasks` 仍由 Core 拥有。
+2. 插件市场 catalog 和 license cache 由 HostExtension 拥有。
+3. 安装前只做策略校验，不直接写安装状态。
+4. 安装动作仍调用 Core `plugins.install`。
+
+#### 数据源治理扩展
+
+```text
+data-source-governance-host
+  extends resource: data_sources
+  hooks:
+    before data_sources.create -> enforce allowed connector policy
+    after data_sources.import_snapshot -> emit lineage event
+  owns resources:
+    data_source_policies
+    data_lineage_events
+  owns callbacks:
+    GET /api/callbacks/data-sources/oauth/{provider}
+```
+
+写法：
+
+1. 外部源协议仍由 `RuntimeExtension` 实现。
+2. secret、preview session、import job 由数据源平台 owner 管理。
+3. HostExtension 负责治理策略、callback 和 lineage 投影。
+4. RuntimeExtension 不能直接注册 HTTP callback。
+
+#### 企业身份扩展
+
+```text
+enterprise-identity-host
+  provides or overrides contract: identity
+  owns resources:
+    identity_provider_links
+    sso_login_sessions
+  owns routes:
+    GET /api/auth/sso/{provider}/start
+    GET /api/auth/sso/{provider}/callback
+```
+
+写法：
+
+1. 如果只是新增 SSO provider，作为 identity resource 的 extension action。
+2. 如果替换完整 identity contract，必须声明 override 并由 deployment policy 允许。
+3. session 写入仍走 Core session / identity action，不直接写会话表。
+
+## 7. 各层定义
+
+### 7.1 Boot Core
 
 `Boot Core` 是最小宿主启动面。
 
@@ -111,7 +436,7 @@ plugin-runner
 2. 持有所有系统能力实现。
 3. 代替 `RuntimeExtension` 或 `CapabilityPlugin` 执行具体能力。
 
-### 5.2 Core Platform
+### 7.2 Core Platform
 
 `Core Platform` 是平台最小内核和跨模块一致性的 owner。
 
@@ -131,7 +456,7 @@ plugin-runner
 只要是 Boot Core 治理、安全、安装、权限、审计和跨模块一致性，默认都属于 Core。
 ```
 
-### 5.3 HostExtension
+### 7.3 HostExtension
 
 `HostExtension` 是受治理的内核级系统插件。
 
@@ -160,7 +485,7 @@ plugin-runner
 HostExtension 可以拥有内核级系统模块，但必须通过宿主治理边界扩展。
 ```
 
-### 5.4 HostExtension 资源所有权
+### 7.4 HostExtension 资源所有权
 
 `HostExtension` 可以拥有系统资源，但资源必须归属到插件命名空间。
 
@@ -186,7 +511,7 @@ HostExtension 可以拥有内核级系统模块，但必须通过宿主治理边
 如果它是 Boot Core 自身维持系统可治理所必需的元数据，必须留在 Core。
 ```
 
-### 5.5 RuntimeExtension
+### 7.5 RuntimeExtension
 
 `RuntimeExtension` 是已注册 runtime slot 的具体实现。
 
@@ -213,7 +538,7 @@ HostExtension 可以拥有内核级系统模块，但必须通过宿主治理边
 2. 直接写平台主数据库。
 3. 拥有平台 secret / preview session / import job / catalog cache 主状态。
 
-### 5.6 CapabilityPlugin
+### 7.6 CapabilityPlugin
 
 `CapabilityPlugin` 是用户显式选择的一项应用能力。
 
@@ -231,7 +556,7 @@ HostExtension 可以拥有内核级系统模块，但必须通过宿主治理边
 2. 平台主资源
 3. runtime slot family 声明
 
-## 6. 插件源码目录
+## 8. 插件源码目录
 
 插件源码工作区统一收敛为：
 
@@ -268,9 +593,9 @@ api/plugins/
 4. `installed/` 只放安装结果。
 5. `api/crates/*` 和 `api/apps/api-server/src/*` 不放插件实现源码。
 
-## 7. 生命周期
+## 9. 生命周期
 
-### 7.1 HostExtension
+### 9.1 HostExtension
 
 `HostExtension` 生命周期固定为：
 
@@ -299,7 +624,7 @@ source workspace
 3. 不做 Rust `so/dll` 热卸载
 4. 需要可重复卸载时优先声明式、Lua、WASM
 
-### 7.2 RuntimeExtension
+### 9.2 RuntimeExtension
 
 `RuntimeExtension` 生命周期固定为：
 
@@ -321,7 +646,7 @@ source workspace
 3. 运行时可按需 `load / reload`
 4. 不要求重启 `api-server`
 
-### 7.3 CapabilityPlugin
+### 9.3 CapabilityPlugin
 
 目标生命周期固定为：
 
@@ -346,11 +671,11 @@ source workspace
 
 当前代码里 `CapabilityPlugin` 安装链路尚未完全打通，但目标生命周期按上述模型设计。
 
-## 8. 打包与发行
+## 10. 打包与发行
 
 打包必须区分 `编译` 与 `发行组装`。
 
-### 8.1 编译
+### 10.1 编译
 
 `cargo build` 只编译：
 
@@ -360,7 +685,7 @@ source workspace
 
 它不把插件源码静态编译进主二进制。
 
-### 8.2 插件打包
+### 10.2 插件打包
 
 插件源码单独执行 `plugin package`：
 
@@ -372,7 +697,7 @@ source workspace
 
 1. `api/plugins/packages/`
 
-### 8.3 发行组装
+### 10.3 发行组装
 
 发行包通过 `api/plugins/sets/*.yaml` 选择需要附带的插件包。
 
@@ -382,9 +707,9 @@ source workspace
 2. 不应默认把所有插件包都打进发行包
 3. 即使随发行包附带，插件仍然是独立 package，不是静态链接进主程序
 
-## 9. 现有能力归属
+## 11. 现有能力归属
 
-### 9.1 文件管理
+### 11.1 文件管理
 
 文件管理平台当前实现属于 `Core`；目标架构中可以作为官方 `HostExtension` 系统模块迁出。
 
@@ -398,7 +723,7 @@ source workspace
 
 如果作为 `HostExtension` 迁出，它可以拥有文件管理命名空间下的系统表、service、route 和 worker；Boot Core 仍只保留插件治理、权限、审计和主存储连接。
 
-### 9.2 主存储
+### 11.2 主存储
 
 平台主存储治理属于 `Core`。
 
@@ -411,7 +736,7 @@ source workspace
 
 `HostExtension` 可以注册 storage implementation，也可以拥有自己命名空间下的系统表；但不能拥有 Boot Core 的全局 migration 链、主存储连接、核心插件生命周期表和跨模块一致性边界。
 
-### 9.3 临时缓存层
+### 11.3 临时缓存层
 
 临时缓存层属于 `Core`。
 
@@ -424,7 +749,7 @@ source workspace
 
 它是宿主基础设施，不是插件能力。
 
-### 9.4 数据源
+### 11.4 数据源
 
 数据源拆成三层：
 
@@ -447,7 +772,7 @@ source workspace
 3. preview read
 4. import snapshot
 
-### 9.5 工作流
+### 11.5 工作流
 
 工作流平台当前实现属于 `Core`；目标架构中，工作流平台本体可以作为官方 `HostExtension` 系统模块，但单个用户可选节点仍属于 `CapabilityPlugin`。
 
@@ -461,15 +786,15 @@ source workspace
 
 工作流 engine、run persistence、debug runtime 如果迁出，应作为工作流 HostExtension 的 extension-owned resource；workflow 中用户可选择的节点、工具、触发器属于 `CapabilityPlugin`。
 
-### 9.6 插件市场与安装元数据
+### 11.6 插件市场与安装元数据
 
 插件安装状态、任务、信任策略、loader inventory 属于 `Core`。
 
 插件市场 catalog、registry source、推荐位、分类、缓存和同步任务可以作为官方 `HostExtension` 系统模块；但它必须通过 Core 提供的安装、信任、审计和任务边界工作。
 
-## 10. HostExtension 可扩展内容示例
+## 12. HostExtension 可扩展内容示例
 
-### 10.1 适合 HostExtension 的例子
+### 12.1 适合 HostExtension 的例子
 
 1. 把 `storage-object` 接到公司内部对象存储桥接器。
 2. 把认证接到企业 SSO / LDAP。
@@ -478,21 +803,27 @@ source workspace
 5. 声明宿主开放 `data_source`、`file_processor`、`model_provider` 这些 runtime slot family。
 6. 实现插件市场系统模块，拥有 marketplace catalog/cache/source 表和 route，但复用 Core 安装与信任边界。
 7. 实现文件管理系统模块，拥有 file management namespace 下的表、service 和 route。
+8. 为已有 Core resource 注册 action hook，例如 `before plugins.install`、`after files.upload`。
+9. 为已有 Core resource 增加受控专属 action，例如 `files.scan_report`、`workflows.approve_run`。
 
-### 10.2 不适合 HostExtension 的例子
+### 12.2 不适合 HostExtension 的例子
 
 1. 直接修改 `plugin_installations`、`plugin_tasks` 等 Core 生命周期表。
 2. 绕过 Core 安装、信任、审计、权限和任务系统。
 3. 直接改写其他 HostExtension 拥有的表。
 4. 裸开不经过 host route registry 的 HTTP route。
-5. 给 workspace 用户安装可注册系统接口的插件。
+5. 隐式 monkey patch、包裹或替换 Core service command。
+6. 绕过 resource action kernel 直接调用 repository impl。
+7. 给 workspace 用户安装可注册系统接口的插件。
 
-## 11. 新需求落点判断表
+## 13. 新需求落点判断表
 
 | 需求类型 | 落点 | 判断标准 | 例子 |
 | --- | --- | --- | --- |
 | Core 内核资源 | `Core` | 维持系统可启动、可治理、可审计、可安装、可授权的全局元数据和跨模块一致性 | 插件安装状态、任务、信任策略、权限、审计、主存储连接 |
 | Host 系统模块 | `HostExtension` | `root/system` 级，boot-time 生效，可拥有 extension namespace 下的表、migration、service、route、worker | 插件市场、文件管理模块、SSO bridge、observability bridge |
+| Core resource action | `Core` | 维持 resource catalog、action registry、hook pipeline、权限、审计、事务和 domain event | `plugins.install`、`files.upload`、`workflows.start_run` |
+| Host 横向扩展 | `HostExtension` | 对已有 resource/action 注册 hook、policy、validator、sidecar、projection 或受控 action | 文件扫描、工作流审批、插件许可证校验 |
 | 外部协议适配器 | `RuntimeExtension` | 是已注册 runtime slot 的具体实现，供 workspace / model 绑定 | OpenAI provider、MySQL 数据源、文件处理器 |
 | 用户显式选择能力 | `CapabilityPlugin` | 是 workflow / app / canvas 中可选择的一项能力 | workflow node、tool、trigger、publisher |
 
@@ -500,10 +831,11 @@ source workspace
 
 1. 需要修改 Boot Core 治理、权限、审计、安装状态：`Core`
 2. 需要新增可独立启停的 root/system 系统模块：`HostExtension`
-3. 需要实现某个 runtime slot：`RuntimeExtension`
-4. 需要新增 workflow / app 中的可选能力块：`CapabilityPlugin`
+3. 需要扩展已有核心业务动作：`HostExtension` 通过 resource action hook/policy/sidecar 扩展
+4. 需要实现某个 runtime slot：`RuntimeExtension`
+5. 需要新增 workflow / app 中的可选能力块：`CapabilityPlugin`
 
-## 12. 对现有 spec 的收敛
+## 14. 对现有 spec 的收敛
 
 本设计收敛并修正 [2026-04-28-host-extension-boundary-design.md](./2026-04-28-host-extension-boundary-design.md) 中以下不够精确的定义：
 
@@ -512,23 +844,29 @@ source workspace
 3. `HostExtension` 可以注册受控系统 API / route，但必须经过 host route registry、权限、审计和 OpenAPI 治理。
 4. `HostExtension` 不只是 bridge，也可以是可启停的内核级系统模块实现。
 5. 主仓插件源码目录不按官方和第三方拆分，而按插件层级拆分。
+6. `HostExtension` 扩展现有核心业务必须走 `Resource / Action / Hook`，不能直接改写 Core resource 真值表。
 
-## 13. 迁移建议
+## 15. 迁移建议
 
 建议按以下顺序推进：
 
-1. 更新 `api/AGENTS.md`，把四层落点判断和 HostExtension 约束写死。
-2. 在 `api/plugins/` 下建立三类插件源码工作区和模板目录。
-3. 把现有 `api-server` 中的 builtin host manifest 迁到 `api/plugins/host-extensions/*` 源码工作区。
-4. 保留 `api-server` 只做 loader、policy、inventory 和 boot assembly。
-5. 后续再逐步补 `HostExtension` runtime 和 `CapabilityPlugin` install chain。
+1. 更新 `api/AGENTS.md`，把四层落点、Resource Action Kernel 和 HostExtension 约束写死。
+2. 在 `control-plane` 补 resource catalog、action registry、action pipeline、hook registry 和 domain event 边界。
+3. 扩展 `plugin-framework` 的 HostExtension manifest，加入 owned resources、extends resources、contributed actions、hooks、routes、workers、migrations。
+4. 在 `api-server` 引入 host route registry 与 resource/action route mount 约束，保持 route 只做协议层。
+5. 在 `api/plugins/` 下建立三类插件源码工作区和模板目录。
+6. 把现有 `api-server` 中的 builtin host manifest 迁到 `api/plugins/host-extensions/*` 源码工作区。
+7. 保留 `api-server` 只做 loader、policy、inventory、route mount 和 boot assembly。
+8. 后续再逐步补 `HostExtension` runtime、extension migration runner 和 `CapabilityPlugin` install chain。
 
-## 14. 自检
+## 16. 自检
 
 本文已检查：
 
 1. 已区分 Boot Core 全局治理资源和 HostExtension 命名空间资源。
 2. 已允许 HostExtension 拥有受治理的系统模块实现、migration、service 和 route。
-3. 没有把 `RuntimeExtension` 和 `CapabilityPlugin` 混成同一类插件。
-4. 没有要求把插件源码移出主仓。
-5. 没有把 Rust native `so/dll` 热卸载作为 `HostExtension` 目标方案。
+3. 已明确 Resource 不等于数据库表，Action 是稳定动作入口。
+4. 已把 HostExtension 横向扩展限定到显式 hook、policy、sidecar、受控 action 和 domain event。
+5. 没有把 `RuntimeExtension` 和 `CapabilityPlugin` 混成同一类插件。
+6. 没有要求把插件源码移出主仓。
+7. 没有把 Rust native `so/dll` 热卸载作为 `HostExtension` 目标方案。

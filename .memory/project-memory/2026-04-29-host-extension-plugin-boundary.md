@@ -36,3 +36,5 @@ status: active
 不要把 Rust `so/dll` native 动态库设计成可重复热加载 / 热卸载的 HostExtension 机制。Rust 依赖链中的 TLS、`static`、allocator 与全局状态很难可靠回收，反复 unload/reload 容易引入不可控泄漏和不稳定性。若需要可重复加载卸载的扩展运行时，优先考虑 WASM 或 Lua/mlua 一类可控沙箱；native host extension 最多按进程生命周期加载，禁用/升级通过 desired state + 重启生效。
 
 2026-04-29 07 进一步修正：`HostExtension` 不应被收窄成只能做 bridge / boot adapter。它是受治理的内核级系统模块，可以拥有 extension namespace 下的系统表、migration、repository、service、worker 和受控 route。Boot Core 仍拥有安装、权限、审计、主存储连接、安全策略和插件生命周期表等全局治理资源。
+
+2026-04-29 07 继续修正：后端需要补 `Resource Action Kernel` 作为 HostExtension 扩展核心业务的稳定面。`Resource` 不是数据库表，`Action` 是可治理动作入口，`Hook` 是显式横向扩展点。HostExtension 可以对现有核心业务注册 action hook、policy、validator、sidecar table、受控 action、worker 和 domain event，但不能直接改核心资源真值表、隐式包裹 service 或绕过 repository 边界。
