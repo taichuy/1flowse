@@ -398,7 +398,7 @@ git commit -m "feat: route file upload through resource action kernel"
 **Files:**
 - Verify only.
 
-- [ ] **Step 1: Format**
+- [x] **Step 1: Format**
 
 Run:
 
@@ -407,7 +407,7 @@ cd api
 cargo fmt
 ```
 
-- [ ] **Step 2: Run focused tests**
+- [x] **Step 2: Run focused tests**
 
 Run:
 
@@ -420,7 +420,7 @@ cargo test -p api-server file_management_routes -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit formatting if needed**
+- [x] **Step 3: Commit formatting if needed**
 
 ```bash
 git add api
