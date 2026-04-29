@@ -25,6 +25,7 @@ pub mod plugin_lifecycle;
 pub mod plugin_management;
 pub mod ports;
 pub mod profile;
+pub mod resource_action;
 pub mod role;
 pub mod runtime_observability;
 pub mod runtime_registry_sync;

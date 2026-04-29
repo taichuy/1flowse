@@ -39,7 +39,7 @@
 - Modify: `api/crates/control-plane/src/lib.rs`
 - Modify: `api/crates/control-plane/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write RED registry tests**
+- [x] **Step 1: Write RED registry tests**
 
 Add tests:
 
@@ -66,7 +66,7 @@ fn registry_requires_existing_resource() {
 }
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -77,7 +77,7 @@ cargo test -p control-plane resource_action -- --nocapture
 
 Expected: FAIL because module does not exist.
 
-- [ ] **Step 3: Implement registry**
+- [x] **Step 3: Implement registry**
 
 Create:
 
@@ -98,7 +98,7 @@ ResourceActionRegistry::register_action
 ResourceActionRegistry::action(resource_code, action_code)
 ```
 
-- [ ] **Step 4: Re-run registry tests**
+- [x] **Step 4: Re-run registry tests**
 
 Run:
 
@@ -109,7 +109,7 @@ cargo test -p control-plane resource_action -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit registry**
+- [x] **Step 5: Commit registry**
 
 ```bash
 git add api/crates/control-plane/src/resource_action api/crates/control-plane/src/_tests/resource_action_tests.rs api/crates/control-plane/src/_tests/mod.rs api/crates/control-plane/src/lib.rs
