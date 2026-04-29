@@ -29,7 +29,7 @@ Use these documents as the source of truth:
    Adds resource/action definitions, hook ordering, transaction pipeline semantics, and migrates `plugins.install` plus `files.upload` as the first two governed actions.
 5. [x] [Plan E: HostExtension Route Worker Migration Namespace](./2026-04-29-plugin-layering-host-extension-plan-e-route-worker-migration.md)
    Adds controlled route registration, worker registry, and extension-owned PostgreSQL migration namespace.
-6. [ ] [Plan F: Builtin Host Manifest Migration And Regression](./2026-04-29-plugin-layering-host-extension-plan-f-builtin-manifest-regression.md)
+6. [x] [Plan F: Builtin Host Manifest Migration And Regression](./2026-04-29-plugin-layering-host-extension-plan-f-builtin-manifest-regression.md)
    Moves builtin host manifests into `api/plugins/host-extensions/*`, introduces plugin sets, removes long-term api-server builtin manifest ownership, and closes with regression.
 
 ## Recommended Order

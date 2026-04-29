@@ -8,6 +8,9 @@
 
 **Tech Stack:** YAML manifests, Rust loader tests, plugin source workspace docs, backend verification script, qa-evaluation closeout.
 
+**Status:** Complete on 2026-04-29. Implementation commits:
+`e4bf00fc`, `efa9f681`, `f02e8256`, `a4682696`, `9aad659b`, `7053f1cb`.
+
 ---
 
 ## File Structure
@@ -309,7 +312,7 @@ git commit -m "docs: align host extension closeout docs"
 **Files:**
 - Verify only.
 
-- [ ] **Step 1: Format**
+- [x] **Step 1: Format**
 
 Run:
 
@@ -320,7 +323,7 @@ cargo fmt
 
 Expected: no uncommitted formatting diff remains.
 
-- [ ] **Step 2: Run full backend verification**
+- [x] **Step 2: Run full backend verification**
 
 Run from repository root:
 
@@ -330,7 +333,7 @@ node scripts/node/verify-backend.js
 
 Expected: PASS. Store warning and coverage artifacts under `tmp/test-governance/` if generated.
 
-- [ ] **Step 3: Run qa-evaluation**
+- [x] **Step 3: Run qa-evaluation**
 
 Use `qa-evaluation` for closeout. The QA report must cover:
 
@@ -343,7 +346,7 @@ builtin manifest source workspace migration
 remaining un-migrated routes that are not yet HostExtension extension points
 ```
 
-- [ ] **Step 4: Commit final verification docs if produced**
+- [x] **Step 4: Commit final verification docs if produced**
 
 If QA produces tracked docs or updates plan status, commit them:
 
@@ -353,3 +356,17 @@ git commit -m "test: close host extension realignment regression"
 ```
 
 Do not commit ignored transient logs.
+
+## QA Closeout Notes
+
+**Verification command:** `node scripts/node/verify-backend.js` passed from repository root on 2026-04-29 after the Plan F clippy fixes in `9aad659b` and `7053f1cb`.
+
+**Coverage reviewed:**
+- HostExtension manifest and load-plan validation: official host extension manifests load from `api/plugins/host-extensions/*`, contribution validation covers bootstrap phase ordering and malformed manifest failures, and builtin loader tests cover missing path errors.
+- Pre-state infrastructure bootstrap: `official.local-infra-host` declares `bootstrap_phase: pre_state` and the six local infrastructure providers used by `ApiState` bootstrap.
+- Resource Action Kernel migrated actions: `plugins.install` and `files.upload` enter through `ResourceActionKernel::dispatch_json`; their handlers still delegate to existing services.
+- Route, worker, and migration registries: structured HostExtension route and worker registries plus PostgreSQL extension migration tracking were covered by focused tests and full backend regression.
+- Builtin manifest source workspace migration: api-server now keeps a file-backed path list instead of long YAML constants; plugin sets select the builtin host extension source packages.
+- Remaining un-migrated routes: other Core routes remain normal api-server routes and are not exposed as stable HostExtension extension points until a resource/action definition and registration path exist.
+
+**QA result:** No blocking or high-severity findings. The remaining `API_EPHEMERAL_BACKEND` documentation match is the intentional negative rule in `api/AGENTS.md`, not a stale target-architecture claim.
