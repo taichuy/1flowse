@@ -1,7 +1,4 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 
 use anyhow::{bail, Context, Result};
 use plugin_framework::{
@@ -95,6 +92,6 @@ fn load_builtin_host_extension_manifest(
     Ok((manifest, contribution))
 }
 
-fn display_path(relative_path: &str, absolute_path: &PathBuf) -> String {
+fn display_path(relative_path: &str, absolute_path: &Path) -> String {
     format!("{} ({})", relative_path, absolute_path.display())
 }
