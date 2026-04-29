@@ -8,6 +8,9 @@
 
 **Tech Stack:** Rust, api-server startup config, storage-ephemeral memory implementations, control-plane ports, targeted Cargo tests.
 
+**Status:** Complete on 2026-04-29. Implementation commits:
+`545d72e5`, `d710b50f`, `8ada6aac`.
+
 ---
 
 ## File Structure
@@ -292,7 +295,7 @@ git commit -m "refactor: remove core redis ephemeral startup path"
 **Files:**
 - Verify only.
 
-- [ ] **Step 1: Format**
+- [x] **Step 1: Format**
 
 Run:
 
@@ -303,7 +306,7 @@ cargo fmt
 
 Expected: no formatting diff remains.
 
-- [ ] **Step 2: Run focused tests**
+- [x] **Step 2: Run focused tests**
 
 Run:
 
@@ -317,7 +320,7 @@ cargo test -p api-server health_routes -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit formatting if needed**
+- [x] **Step 3: Commit formatting if needed**
 
 ```bash
 git add api

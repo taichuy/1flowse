@@ -23,7 +23,7 @@ Use these documents as the source of truth:
    Updates `api/AGENTS.md`, plugin README, env examples, and quick-start docs so all agents and humans use the new target architecture before code changes.
 2. [x] [Plan B: HostExtension Manifest And Load Plan](./2026-04-29-plugin-layering-host-extension-plan-b-manifest-and-load-plan.md)
    Adds `host-extension.yaml` parsing, contribution validation, bootstrap phases, and load-plan failure behavior without executing native code yet.
-3. [ ] [Plan C: Pre-State Infrastructure Bootstrap](./2026-04-29-plugin-layering-host-extension-plan-c-pre-state-infra-bootstrap.md)
+3. [x] [Plan C: Pre-State Infrastructure Bootstrap](./2026-04-29-plugin-layering-host-extension-plan-c-pre-state-infra-bootstrap.md)
    Replaces Core Redis env selection with a `HostInfrastructureRegistry` and a default `local-infra-host` provider before `ApiState` construction.
 4. [ ] [Plan D: Resource Action Kernel v1](./2026-04-29-plugin-layering-host-extension-plan-d-resource-action-kernel-v1.md)
    Adds resource/action definitions, hook ordering, transaction pipeline semantics, and migrates `plugins.install` plus `files.upload` as the first two governed actions.
