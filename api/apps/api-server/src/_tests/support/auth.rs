@@ -46,7 +46,7 @@ fn default_test_config() -> ApiConfig {
         std::env::var("BOOTSTRAP_ROOT_PASSWORD").unwrap_or_else(|_| "change-me".into());
     let workspace_name =
         std::env::var("BOOTSTRAP_WORKSPACE_NAME").unwrap_or_else(|_| "1flowbase".into());
-    let entries = vec![
+    let entries = [
         ("API_DATABASE_URL".to_string(), database_url),
         (
             "API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS".to_string(),
