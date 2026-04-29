@@ -19,17 +19,17 @@ Use these documents as the source of truth:
 
 ## Execution Plans
 
-1. [Plan A: Local Rules And Docs](./2026-04-29-plugin-layering-host-extension-plan-a-local-rules-and-docs.md)
+1. [x] [Plan A: Local Rules And Docs](./2026-04-29-plugin-layering-host-extension-plan-a-local-rules-and-docs.md)
    Updates `api/AGENTS.md`, plugin README, env examples, and quick-start docs so all agents and humans use the new target architecture before code changes.
-2. [Plan B: HostExtension Manifest And Load Plan](./2026-04-29-plugin-layering-host-extension-plan-b-manifest-and-load-plan.md)
+2. [ ] [Plan B: HostExtension Manifest And Load Plan](./2026-04-29-plugin-layering-host-extension-plan-b-manifest-and-load-plan.md)
    Adds `host-extension.yaml` parsing, contribution validation, bootstrap phases, and load-plan failure behavior without executing native code yet.
-3. [Plan C: Pre-State Infrastructure Bootstrap](./2026-04-29-plugin-layering-host-extension-plan-c-pre-state-infra-bootstrap.md)
+3. [ ] [Plan C: Pre-State Infrastructure Bootstrap](./2026-04-29-plugin-layering-host-extension-plan-c-pre-state-infra-bootstrap.md)
    Replaces Core Redis env selection with a `HostInfrastructureRegistry` and a default `local-infra-host` provider before `ApiState` construction.
-4. [Plan D: Resource Action Kernel v1](./2026-04-29-plugin-layering-host-extension-plan-d-resource-action-kernel-v1.md)
+4. [ ] [Plan D: Resource Action Kernel v1](./2026-04-29-plugin-layering-host-extension-plan-d-resource-action-kernel-v1.md)
    Adds resource/action definitions, hook ordering, transaction pipeline semantics, and migrates `plugins.install` plus `files.upload` as the first two governed actions.
-5. [Plan E: HostExtension Route Worker Migration Namespace](./2026-04-29-plugin-layering-host-extension-plan-e-route-worker-migration.md)
+5. [ ] [Plan E: HostExtension Route Worker Migration Namespace](./2026-04-29-plugin-layering-host-extension-plan-e-route-worker-migration.md)
    Adds controlled route registration, worker registry, and extension-owned PostgreSQL migration namespace.
-6. [Plan F: Builtin Host Manifest Migration And Regression](./2026-04-29-plugin-layering-host-extension-plan-f-builtin-manifest-regression.md)
+6. [ ] [Plan F: Builtin Host Manifest Migration And Regression](./2026-04-29-plugin-layering-host-extension-plan-f-builtin-manifest-regression.md)
    Moves builtin host manifests into `api/plugins/host-extensions/*`, introduces plugin sets, removes long-term api-server builtin manifest ownership, and closes with regression.
 
 ## Recommended Order

@@ -30,7 +30,7 @@
 **Files:**
 - Modify: `api/AGENTS.md`
 
-- [ ] **Step 1: Update rules for new target architecture**
+- [x] **Step 1: Update rules for new target architecture**
 
 Edit `api/AGENTS.md` so the Local Rules include these exact rules in the HostExtension block:
 
@@ -45,7 +45,7 @@ Edit `api/AGENTS.md` so the Local Rules include these exact rules in the HostExt
 - HostExtension migration 只能写 `ext_<normalized_extension_id>__*` 命名空间，不得修改 Core 真值表。
 ```
 
-- [ ] **Step 2: Verify rule text exists**
+- [x] **Step 2: Verify rule text exists**
 
 Run:
 
@@ -55,7 +55,7 @@ rg -n "pre-state infra provider bootstrap|Resource Action Kernel|API_EPHEMERAL_B
 
 Expected: all four phrases are found.
 
-- [ ] **Step 3: Commit local rules**
+- [x] **Step 3: Commit local rules**
 
 ```bash
 git add api/AGENTS.md
@@ -68,7 +68,7 @@ git commit -m "docs: align backend host extension rules"
 - Modify: `api/plugins/README.md`
 - Modify: `api/README.md`
 
-- [ ] **Step 1: Replace plugin README with the new workspace layout**
+- [x] **Step 1: Replace plugin README with the new workspace layout**
 
 Ensure `api/plugins/README.md` describes this structure:
 
@@ -95,11 +95,11 @@ Document these rules:
 - `capability-plugins/*` packages contribute workspace-selected app/workflow capabilities.
 ```
 
-- [ ] **Step 2: Update API README module map**
+- [x] **Step 2: Update API README module map**
 
 In `api/README.md`, update the plugin line so it points to all three plugin source workspaces and notes that `api/plugins/templates/data_source_http_fixture` is a runtime-extension template, not the only plugin template.
 
-- [ ] **Step 3: Verify docs no longer describe only data-source plugins**
+- [x] **Step 3: Verify docs no longer describe only data-source plugins**
 
 Run:
 
@@ -109,7 +109,7 @@ rg -n "host-extensions|runtime-extensions|capability-plugins|packages/|installed
 
 Expected: both files mention the new plugin workspace model.
 
-- [ ] **Step 4: Commit plugin docs**
+- [x] **Step 4: Commit plugin docs**
 
 ```bash
 git add api/plugins/README.md api/README.md
@@ -122,7 +122,7 @@ git commit -m "docs: document plugin source workspaces"
 - Modify: `api/apps/api-server/.env.example`
 - Modify: `api/apps/api-server/.env.production.example`
 
-- [ ] **Step 1: Remove Core Redis backend target env**
+- [x] **Step 1: Remove Core Redis backend target env**
 
 Delete these keys from both env example files:
 
@@ -140,7 +140,7 @@ API_SECRET_RESOLVER=env
 
 Keep database, root bootstrap, plugin runner, and install-root env values untouched.
 
-- [ ] **Step 2: Verify old env target is gone**
+- [x] **Step 2: Verify old env target is gone**
 
 Run:
 
@@ -150,7 +150,7 @@ rg -n "API_EPHEMERAL_BACKEND|API_EPHEMERAL_REDIS_URL" api/apps/api-server/.env.e
 
 Expected: no matches.
 
-- [ ] **Step 3: Verify new env target exists**
+- [x] **Step 3: Verify new env target exists**
 
 Run:
 
@@ -160,7 +160,7 @@ rg -n "API_PLUGIN_SET|API_SECRET_RESOLVER" api/apps/api-server/.env.example api/
 
 Expected: both files contain both keys.
 
-- [ ] **Step 4: Commit env docs**
+- [x] **Step 4: Commit env docs**
 
 ```bash
 git add api/apps/api-server/.env.example api/apps/api-server/.env.production.example
@@ -172,7 +172,7 @@ git commit -m "docs: update host infrastructure env examples"
 **Files:**
 - Verify only.
 
-- [ ] **Step 1: Check worktree**
+- [x] **Step 1: Check worktree**
 
 Run:
 
@@ -182,6 +182,6 @@ git status --short
 
 Expected: clean worktree.
 
-- [ ] **Step 2: Record completion**
+- [x] **Step 2: Record completion**
 
 Mark Plan A complete in the index if your execution workflow tracks plan status inside docs.
