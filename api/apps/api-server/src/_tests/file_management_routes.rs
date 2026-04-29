@@ -196,6 +196,37 @@ async fn file_management_routes_create_workspace_table_upload_and_read_by_storag
         .unwrap();
     assert_eq!(bind_response.status(), StatusCode::OK);
 
+    let second_upload_boundary = "----1flowbase-file-upload-after-bind";
+    let second_upload_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/files/upload")
+                .header("cookie", &admin_cookie)
+                .header("x-csrf-token", &admin_csrf)
+                .header(
+                    "content-type",
+                    format!("multipart/form-data; boundary={second_upload_boundary}"),
+                )
+                .body(Body::from(build_file_upload_body(
+                    second_upload_boundary,
+                    &file_table_id,
+                    "demo-after-bind.txt",
+                    "text/plain",
+                    b"hello backup storage",
+                )))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(second_upload_response.status(), StatusCode::CREATED);
+    let second_upload_payload = response_json(second_upload_response).await;
+    assert_eq!(
+        second_upload_payload["data"]["storage_id"].as_str(),
+        Some(backup_storage_id.as_str())
+    );
+
     let content_response = app
         .clone()
         .oneshot(
@@ -226,6 +257,35 @@ async fn file_management_routes_create_workspace_table_upload_and_read_by_storag
     );
 
     let _ = std::fs::remove_dir_all(backup_root);
+}
+
+#[tokio::test]
+async fn file_upload_requires_workspace_session_context() {
+    let app = test_app().await;
+    let boundary = "----1flowbase-file-upload-no-session";
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/files/upload")
+                .header(
+                    "content-type",
+                    format!("multipart/form-data; boundary={boundary}"),
+                )
+                .body(Body::from(build_file_upload_body(
+                    boundary,
+                    &Uuid::now_v7().to_string(),
+                    "demo.txt",
+                    "text/plain",
+                    b"hello",
+                )))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]

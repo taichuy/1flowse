@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use axum::{
     body::Body,
@@ -9,7 +9,11 @@ use axum::{
     Json, Router,
 };
 use control_plane::ports::{FileManagementRepository, ModelDefinitionRepository};
-use serde::Serialize;
+use control_plane::resource_action::{
+    ActionDefinition, ResourceActionKernel, ResourceActionRegistry, ResourceDefinition,
+    ResourceScopeKind,
+};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -20,11 +24,56 @@ use crate::{
     response::ApiSuccess,
 };
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct UploadedFileResponse {
     pub storage_id: String,
     #[schema(value_type = Object)]
     pub record: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct UploadFileActorInput {
+    user_id: Uuid,
+    tenant_id: Uuid,
+    current_workspace_id: Uuid,
+    effective_display_role: String,
+    is_root: bool,
+    permissions: Vec<String>,
+}
+
+impl From<domain::ActorContext> for UploadFileActorInput {
+    fn from(actor: domain::ActorContext) -> Self {
+        Self {
+            user_id: actor.user_id,
+            tenant_id: actor.tenant_id,
+            current_workspace_id: actor.current_workspace_id,
+            effective_display_role: actor.effective_display_role,
+            is_root: actor.is_root,
+            permissions: actor.permissions.into_iter().collect(),
+        }
+    }
+}
+
+impl UploadFileActorInput {
+    fn into_actor(self) -> domain::ActorContext {
+        domain::ActorContext {
+            user_id: self.user_id,
+            tenant_id: self.tenant_id,
+            current_workspace_id: self.current_workspace_id,
+            effective_display_role: self.effective_display_role,
+            is_root: self.is_root,
+            permissions: HashSet::from_iter(self.permissions),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct UploadFileActionInput {
+    actor: UploadFileActorInput,
+    file_table_id: Uuid,
+    original_filename: String,
+    content_type: Option<String>,
+    bytes: Vec<u8>,
 }
 
 pub fn router() -> Router<Arc<ApiState>> {
@@ -83,6 +132,43 @@ fn map_file_storage_error(error: storage_object::FileStorageError) -> ApiError {
     }
 }
 
+fn upload_file_action_kernel(state: Arc<ApiState>) -> Result<ResourceActionKernel, ApiError> {
+    let mut registry = ResourceActionRegistry::default();
+    registry.register_resource(ResourceDefinition::core("files", ResourceScopeKind::Workspace))?;
+    registry.register_action(ActionDefinition::core("files", "upload"))?;
+
+    let mut kernel = ResourceActionKernel::new(registry);
+    kernel.register_json_handler("files", "upload", move |input| {
+        let state = state.clone();
+        async move {
+            let input: UploadFileActionInput = serde_json::from_value(input).map_err(|_| {
+                control_plane::errors::ControlPlaneError::InvalidInput("file_upload_action")
+            })?;
+            let uploaded = control_plane::file_management::FileUploadService::new(
+                state.store.clone(),
+                state.file_storage_registry.clone(),
+                state.runtime_engine.clone(),
+            )
+            .upload(control_plane::file_management::UploadFileCommand {
+                actor: input.actor.into_actor(),
+                file_table_id: input.file_table_id,
+                original_filename: input.original_filename,
+                content_type: input.content_type,
+                bytes: input.bytes,
+            })
+            .await
+            .map_err(|error| map_runtime_error(error).0)?;
+
+            Ok(serde_json::to_value(UploadedFileResponse {
+                storage_id: uploaded.storage_id.to_string(),
+                record: uploaded.record,
+            })?)
+        }
+    })?;
+
+    Ok(kernel)
+}
+
 #[utoipa::path(
     post,
     path = "/api/console/files/upload",
@@ -115,32 +201,32 @@ pub async fn upload_file(
         }
     }
 
-    let uploaded = control_plane::file_management::FileUploadService::new(
-        state.store.clone(),
-        state.file_storage_registry.clone(),
-        state.runtime_engine.clone(),
-    )
-    .upload(control_plane::file_management::UploadFileCommand {
-        actor: context.actor,
-        file_table_id: parse_uuid(
+    let file_table_id = parse_uuid(
             file_table_id
                 .as_deref()
                 .ok_or_else(|| invalid_input("file_table_id"))?,
             "file_table_id",
-        )?,
-        original_filename: filename.unwrap_or_else(|| "upload.bin".into()),
-        content_type,
-        bytes: bytes.ok_or_else(|| invalid_input("file"))?,
-    })
-    .await
-    .map_err(map_runtime_error)?;
+        )?;
+    let output = upload_file_action_kernel(state.clone())?
+        .dispatch_json(
+            "files",
+            "upload",
+            serde_json::json!({
+                "actor": UploadFileActorInput::from(context.actor),
+                "file_table_id": file_table_id,
+                "original_filename": filename.unwrap_or_else(|| "upload.bin".into()),
+                "content_type": content_type,
+                "bytes": bytes.ok_or_else(|| invalid_input("file"))?,
+            }),
+        )
+        .await?;
+    let response = serde_json::from_value(output).map_err(|_| {
+        control_plane::errors::ControlPlaneError::InvalidInput("file_upload_result")
+    })?;
 
     Ok((
         StatusCode::CREATED,
-        Json(ApiSuccess::new(UploadedFileResponse {
-            storage_id: uploaded.storage_id.to_string(),
-            record: uploaded.record,
-        })),
+        Json(ApiSuccess::new(response)),
     ))
 }
 

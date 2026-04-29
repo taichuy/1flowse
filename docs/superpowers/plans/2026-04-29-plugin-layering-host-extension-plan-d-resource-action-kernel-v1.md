@@ -336,7 +336,7 @@ git commit -m "feat: route plugin install through resource action kernel"
 - Modify: `api/apps/api-server/src/routes/files.rs`
 - Modify: `api/apps/api-server/src/_tests/file_management_routes.rs`
 
-- [ ] **Step 1: Add route regression expectation**
+- [x] **Step 1: Add route regression expectation**
 
 Extend file upload route tests to assert:
 
@@ -346,7 +346,7 @@ workspace context is required
 file table binding behavior stays unchanged
 ```
 
-- [ ] **Step 2: Run baseline tests**
+- [x] **Step 2: Run baseline tests**
 
 Run:
 
@@ -357,7 +357,7 @@ cargo test -p api-server file_management_routes -- --nocapture
 
 Expected: PASS before migration.
 
-- [ ] **Step 3: Register Core action**
+- [x] **Step 3: Register Core action**
 
 Register:
 
@@ -374,7 +374,7 @@ The route must call:
 resource_action_kernel.dispatch_json("files", "upload", input_json)
 ```
 
-- [ ] **Step 4: Re-run file route tests**
+- [x] **Step 4: Re-run file route tests**
 
 Run:
 
@@ -386,7 +386,7 @@ cargo test -p control-plane resource_action -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit files.upload migration**
+- [x] **Step 5: Commit files.upload migration**
 
 ```bash
 git add api/crates/control-plane/src api/apps/api-server/src/routes/files.rs api/apps/api-server/src/_tests/file_management_routes.rs
