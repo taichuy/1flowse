@@ -1,7 +1,28 @@
 use control_plane::resource_action::{
     ActionDefinition, ActionHookDefinition, ActionHookResult, ActionHookStage, ActionPipeline,
-    ResourceActionRegistry, ResourceDefinition, ResourceScopeKind,
+    ResourceActionKernel, ResourceActionRegistry, ResourceDefinition, ResourceScopeKind,
 };
+
+fn test_kernel_with_plugins_install_handler(
+    handler: impl Fn(serde_json::Value) -> serde_json::Value + Send + Sync + 'static,
+) -> ResourceActionKernel {
+    let mut registry = ResourceActionRegistry::default();
+    registry
+        .register_resource(ResourceDefinition::core("plugins", ResourceScopeKind::System))
+        .unwrap();
+    registry
+        .register_action(ActionDefinition::core("plugins", "install"))
+        .unwrap();
+
+    let mut kernel = ResourceActionKernel::new(registry);
+    kernel
+        .register_json_handler("plugins", "install", move |input| {
+            let output = handler(input);
+            async move { Ok(output) }
+        })
+        .unwrap();
+    kernel
+}
 
 #[test]
 fn registry_rejects_duplicate_action() {
@@ -150,4 +171,23 @@ fn after_commit_warning_does_not_change_action_result() {
     assert!(outcome.denied.is_none());
     assert_eq!(outcome.warnings.len(), 1);
     assert_eq!(outcome.warnings[0].code, "audit_lag");
+}
+
+#[tokio::test]
+async fn dispatch_calls_registered_core_handler() {
+    let kernel = test_kernel_with_plugins_install_handler(|input| {
+        assert_eq!(input["plugin_id"], "openai_compatible@0.3.18");
+        serde_json::json!({"status": "installed"})
+    });
+
+    let output = kernel
+        .dispatch_json(
+            "plugins",
+            "install",
+            serde_json::json!({"plugin_id": "openai_compatible@0.3.18"}),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(output["status"], "installed");
 }

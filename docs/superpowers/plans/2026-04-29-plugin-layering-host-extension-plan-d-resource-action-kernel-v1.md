@@ -204,7 +204,7 @@ git commit -m "feat: add resource action hook pipeline"
 - Modify: `api/crates/control-plane/src/resource_action/mod.rs`
 - Modify: `api/crates/control-plane/src/_tests/resource_action_tests.rs`
 
-- [ ] **Step 1: Write RED dispatch test**
+- [x] **Step 1: Write RED dispatch test**
 
 Add a test registering `plugins.install` with a fake handler:
 
@@ -225,7 +225,7 @@ async fn dispatch_calls_registered_core_handler() {
 }
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -236,7 +236,7 @@ cargo test -p control-plane resource_action -- --nocapture
 
 Expected: FAIL because kernel dispatch does not exist.
 
-- [ ] **Step 3: Implement dispatch shell**
+- [x] **Step 3: Implement dispatch shell**
 
 Implement:
 
@@ -251,7 +251,7 @@ pub async fn dispatch_json(
 
 For v1, handler storage may be a boxed async function or enum-backed internal handlers. Keep public API narrow and avoid exposing repository impl.
 
-- [ ] **Step 4: Re-run dispatch tests**
+- [x] **Step 4: Re-run dispatch tests**
 
 Run:
 
@@ -262,7 +262,7 @@ cargo test -p control-plane resource_action -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit kernel shell**
+- [x] **Step 5: Commit kernel shell**
 
 ```bash
 git add api/crates/control-plane/src/resource_action api/crates/control-plane/src/_tests/resource_action_tests.rs
