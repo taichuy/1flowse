@@ -1,60 +1,65 @@
-use control_plane::host_extension_boot::register_builtin_host_extensions;
-use plugin_framework::parse_host_extension_manifest;
+use std::{fs, path::PathBuf};
+
+use control_plane::host_extension_boot::register_builtin_host_extension_contributions;
+use plugin_framework::{
+    parse_host_extension_contribution_manifest, parse_plugin_manifest, HostExtensionBootstrapPhase,
+    HostExtensionContributionManifest, PluginManifestV1,
+};
 
 #[test]
-fn builtin_manifests_populate_contract_slot_and_storage_registry() {
-    let manifests = vec![
-        r#"
-manifest_version: 1
-extension_id: official.storage-host
-version: 0.1.0
-display_name: Storage Host
-source_kind: builtin
-trust_level: trusted_host
-activation_phase: boot
-provides_contracts: [storage-durable, storage-ephemeral, storage-object]
-overrides_contracts: []
-registers_slots: []
-registers_interfaces: []
-registers_storage:
-  - { kind: storage-durable, implementation: postgres }
-  - { kind: storage-ephemeral, implementation: memory }
-dependencies: []
-load_order: { after: [], before: [] }
-"#,
-        r#"
-manifest_version: 1
-extension_id: official.data-access-host
-version: 0.1.0
-display_name: Data Access Host
-source_kind: builtin
-trust_level: trusted_host
-activation_phase: boot
-provides_contracts: [data_access]
-overrides_contracts: []
-registers_slots: [data_source]
-registers_interfaces: []
-registers_storage: []
-dependencies: []
-load_order: { after: [], before: [] }
-"#,
-    ];
-    let parsed = manifests
-        .into_iter()
-        .map(|raw| parse_host_extension_manifest(raw).unwrap())
-        .collect::<Vec<_>>();
-    let registry = register_builtin_host_extensions(&parsed).expect("registry should build");
+fn contribution_backed_builtins_populate_registry() {
+    let manifests = load_builtin_manifest_pairs();
+    let registry =
+        register_builtin_host_extension_contributions(&manifests).expect("registry should build");
 
-    assert_eq!(
-        registry.contract_provider("storage-durable"),
-        Some("official.storage-host")
-    );
-    assert_eq!(
-        registry.storage_implementation("storage-durable"),
-        Some("postgres")
-    );
-    assert_eq!(
-        registry.slot_provider("data_source"),
-        Some("official.data-access-host")
-    );
+    let local = registry
+        .extension("official.local-infra-host")
+        .expect("local infra extension should be registered");
+    assert_eq!(local.bootstrap_phase, HostExtensionBootstrapPhase::PreState);
+    assert!(local.infrastructure_providers.iter().any(|provider| {
+        provider.contract == "storage-ephemeral" && provider.provider_code == "local"
+    }));
+    assert!(registry
+        .infrastructure_provider("cache-store", "local")
+        .is_some());
+
+    let identity = registry
+        .extension("official.identity-host")
+        .expect("identity extension should be registered");
+    assert_eq!(identity.owned_resources, vec!["identity"]);
+
+    let workspace = registry
+        .extension("official.workspace-host")
+        .expect("workspace extension should be registered");
+    assert_eq!(workspace.owned_resources, vec!["workspace"]);
+    assert_eq!(workspace.extends_resources, vec!["identity"]);
+}
+
+fn load_builtin_manifest_pairs() -> Vec<(PluginManifestV1, HostExtensionContributionManifest)> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    [
+        "official.identity-host",
+        "official.workspace-host",
+        "official.plugin-host",
+        "official.local-infra-host",
+        "official.file-management-host",
+        "official.runtime-orchestration-host",
+    ]
+    .into_iter()
+    .map(|extension_id| {
+        let manifest_path = root
+            .join("plugins/host-extensions")
+            .join(extension_id)
+            .join("manifest.yaml");
+        let manifest_raw = fs::read_to_string(&manifest_path).unwrap();
+        let manifest = parse_plugin_manifest(&manifest_raw).unwrap();
+        let contribution_path = manifest_path
+            .parent()
+            .unwrap()
+            .join(&manifest.runtime.entry);
+        let contribution_raw = fs::read_to_string(contribution_path).unwrap();
+        let contribution = parse_host_extension_contribution_manifest(&contribution_raw).unwrap();
+        (manifest, contribution)
+    })
+    .collect()
 }

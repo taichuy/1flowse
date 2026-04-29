@@ -149,4 +149,8 @@ impl HostExtensionRegistry {
             })
             .collect()
     }
+
+    pub fn extension(&self, extension_id: &str) -> Option<&RegisteredHostExtension> {
+        self.extensions.get(extension_id)
+    }
 }

@@ -364,7 +364,7 @@ fn validate_permission_values(permissions: &PluginPermissionManifest) -> Framewo
     validate_allowed(
         &permissions.secrets,
         "permissions.secrets",
-        &["none", "provider_instance_only"],
+        &["none", "provider_instance_only", "host_managed"],
     )?;
     validate_allowed(
         &permissions.storage,

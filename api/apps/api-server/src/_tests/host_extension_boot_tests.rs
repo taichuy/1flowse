@@ -1,11 +1,18 @@
 use api_server::host_extension_boot::builtin_host_extension_ids;
 
 #[test]
-fn builtin_host_extensions_include_storage_data_file_and_model_runtime() {
+fn builtin_host_extensions_include_plan_f_official_hosts() {
     let ids = builtin_host_extension_ids();
 
-    assert!(ids.contains(&"official.storage-host"));
-    assert!(ids.contains(&"official.data-access-host"));
-    assert!(ids.contains(&"official.file-management-host"));
-    assert!(ids.contains(&"official.model-runtime-host"));
+    assert_eq!(
+        ids,
+        vec![
+            "official.identity-host",
+            "official.workspace-host",
+            "official.plugin-host",
+            "official.local-infra-host",
+            "official.file-management-host",
+            "official.runtime-orchestration-host",
+        ]
+    );
 }
