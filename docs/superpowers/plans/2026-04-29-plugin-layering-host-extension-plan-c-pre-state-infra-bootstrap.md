@@ -34,7 +34,7 @@
 - Create: `api/apps/api-server/src/_tests/host_infrastructure_tests.rs`
 - Modify: `api/apps/api-server/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write RED tests**
+- [x] **Step 1: Write RED tests**
 
 Add tests proving:
 
@@ -61,7 +61,7 @@ fn duplicate_default_provider_is_rejected() {
 }
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -80,7 +80,7 @@ Expected: FAIL because `host_infrastructure` does not exist.
 - Create: `api/apps/api-server/src/host_infrastructure/contracts.rs`
 - Modify: `api/apps/api-server/src/lib.rs`
 
-- [ ] **Step 1: Add contract facades**
+- [x] **Step 1: Add contract facades**
 
 Define narrow facades:
 
@@ -108,7 +108,7 @@ pub trait RateLimitStore: Send + Sync {
 
 Use no-op or in-memory local structs for contracts not yet consumed by code.
 
-- [ ] **Step 2: Add registry**
+- [x] **Step 2: Add registry**
 
 Implement:
 
@@ -136,7 +136,7 @@ task_queue() -> Arc<dyn TaskQueue>
 rate_limit_store() -> Arc<dyn RateLimitStore>
 ```
 
-- [ ] **Step 3: Add local-infra-host factory**
+- [x] **Step 3: Add local-infra-host factory**
 
 Create `build_local_host_infrastructure()` returning defaults:
 
@@ -151,7 +151,7 @@ rate-limit-store = local
 
 Use `MemorySessionStore::new(SESSION_STORE_NAMESPACE)` for session storage.
 
-- [ ] **Step 4: Re-run registry tests**
+- [x] **Step 4: Re-run registry tests**
 
 Run:
 
@@ -162,7 +162,7 @@ cargo test -p api-server host_infrastructure -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit registry**
+- [x] **Step 5: Commit registry**
 
 ```bash
 git add api/apps/api-server/src/host_infrastructure api/apps/api-server/src/_tests/host_infrastructure_tests.rs api/apps/api-server/src/_tests/mod.rs api/apps/api-server/src/lib.rs

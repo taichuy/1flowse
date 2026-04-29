@@ -6,6 +6,7 @@ pub mod error_response;
 pub mod host_extension_boot;
 pub mod host_extension_loader;
 pub mod host_extensions;
+pub mod host_infrastructure;
 pub mod middleware;
 pub mod official_plugin_registry;
 pub mod openapi;

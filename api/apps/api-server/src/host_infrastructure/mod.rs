@@ -1,0 +1,119 @@
+mod contracts;
+mod local;
+
+use std::{collections::BTreeMap, sync::Arc};
+
+use anyhow::{anyhow, Result};
+use control_plane::ports::SessionStore;
+
+pub use contracts::{CacheStore, DistributedLock, EventBus, RateLimitStore, TaskQueue};
+pub use local::build_local_host_infrastructure;
+
+pub const SESSION_STORE_NAMESPACE: &str = "flowbase:console:session";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegisteredInfrastructureProvider {
+    pub contract: String,
+    pub provider_code: String,
+    pub source: String,
+}
+
+#[derive(Clone, Default)]
+pub struct HostInfrastructureRegistry {
+    providers: BTreeMap<String, RegisteredInfrastructureProvider>,
+    session_store: Option<Arc<dyn SessionStore>>,
+    cache_store: Option<Arc<dyn CacheStore>>,
+    distributed_lock: Option<Arc<dyn DistributedLock>>,
+    event_bus: Option<Arc<dyn EventBus>>,
+    task_queue: Option<Arc<dyn TaskQueue>>,
+    rate_limit_store: Option<Arc<dyn RateLimitStore>>,
+}
+
+impl HostInfrastructureRegistry {
+    pub fn register_default_provider(
+        &mut self,
+        contract: impl Into<String>,
+        provider_code: impl Into<String>,
+        source: impl Into<String>,
+    ) -> Result<()> {
+        let contract = contract.into();
+        let provider = RegisteredInfrastructureProvider {
+            contract: contract.clone(),
+            provider_code: provider_code.into(),
+            source: source.into(),
+        };
+
+        if self.providers.contains_key(&contract) {
+            return Err(anyhow!(
+                "default provider already registered for infrastructure contract `{contract}`"
+            ));
+        }
+
+        self.providers.insert(contract, provider);
+        Ok(())
+    }
+
+    pub fn default_provider(&self, contract: &str) -> Option<&str> {
+        self.providers
+            .get(contract)
+            .map(|provider| provider.provider_code.as_str())
+    }
+
+    pub fn set_session_store(&mut self, session_store: Arc<dyn SessionStore>) {
+        self.session_store = Some(session_store);
+    }
+
+    pub fn session_store(&self) -> Option<Arc<dyn SessionStore>> {
+        self.session_store.clone()
+    }
+
+    pub fn set_cache_store(&mut self, cache_store: Arc<dyn CacheStore>) {
+        self.cache_store = Some(cache_store);
+    }
+
+    pub fn cache_store(&self) -> Arc<dyn CacheStore> {
+        self.cache_store
+            .clone()
+            .expect("cache-store provider must be registered before use")
+    }
+
+    pub fn set_distributed_lock(&mut self, distributed_lock: Arc<dyn DistributedLock>) {
+        self.distributed_lock = Some(distributed_lock);
+    }
+
+    pub fn distributed_lock(&self) -> Arc<dyn DistributedLock> {
+        self.distributed_lock
+            .clone()
+            .expect("distributed-lock provider must be registered before use")
+    }
+
+    pub fn set_event_bus(&mut self, event_bus: Arc<dyn EventBus>) {
+        self.event_bus = Some(event_bus);
+    }
+
+    pub fn event_bus(&self) -> Arc<dyn EventBus> {
+        self.event_bus
+            .clone()
+            .expect("event-bus provider must be registered before use")
+    }
+
+    pub fn set_task_queue(&mut self, task_queue: Arc<dyn TaskQueue>) {
+        self.task_queue = Some(task_queue);
+    }
+
+    pub fn task_queue(&self) -> Arc<dyn TaskQueue> {
+        self.task_queue
+            .clone()
+            .expect("task-queue provider must be registered before use")
+    }
+
+    pub fn set_rate_limit_store(&mut self, rate_limit_store: Arc<dyn RateLimitStore>) {
+        self.rate_limit_store = Some(rate_limit_store);
+    }
+
+    pub fn rate_limit_store(&self) -> Arc<dyn RateLimitStore> {
+        self.rate_limit_store
+            .clone()
+            .expect("rate-limit-store provider must be registered before use")
+    }
+}
