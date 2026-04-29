@@ -49,7 +49,8 @@
 - 单个请求链路落在一个显式 `workspace` 上下文。
 - `root/system` 与业务 `workspace` 是不同命名面；外部接口与业务语义统一使用 `workspace`。
 - 数据建模定义的 `scope_kind` 是 `workspace` 或 `system`；`system` 使用 `SYSTEM_SCOPE_ID`。
-- runtime 物理 scope 列统一使用 `scope_id`；活跃后端代码不保留 `team/app` alias、`team_id` 或 `app_id` 语义。
+- runtime 物理 scope 列统一使用 `scope_id`；不使用 `team/app` alias，也不使用 `team_id/app_id` 表示 scope。
+- Application 领域统一使用 `application_id`；不新增 `app_id` 缩写。
 - `Boot Core` 负责启动、加载、deployment policy、root/system bootstrap、extension inventory、health/reconcile。
 - `HostExtension` 是 system/root 级可信 host 模块，可定义、替换、增强 host contract；v1 是 trusted native in-process、boot-time activated、restart-scoped。
 - `RuntimeExtension` 实现已注册 runtime slot，例如 `model_provider`、`data_source`、`file_processor`。

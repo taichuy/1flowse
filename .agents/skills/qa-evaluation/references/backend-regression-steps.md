@@ -34,7 +34,8 @@
 - `scope_kind` 是否只保留 `workspace/system`
 - `system` 是否固定使用 `SYSTEM_SCOPE_ID`
 - runtime 物理 scope 列是否统一为 `scope_id`
-- 活跃后端代码是否已清掉 `team/app` alias
+- 活跃后端代码是否不再使用 `team/app` alias、`team_id/app_id` 表示 scope
+- Application 领域新增命名是否使用 `application_id`，而不是 `app_id` 缩写
 - 如果涉及文件管理，`file_storages` 是否仍归 `root/system` 管理，文件记录是否仍保存实际 `storage_id` 快照
 
 ## Step 2: Run Backend Verification
