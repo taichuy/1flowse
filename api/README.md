@@ -9,7 +9,9 @@
 - `crates/storage-durable`: Main durable storage boundary used by API-server and other hosts
 - `crates/storage-durable/postgres`: `storage-postgres` crate with PostgreSQL-backed repository implementations and migrations
 - `crates/storage-ephemeral`: non-durable session and ephemeral coordination adapters
-- `plugins/templates/data_source_http_fixture`: Example external data-source runtime-extension package
+- `plugins/host-extensions`, `plugins/runtime-extensions`, `plugins/capability-plugins`: HostExtension, RuntimeExtension, and CapabilityPlugin source workspaces
+- `plugins/packages`, `plugins/installed`: packaged `.1flowbasepkg` artifacts and installed package results
+- `plugins/templates/data_source_http_fixture`: external data-source runtime-extension template, not the only plugin template
 
 ## Verification
 
