@@ -123,7 +123,7 @@ git commit -m "feat: add resource action registry"
 - Modify: `api/crates/control-plane/src/resource_action/mod.rs`
 - Modify: `api/crates/control-plane/src/_tests/resource_action_tests.rs`
 
-- [ ] **Step 1: Add RED hook ordering tests**
+- [x] **Step 1: Add RED hook ordering tests**
 
 Test expected ordering:
 
@@ -141,7 +141,7 @@ before_execute hook returning deny stops execute and after_execute
 after_commit error records warning without changing action result
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -152,7 +152,7 @@ cargo test -p control-plane resource_action -- --nocapture
 
 Expected: FAIL because pipeline does not exist.
 
-- [ ] **Step 3: Implement pipeline**
+- [x] **Step 3: Implement pipeline**
 
 Define stages:
 
@@ -179,7 +179,7 @@ pub enum ActionHookResult {
 
 Implement deterministic sort and failure behavior in a pure testable function before wiring services.
 
-- [ ] **Step 4: Re-run tests**
+- [x] **Step 4: Re-run tests**
 
 Run:
 
@@ -190,7 +190,7 @@ cargo test -p control-plane resource_action -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit pipeline**
+- [x] **Step 5: Commit pipeline**
 
 ```bash
 git add api/crates/control-plane/src/resource_action api/crates/control-plane/src/_tests/resource_action_tests.rs
