@@ -1,10 +1,6 @@
 const { parseCliArgs, selectServiceKeys, shouldManageDocker, usage } = require('./cli.js');
 const { buildServiceEnv, ensureServiceEnvFile, getServicePrestartCommands } = require('./env.js');
-const {
-  ensureRustfsVolumePermissions,
-  manageDocker,
-  resolveComposeCommand,
-} = require('./middleware.js');
+const { manageDocker, resolveComposeCommand } = require('./middleware.js');
 const { manageServices, startService, waitForServicePort } = require('./process.js');
 const { runServicePrestartCommands } = require('./postgres-reset.js');
 const {
@@ -43,7 +39,6 @@ async function main(argv = process.argv.slice(2)) {
 module.exports = {
   DEFAULT_STARTUP_TIMEOUT_MS,
   buildServiceEnv,
-  ensureRustfsVolumePermissions,
   ensureServiceEnvFile,
   getRepoRoot,
   getRuntimePaths,

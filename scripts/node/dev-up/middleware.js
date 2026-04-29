@@ -8,9 +8,6 @@ const { getRepoRoot } = require('./services.js');
 
 const DEFAULT_MIDDLEWARE_HOST_PORTS = {
   POSTGRES_PORT: 35432,
-  REDIS_PORT: 36379,
-  RUSTFS_PORT: 39000,
-  RUSTFS_CONSOLE_PORT: 39001,
 };
 
 function runCommand(command, args, options = {}) {
@@ -82,17 +79,6 @@ function ensureMiddlewareEnv(repoRoot, { logImpl = log } = {}) {
   if (!fs.existsSync(targetPath) && fs.existsSync(examplePath)) {
     fs.copyFileSync(examplePath, targetPath);
     logImpl('已创建 docker/middleware.env');
-  }
-}
-
-function ensureRustfsVolumePermissions(repoRoot) {
-  const rustfsRootDir = path.join(repoRoot, 'docker', 'volumes', 'rustfs');
-  const rustfsDataDir = path.join(rustfsRootDir, 'data');
-  const rustfsLogsDir = path.join(rustfsRootDir, 'logs');
-
-  for (const targetDir of [rustfsRootDir, rustfsDataDir, rustfsLogsDir]) {
-    fs.mkdirSync(targetDir, { recursive: true, mode: 0o777 });
-    fs.chmodSync(targetDir, 0o777);
   }
 }
 
@@ -222,7 +208,6 @@ async function manageDocker(
   action,
   {
     ensureMiddlewareEnvImpl = ensureMiddlewareEnv,
-    ensureRustfsVolumePermissionsImpl = ensureRustfsVolumePermissions,
     runMiddlewareComposeImpl = runMiddlewareCompose,
     getMiddlewareHostPortsImpl = getMiddlewareHostPorts,
     clearPortConflictsImpl = clearPortConflicts,
@@ -249,8 +234,6 @@ async function manageDocker(
     return;
   }
 
-  ensureRustfsVolumePermissionsImpl(repoRoot);
-
   if (action === 'restart') {
     runMiddlewareComposeImpl(repoRoot, ['down']);
     await clearPortConflictsImpl('docker 中间件', getMiddlewareHostPortsImpl(repoRoot));
@@ -275,7 +258,6 @@ module.exports = {
   clearPortConflicts,
   ensureCommandSuccess,
   ensureMiddlewareEnv,
-  ensureRustfsVolumePermissions,
   getMiddlewareHostPorts,
   getMiddlewarePostgresPort,
   manageDocker,

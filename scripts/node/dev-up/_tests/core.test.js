@@ -17,7 +17,6 @@ const {
   getServicePrestartCommands,
   runServicePrestartCommands,
   resolveComposeCommand,
-  ensureRustfsVolumePermissions,
   waitForServicePort,
 } = require('../core.js');
 
@@ -224,9 +223,8 @@ test('manageDocker restart clears middleware port conflicts before bringing serv
 
   await manageDocker('/repo-root', 'restart', {
     ensureMiddlewareEnvImpl() {},
-    ensureRustfsVolumePermissionsImpl() {},
     getMiddlewareHostPortsImpl() {
-      return [35432, 36379, 39000, 39001];
+      return [35432];
     },
     async clearPortConflictsImpl(label, ports) {
       clearCalls.push({ label, ports });
@@ -244,7 +242,7 @@ test('manageDocker restart clears middleware port conflicts before bringing serv
   assert.deepEqual(clearCalls, [
     {
       label: 'docker 中间件',
-      ports: [35432, 36379, 39000, 39001],
+      ports: [35432],
     },
   ]);
   assert.deepEqual(composeCalls, [['down'], ['up', '-d']]);
@@ -267,22 +265,6 @@ test('api-server example env files use workspace bootstrap naming', () => {
   assert.doesNotMatch(productionExample, /^BOOTSTRAP_TEAM_NAME=/mu);
 });
 
-test('ensureRustfsVolumePermissions creates writable rustfs bind mount directories', () => {
-  const tempRepoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-'));
-  const dockerDir = path.join(tempRepoRoot, 'docker');
-  const rustfsDataDir = path.join(dockerDir, 'volumes', 'rustfs', 'data');
-  const rustfsLogsDir = path.join(dockerDir, 'volumes', 'rustfs', 'logs');
-
-  fs.mkdirSync(rustfsDataDir, { recursive: true, mode: 0o755 });
-  fs.mkdirSync(rustfsLogsDir, { recursive: true, mode: 0o755 });
-
-  ensureRustfsVolumePermissions(tempRepoRoot);
-
-  assert.equal(fs.statSync(path.join(dockerDir, 'volumes', 'rustfs')).mode & 0o777, 0o777);
-  assert.equal(fs.statSync(rustfsDataDir).mode & 0o777, 0o777);
-  assert.equal(fs.statSync(rustfsLogsDir).mode & 0o777, 0o777);
-});
-
 test('ensureServiceEnvFile seeds api env defaults and buildServiceEnv loads them', () => {
   const tempRepoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-env-'));
   const apiServerDir = path.join(tempRepoRoot, 'api', 'apps', 'api-server');
@@ -294,7 +276,6 @@ test('ensureServiceEnvFile seeds api env defaults and buildServiceEnv loads them
     [
       '# api defaults',
       'API_DATABASE_URL=postgres://from-example',
-      'API_REDIS_URL=redis://from-example',
       'BOOTSTRAP_WORKSPACE_NAME=\"1flowbase\"',
     ].join('\n')
   );
@@ -312,7 +293,6 @@ test('ensureServiceEnvFile seeds api env defaults and buildServiceEnv loads them
   });
 
   assert.equal(env.API_DATABASE_URL, 'postgres://from-shell');
-  assert.equal(env.API_REDIS_URL, 'redis://from-example');
   assert.equal(env.BOOTSTRAP_WORKSPACE_NAME, '1flowbase');
   assert.equal(env.EXTRA_FLAG, 'enabled');
 });
@@ -328,7 +308,6 @@ test('ensureServiceEnvFile leaves existing api-server env values untouched even 
     envExamplePath,
     [
       'API_DATABASE_URL=postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase',
-      'API_REDIS_URL=redis://:1flowbase@127.0.0.1:36379',
       'API_COOKIE_NAME=flowbase_console_session',
       'BOOTSTRAP_WORKSPACE_NAME=1flowbase',
     ].join('\n')
@@ -337,7 +316,6 @@ test('ensureServiceEnvFile leaves existing api-server env values untouched even 
     envPath,
     [
       'API_DATABASE_URL=postgres://postgres:sevenflows@127.0.0.1:35432/sevenflows',
-      'API_REDIS_URL=redis://:sevenflows@127.0.0.1:36379',
       'API_COOKIE_NAME=flowse_console_session',
       'BOOTSTRAP_WORKSPACE_NAME=1Flowse',
       'BOOTSTRAP_ROOT_PASSWORD=change-me',
@@ -352,7 +330,6 @@ test('ensureServiceEnvFile leaves existing api-server env values untouched even 
   const env = buildServiceEnv(apiService, {});
 
   assert.equal(env.API_DATABASE_URL, 'postgres://postgres:sevenflows@127.0.0.1:35432/sevenflows');
-  assert.equal(env.API_REDIS_URL, 'redis://:sevenflows@127.0.0.1:36379');
   assert.equal(env.API_COOKIE_NAME, 'flowse_console_session');
   assert.equal(env.BOOTSTRAP_WORKSPACE_NAME, '1Flowse');
   assert.equal(env.BOOTSTRAP_ROOT_PASSWORD, 'change-me');
@@ -456,7 +433,6 @@ test('runServicePrestartCommands rebuilds local postgres db after migration chec
     [
       'API_ENV=development',
       'API_DATABASE_URL=postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase',
-      'API_REDIS_URL=redis://127.0.0.1:36379',
       'BOOTSTRAP_WORKSPACE_NAME=1flowbase',
       'BOOTSTRAP_ROOT_ACCOUNT=root',
       'BOOTSTRAP_ROOT_EMAIL=root@example.com',
@@ -547,7 +523,6 @@ test('runServicePrestartCommands rebuilds local postgres db after missing resolv
     [
       'API_ENV=development',
       'API_DATABASE_URL=postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase',
-      'API_REDIS_URL=redis://127.0.0.1:36379',
       'BOOTSTRAP_WORKSPACE_NAME=1flowbase',
       'BOOTSTRAP_ROOT_ACCOUNT=root',
       'BOOTSTRAP_ROOT_EMAIL=root@example.com',

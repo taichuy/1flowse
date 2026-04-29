@@ -1,4 +1,4 @@
-# 7Flows Docker
+# 1flowbase Docker
 
 ## 仅启动中间件
 
@@ -7,15 +7,11 @@ Copy-Item .\middleware.env.example .\middleware.env
 docker compose -f .\docker-compose.middleware.yaml up -d
 ```
 
-RustFS 依赖宿主机绑定目录 `docker/volumes/rustfs/{data,logs}` 可写。使用仓库统一入口 `node scripts/node/dev-up.js` 启动时会自动修正这些目录权限；如果手动执行 compose，请先确保这两个目录对容器进程可写。
+当前默认本地中间件只包含 PostgreSQL。Redis 不作为默认依赖；后续通过 Redis HostExtension / infra plugin 接入。RustFS 不作为默认依赖；对象存储由后台文件存储配置选择，默认使用本地存储。
 
 默认映射端口：
 
 - PostgreSQL: `35432`
-- Redis: `36379`
-- RustFS API: `39000`
-- RustFS Console: `39001`
-- Sandbox: `38194`
 
 `docker/sandbox/config.yaml` 是默认 / reference sandbox backend 的配置模板，后续如果要接代理、限网或更严格隔离，可以直接在这里扩展。它当前更适合作为可选参考执行后端，而不是普通 workflow 开发的硬前置依赖。
 
