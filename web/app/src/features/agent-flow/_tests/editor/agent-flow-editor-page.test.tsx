@@ -79,6 +79,16 @@ function renderShell(ui: ReactNode) {
   return renderReactFlowScene(ui as ReactElement);
 }
 
+async function openLlmDetailDock() {
+  fireEvent.click(
+    await screen.findByText('LLM', {
+      selector: '.agent-flow-node-card__title'
+    })
+  );
+
+  return screen.findByTestId('agent-flow-editor-detail-dock');
+}
+
 afterEach(() => {
   vi.useRealTimers();
 });
@@ -252,11 +262,13 @@ describe('AgentFlowEditorShell', () => {
   }, 20_000);
 
   test('opens debug console from overlay action and starts the run from composer', async () => {
+    const initialState = createInitialState();
+
     renderShell(
       <AgentFlowEditorShell
         applicationId="app-1"
         applicationName="Support Agent"
-        initialState={createInitialState()}
+        initialState={initialState}
       />
     );
 
@@ -275,8 +287,11 @@ describe('AgentFlowEditorShell', () => {
     await waitFor(() => {
       expect(runtimeApi.startFlowDebugRun).toHaveBeenCalledWith(
         'app-1',
-        { input_payload: { 'node-start': { query: '请总结退款政策' } } },
-        expect.any(String)
+        {
+          document: initialState.draft.document,
+          input_payload: { 'node-start': { query: '请总结退款政策' } }
+        },
+        'csrf-123'
       );
     });
   }, 20_000);
@@ -302,7 +317,8 @@ describe('AgentFlowEditorShell', () => {
       />
     );
 
-    const header = screen.getByTestId('node-detail-header');
+    await openLlmDetailDock();
+    const header = await screen.findByTestId('node-detail-header');
 
     fireEvent.change(within(header).getByLabelText('节点别名'), {
       target: { value: 'Support LLM' }
@@ -457,7 +473,7 @@ describe('AgentFlowEditorShell', () => {
       />
     );
 
-    const detailDock = await screen.findByTestId('agent-flow-editor-detail-dock');
+    const detailDock = await openLlmDetailDock();
 
     expect(detailDock).toBeInTheDocument();
     expect(within(detailDock).getByLabelText('节点详情')).toBeInTheDocument();
@@ -477,7 +493,7 @@ describe('AgentFlowEditorShell', () => {
       />
     );
 
-    const detailDock = await screen.findByTestId('agent-flow-editor-detail-dock');
+    const detailDock = await openLlmDetailDock();
 
     fireEvent.click(screen.getByRole('tab', { name: '上次运行' }));
 
@@ -500,6 +516,7 @@ describe('AgentFlowEditorShell', () => {
       />
     );
 
+    await openLlmDetailDock();
     fireEvent.click(await screen.findByRole('tab', { name: '上次运行' }));
 
     expect(await screen.findByText('当前节点还没有运行记录')).toBeVisible();
@@ -530,7 +547,7 @@ describe('AgentFlowEditorShell', () => {
       />
     );
 
-    const detailDock = await screen.findByTestId('agent-flow-editor-detail-dock');
+    const detailDock = await openLlmDetailDock();
 
     expect(detailDock).toHaveStyle(`width: ${NODE_DETAIL_DEFAULT_WIDTH}px`);
     expect(detailDock).toHaveAttribute('data-layout', 'regular');
