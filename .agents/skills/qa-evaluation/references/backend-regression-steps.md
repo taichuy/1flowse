@@ -1,6 +1,6 @@
 # Backend Regression Steps
 
-只要评估范围涉及后端 API、状态入口、插件边界、runtime、`resource kernel` 或 `route / service / repository / domain / mapper` 分层，就必须按以下顺序做后端回归；不要跳过前置验证直接下 QA 结论。
+只要评估范围涉及后端 API、状态入口、插件边界、runtime、`Resource Action Kernel`、HostExtension registry 或 `route / service / repository / domain / mapper` 分层，就必须按以下顺序做后端回归；不要跳过前置验证直接下 QA 结论。
 
 ## Fixed Order
 
@@ -24,8 +24,12 @@
 如果涉及插件、runtime 或动态建模，必须额外确认：
 
 - `public / control / runtime` 三平面归属
-- `host-extension / runtime extension / capability plugin` 边界
-- `resource kernel` 是否仍由宿主托管
+- `HostExtension / RuntimeExtension / CapabilityPlugin` 边界
+- `Resource Action Kernel` 是否仍由宿主托管
+- HostExtension 是否只通过 manifest contribution 注册 resource、action、hook、route、worker、migration 和 infrastructure provider
+- pre-state infrastructure provider 是否在 `ApiState`、session store、control-plane service、runtime engine 和 HTTP router 构造前完成
+- RuntimeExtension / CapabilityPlugin 是否没有直接持有 Redis、NATS、RabbitMQ 等基础设施连接
+- native HostExtension 是否保持 in-process、restart-scoped，不设计 Rust native 热卸载
 - `dynamic modeling` 是否仍是元数据系统，而不是 runtime 数据本身
 - `scope_kind` 是否只保留 `workspace/system`
 - `system` 是否固定使用 `SYSTEM_SCOPE_ID`
@@ -78,6 +82,7 @@ cargo test -p <crate-name>
 
 - 状态修改是否仍通过命名明确的 service action / command
 - route 没有绕过 service 直接改状态
+- HostExtension route / worker 没有绕过 `Resource Action Kernel` 直接改 Core 真值
 - repository 没有偷偷承担事务意图、权限判定或状态流转
 - 关键副作用、审计、幂等仍由 service 编排
 - `workspace`、`system` 与 session scope 语义没有在写入口被重新混用
@@ -100,6 +105,7 @@ cargo test -p <crate-name>
 - 公共 API、session 或 auth 契约变化后，调用方是否同步成立
 - `storage-durable/postgres`、`storage-durable`、`storage-object` 或持久化层调整后，service、route、tests 是否仍成立
 - runtime 或插件相关改动后，白名单槽位与消费方式是否仍成立
+- HostExtension 相关改动后，manifest contribution、load plan、route / worker / migration namespace 和 infrastructure provider 是否仍成立
 - `workspace/system`、`SYSTEM_SCOPE_ID` 与 runtime `scope_id` 约束是否贯穿 route / service / repository / tests
 - `_tests`、文件大小、目录收纳和最小验证命令是否仍遵守质量门禁
 

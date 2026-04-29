@@ -17,6 +17,14 @@
 - 数据一致性和状态一致性分别靠什么保证？
 - 失败、重试、回滚时状态是否仍然可解释？
 
+## Resource Action Kernel Checks
+
+- 新 Core 写动作是否注册为 resource/action，还是仍由 route 直接调散落 service
+- route、worker、HostExtension route 是否都通过 action dispatch 进入同一写入口
+- hook / policy / validator 是否只在显式 pipeline 中运行，且顺序可解释
+- HostExtension 是否只写 extension-owned sidecar table，或通过 Core action 改变 Core 真值
+- audit、outbox、幂等和事务边界是否属于 action owner，而不是插件私自补
+
 ## Warning Signs
 
 - 多个 handler 都能直接把对象改成“完成”

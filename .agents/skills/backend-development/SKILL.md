@@ -31,6 +31,9 @@ description: Use when building or changing backend APIs, state transitions, modu
 - 核心状态机、对外协议、权限策略、插件边界、核心对象定义：先问人
 - 先分清稳定核心和边界适配层，再写代码
 - 能力边界优先使用能力名，具体实现留在 adapter / repository / driver
+- HostExtension 扩展核心业务时只走 `Resource Action Kernel`、声明式 hook、受控 route / worker / migration，不直接改 Core 真值表
+- Redis、队列、锁、event bus 等基础设施只作为 HostExtension provider 实现 host contract，不进业务代码直连
+- native HostExtension v1 是可信 in-process、restart-scoped；启停升级写 desired state，不设计 Rust 热卸载
 - API 输入保持短、平、单动作
 - 状态必须写清：状态集合、流转规则、动作约束
 - 多个模块都能改同一关键状态：立即收口
