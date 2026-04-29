@@ -19,10 +19,17 @@ api/plugins/
 - Source workspace location does not decide whether something is a plugin; package/install/enable-disable/load lifecycle does.
 - `packages/` stores `.1flowbasepkg` artifacts only.
 - `installed/` stores installed package results only.
-- `host-extensions/*` packages are system/root HostExtension sources and are not statically linked into `api-server`.
+- `host-extensions/*` packages are system/root HostExtension source manifests owned by the plugin source workspace; they are not statically linked into `api-server`.
 - `runtime-extensions/*` packages implement registered runtime slots through plugin-runner.
 - `capability-plugins/*` packages contribute workspace-selected app/workflow capabilities.
 - `sets/minimal.yaml` and `sets/default.yaml` select package sources for deployment assembly. They do not make plugin source code part of `api-server`; selected plugins still move through package/install/load lifecycle.
+
+## Host Assembly Boundary
+
+- `api-server` owns loader, policy, inventory, infra bootstrap, route mount, and boot assembly.
+- The plugin source workspace owns HostExtension source manifests and templates.
+- RuntimeExtension packages continue to use `plugin-runner`.
+- CapabilityPlugin packages remain workspace-selectable abilities.
 
 ## Data Source Plugin Rules
 

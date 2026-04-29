@@ -13,6 +13,13 @@
 - `plugins/packages`, `plugins/installed`: packaged `.1flowbasepkg` artifacts and installed package results
 - `plugins/templates/data_source_http_fixture`: external data-source runtime-extension template, not the only plugin template
 
+## Plugin Layering
+
+- `apps/api-server` owns loader, policy, inventory, infra bootstrap, route mount, and boot assembly.
+- `plugins/host-extensions` owns HostExtension source manifests; `plugins/templates` owns source templates.
+- RuntimeExtension packages continue to use `apps/plugin-runner`.
+- CapabilityPlugin packages are workspace-selectable abilities.
+
 ## Verification
 
 Run from the repository root:

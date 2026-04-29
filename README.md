@@ -8,6 +8,13 @@
 
 前端命令在 `web/` 下执行，后端命令在 `api/` 下执行，不再把对应工具链放在仓库根目录。
 
+## Plugin Layering
+
+- `api/apps/api-server` owns plugin loader, deployment policy, extension inventory, infrastructure bootstrap, route mount, and boot assembly.
+- `api/plugins` owns plugin source workspace files, including HostExtension source manifests and templates.
+- RuntimeExtension packages continue to execute through `plugin-runner`.
+- CapabilityPlugin packages are workspace-selectable abilities and are not system boot modules.
+
 ## Bootstrap Quick Start
 
 ### Unified Dev Script
