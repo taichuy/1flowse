@@ -1,7 +1,7 @@
 ---
 memory_type: project
 topic: 数据建模定义改走物理表实时生效路线
-summary: 用户确认 1flowbase 的数据建模定义对齐 NocoBase 类路线：控制面保存定义，用户有权限执行修改后直接实时变更 PostgreSQL 物理表与运行时资源，不保留“发布后生效”或版本发布控制；数据建模定义与界面定义分离，运行时继续走统一路由，插件边界保持 host-extension / runtime extension / capability plugin 三分。
+summary: 用户确认 1flowbase 的数据建模定义对齐 NocoBase 类路线：控制面保存定义，用户有权限执行修改后直接实时变更 PostgreSQL 物理表与运行时资源；2026-04-30 补充为保留数据模型状态 draft/published/disabled/broken，并与 API 暴露状态分离；数据建模定义与界面定义分离，运行时继续走统一路由，插件边界保持 host-extension / runtime extension / capability plugin 三分。
 keywords:
   - data-modeling
   - physical-table
@@ -15,7 +15,7 @@ match_when:
   - 需要判断是否保留 model publish/version 流程
   - 需要扩展运行时资源与插件绑定
 created_at: 2026-04-13 09
-updated_at: 2026-04-13 09
+updated_at: 2026-04-30 09
 last_verified_at: 2026-04-13 09
 decision_policy: verify_before_decision
 scope:
@@ -50,7 +50,9 @@ scope:
 ## 决策背后动机
 
 - 数据建模定义采用“控制面保存定义 + 实时变更 PostgreSQL 物理表 + 统一运行时资源接口”的路线。
-- 不保留面向用户的“发布后生效”或“版本发布控制”；用户有权限执行修改后直接生效。
+- 不保留复杂版本发布控制；结构修改仍实时生效。
+- 2026-04-30 补充：保留面向用户可见的数据模型状态 `draft / published / disabled / broken`，新建默认从数据源设置继承，默认 `published`。
+- 2026-04-30 补充：发布状态不等于 API 安全可用状态；默认 API 暴露状态为 `published_not_exposed`，API 可用必须同时满足 API Key、动作权限、scope grant、scope filter 和审计配置。
 - 不支持修改物理表名和物理字段类型；数据表编码与物理表名创建后固定。
 - 不支持重命名物理字段；如需调整，按“删除后重建”处理。
 - 删除操作允许直接执行，但需要显式确认。

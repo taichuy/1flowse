@@ -115,7 +115,7 @@ HostExtension: workspace-scope
 2. 外部数据源支持 PostgreSQL 与 REST API 插件形态的契约预留和验证。
 3. 外部数据源不导入、不同步，直接通过插件对外部源 CRUD。
 4. 外部数据源必须进入平台数据模型、权限层、审计层和 runtime API。
-5. 数据模型支持草稿与发布，发布后才开放 runtime CRUD。
+5. 数据模型支持 `draft / published / disabled / broken` 状态，新建默认状态从数据源设置继承，默认 `published`。
 6. 支持 API Key 认证。
 7. 编排中提供一个通用“数据模型”节点，动作可选 list/get/create/update/delete。
 8. Settings 中提供数据源、数据模型、API、权限、记录预览和 Advisor 入口。
@@ -181,6 +181,15 @@ scope 获得使用权：
 3. `disabled`
 4. `broken`
 
+新建数据模型的默认状态由数据源设置决定。内置 `main_source` 默认 `published`，外部数据源实例默认也建议 `published`，但可在数据源设置中调整。
+
+创建或编辑数据模型时，用户可以通过下拉选择数据模型状态：
+
+1. `draft`：结构仍在准备中，不允许 runtime CRUD。
+2. `published`：结构可被 runtime CRUD 调用，但不代表外部 API 已安全开放。
+3. `disabled`：管理员主动停用，runtime CRUD 和外部 API 都不可调用。
+4. `broken`：系统检测到结构、物理表、外部资源或插件能力异常，runtime CRUD 和外部 API 都不可调用。
+
 API 暴露状态：
 
 1. `draft`：未发布，runtime CRUD 不可调用。
@@ -188,6 +197,14 @@ API 暴露状态：
 3. `api_exposed_no_permission`：已开放 API 入口，但没有可用动作权限或 scope grant。
 4. `api_exposed_ready`：API、权限、scope filter 和审计配置完整。
 5. `unsafe_external_source`：外部数据源缺少 owner/scope 能力，或插件声明无法保证安全过滤。
+
+API 暴露状态默认也由数据源设置决定。默认规则：
+
+1. 当默认数据模型状态为 `published` 时，默认 API 暴露状态为 `published_not_exposed`。
+2. 当默认数据模型状态为 `draft` 时，默认 API 暴露状态只能为 `draft`。
+3. 当数据模型状态为 `disabled` 或 `broken` 时，runtime 先按数据模型状态阻断调用；API 暴露状态可以保留上一次配置，但 effective API 状态不可用。
+4. `api_exposed_ready` 不能只靠下拉选择产生，必须同时满足 API Key、动作权限、scope grant、scope filter 和审计配置。
+5. `unsafe_external_source` 由外部数据源插件 capability 和平台校验派生，不能由用户手动选择为安全状态。
 
 发布时必须校验：
 
@@ -209,12 +226,14 @@ API 暴露状态：
 2. `source_code`
 3. `display_name`
 4. `status`
-5. `config_json`
-6. `secret_ref / secret_version`
-7. `scope_kind / scope_id`
-8. `created_by / created_at / updated_at`
+5. `default_data_model_status`
+6. `default_api_exposure_status`
+7. `config_json`
+8. `secret_ref / secret_version`
+9. `scope_kind / scope_id`
+10. `created_by / created_at / updated_at`
 
-`main_source` 是系统内置数据源，不需要用户创建实例。
+`main_source` 是系统内置数据源，不需要用户创建实例，但仍有系统级数据源设置。`main_source.default_data_model_status` 默认为 `published`，`main_source.default_api_exposure_status` 默认为 `published_not_exposed`。
 
 ### 6.2 DataModel
 
@@ -238,6 +257,8 @@ API 暴露状态：
 16. `owner_kind`：`core / host_extension / runtime_extension`
 17. `owner_id`
 18. `is_protected`
+
+`status` 创建时从数据源默认配置继承，用户可在数据模型详情中下拉调整。`api_exposure_status` 创建时也从数据源默认配置继承，但保存前必须经过状态兼容校验。
 
 ### 6.3 DataModelField
 
@@ -489,9 +510,11 @@ Settings
 
 1. 基础信息
 2. 连接状态
-3. 数据模型列表
-4. secret reference 状态
-5. 审计记录入口
+3. 默认数据模型状态
+4. 默认 API 暴露状态
+5. 数据模型列表
+6. secret reference 状态
+7. 审计记录入口
 
 数据模型详情：
 
@@ -500,7 +523,7 @@ Settings
 3. 权限
 4. API
 5. 记录预览
-6. 发布状态
+6. 数据模型状态下拉
 7. API 暴露状态
 8. Advisor
 
@@ -629,10 +652,11 @@ workflow runtime
 1. system 创建数据模型。
 2. 动态建表。
 3. 字段新增和删除。
-4. 草稿发布。
-5. runtime CRUD。
-6. `DEFAULT_SCOPE_ID` 和 scope 过滤闭环。
-7. 基础 API 暴露状态。
+4. 数据源默认数据模型状态与默认 API 暴露状态。
+5. 数据模型状态下拉调整。
+6. runtime CRUD。
+7. `DEFAULT_SCOPE_ID` 和 scope 过滤闭环。
+8. 基础 API 暴露状态。
 
 ### V1.2 API Key 与开发者 API
 
@@ -676,24 +700,25 @@ workflow runtime
 
 V1 完成时必须满足：
 
-1. `main_source` 可在 system 创建数据模型，并发布后通过 runtime CRUD 操作记录。
-2. 同一个 data source 内不能创建重复 `data_model.code`。
-3. 所有持久化对象 ID 全局唯一，不允许复用。
-4. 未发布数据模型不能被 runtime CRUD 调用。
-5. 非 system scope 只能使用 system 授权的数据模型，不能改字段结构。
-6. 权限范围能区分 `owner / scope_all / system_all`。
-7. 单机开源版固定 `DEFAULT_SCOPE_ID`，不需要 workspace UI 也能完成 CRUD 查询。
-8. API Key 能调用被授权的数据模型 CRUD，不能越权访问。
-9. API 暴露状态能区分未发布、已发布未开放、开放但无权限、开放可用和外部源不安全。
-10. 外部数据源发布必须通过连接测试、schema 校验和 scope capability 校验。
-11. 外部数据源 CRUD 通过插件执行，但权限和审计仍由平台控制。
-12. secret 不明文进入数据模型或审计日志。
-13. 受保护模型不能被普通管理员删除字段、删除模型或直接开放 API。
-14. Advisor 能发现 blocking/high 风险并阻止发布或要求显式确认。
-15. 编排节点通过 runtime CRUD contract 执行，不直接调用插件或 SQL。
-16. 删除字段和删除记录都写入审计；删除记录 V1 为物理删除。
-17. 前端 Settings 中能从数据源进入数据模型列表和详情。
-18. 未来 workspace HostExtension 能通过 scope provider 扩展多租户，不需要改写动态表结构。
+1. `main_source` 可在 system 创建数据模型，并在 `published` 状态下通过 runtime CRUD 操作记录。
+2. 新建数据模型默认 `published`，默认 API 暴露状态为 `published_not_exposed`，除非数据源设置覆盖。
+3. 同一个 data source 内不能创建重复 `data_model.code`。
+4. 所有持久化对象 ID 全局唯一，不允许复用。
+5. `draft / disabled / broken` 数据模型不能被 runtime CRUD 调用。
+6. 非 system scope 只能使用 system 授权的数据模型，不能改字段结构。
+7. 权限范围能区分 `owner / scope_all / system_all`。
+8. 单机开源版固定 `DEFAULT_SCOPE_ID`，不需要 workspace UI 也能完成 CRUD 查询。
+9. API Key 能调用被授权的数据模型 CRUD，不能越权访问。
+10. API 暴露状态能区分未发布、已发布未开放、开放但无权限、开放可用和外部源不安全。
+11. 外部数据源发布必须通过连接测试、schema 校验和 scope capability 校验。
+12. 外部数据源 CRUD 通过插件执行，但权限和审计仍由平台控制。
+13. secret 不明文进入数据模型或审计日志。
+14. 受保护模型不能被普通管理员删除字段、删除模型或直接开放 API。
+15. Advisor 能发现 blocking/high 风险并阻止发布或要求显式确认。
+16. 编排节点通过 runtime CRUD contract 执行，不直接调用插件或 SQL。
+17. 删除字段和删除记录都写入审计；删除记录 V1 为物理删除。
+18. 前端 Settings 中能从数据源进入数据模型列表和详情。
+19. 未来 workspace HostExtension 能通过 scope provider 扩展多租户，不需要改写动态表结构。
 
 ## 20. 风险与约束
 
