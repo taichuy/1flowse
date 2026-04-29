@@ -17,7 +17,7 @@ use crate::{app_state::ApiState, host_extension_loader::load_host_extensions_at_
 use super::support::{test_api_state_with_database_url, write_test_executable};
 
 fn create_host_extension_installation_fixture(root: &Path, version: &str, source_kind: &str) {
-    fs::create_dir_all(root.join("bin")).unwrap();
+    fs::create_dir_all(root.join("lib")).unwrap();
     fs::write(
         root.join("manifest.yaml"),
         format!(
@@ -47,14 +47,35 @@ permissions:
   subprocess: deny
 runtime:
   protocol: native_host
-  entry: bin/fixture_host_extension
+  entry: host-extension.yaml
   limits: {{}}
 "#
         ),
     )
     .unwrap();
+    fs::write(
+        root.join("host-extension.yaml"),
+        format!(
+            r#"schema_version: 1flowbase.host-extension/v1
+extension_id: fixture_host_extension
+version: {version}
+bootstrap_phase: boot
+native:
+  abi_version: 1flowbase.host.native/v1
+  library: lib/fixture_host_extension
+  entry_symbol: oneflowbase_host_extension_entry_v1
+owned_resources: []
+extends_resources: []
+infrastructure_providers: []
+routes: []
+workers: []
+migrations: []
+"#
+        ),
+    )
+    .unwrap();
     write_test_executable(
-        &root.join("bin/fixture_host_extension"),
+        &root.join("lib/fixture_host_extension"),
         "#!/bin/sh\nexit 0\n",
     );
 }
@@ -151,14 +172,14 @@ async fn startup_loader_scans_dropins_and_pending_restart_rows_before_serving() 
 }
 
 #[tokio::test]
-async fn startup_loader_only_writes_runtime_status_on_failure() {
+async fn installed_host_extension_without_host_extension_yaml_becomes_load_failed() {
     let (base_state, _database_url) = test_api_state_with_database_url().await;
     let pending_root = std::env::temp_dir().join(format!(
-        "host-extension-broken-installed-{}",
+        "host-extension-missing-contribution-{}",
         Uuid::now_v7()
     ));
     create_host_extension_installation_fixture(&pending_root, "0.1.0", "uploaded");
-    fs::remove_file(pending_root.join("bin/fixture_host_extension")).unwrap();
+    fs::remove_file(pending_root.join("host-extension.yaml")).unwrap();
     let installation_id =
         seed_pending_restart_host_extension(&base_state, &pending_root, "0.1.0").await;
 
@@ -184,7 +205,83 @@ async fn startup_loader_only_writes_runtime_status_on_failure() {
         .last_load_error
         .as_deref()
         .unwrap_or_default()
-        .contains("host extension entry not found"));
+        .contains("host-extension.yaml"));
+
+    let _ = fs::remove_dir_all(pending_root);
+}
+
+#[tokio::test]
+async fn invalid_host_extension_yaml_becomes_load_failed_with_last_error() {
+    let (base_state, _database_url) = test_api_state_with_database_url().await;
+    let pending_root =
+        std::env::temp_dir().join(format!("host-extension-invalid-yaml-{}", Uuid::now_v7()));
+    create_host_extension_installation_fixture(&pending_root, "0.1.0", "uploaded");
+    fs::write(
+        pending_root.join("host-extension.yaml"),
+        r#"schema_version: wrong/v1
+extension_id: fixture_host_extension
+version: 0.1.0
+bootstrap_phase: boot
+native:
+  abi_version: 1flowbase.host.native/v1
+  library: lib/fixture_host_extension
+  entry_symbol: oneflowbase_host_extension_entry_v1
+owned_resources: []
+extends_resources: []
+infrastructure_providers: []
+routes: []
+workers: []
+migrations: []
+"#,
+    )
+    .unwrap();
+    let installation_id =
+        seed_pending_restart_host_extension(&base_state, &pending_root, "0.1.0").await;
+
+    let summary = load_host_extensions_at_startup(&base_state).await.unwrap();
+    let installation = PluginRepository::get_installation(&base_state.store, installation_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(summary.pending_restart_count, 1);
+    assert_eq!(summary.loaded_count, 0);
+    assert_eq!(summary.failed_count, 1);
+    assert_eq!(installation.runtime_status, PluginRuntimeStatus::LoadFailed);
+    assert!(installation
+        .last_load_error
+        .as_deref()
+        .unwrap_or_default()
+        .contains("schema_version"));
+
+    let _ = fs::remove_dir_all(pending_root);
+}
+
+#[tokio::test]
+async fn entry_file_existence_alone_is_insufficient() {
+    let (base_state, _database_url) = test_api_state_with_database_url().await;
+    let pending_root =
+        std::env::temp_dir().join(format!("host-extension-missing-native-{}", Uuid::now_v7()));
+    create_host_extension_installation_fixture(&pending_root, "0.1.0", "uploaded");
+    fs::remove_file(pending_root.join("lib/fixture_host_extension")).unwrap();
+    let installation_id =
+        seed_pending_restart_host_extension(&base_state, &pending_root, "0.1.0").await;
+
+    let summary = load_host_extensions_at_startup(&base_state).await.unwrap();
+    let installation = PluginRepository::get_installation(&base_state.store, installation_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(summary.pending_restart_count, 1);
+    assert_eq!(summary.loaded_count, 0);
+    assert_eq!(summary.failed_count, 1);
+    assert_eq!(installation.runtime_status, PluginRuntimeStatus::LoadFailed);
+    assert!(installation
+        .last_load_error
+        .as_deref()
+        .unwrap_or_default()
+        .contains("native library"));
 
     let _ = fs::remove_dir_all(pending_root);
 }

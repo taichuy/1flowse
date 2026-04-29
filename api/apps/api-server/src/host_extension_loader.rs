@@ -1,4 +1,7 @@
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Component, Path},
+};
 
 use anyhow::{bail, Context, Result};
 use control_plane::{
@@ -8,7 +11,8 @@ use control_plane::{
 };
 use domain::{PluginArtifactStatus, PluginDesiredState, PluginRuntimeStatus};
 use plugin_framework::{
-    scan_host_extension_dropins_with_policy, HostExtensionDropinPolicy, HostExtensionDropinScan,
+    parse_host_extension_contribution_manifest, scan_host_extension_dropins_with_policy,
+    HostExtensionContributionManifest, HostExtensionDropinPolicy, HostExtensionDropinScan,
 };
 
 use crate::app_state::ApiState;
@@ -133,7 +137,7 @@ async fn activate_pending_restart_installation(
                         installation.artifact_status,
                         PluginRuntimeStatus::LoadFailed,
                     ),
-                    last_load_error: Some(error.to_string()),
+                    last_load_error: Some(format!("{error:#}")),
                 })
                 .await?;
             Ok(ActivationOutcome::Failed)
@@ -157,9 +161,56 @@ fn validate_host_extension_installation(
         );
     }
 
-    let entry_path = install_root.join(&manifest.runtime.entry);
-    if !entry_path.is_file() {
-        bail!("host extension entry not found at {}", entry_path.display());
+    let contribution_path = install_root.join(&manifest.runtime.entry);
+    let contribution_raw = fs::read_to_string(&contribution_path)
+        .with_context(|| format!("failed to read {}", contribution_path.display()))?;
+    let contribution = parse_host_extension_contribution_manifest(&contribution_raw)
+        .with_context(|| format!("failed to parse {}", contribution_path.display()))?;
+    let plugin_code = manifest
+        .plugin_code()
+        .with_context(|| format!("invalid plugin identity {}", manifest.plugin_id))?;
+    if plugin_code != contribution.extension_id {
+        bail!(
+            "host extension contribution identity mismatch: package {} contribution {}",
+            plugin_code,
+            contribution.extension_id
+        );
+    }
+    if manifest.version != contribution.version {
+        bail!(
+            "host extension contribution version mismatch: package {} contribution {}",
+            manifest.version,
+            contribution.version
+        );
+    }
+    validate_native_library(install_root, &contribution)?;
+
+    Ok(())
+}
+
+fn validate_native_library(
+    install_root: &Path,
+    contribution: &HostExtensionContributionManifest,
+) -> Result<()> {
+    if contribution.native.library.starts_with("builtin://") {
+        return Ok(());
+    }
+
+    let library = Path::new(&contribution.native.library);
+    if library.is_absolute()
+        || library
+            .components()
+            .any(|component| matches!(component, Component::ParentDir))
+    {
+        bail!(
+            "host extension native library must stay under install root: {}",
+            contribution.native.library
+        );
+    }
+
+    let library_path = install_root.join(library);
+    if !library_path.is_file() {
+        bail!("native library not found at {}", library_path.display());
     }
 
     Ok(())
