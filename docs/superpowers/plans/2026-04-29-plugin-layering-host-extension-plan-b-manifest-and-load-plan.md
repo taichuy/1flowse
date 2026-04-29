@@ -8,6 +8,9 @@
 
 **Tech Stack:** Rust, serde_yaml, plugin-framework, control-plane, api-server startup tests, targeted Cargo tests.
 
+**Status:** Complete on 2026-04-29. Implementation commits:
+`f32161db`, `1684df19`, `35f84340`, `71e761cb`.
+
 ---
 
 ## File Structure
@@ -32,7 +35,7 @@
 - Create: `api/crates/plugin-framework/src/_tests/host_extension_contribution_tests.rs`
 - Modify: `api/crates/plugin-framework/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write RED tests**
+- [x] **Step 1: Write RED tests**
 
 Add tests covering valid manifest parsing and rejection of undeclared empty identifiers:
 
@@ -92,7 +95,7 @@ migrations: []
 }
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -109,7 +112,7 @@ Expected: FAIL because `parse_host_extension_contribution_manifest` does not exi
 - Create: `api/crates/plugin-framework/src/host_extension_contribution.rs`
 - Modify: `api/crates/plugin-framework/src/lib.rs`
 
-- [ ] **Step 1: Add structs and parser**
+- [x] **Step 1: Add structs and parser**
 
 Implement structs with `#[serde(deny_unknown_fields)]`:
 
@@ -164,7 +167,7 @@ provider contract and provider_code are non-empty
 provider config_ref must start with secret://system/
 ```
 
-- [ ] **Step 2: Re-run parser tests**
+- [x] **Step 2: Re-run parser tests**
 
 Run:
 
@@ -175,7 +178,7 @@ cargo test -p plugin-framework host_extension_contribution -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit parser**
+- [x] **Step 3: Commit parser**
 
 ```bash
 git add api/crates/plugin-framework/src/host_extension_contribution.rs api/crates/plugin-framework/src/lib.rs api/crates/plugin-framework/src/_tests
@@ -190,7 +193,7 @@ git commit -m "feat: parse host extension contribution manifests"
 - Modify: `api/crates/control-plane/src/host_extension_boot/loader.rs`
 - Modify: `api/crates/control-plane/src/_tests/host_extension_boot_tests.rs`
 
-- [ ] **Step 1: Write registry/load-plan tests**
+- [x] **Step 1: Write registry/load-plan tests**
 
 Add tests for:
 
@@ -210,7 +213,7 @@ official.plugin-host
 official.file-management-host
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -222,7 +225,7 @@ cargo test -p control-plane host_extension_boot -- --nocapture
 
 Expected: FAIL on missing contribution fields or phase-aware ordering.
 
-- [ ] **Step 3: Implement registry fields**
+- [x] **Step 3: Implement registry fields**
 
 Extend `RegisteredHostExtension` with:
 
@@ -243,7 +246,7 @@ pub fn infrastructure_provider(&self, contract: &str, provider_code: &str) -> Op
 pub fn providers_for_contract(&self, contract: &str) -> Vec<&RegisteredInfrastructureProvider>
 ```
 
-- [ ] **Step 4: Implement phase-aware load plan**
+- [x] **Step 4: Implement phase-aware load plan**
 
 In `control-plane/src/host_extension_boot/loader.rs`, include `bootstrap_phase` on `HostExtensionLoadPlanItem` and sort resolved items by:
 
@@ -253,7 +256,7 @@ pre_state before boot when no dependency conflicts
 extension_id for deterministic ties
 ```
 
-- [ ] **Step 5: Re-run tests**
+- [x] **Step 5: Re-run tests**
 
 Run:
 
@@ -265,7 +268,7 @@ cargo test -p control-plane host_extension_boot -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit registry/load plan**
+- [x] **Step 6: Commit registry/load plan**
 
 ```bash
 git add api/crates/plugin-framework/src/host_extension_registry.rs api/crates/plugin-framework/src/_tests/host_extension_registry_tests.rs api/crates/control-plane/src/host_extension_boot/loader.rs api/crates/control-plane/src/_tests/host_extension_boot_tests.rs
@@ -278,7 +281,7 @@ git commit -m "feat: add phase-aware host extension load plan"
 - Modify: `api/apps/api-server/src/host_extension_loader.rs`
 - Modify: `api/apps/api-server/src/_tests/host_extension_loader_tests.rs`
 
-- [ ] **Step 1: Add startup validation tests**
+- [x] **Step 1: Add startup validation tests**
 
 Add tests proving:
 
@@ -289,7 +292,7 @@ valid manifest + valid contribution manifest becomes active
 entry file existence alone is insufficient
 ```
 
-- [ ] **Step 2: Run RED verification**
+- [x] **Step 2: Run RED verification**
 
 Run:
 
@@ -300,7 +303,7 @@ cargo test -p api-server host_extension_loader -- --nocapture
 
 Expected: FAIL because loader only checks `manifest.runtime.entry`.
 
-- [ ] **Step 3: Implement validation**
+- [x] **Step 3: Implement validation**
 
 Change loader validation to:
 
@@ -314,7 +317,7 @@ verify manifest.plugin_code/version matches contribution extension_id/version
 verify native.library path exists only after contribution manifest validates
 ```
 
-- [ ] **Step 4: Re-run startup tests**
+- [x] **Step 4: Re-run startup tests**
 
 Run:
 
@@ -325,7 +328,7 @@ cargo test -p api-server host_extension_loader -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit startup validation**
+- [x] **Step 5: Commit startup validation**
 
 ```bash
 git add api/apps/api-server/src/host_extension_loader.rs api/apps/api-server/src/_tests/host_extension_loader_tests.rs
@@ -337,7 +340,7 @@ git commit -m "feat: validate host extension contribution manifests at startup"
 **Files:**
 - Verify only.
 
-- [ ] **Step 1: Format**
+- [x] **Step 1: Format**
 
 Run:
 
@@ -348,7 +351,7 @@ cargo fmt
 
 Expected: no diff after formatting.
 
-- [ ] **Step 2: Run focused tests**
+- [x] **Step 2: Run focused tests**
 
 Run:
 
@@ -361,7 +364,7 @@ cargo test -p api-server host_extension -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit any formatting changes**
+- [x] **Step 3: Commit any formatting changes**
 
 If `git status --short` shows formatting changes, run:
 
