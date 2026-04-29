@@ -7,6 +7,7 @@ pub mod data_source_contract;
 pub mod data_source_package;
 pub mod error;
 pub mod host_contract;
+pub mod host_extension_contribution;
 pub mod host_extension_dropin;
 pub mod host_extension_manifest;
 pub mod host_extension_registry;
@@ -24,6 +25,11 @@ pub use data_source_contract::*;
 pub use data_source_package::*;
 pub use error::*;
 pub use host_contract::{HostContractCode, RuntimeSlotCode, StorageImplementationKind};
+pub use host_extension_contribution::{
+    parse_host_extension_contribution_manifest, HostExtensionBootstrapPhase,
+    HostExtensionContributionManifest, HostExtensionNativeEntrypointManifest,
+    HostInfrastructureProviderManifest,
+};
 pub use host_extension_dropin::*;
 pub use host_extension_manifest::{
     parse_host_extension_manifest, HostExtensionActivationPhase, HostExtensionDependencyManifest,

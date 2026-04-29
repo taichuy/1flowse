@@ -3,6 +3,7 @@ mod assignment_tests;
 mod data_source_contract_tests;
 mod data_source_package_tests;
 mod host_contract_tests;
+mod host_extension_contribution_tests;
 mod host_extension_dropin_tests;
 mod host_extension_manifest_tests;
 mod host_extension_registry_tests;
