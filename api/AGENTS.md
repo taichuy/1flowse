@@ -52,6 +52,14 @@
 - 需要 CSRF 保护的写接口必须校验 `x-csrf-token`。
 - `Boot Core` 只负责启动、加载、deployment policy、root/system bootstrap、extension inventory、health/reconcile，不承载完整业务能力面。
 - `HostExtension` 是 system/root 级可信 host 模块，可定义、替换、增强 host contract；只能 boot-time 激活，不给 workspace 用户安装或热卸载。
+- `HostExtension` v1 使用可信 native in-process，随主进程 boot-time 加载；启停、升级只写 desired state，并在重启后生效。
+- `HostExtension` 不做 Rust native `so/dll` 热卸载；可重复卸载的第三方运行时按 WASM 或 Lua 单独设计，不纳入本轮 native HostExtension v1。
+- `HostExtension` 实现或增强 host contract 时，必须通过 manifest 声明 contribution；native entrypoint 只能注册已声明的 resource、action、hook、route、worker、migration 和 infrastructure provider。
+- `pre-state infra provider bootstrap` 必须发生在 `ApiState`、session store、control-plane service、runtime engine 和 HTTP router 构造前。
+- `storage-ephemeral`、`cache-store`、`distributed-lock`、`event-bus`、`task-queue`、`rate-limit-store` 是宿主基础设施 contract；具体 Redis、NATS、RabbitMQ 等实现只能作为 HostExtension provider。
+- `API_EPHEMERAL_BACKEND=redis` 不再是目标架构；Core 不通过 env 分支直接选择 Redis session store。
+- Core 写动作要逐步进入 `Resource Action Kernel`；未进入 kernel 的 route 不作为 HostExtension hook 扩展点。
+- HostExtension migration 只能写 `ext_<normalized_extension_id>__*` 命名空间，不得修改 Core 真值表。
 - `RuntimeExtension` 只能实现已注册 runtime slot，例如 `model_provider`、`data_source`、`file_processor`；禁止注册 HTTP 接口、resource、auth provider 或直接写平台主存储。
 - `CapabilityPlugin` 只能贡献 workspace 用户显式选择的能力，例如 canvas node、tool、trigger、publisher；禁止注册系统接口。
 - `provider`、`data source`、`file processor` 不是插件主类型，分别是 runtime slot 或 host capability。
