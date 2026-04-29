@@ -12,6 +12,7 @@ const {
   getServiceDefinitions,
   manageDocker,
   startService,
+  manageServices,
   ensureServiceEnvFile,
   buildServiceEnv,
   getServicePrestartCommands,
@@ -215,6 +216,94 @@ test('startService reclaims an occupied service port during restart takeover bef
   ]);
   assert.equal(spawned, true);
   assert.equal(recordedPid, 4242);
+});
+
+test('startService restarts a running managed service when takeover is requested', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-managed-takeover-'));
+  const service = {
+    key: 'web',
+    label: 'frontend',
+    cwd: path.join(tempRoot, 'web'),
+    command: 'pnpm',
+    args: ['--filter', '@1flowbase/web', 'dev'],
+    bindHost: '0.0.0.0',
+    probeHost: '127.0.0.1',
+    port: 3100,
+    startupTimeoutMs: DEFAULT_STARTUP_TIMEOUT_MS,
+    logFile: path.join(tempRoot, 'web.log'),
+    pidFile: path.join(tempRoot, 'web.json'),
+  };
+  const stopCalls = [];
+  let portOpen = true;
+  let spawned = false;
+  let recordedPid = null;
+
+  await startService(service, {
+    ensureServiceEnvFileImpl() {
+      return false;
+    },
+    requireCommandImpl() {},
+    runServicePrestartCommandsImpl() {},
+    readPidRecordImpl() {
+      return { pid: 3100 };
+    },
+    isProcessAliveImpl() {
+      return true;
+    },
+    async isPortOpenImpl() {
+      return portOpen;
+    },
+    async stopServiceImpl(stoppedService) {
+      stopCalls.push(stoppedService.key);
+      portOpen = false;
+    },
+    logImpl() {},
+    spawnImpl() {
+      spawned = true;
+      return {
+        pid: 4243,
+        unref() {},
+      };
+    },
+    buildServiceEnvImpl() {
+      return {};
+    },
+    writePidRecordImpl(_service, pid) {
+      recordedPid = pid;
+    },
+    async waitForServicePortImpl() {
+      return true;
+    },
+    takeOverPortOwnership: true,
+  });
+
+  assert.deepEqual(stopCalls, ['web']);
+  assert.equal(spawned, true);
+  assert.equal(recordedPid, 4243);
+});
+
+test('manageServices treats start as a service takeover', async () => {
+  const service = {
+    key: 'web',
+    label: 'frontend',
+  };
+  const calls = [];
+
+  await manageServices('start', [service], {
+    async startServiceImpl(startedService, options) {
+      calls.push({
+        key: startedService.key,
+        takeOverPortOwnership: options.takeOverPortOwnership,
+      });
+    },
+  });
+
+  assert.deepEqual(calls, [
+    {
+      key: 'web',
+      takeOverPortOwnership: true,
+    },
+  ]);
 });
 
 test('manageDocker restart clears middleware port conflicts before bringing services up', async () => {

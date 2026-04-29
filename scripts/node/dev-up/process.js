@@ -268,21 +268,22 @@ async function startService(
 ) {
   ensureServiceEnvFileImpl(service);
   requireCommandImpl(service.command);
-  runServicePrestartCommandsImpl(service);
 
   const pidRecord = readPidRecordImpl(service.pidFile);
-  if (
-    pidRecord &&
-    isProcessAliveImpl(pidRecord.pid) &&
-    (await isPortOpenImpl(getProbeHost(service), service.port))
-  ) {
-    logImpl(`${service.label} 已在运行，跳过启动`);
-    return;
-  }
-
   if (pidRecord && isProcessAliveImpl(pidRecord.pid)) {
+    if (await isPortOpenImpl(getProbeHost(service), service.port)) {
+      if (!takeOverPortOwnership) {
+        logImpl(`${service.label} 已在运行，跳过启动`);
+        return;
+      }
+
+      logImpl(`${service.label} 已在运行，正在重启`);
+    }
+
     await stopServiceImpl(service);
   }
+
+  runServicePrestartCommandsImpl(service);
 
   if (await isPortOpenImpl(getProbeHost(service), service.port) && takeOverPortOwnership) {
     await clearPortConflictsImpl(service.label, [service.port]);
@@ -351,30 +352,38 @@ async function statusService(service) {
   );
 }
 
-async function manageServices(action, services) {
+async function manageServices(
+  action,
+  services,
+  {
+    stopServiceImpl = stopService,
+    statusServiceImpl = statusService,
+    startServiceImpl = startService,
+  } = {}
+) {
   if (action === 'stop') {
     for (const service of [...services].reverse()) {
-      await stopService(service);
+      await stopServiceImpl(service);
     }
     return;
   }
 
   if (action === 'status') {
     for (const service of services) {
-      await statusService(service);
+      await statusServiceImpl(service);
     }
     return;
   }
 
   if (action === 'restart') {
     for (const service of [...services].reverse()) {
-      await stopService(service);
+      await stopServiceImpl(service);
     }
   }
 
   for (const service of services) {
-    await startService(service, {
-      takeOverPortOwnership: action === 'restart',
+    await startServiceImpl(service, {
+      takeOverPortOwnership: action === 'start' || action === 'restart',
     });
   }
 }

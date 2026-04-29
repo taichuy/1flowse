@@ -46,6 +46,7 @@ module.exports = {
   getServicePrestartCommands,
   main,
   manageDocker,
+  manageServices,
   parseCliArgs,
   resolveComposeCommand,
   runServicePrestartCommands,
