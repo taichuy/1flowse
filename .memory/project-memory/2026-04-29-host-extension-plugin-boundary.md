@@ -38,3 +38,5 @@ status: active
 2026-04-29 07 进一步修正：`HostExtension` 不应被收窄成只能做 bridge / boot adapter。它是受治理的内核级系统模块，可以拥有 extension namespace 下的系统表、migration、repository、service、worker 和受控 route。Boot Core 仍拥有安装、权限、审计、主存储连接、安全策略和插件生命周期表等全局治理资源。
 
 2026-04-29 07 继续修正：后端需要补 `Resource Action Kernel` 作为 HostExtension 扩展核心业务的稳定面。`Resource` 不是数据库表，`Action` 是可治理动作入口，`Hook` 是显式横向扩展点。HostExtension 可以对现有核心业务注册 action hook、policy、validator、sidecar table、受控 action、worker 和 domain event，但不能直接改核心资源真值表、隐式包裹 service 或绕过 repository 边界。
+
+2026-04-29 07 缓存与分布式基础设施补充：当前单机阶段可以保留 in-memory / local / PostgreSQL lease 默认实现，但未来 Redis 等分布式能力应作为 HostExtension 实现 Core 定义的 `storage-ephemeral`、`cache-store`、`distributed-lock`、`event-bus`、`task-queue`、`rate-limit-store` contract。Core 拥有缓存语义、失效规则、任务 claim、事件投递和限流窗口；HostExtension 只负责实现；RuntimeExtension 与 CapabilityPlugin 不能直接持有 Redis 等基础设施连接。

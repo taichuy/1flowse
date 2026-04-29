@@ -21,7 +21,8 @@
 5. 现有能力如文件管理、主存储、临时缓存、数据源、工作流分别属于哪一层。
 6. 现有后端结构和调整后的后端结构。
 7. `Resource / Action / Hook` 如何成为 HostExtension 横向扩展核心业务的稳定入口。
-8. 新增需求时如何快速判断应该写到哪一层。
+8. 缓存、分布式锁、事件总线、任务队列等基础设施如何通过 HostExtension 平替。
+9. 新增需求时如何快速判断应该写到哪一层。
 
 ## 2. 结论摘要
 
@@ -38,6 +39,8 @@
 9. 禁止为 `HostExtension` 设计 Rust `so/dll` 可重复热加载 / 热卸载；需要可重复卸载的运行时优先考虑声明式、Lua 或 WASM。
 10. 需要补一层 `Resource Action Kernel`，让核心业务通过 `Resource / Action / Hook` 暴露稳定扩展点。
 11. `HostExtension` 可以扩展现有核心业务，但必须通过 resource action、显式 hook、sidecar table、受控 route 和 domain event；不能直接改写核心表。
+12. 缓存不作为单一能力层处理，应拆成 `storage-ephemeral`、`cache-store`、`distributed-lock`、`event-bus`、`task-queue`、`rate-limit-store` 等宿主基础设施 contract。
+13. Redis 是这些 contract 的一种 HostExtension 实现；Core 拥有语义、失效规则和缓存策略，Redis HostExtension 只负责实现。
 
 ## 3. 范围与非目标
 
@@ -51,7 +54,8 @@
 4. 现有核心能力的归属判断。
 5. 后端现有结构与目标结构。
 6. HostExtension 扩展现有核心业务的写法。
-7. 后续新增需求的落点判断规则。
+7. Redis、缓存、分布式锁、事件总线和任务队列的扩展方式。
+8. 后续新增需求的落点判断规则。
 
 ### 3.2 非目标
 
@@ -120,10 +124,13 @@ api/crates/storage-durable/postgres
   -> migration / repository impl / mapper / SQL
 
 api/crates/storage-ephemeral
-  -> session / short-lived coordination
+  -> session / short-lived coordination / local ephemeral implementation
 
 api/crates/storage-object
   -> object storage implementation boundary
+
+api/crates/observability
+  -> local event bus / trace / log foundation
 
 api/apps/plugin-runner
   -> RuntimeExtension / CapabilityPlugin execution host
@@ -156,6 +163,7 @@ route
 3. `Action` 还没有成为可注册、可审计、可 hook 的稳定动作入口。
 4. `HostExtension` 还不能声明式扩展已有核心 resource/action。
 5. 横向扩展目前只能靠新增 route、service 或内部改代码，不适合作为长期插件扩展面。
+6. 缓存、分布式锁、事件总线、任务队列等基础设施 contract 尚未统一抽象，单机实现与未来 Redis 实现还缺少稳定平替边界。
 
 ## 6. 调整后的后端结构
 
@@ -173,6 +181,8 @@ api/crates/control-plane
   -> resource catalog
   -> action registry
   -> action pipeline
+  -> cache policy registry
+  -> infrastructure contract registry
   -> service command
   -> domain event / audit
   -> repository trait
@@ -181,6 +191,7 @@ api/crates/plugin-framework
   -> HostExtension manifest
   -> resource contribution manifest
   -> action contribution manifest
+  -> infrastructure implementation manifest
   -> hook / policy / worker / route declaration
 
 api/crates/storage-durable
@@ -197,6 +208,9 @@ api/plugins/host-extensions/<extension_id>
   -> host-extension.yaml
   -> migrations/
   -> src/ or package payload
+
+api/plugins/host-extensions/redis-infra-host
+  -> optional Redis-backed infrastructure implementation source
 
 api/plugins/runtime-extensions/<extension_id>
   -> runtime slot implementation package source
@@ -415,6 +429,116 @@ enterprise-identity-host
 2. 如果替换完整 identity contract，必须声明 override 并由 deployment policy 允许。
 3. session 写入仍走 Core session / identity action，不直接写会话表。
 
+### 6.5 缓存与分布式基础设施扩展
+
+缓存不作为一个泛化插件层级处理，应拆成多个宿主基础设施 contract。Redis 是这些 contract 的一种实现，不是业务 resource owner。
+
+建议固定以下 contract：
+
+```text
+storage-ephemeral
+  -> session、临时 kv、lease、wakeup signal
+
+cache-store
+  -> 查询缓存、编译缓存、短期结果缓存
+
+distributed-lock
+  -> 分布式锁、任务抢占、幂等保护
+
+event-bus
+  -> 跨实例事件广播、缓存失效通知、轻量异步事件
+
+task-queue
+  -> 后台任务队列、工作流加速队列、导入同步任务
+
+rate-limit-store
+  -> 限流计数、配额窗口、短期用量统计
+```
+
+单机默认实现：
+
+```text
+storage-ephemeral = in-memory / local
+cache-store = in-memory
+distributed-lock = local mutex / postgres lease where needed
+event-bus = local channel
+task-queue = local worker / postgres lease
+rate-limit-store = in-memory
+```
+
+分布式实现：
+
+```text
+storage-ephemeral = redis
+cache-store = redis
+distributed-lock = redis
+event-bus = redis pubsub / redis streams / nats
+task-queue = redis streams / rabbitmq / dedicated queue
+rate-limit-store = redis
+```
+
+所有权边界：
+
+1. `Core` 定义 session、lease、cache key namespace、invalidation、task claim、event delivery、rate limit window 的语义。
+2. `HostExtension` 实现这些基础设施 contract，例如 `local-infra-host`、`redis-infra-host`、`nats-event-bus-host`。
+3. `Resource Action Kernel` 决定哪些 action 能缓存、缓存多久、由哪些 domain event 失效。
+4. `RuntimeExtension` 不能直连 Redis，只能通过宿主提供的 runtime context 使用受控 cache。
+5. `CapabilityPlugin` 不能拥有 Redis 连接，只能声明 workflow node output 是否允许被缓存。
+6. 缓存数据不能成为核心业务真值，失效或丢失后必须能从 durable resource 重建。
+
+Redis HostExtension 示例：
+
+```text
+redis-infra-host
+  provides contracts:
+    storage-ephemeral
+    cache-store
+    distributed-lock
+    event-bus
+    task-queue
+    rate-limit-store
+  activation: boot
+  lifecycle: restart_required
+  config:
+    url: redis://...
+    key_prefix: 1flowbase:{deployment_id}
+```
+
+典型使用场景：
+
+```text
+files.list
+  cache: ttl 30s
+  invalidate_on: files.uploaded / files.deleted / file_table.updated
+
+workflows.compile
+  cache: until workflows.updated
+  backing: cache-store
+
+workflows.run_queue
+  queue: task-queue
+  lock: distributed-lock
+
+plugin_marketplace.catalog
+  cache: ttl 10m
+  invalidate_on: marketplace.synced
+
+data_sources.discover_catalog
+  cache key: workspace + data_source + schema fingerprint
+  adapter: RuntimeExtension
+  policy owner: data-source platform
+  implementation: cache-store HostExtension
+```
+
+判断方式：
+
+```text
+需要切换缓存、锁、事件总线、队列实现：HostExtension。
+需要决定某个业务 action 是否缓存和如何失效：resource/action owner。
+需要保存业务真值：durable resource owner，不能放缓存。
+需要 RuntimeExtension 使用缓存：通过 runtime context，不直连 Redis。
+```
+
 ## 7. 各层定义
 
 ### 7.1 Boot Core
@@ -447,13 +571,15 @@ enterprise-identity-host
 3. Boot Core repository / mapper，以及当前核心模块 repository / mapper。
 4. 核心权限、审计、状态机。
 5. 插件安装、任务、信任、inventory、registry metadata。
-6. 跨模块必须一致的事务边界。
-7. 当前尚未插件化的系统模块实现。
+6. 基础设施 contract 语义，例如 session、lease、cache invalidation、task claim、event delivery、rate limit window。
+7. resource action 的缓存策略和失效规则。
+8. 跨模块必须一致的事务边界。
+9. 当前尚未插件化的系统模块实现。
 
 一句话：
 
 ```text
-只要是 Boot Core 治理、安全、安装、权限、审计和跨模块一致性，默认都属于 Core。
+只要是 Boot Core 治理、安全、安装、权限、审计、基础设施语义和跨模块一致性，默认都属于 Core。
 ```
 
 ### 7.3 HostExtension
@@ -469,6 +595,7 @@ enterprise-identity-host
 5. observability、auth、gateway、secret manager 一类宿主桥接器。
 6. 自己命名空间下的系统资源、migration、repository、service。
 7. 通过 host route registry 注册的受控 route / callback / worker。
+8. `storage-ephemeral`、`cache-store`、`distributed-lock`、`event-bus`、`task-queue`、`rate-limit-store` 等宿主基础设施 contract 的实现。
 
 它不负责：
 
@@ -478,6 +605,8 @@ enterprise-identity-host
 4. 绕过 `control-plane`、权限、审计和 route registry。
 5. 裸开任意 HTTP route。
 6. workspace 用户可安装的普通能力。
+7. 改变 Core 定义的缓存语义、失效规则、任务 claim 语义或事件投递语义。
+8. 把缓存数据作为核心业务真值。
 
 一句话：
 
@@ -496,6 +625,7 @@ HostExtension 可以拥有内核级系统模块，但必须通过宿主治理边
 3. 插件自有 service 和 repository。
 4. 通过宿主 route registry 注册的系统 API。
 5. 通过宿主 worker registry 注册的后台任务。
+6. 插件自有缓存 key namespace、队列消费者和事件订阅。
 
 禁止：
 
@@ -503,6 +633,7 @@ HostExtension 可以拥有内核级系统模块，但必须通过宿主治理边
 2. 直接抢占其他 `HostExtension` 的资源命名空间。
 3. 绕过宿主权限、审计、CSRF、OpenAPI 和健康检查。
 4. 在运行中热替换 Rust native 代码。
+5. 让 RuntimeExtension 或 CapabilityPlugin 直接持有 Redis、NATS、RabbitMQ 等基础设施连接。
 
 判断方式：
 
@@ -537,6 +668,7 @@ HostExtension 可以拥有内核级系统模块，但必须通过宿主治理边
 1. 注册系统接口。
 2. 直接写平台主数据库。
 3. 拥有平台 secret / preview session / import job / catalog cache 主状态。
+4. 直接连接 Redis、NATS、RabbitMQ 等宿主基础设施。
 
 ### 7.6 CapabilityPlugin
 
@@ -555,6 +687,7 @@ HostExtension 可以拥有内核级系统模块，但必须通过宿主治理边
 1. 系统级 bridge
 2. 平台主资源
 3. runtime slot family 声明
+4. 宿主基础设施连接或缓存实现
 
 ## 8. 插件源码目录
 
@@ -736,18 +869,26 @@ source workspace
 
 `HostExtension` 可以注册 storage implementation，也可以拥有自己命名空间下的系统表；但不能拥有 Boot Core 的全局 migration 链、主存储连接、核心插件生命周期表和跨模块一致性边界。
 
-### 11.3 临时缓存层
+### 11.3 临时缓存与分布式基础设施
 
-临时缓存层属于 `Core`。
+临时缓存和分布式基础设施的语义属于 `Core`，具体实现可以由 `HostExtension` 平替。
 
-包括：
+Core 负责定义：
 
 1. session
 2. ephemeral kv
 3. lease
 4. wakeup signal
+5. cache key namespace
+6. cache invalidation
+7. distributed lock semantics
+8. event delivery semantics
+9. task queue claim semantics
+10. rate limit window semantics
 
-它是宿主基础设施，不是插件能力。
+默认单机实现可以是 in-memory / local / PostgreSQL lease。未来分布式实现可以由 `redis-infra-host`、`nats-event-bus-host`、`rabbitmq-task-queue-host` 这类 HostExtension 提供。
+
+它是宿主基础设施，不是业务插件能力；缓存数据不能成为核心业务真值。
 
 ### 11.4 数据源
 
@@ -805,6 +946,7 @@ source workspace
 7. 实现文件管理系统模块，拥有 file management namespace 下的表、service 和 route。
 8. 为已有 Core resource 注册 action hook，例如 `before plugins.install`、`after files.upload`。
 9. 为已有 Core resource 增加受控专属 action，例如 `files.scan_report`、`workflows.approve_run`。
+10. 实现 Redis-backed `storage-ephemeral`、`cache-store`、`distributed-lock`、`event-bus`、`task-queue` 或 `rate-limit-store`。
 
 ### 12.2 不适合 HostExtension 的例子
 
@@ -815,6 +957,8 @@ source workspace
 5. 隐式 monkey patch、包裹或替换 Core service command。
 6. 绕过 resource action kernel 直接调用 repository impl。
 7. 给 workspace 用户安装可注册系统接口的插件。
+8. 让 RuntimeExtension 或 CapabilityPlugin 直接持有 Redis 连接。
+9. 把缓存作为业务真值或绕过 durable resource。
 
 ## 13. 新需求落点判断表
 
@@ -824,6 +968,7 @@ source workspace
 | Host 系统模块 | `HostExtension` | `root/system` 级，boot-time 生效，可拥有 extension namespace 下的表、migration、service、route、worker | 插件市场、文件管理模块、SSO bridge、observability bridge |
 | Core resource action | `Core` | 维持 resource catalog、action registry、hook pipeline、权限、审计、事务和 domain event | `plugins.install`、`files.upload`、`workflows.start_run` |
 | Host 横向扩展 | `HostExtension` | 对已有 resource/action 注册 hook、policy、validator、sidecar、projection 或受控 action | 文件扫描、工作流审批、插件许可证校验 |
+| 宿主基础设施实现 | `HostExtension` | 实现 Core 定义的 `storage-ephemeral`、`cache-store`、`distributed-lock`、`event-bus`、`task-queue`、`rate-limit-store` contract | `redis-infra-host`、`nats-event-bus-host`、`rabbitmq-task-queue-host` |
 | 外部协议适配器 | `RuntimeExtension` | 是已注册 runtime slot 的具体实现，供 workspace / model 绑定 | OpenAI provider、MySQL 数据源、文件处理器 |
 | 用户显式选择能力 | `CapabilityPlugin` | 是 workflow / app / canvas 中可选择的一项能力 | workflow node、tool、trigger、publisher |
 
@@ -832,8 +977,9 @@ source workspace
 1. 需要修改 Boot Core 治理、权限、审计、安装状态：`Core`
 2. 需要新增可独立启停的 root/system 系统模块：`HostExtension`
 3. 需要扩展已有核心业务动作：`HostExtension` 通过 resource action hook/policy/sidecar 扩展
-4. 需要实现某个 runtime slot：`RuntimeExtension`
-5. 需要新增 workflow / app 中的可选能力块：`CapabilityPlugin`
+4. 需要切换缓存、分布式锁、事件总线、任务队列实现：`HostExtension`
+5. 需要实现某个 runtime slot：`RuntimeExtension`
+6. 需要新增 workflow / app 中的可选能力块：`CapabilityPlugin`
 
 ## 14. 对现有 spec 的收敛
 
@@ -845,6 +991,7 @@ source workspace
 4. `HostExtension` 不只是 bridge，也可以是可启停的内核级系统模块实现。
 5. 主仓插件源码目录不按官方和第三方拆分，而按插件层级拆分。
 6. `HostExtension` 扩展现有核心业务必须走 `Resource / Action / Hook`，不能直接改写 Core resource 真值表。
+7. Redis、NATS、RabbitMQ 等基础设施只作为 HostExtension 实现 Core contract，不能成为业务 owner 或插件直连资源。
 
 ## 15. 迁移建议
 
@@ -853,11 +1000,13 @@ source workspace
 1. 更新 `api/AGENTS.md`，把四层落点、Resource Action Kernel 和 HostExtension 约束写死。
 2. 在 `control-plane` 补 resource catalog、action registry、action pipeline、hook registry 和 domain event 边界。
 3. 扩展 `plugin-framework` 的 HostExtension manifest，加入 owned resources、extends resources、contributed actions、hooks、routes、workers、migrations。
-4. 在 `api-server` 引入 host route registry 与 resource/action route mount 约束，保持 route 只做协议层。
-5. 在 `api/plugins/` 下建立三类插件源码工作区和模板目录。
-6. 把现有 `api-server` 中的 builtin host manifest 迁到 `api/plugins/host-extensions/*` 源码工作区。
-7. 保留 `api-server` 只做 loader、policy、inventory、route mount 和 boot assembly。
-8. 后续再逐步补 `HostExtension` runtime、extension migration runner 和 `CapabilityPlugin` install chain。
+4. 定义 `storage-ephemeral`、`cache-store`、`distributed-lock`、`event-bus`、`task-queue`、`rate-limit-store` contract，并保留 local 默认实现。
+5. 预留 `redis-infra-host` 作为这些 contract 的可选分布式实现。
+6. 在 `api-server` 引入 host route registry 与 resource/action route mount 约束，保持 route 只做协议层。
+7. 在 `api/plugins/` 下建立三类插件源码工作区和模板目录。
+8. 把现有 `api-server` 中的 builtin host manifest 迁到 `api/plugins/host-extensions/*` 源码工作区。
+9. 保留 `api-server` 只做 loader、policy、inventory、route mount 和 boot assembly。
+10. 后续再逐步补 `HostExtension` runtime、extension migration runner 和 `CapabilityPlugin` install chain。
 
 ## 16. 自检
 
@@ -867,6 +1016,8 @@ source workspace
 2. 已允许 HostExtension 拥有受治理的系统模块实现、migration、service 和 route。
 3. 已明确 Resource 不等于数据库表，Action 是稳定动作入口。
 4. 已把 HostExtension 横向扩展限定到显式 hook、policy、sidecar、受控 action 和 domain event。
-5. 没有把 `RuntimeExtension` 和 `CapabilityPlugin` 混成同一类插件。
-6. 没有要求把插件源码移出主仓。
-7. 没有把 Rust native `so/dll` 热卸载作为 `HostExtension` 目标方案。
+5. 已区分缓存策略 owner 和缓存实现 owner，Redis 只作为 HostExtension 实现。
+6. 已明确 RuntimeExtension 与 CapabilityPlugin 不能直接持有 Redis 等基础设施连接。
+7. 没有把 `RuntimeExtension` 和 `CapabilityPlugin` 混成同一类插件。
+8. 没有要求把插件源码移出主仓。
+9. 没有把 Rust native `so/dll` 热卸载作为 `HostExtension` 目标方案。
