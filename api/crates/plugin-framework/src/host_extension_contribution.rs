@@ -1,8 +1,6 @@
 use serde::Deserialize;
 
-use crate::{
-    error::{FrameworkResult, PluginFrameworkError},
-};
+use crate::error::{FrameworkResult, PluginFrameworkError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -80,10 +78,7 @@ fn validate_host_extension_contribution_manifest(
     validate_non_empty(&manifest.native.entry_symbol, "native.entry_symbol")?;
 
     for provider in &manifest.infrastructure_providers {
-        validate_non_empty(
-            &provider.contract,
-            "infrastructure_providers[].contract",
-        )?;
+        validate_non_empty(&provider.contract, "infrastructure_providers[].contract")?;
         validate_non_empty(
             &provider.provider_code,
             "infrastructure_providers[].provider_code",

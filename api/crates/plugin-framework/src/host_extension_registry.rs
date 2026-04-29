@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::error::{FrameworkResult, PluginFrameworkError};
 use crate::host_extension_contribution::{
     HostExtensionBootstrapPhase, HostInfrastructureProviderManifest,
 };
-use crate::error::{FrameworkResult, PluginFrameworkError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegisteredHostExtension {

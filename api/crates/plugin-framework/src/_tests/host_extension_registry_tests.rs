@@ -78,15 +78,13 @@ fn registry_allows_explicit_contract_override() {
 fn registry_rejects_duplicate_infrastructure_provider() {
     let mut registry = HostExtensionRegistry::default();
     let mut local = registered_extension("local-infra-host");
-    local.infrastructure_providers =
-        vec![infrastructure_provider("storage-ephemeral", "redis")];
+    local.infrastructure_providers = vec![infrastructure_provider("storage-ephemeral", "redis")];
     registry
         .register(local)
         .expect("first provider should register");
 
     let mut redis = registered_extension("redis-infra-host");
-    redis.infrastructure_providers =
-        vec![infrastructure_provider("storage-ephemeral", "redis")];
+    redis.infrastructure_providers = vec![infrastructure_provider("storage-ephemeral", "redis")];
     let error = registry
         .register(redis)
         .expect_err("duplicate provider should fail");
@@ -100,15 +98,13 @@ fn registry_rejects_duplicate_infrastructure_provider() {
 fn registry_rejects_multiple_default_providers_for_contract() {
     let mut registry = HostExtensionRegistry::default();
     let mut local = registered_extension("local-infra-host");
-    local.infrastructure_providers =
-        vec![infrastructure_provider("storage-ephemeral", "local")];
+    local.infrastructure_providers = vec![infrastructure_provider("storage-ephemeral", "local")];
     registry
         .register(local)
         .expect("first default provider should register");
 
     let mut redis = registered_extension("redis-infra-host");
-    redis.infrastructure_providers =
-        vec![infrastructure_provider("storage-ephemeral", "redis")];
+    redis.infrastructure_providers = vec![infrastructure_provider("storage-ephemeral", "redis")];
     let error = registry
         .register(redis)
         .expect_err("second default provider should fail");
