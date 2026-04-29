@@ -37,11 +37,7 @@ impl ResourceActionRegistry {
         Ok(())
     }
 
-    pub fn action(
-        &self,
-        resource_code: &str,
-        action_code: &str,
-    ) -> Option<&ActionDefinition> {
+    pub fn action(&self, resource_code: &str, action_code: &str) -> Option<&ActionDefinition> {
         self.actions
             .get(&(resource_code.to_string(), action_code.to_string()))
     }

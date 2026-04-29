@@ -134,7 +134,10 @@ fn map_file_storage_error(error: storage_object::FileStorageError) -> ApiError {
 
 fn upload_file_action_kernel(state: Arc<ApiState>) -> Result<ResourceActionKernel, ApiError> {
     let mut registry = ResourceActionRegistry::default();
-    registry.register_resource(ResourceDefinition::core("files", ResourceScopeKind::Workspace))?;
+    registry.register_resource(ResourceDefinition::core(
+        "files",
+        ResourceScopeKind::Workspace,
+    ))?;
     registry.register_action(ActionDefinition::core("files", "upload"))?;
 
     let mut kernel = ResourceActionKernel::new(registry);
@@ -202,11 +205,11 @@ pub async fn upload_file(
     }
 
     let file_table_id = parse_uuid(
-            file_table_id
-                .as_deref()
-                .ok_or_else(|| invalid_input("file_table_id"))?,
-            "file_table_id",
-        )?;
+        file_table_id
+            .as_deref()
+            .ok_or_else(|| invalid_input("file_table_id"))?,
+        "file_table_id",
+    )?;
     let output = upload_file_action_kernel(state.clone())?
         .dispatch_json(
             "files",
@@ -224,10 +227,7 @@ pub async fn upload_file(
         control_plane::errors::ControlPlaneError::InvalidInput("file_upload_result")
     })?;
 
-    Ok((
-        StatusCode::CREATED,
-        Json(ApiSuccess::new(response)),
-    ))
+    Ok((StatusCode::CREATED, Json(ApiSuccess::new(response))))
 }
 
 #[utoipa::path(

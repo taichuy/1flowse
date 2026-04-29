@@ -8,7 +8,10 @@ fn test_kernel_with_plugins_install_handler(
 ) -> ResourceActionKernel {
     let mut registry = ResourceActionRegistry::default();
     registry
-        .register_resource(ResourceDefinition::core("plugins", ResourceScopeKind::System))
+        .register_resource(ResourceDefinition::core(
+            "plugins",
+            ResourceScopeKind::System,
+        ))
         .unwrap();
     registry
         .register_action(ActionDefinition::core("plugins", "install"))
@@ -28,7 +31,10 @@ fn test_kernel_with_plugins_install_handler(
 fn registry_rejects_duplicate_action() {
     let mut registry = ResourceActionRegistry::default();
     registry
-        .register_resource(ResourceDefinition::core("plugins", ResourceScopeKind::System))
+        .register_resource(ResourceDefinition::core(
+            "plugins",
+            ResourceScopeKind::System,
+        ))
         .unwrap();
     registry
         .register_action(ActionDefinition::core("plugins", "install"))

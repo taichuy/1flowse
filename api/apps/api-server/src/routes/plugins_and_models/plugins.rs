@@ -662,10 +662,7 @@ pub async fn install_plugin(
         control_plane::errors::ControlPlaneError::InvalidInput("plugin_install_result")
     })?;
 
-    Ok((
-        StatusCode::CREATED,
-        Json(ApiSuccess::new(response)),
-    ))
+    Ok((StatusCode::CREATED, Json(ApiSuccess::new(response))))
 }
 
 #[utoipa::path(

@@ -85,7 +85,11 @@ impl ActionPipeline {
     pub fn execute<T>(&self, execute: impl FnOnce() -> T) -> ActionPipelineOutcome<T> {
         let mut warnings = Vec::new();
 
-        for hook in self.hooks.iter().filter(|hook| hook.stage <= ActionHookStage::BeforeExecute) {
+        for hook in self
+            .hooks
+            .iter()
+            .filter(|hook| hook.stage <= ActionHookStage::BeforeExecute)
+        {
             match &hook.result {
                 ActionHookResult::Continue => {}
                 ActionHookResult::Deny { code, message } => {
@@ -109,7 +113,11 @@ impl ActionPipeline {
 
         let output = execute();
 
-        for hook in self.hooks.iter().filter(|hook| hook.stage > ActionHookStage::BeforeExecute) {
+        for hook in self
+            .hooks
+            .iter()
+            .filter(|hook| hook.stage > ActionHookStage::BeforeExecute)
+        {
             match &hook.result {
                 ActionHookResult::Continue => {}
                 ActionHookResult::Deny { code, message }

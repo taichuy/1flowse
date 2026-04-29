@@ -9,6 +9,4 @@ pub use pipeline::{
     ActionPipeline, ActionPipelineOutcome,
 };
 pub use registry::ResourceActionRegistry;
-pub use types::{
-    ActionDefinition, ResourceDefinition, ResourceOwnerKind, ResourceScopeKind,
-};
+pub use types::{ActionDefinition, ResourceDefinition, ResourceOwnerKind, ResourceScopeKind};
