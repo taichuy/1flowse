@@ -97,6 +97,20 @@ Task 1 spec review FAIL follow-up validation record, 2026-04-30:
   - `git diff --check`
 - QA note: Preview sessions now persist a `sha256:` fingerprint over redacted preview input, not serialized secret JSON. Secret rotation now returns a repository-owned `RotateDataSourceSecretOutput` containing both the new secret row and the instance updated in the same PostgreSQL transaction after locking the instance row; service no longer performs a separate config-marker update after rotation.
 
+Task 1 spec review FAIL second follow-up validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane validate_preview_and_catalog_redact_embedded_secret_substrings` failed because validate output still contained `embedded-secret-value` inside `Bearer embedded-secret-value`.
+  - `cargo test --manifest-path api/Cargo.toml -p api-server data_source_routes_create_validate_preview_and_catalog -- --test-threads=1` failed because the validate route response still contained `route-secret-echo` inside runtime-echoed output/catalog data.
+- Green evidence:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p storage-postgres data_source_repository_tests -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server data_sources_routes -- --test-threads=1`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- QA note: Runtime `discover_catalog` output is now recursively redacted before contract parsing, catalog cache upsert, and validate response mapping. Recursive redaction now replaces stored secret substrings inside string values, so validate output, preview rows/cursor, and catalog JSON redact shapes like `Bearer <secret>` to `Bearer ***` while preserving prior exact-value behavior.
+
 ### Task 2: Data Source Plugin CRUD Contract
 
 **Files:**

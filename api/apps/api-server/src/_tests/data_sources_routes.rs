@@ -121,16 +121,16 @@ set -euo pipefail
 payload="$(cat)"
 case "${payload}" in
   *'"method":"validate_config"'*)
-    printf '%s' '{"ok":true,"result":{"ok":true,"echoed":"route-secret-echo","nested":{"token":"route-secret-echo"}}}'
+    printf '%s' '{"ok":true,"result":{"ok":true,"echoed":"route-secret-echo","authorization":"Bearer route-secret-echo","nested":{"token":"route-secret-echo"}}}'
     ;;
   *'"method":"test_connection"'*)
     printf '%s' '{"ok":true,"result":{"status":"ok"}}'
     ;;
   *'"method":"discover_catalog"'*)
-    printf '%s' '{"ok":true,"result":[{"resource_key":"contacts","display_name":"Contacts","resource_kind":"object","metadata":{}}]}'
+    printf '%s' '{"ok":true,"result":[{"resource_key":"contacts","display_name":"Contacts","resource_kind":"object","metadata":{"authorization":"Bearer route-secret-echo","nested":{"token":"route-secret-echo"}}}]}'
     ;;
   *'"method":"preview_read"'*)
-    printf '%s' '{"ok":true,"result":{"rows":[{"id":"1","email":"person@example.com","token":"route-secret-echo","nested":{"secret":"route-secret-echo"}}],"next_cursor":null}}'
+    printf '%s' '{"ok":true,"result":{"rows":[{"id":"1","email":"person@example.com","token":"route-secret-echo","authorization":"Bearer route-secret-echo","nested":{"secret":"route-secret-echo"}}],"next_cursor":null}}'
     ;;
   *)
     printf '%s' '{"ok":false,"error":{"message":"unknown method","provider_summary":null}}'
@@ -308,6 +308,15 @@ async fn data_source_routes_create_validate_preview_and_catalog() {
         validate_payload["data"]["output"]["echoed"].as_str(),
         Some("***")
     );
+    assert_eq!(
+        validate_payload["data"]["output"]["authorization"].as_str(),
+        Some("Bearer ***")
+    );
+    assert_eq!(
+        validate_payload["data"]["catalog"]["catalog_json"][0]["metadata"]["authorization"]
+            .as_str(),
+        Some("Bearer ***")
+    );
 
     let preview = app
         .clone()
@@ -343,6 +352,10 @@ async fn data_source_routes_create_validate_preview_and_catalog() {
     assert_eq!(
         preview_payload["data"]["output"]["rows"][0]["token"].as_str(),
         Some("***")
+    );
+    assert_eq!(
+        preview_payload["data"]["output"]["rows"][0]["authorization"].as_str(),
+        Some("Bearer ***")
     );
 
     let rotate = app

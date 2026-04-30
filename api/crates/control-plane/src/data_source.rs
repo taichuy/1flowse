@@ -284,6 +284,7 @@ where
             .runtime
             .discover_catalog(&installation, existing.config_json.clone(), secret_json)
             .await?;
+        let catalog_json = redact_value(&catalog_json, &secret_values);
         let _catalog_entries: Vec<DataSourceCatalogEntry> =
             serde_json::from_value(catalog_json.clone())?;
         let now = OffsetDateTime::now_utc();
@@ -751,7 +752,7 @@ fn collect_secret_strings_into(value: &Value, secrets: &mut HashSet<String>) {
 
 fn redact_value(value: &Value, secrets: &HashSet<String>) -> Value {
     match value {
-        Value::String(raw) if secrets.contains(raw) => json!("***"),
+        Value::String(raw) => Value::String(redact_string(raw, secrets)),
         Value::Array(items) => Value::Array(
             items
                 .iter()
@@ -768,6 +769,24 @@ fn redact_value(value: &Value, secrets: &HashSet<String>) -> Value {
     }
 }
 
+fn redact_string(raw: &str, secrets: &HashSet<String>) -> String {
+    if secrets.is_empty() {
+        return raw.to_string();
+    }
+
+    let mut ordered_secrets = secrets.iter().collect::<Vec<_>>();
+    ordered_secrets
+        .sort_by(|left, right| right.len().cmp(&left.len()).then_with(|| left.cmp(right)));
+
+    let mut redacted = raw.to_string();
+    for secret in ordered_secrets {
+        if !secret.is_empty() {
+            redacted = redacted.replace(secret, "***");
+        }
+    }
+    redacted
+}
+
 fn redact_preview_output(
     output: DataSourcePreviewReadOutput,
     secrets: &HashSet<String>,
@@ -778,13 +797,9 @@ fn redact_preview_output(
             .into_iter()
             .map(|row| redact_value(&row, secrets))
             .collect(),
-        next_cursor: output.next_cursor.map(|cursor| {
-            if secrets.contains(&cursor) {
-                "***".to_string()
-            } else {
-                cursor
-            }
-        }),
+        next_cursor: output
+            .next_cursor
+            .map(|cursor| redact_string(&cursor, secrets)),
     }
 }
 

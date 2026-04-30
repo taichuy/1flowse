@@ -608,11 +608,14 @@ impl DataSourceRuntimePort for StubDataSourceRuntime {
         secret_json: Value,
     ) -> Result<Value> {
         if self.echo_secret_output {
+            let secret = secret_json["client_secret"].as_str().unwrap_or_default();
             return Ok(json!({
                 "ok": true,
                 "echoed": secret_json["client_secret"].clone(),
+                "authorization": format!("Bearer {secret}"),
                 "nested": {
                     "token": secret_json["client_secret"].clone(),
+                    "authorization": format!("Token {secret}"),
                 }
             }));
         }
@@ -632,8 +635,22 @@ impl DataSourceRuntimePort for StubDataSourceRuntime {
         &self,
         _installation: &PluginInstallationRecord,
         _config_json: Value,
-        _secret_json: Value,
+        secret_json: Value,
     ) -> Result<Value> {
+        if self.echo_secret_output {
+            let secret = secret_json["client_secret"].as_str().unwrap_or_default();
+            return Ok(serde_json::to_value(vec![DataSourceCatalogEntry {
+                resource_key: "contacts".to_string(),
+                display_name: "Contacts".to_string(),
+                resource_kind: "object".to_string(),
+                metadata: json!({
+                    "authorization": format!("Bearer {secret}"),
+                    "nested": {
+                        "token": secret_json["client_secret"].clone(),
+                    },
+                }),
+            }])?);
+        }
         Ok(serde_json::to_value(vec![DataSourceCatalogEntry {
             resource_key: "contacts".to_string(),
             display_name: "Contacts".to_string(),
@@ -650,10 +667,12 @@ impl DataSourceRuntimePort for StubDataSourceRuntime {
         let echoed_secret = input.connection.secret_json["client_secret"].clone();
         self.preview_inputs.write().await.push(input);
         if self.echo_secret_output {
+            let secret = echoed_secret.as_str().unwrap_or_default();
             return Ok(DataSourcePreviewReadOutput {
                 rows: vec![json!({
                     "id": "1",
                     "token": echoed_secret,
+                    "authorization": format!("Bearer {secret}"),
                     "nested": { "secret": echoed_secret },
                     "items": [echoed_secret]
                 })],
@@ -1028,6 +1047,70 @@ async fn validate_and_preview_redact_runtime_echoed_secret_values() {
     assert!(!serde_json::to_string(&preview_session.preview_json)
         .unwrap()
         .contains(plaintext));
+}
+
+#[tokio::test]
+async fn validate_preview_and_catalog_redact_embedded_secret_substrings() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::echoing_secret();
+    let service = DataSourceService::new(repository.clone(), runtime);
+    let plaintext = "embedded-secret-value";
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": plaintext }),
+        })
+        .await
+        .unwrap();
+
+    let validated = service
+        .validate_instance(ValidateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+        })
+        .await
+        .unwrap();
+    let preview = service
+        .preview_read(PreviewDataSourceReadCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            resource_key: "contacts".into(),
+            limit: Some(20),
+            cursor: None,
+            options_json: json!({}),
+        })
+        .await
+        .unwrap();
+
+    let validate_text = validated.output.to_string();
+    let catalog_text = serde_json::to_string(&validated.catalog.catalog_json).unwrap();
+    let stored_catalog = repository
+        .caches
+        .read()
+        .await
+        .get(&created.instance.id)
+        .expect("catalog cache should be persisted")
+        .catalog_json
+        .clone();
+    let stored_catalog_text = serde_json::to_string(&stored_catalog).unwrap();
+    let preview_text = serde_json::to_string(&preview.output.rows).unwrap();
+
+    assert!(!validate_text.contains(plaintext));
+    assert!(!catalog_text.contains(plaintext));
+    assert!(!stored_catalog_text.contains(plaintext));
+    assert!(!preview_text.contains(plaintext));
+    assert!(validate_text.contains("Bearer ***"));
+    assert!(catalog_text.contains("Bearer ***"));
+    assert!(stored_catalog_text.contains("Bearer ***"));
+    assert!(preview_text.contains("Bearer ***"));
 }
 
 #[tokio::test]
