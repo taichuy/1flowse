@@ -732,29 +732,31 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
         let actor_user_id = nullable_actor_user_id(actor_user_id);
 
         let transactional_result = async {
-            match field.field_kind {
-                domain::ModelFieldKind::ManyToMany => {
-                    if let Some(relation_target) = relation_target.as_ref() {
-                        drop_join_table(
+            if model.source_kind == domain::DataModelSourceKind::MainSource {
+                match field.field_kind {
+                    domain::ModelFieldKind::ManyToMany => {
+                        if let Some(relation_target) = relation_target.as_ref() {
+                            drop_join_table(
+                                &mut tx,
+                                &join_table_name(
+                                    &model.code,
+                                    model.id,
+                                    &relation_target.code,
+                                    relation_target.id,
+                                ),
+                            )
+                            .await?;
+                        }
+                    }
+                    domain::ModelFieldKind::OneToMany => {}
+                    _ => {
+                        drop_runtime_column(
                             &mut tx,
-                            &join_table_name(
-                                &model.code,
-                                model.id,
-                                &relation_target.code,
-                                relation_target.id,
-                            ),
+                            &model.physical_table_name,
+                            &field.physical_column_name,
                         )
                         .await?;
                     }
-                }
-                domain::ModelFieldKind::OneToMany => {}
-                _ => {
-                    drop_runtime_column(
-                        &mut tx,
-                        &model.physical_table_name,
-                        &field.physical_column_name,
-                    )
-                    .await?;
                 }
             }
             sqlx::query("delete from model_fields where id = $1 and data_model_id = $2")

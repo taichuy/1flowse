@@ -230,8 +230,8 @@ Task 3a validation record, 2026-04-30:
   - `cargo test --manifest-path api/Cargo.toml -p storage-postgres model_definition_repository_tests -- --test-threads=1`
   - `cargo check --manifest-path api/Cargo.toml -p api-server`
   - `git diff --check`
-- Scope note: This commit completes the external Data Model metadata/storage mapping slice: `source_kind`, `external_resource_key`, and `external_field_key` are persisted and reloaded, and external-source Data Model creation skips local runtime table/column DDL. It also documents `supports_transactions` / `transaction_id` semantics and adds get/create/update data-source DTO JSON shape tests.
-- Remaining Task 3 scope: runtime CRUD dispatch through `RuntimeRecordBackend`, plugin capability snapshot persistence, and complete external safety readiness remain for Task 3a-2 or Task 3b. In particular, `unsafe_external_source` readiness and `system_all` explicit confirmation are not implemented in this slice beyond existing domain/status scaffolding.
+- Scope note: Task 3a only completes the repository/storage metadata mapping slice. `source_kind`, `external_resource_key`, and `external_field_key` are persisted and reloaded, and external-source Data Model create/add/delete storage paths skip local runtime table/column/relation DDL. It also documents `supports_transactions` / `transaction_id` semantics and adds get/create/update data-source DTO JSON shape tests.
+- Remaining Task 3 scope: service/API/catalog mapping is still incomplete, including `CreateModelDefinitionCommand.external_resource_key`, `AddModelFieldCommand.external_field_key`, console route/data-source catalog mapping, plugin capability snapshot persistence, `unsafe_external_source` readiness, `system_all` explicit confirmation, runtime CRUD dispatch through `RuntimeRecordBackend`, and REST connector fixture behavior. This Task 3a record must not be read as complete Task 3 external Data Model mapping.
 
 ### Task 4: REST API Connector Rules
 

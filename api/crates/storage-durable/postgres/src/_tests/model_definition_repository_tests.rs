@@ -655,8 +655,7 @@ async fn model_definition_repository_reads_data_source_defaults_only_inside_work
 }
 
 #[tokio::test]
-async fn model_definition_repository_persists_external_source_mapping_without_local_table_columns()
-{
+async fn model_definition_repository_deletes_external_source_field_without_local_ddl() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();
     let store = PgControlPlaneStore::new(pool);
@@ -754,6 +753,17 @@ async fn model_definition_repository_persists_external_source_mapping_without_lo
         reloaded.fields[0].external_field_key.as_deref(),
         Some("properties.email")
     );
+
+    ModelDefinitionRepository::delete_model_field(&store, actor_user_id, created.id, field.id)
+        .await
+        .unwrap();
+
+    let reloaded_after_delete =
+        ModelDefinitionRepository::get_model_definition(&store, workspace_id, created.id)
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(reloaded_after_delete.fields.len(), 0);
 }
 
 #[tokio::test]
