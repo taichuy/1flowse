@@ -554,6 +554,9 @@ fn to_runtime_model_metadata(model: domain::ModelDefinitionRecord) -> ModelMetad
         status: model.status,
         scope_kind: model.scope_kind,
         scope_id: model.scope_id,
+        data_source_instance_id: model.data_source_instance_id,
+        source_kind: model.source_kind,
+        external_resource_key: model.external_resource_key,
         physical_table_name: model.physical_table_name,
         scope_column_name: "scope_id".into(),
         fields: model

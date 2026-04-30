@@ -301,6 +301,16 @@ Task 3a-2b catalog mapping secret-redaction fix validation record, 2026-04-30:
   - `git diff --check`
 - Scope note: `map_resource_to_model` now recursively redacts `describe_resource` descriptor output with stored secret string values before deriving Data Model title, external resource key, fields, field display options, and audit payload. The runtime still receives the original stored config and secret input. Console route/runtime dispatch/REST fixture remain outside this fix.
 
+Task 3b runtime-core dispatch slice validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p runtime-core external_source_runtime_crud_dispatches_to_data_source_backend_after_acl_scope_resolution` failed before implementation because `DataSourceRuntimeRecordBackend` did not exist.
+- Green evidence:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_engine_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_acl_tests`
+- Scope note: This narrowed Task 3b slice adds the runtime-core source-kind dispatch abstraction and fake-backend coverage for external-source list/get/create/update/delete after runtime ACL scope resolution. It maps runtime filters, sorts, pagination, expand options, payload, record id, owner context, and scope context into the data-source CRUD DTOs, and keeps main-source CRUD on the existing `RuntimeRecordRepository`. Api-server/plugin-runner host wiring remains the next Task 3b slice. REST connector fixture behavior remains Task 4.
+
 ### Task 4: REST API Connector Rules
 
 **Files:**

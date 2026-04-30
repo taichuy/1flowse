@@ -6,6 +6,13 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use plugin_framework::data_source_contract::{
+    DataSourceConfigInput, DataSourceCreateRecordInput, DataSourceCreateRecordOutput,
+    DataSourceDeleteRecordInput, DataSourceDeleteRecordOutput, DataSourceGetRecordInput,
+    DataSourceGetRecordOutput, DataSourceListRecordsInput, DataSourceListRecordsOutput,
+    DataSourceRecordFilter, DataSourceRecordPage, DataSourceRecordScopeContext,
+    DataSourceRecordSort, DataSourceUpdateRecordInput, DataSourceUpdateRecordOutput,
+};
 use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
@@ -69,6 +76,39 @@ pub struct RuntimeDeleteInput {
     pub scope_grant: Option<RuntimeScopeGrant>,
 }
 
+#[async_trait]
+pub trait DataSourceRuntimeRecordBackend: Send + Sync {
+    async fn list_records(
+        &self,
+        data_source_instance_id: Uuid,
+        input: DataSourceListRecordsInput,
+    ) -> Result<DataSourceListRecordsOutput>;
+
+    async fn get_record(
+        &self,
+        data_source_instance_id: Uuid,
+        input: DataSourceGetRecordInput,
+    ) -> Result<DataSourceGetRecordOutput>;
+
+    async fn create_record(
+        &self,
+        data_source_instance_id: Uuid,
+        input: DataSourceCreateRecordInput,
+    ) -> Result<DataSourceCreateRecordOutput>;
+
+    async fn update_record(
+        &self,
+        data_source_instance_id: Uuid,
+        input: DataSourceUpdateRecordInput,
+    ) -> Result<DataSourceUpdateRecordOutput>;
+
+    async fn delete_record(
+        &self,
+        data_source_instance_id: Uuid,
+        input: DataSourceDeleteRecordInput,
+    ) -> Result<DataSourceDeleteRecordOutput>;
+}
+
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum RuntimeModelError {
     #[error("runtime model unavailable: {0}")]
@@ -121,6 +161,7 @@ pub struct RuntimeEngine {
     validator: Arc<dyn RecordValidator>,
     registry: RuntimeModelRegistry,
     records: Arc<dyn RuntimeRecordRepository>,
+    data_source_records: Option<Arc<dyn DataSourceRuntimeRecordBackend>>,
 }
 
 impl RuntimeEngine {
@@ -130,6 +171,21 @@ impl RuntimeEngine {
             validator: Arc::new(NoopRecordValidator),
             registry,
             records,
+            data_source_records: None,
+        }
+    }
+
+    pub fn new_with_data_source_backend(
+        registry: RuntimeModelRegistry,
+        records: Arc<dyn RuntimeRecordRepository>,
+        data_source_records: Arc<dyn DataSourceRuntimeRecordBackend>,
+    ) -> Self {
+        Self {
+            default_value_resolver: Arc::new(PassthroughValueResolver),
+            validator: Arc::new(NoopRecordValidator),
+            registry,
+            records,
+            data_source_records: Some(data_source_records),
         }
     }
 
@@ -147,6 +203,20 @@ impl RuntimeEngine {
         )
     }
 
+    pub fn for_tests_with_models_and_data_source_backend(
+        models: Vec<ModelMetadata>,
+        data_source_records: Arc<dyn DataSourceRuntimeRecordBackend>,
+    ) -> Self {
+        let registry = RuntimeModelRegistry::default();
+        registry.rebuild(models);
+
+        Self::new_with_data_source_backend(
+            registry,
+            Arc::new(InMemoryRuntimeRecordRepository::default()),
+            data_source_records,
+        )
+    }
+
     pub fn registry(&self) -> &RuntimeModelRegistry {
         &self.registry
     }
@@ -161,20 +231,24 @@ impl RuntimeEngine {
             input.scope_grant.as_ref(),
         )?;
 
-        self.records
-            .list_records(
-                &metadata,
-                RuntimeListQuery {
-                    scope_id: access_scope.scope_id,
-                    owner_user_id: access_scope.owner_user_id,
-                    filters: input.filters,
-                    sorts: input.sorts,
-                    expand_relations: input.expand_relations,
-                    page: input.page,
-                    page_size: input.page_size,
-                },
-            )
-            .await
+        let query = RuntimeListQuery {
+            scope_id: access_scope.scope_id,
+            owner_user_id: access_scope.owner_user_id,
+            filters: input.filters,
+            sorts: input.sorts,
+            expand_relations: input.expand_relations,
+            page: input.page,
+            page_size: input.page_size,
+        };
+
+        match metadata.source_kind {
+            domain::DataModelSourceKind::MainSource => {
+                self.records.list_records(&metadata, query).await
+            }
+            domain::DataModelSourceKind::ExternalSource => {
+                self.list_external_records(&metadata, query).await
+            }
+        }
     }
 
     pub async fn get_record(&self, input: RuntimeGetInput) -> Result<Option<Value>> {
@@ -187,14 +261,22 @@ impl RuntimeEngine {
             input.scope_grant.as_ref(),
         )?;
 
-        self.records
-            .get_record(
-                &metadata,
-                access_scope.scope_id,
-                access_scope.owner_user_id,
-                &input.record_id,
-            )
-            .await
+        match metadata.source_kind {
+            domain::DataModelSourceKind::MainSource => {
+                self.records
+                    .get_record(
+                        &metadata,
+                        access_scope.scope_id,
+                        access_scope.owner_user_id,
+                        &input.record_id,
+                    )
+                    .await
+            }
+            domain::DataModelSourceKind::ExternalSource => {
+                self.get_external_record(&metadata, access_scope, input.record_id)
+                    .await
+            }
+        }
     }
 
     pub async fn create_record(&self, input: RuntimeCreateInput) -> Result<Value> {
@@ -217,9 +299,22 @@ impl RuntimeEngine {
             .validate(input.actor.user_id, &input.model_code, &payload)
             .await?;
 
-        self.records
-            .create_record(&metadata, input.actor.user_id, scope_id, payload)
-            .await
+        match metadata.source_kind {
+            domain::DataModelSourceKind::MainSource => {
+                self.records
+                    .create_record(&metadata, input.actor.user_id, scope_id, payload)
+                    .await
+            }
+            domain::DataModelSourceKind::ExternalSource => {
+                self.create_external_record(
+                    &metadata,
+                    access_scope.scope_id,
+                    Some(input.actor.user_id),
+                    payload,
+                )
+                .await
+            }
+        }
     }
 
     pub async fn update_record(&self, input: RuntimeUpdateInput) -> Result<Value> {
@@ -235,16 +330,24 @@ impl RuntimeEngine {
             .validate(input.actor.user_id, &input.model_code, &input.payload)
             .await?;
 
-        self.records
-            .update_record(
-                &metadata,
-                input.actor.user_id,
-                access_scope.scope_id,
-                access_scope.owner_user_id,
-                &input.record_id,
-                input.payload,
-            )
-            .await
+        match metadata.source_kind {
+            domain::DataModelSourceKind::MainSource => {
+                self.records
+                    .update_record(
+                        &metadata,
+                        input.actor.user_id,
+                        access_scope.scope_id,
+                        access_scope.owner_user_id,
+                        &input.record_id,
+                        input.payload,
+                    )
+                    .await
+            }
+            domain::DataModelSourceKind::ExternalSource => {
+                self.update_external_record(&metadata, access_scope, input.record_id, input.payload)
+                    .await
+            }
+        }
     }
 
     pub async fn delete_record(&self, input: RuntimeDeleteInput) -> Result<Value> {
@@ -256,15 +359,22 @@ impl RuntimeEngine {
             metadata.model_id,
             input.scope_grant.as_ref(),
         )?;
-        let deleted = self
-            .records
-            .delete_record(
-                &metadata,
-                access_scope.scope_id,
-                access_scope.owner_user_id,
-                &input.record_id,
-            )
-            .await?;
+        let deleted = match metadata.source_kind {
+            domain::DataModelSourceKind::MainSource => {
+                self.records
+                    .delete_record(
+                        &metadata,
+                        access_scope.scope_id,
+                        access_scope.owner_user_id,
+                        &input.record_id,
+                    )
+                    .await?
+            }
+            domain::DataModelSourceKind::ExternalSource => {
+                self.delete_external_record(&metadata, access_scope, input.record_id)
+                    .await?
+            }
+        };
 
         if !deleted {
             return Err(anyhow!("runtime record not found"));
@@ -309,6 +419,186 @@ impl RuntimeEngine {
             &runtime_model.metadata.model_code,
             runtime_model.availability,
         )
+    }
+
+    async fn list_external_records(
+        &self,
+        metadata: &ModelMetadata,
+        query: RuntimeListQuery,
+    ) -> Result<RuntimeListResult> {
+        let output = self
+            .external_backend()?
+            .list_records(
+                external_data_source_instance_id(metadata)?,
+                DataSourceListRecordsInput {
+                    connection: DataSourceConfigInput::default(),
+                    resource_key: external_resource_key(metadata)?,
+                    context: data_source_context(query.scope_id, query.owner_user_id),
+                    filters: query
+                        .filters
+                        .into_iter()
+                        .map(|filter| DataSourceRecordFilter {
+                            field_key: external_field_key(metadata, &filter.field_code),
+                            operator: filter.operator,
+                            value: filter.value,
+                        })
+                        .collect(),
+                    sort: query
+                        .sorts
+                        .into_iter()
+                        .map(|sort| DataSourceRecordSort {
+                            field_key: external_field_key(metadata, &sort.field_code),
+                            descending: sort.direction.eq_ignore_ascii_case("desc"),
+                        })
+                        .collect(),
+                    page: Some(data_source_page(query.page, query.page_size)),
+                    options_json: serde_json::json!({
+                        "expand_relations": query.expand_relations
+                    }),
+                },
+            )
+            .await?;
+
+        Ok(RuntimeListResult {
+            total: output.total_count.unwrap_or(output.rows.len() as u64) as i64,
+            items: output.rows,
+        })
+    }
+
+    async fn get_external_record(
+        &self,
+        metadata: &ModelMetadata,
+        access_scope: crate::runtime_acl::RuntimeAccessScope,
+        record_id: String,
+    ) -> Result<Option<Value>> {
+        self.external_backend()?
+            .get_record(
+                external_data_source_instance_id(metadata)?,
+                DataSourceGetRecordInput {
+                    connection: DataSourceConfigInput::default(),
+                    resource_key: external_resource_key(metadata)?,
+                    record_id,
+                    context: data_source_context(access_scope.scope_id, access_scope.owner_user_id),
+                    options_json: Value::Object(Default::default()),
+                },
+            )
+            .await
+            .map(|output| output.record)
+    }
+
+    async fn create_external_record(
+        &self,
+        metadata: &ModelMetadata,
+        scope_id: Option<Uuid>,
+        owner_user_id: Option<Uuid>,
+        payload: Value,
+    ) -> Result<Value> {
+        self.external_backend()?
+            .create_record(
+                external_data_source_instance_id(metadata)?,
+                DataSourceCreateRecordInput {
+                    connection: DataSourceConfigInput::default(),
+                    resource_key: external_resource_key(metadata)?,
+                    record: payload,
+                    context: data_source_context(scope_id, owner_user_id),
+                    transaction_id: None,
+                    options_json: Value::Object(Default::default()),
+                },
+            )
+            .await
+            .map(|output| output.record)
+    }
+
+    async fn update_external_record(
+        &self,
+        metadata: &ModelMetadata,
+        access_scope: crate::runtime_acl::RuntimeAccessScope,
+        record_id: String,
+        payload: Value,
+    ) -> Result<Value> {
+        self.external_backend()?
+            .update_record(
+                external_data_source_instance_id(metadata)?,
+                DataSourceUpdateRecordInput {
+                    connection: DataSourceConfigInput::default(),
+                    resource_key: external_resource_key(metadata)?,
+                    record_id,
+                    patch: payload,
+                    context: data_source_context(access_scope.scope_id, access_scope.owner_user_id),
+                    transaction_id: None,
+                    options_json: Value::Object(Default::default()),
+                },
+            )
+            .await
+            .map(|output| output.record)
+    }
+
+    async fn delete_external_record(
+        &self,
+        metadata: &ModelMetadata,
+        access_scope: crate::runtime_acl::RuntimeAccessScope,
+        record_id: String,
+    ) -> Result<bool> {
+        self.external_backend()?
+            .delete_record(
+                external_data_source_instance_id(metadata)?,
+                DataSourceDeleteRecordInput {
+                    connection: DataSourceConfigInput::default(),
+                    resource_key: external_resource_key(metadata)?,
+                    record_id,
+                    context: data_source_context(access_scope.scope_id, access_scope.owner_user_id),
+                    transaction_id: None,
+                    options_json: Value::Object(Default::default()),
+                },
+            )
+            .await
+            .map(|output| output.deleted)
+    }
+
+    fn external_backend(&self) -> Result<&Arc<dyn DataSourceRuntimeRecordBackend>> {
+        self.data_source_records
+            .as_ref()
+            .ok_or_else(|| anyhow!("external data source runtime backend is not configured"))
+    }
+}
+
+fn external_data_source_instance_id(metadata: &ModelMetadata) -> Result<Uuid> {
+    metadata
+        .data_source_instance_id
+        .ok_or_else(|| anyhow!("external data source instance is not configured"))
+}
+
+fn external_resource_key(metadata: &ModelMetadata) -> Result<String> {
+    metadata
+        .external_resource_key
+        .clone()
+        .ok_or_else(|| anyhow!("external resource key is not configured"))
+}
+
+fn external_field_key(metadata: &ModelMetadata, field_code: &str) -> String {
+    metadata
+        .field_by_code(field_code)
+        .and_then(|field| field.external_field_key.clone())
+        .unwrap_or_else(|| field_code.to_string())
+}
+
+fn data_source_context(
+    scope_id: Option<Uuid>,
+    owner_user_id: Option<Uuid>,
+) -> DataSourceRecordScopeContext {
+    DataSourceRecordScopeContext {
+        owner_id: owner_user_id.map(|id| id.to_string()),
+        scope_id: scope_id.map(|id| id.to_string()),
+    }
+}
+
+fn data_source_page(page: i64, page_size: i64) -> DataSourceRecordPage {
+    let page = page.max(1) as u64;
+    let page_size = page_size.max(1) as u64;
+    DataSourceRecordPage {
+        limit: Some(page_size.min(u32::MAX as u64) as u32),
+        cursor: None,
+        offset: Some((page - 1) * page_size),
     }
 }
 
@@ -586,6 +876,9 @@ fn test_model_metadata() -> ModelMetadata {
         status: domain::DataModelStatus::Published,
         scope_kind: domain::DataModelScopeKind::Workspace,
         scope_id: Uuid::nil(),
+        data_source_instance_id: None,
+        source_kind: domain::DataModelSourceKind::MainSource,
+        external_resource_key: None,
         physical_table_name: "rtm_workspace_demo_orders".into(),
         scope_column_name: "scope_id".into(),
         fields: vec![
