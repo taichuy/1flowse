@@ -6,16 +6,17 @@ use std::{
 use access_control::ensure_permission;
 use anyhow::Result;
 use async_trait::async_trait;
-use domain::DataModelScopeKind;
+use domain::{DataModelScopeKind, ScopeDataModelPermissionProfile};
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::{
     audit::audit_log,
     errors::ControlPlaneError,
     ports::{
-        AddModelFieldInput, CreateModelDefinitionInput, CreateScopeDataModelGrantInput,
-        ModelDefinitionRepository, UpdateModelDefinitionInput, UpdateModelDefinitionStatusInput,
-        UpdateModelFieldInput, UpdateScopeDataModelGrantInput,
+        AddModelFieldInput, ApiKeyDataModelReadinessRecord, CreateModelDefinitionInput,
+        CreateScopeDataModelGrantInput, ModelDefinitionRepository, UpdateModelDefinitionInput,
+        UpdateModelDefinitionStatusInput, UpdateModelFieldInput, UpdateScopeDataModelGrantInput,
     },
 };
 
@@ -88,6 +89,15 @@ pub struct DeleteModelFieldCommand {
 }
 
 pub struct CreateScopeDataModelGrantCommand {
+    pub actor_user_id: Uuid,
+    pub scope_kind: DataModelScopeKind,
+    pub scope_id: Uuid,
+    pub data_model_id: Uuid,
+    pub enabled: bool,
+    pub permission_profile: String,
+}
+
+pub struct UpdateScopeDataModelGrantCommand {
     pub actor_user_id: Uuid,
     pub scope_kind: DataModelScopeKind,
     pub scope_id: Uuid,
@@ -194,9 +204,11 @@ where
             .load_actor_context_for_user(actor_user_id)
             .await?;
         ensure_state_model_permission(&actor, "view")?;
-        self.repository
+        let models = self
+            .repository
             .list_model_definitions(actor.current_workspace_id)
-            .await
+            .await?;
+        self.with_effective_exposures(models).await
     }
 
     pub async fn create_model(
@@ -277,7 +289,7 @@ where
             ))
             .await?;
 
-        Ok(model)
+        self.with_effective_exposure(model).await
     }
 
     pub async fn update_model_status(
@@ -289,13 +301,19 @@ where
             .load_actor_context_for_user(command.actor_user_id)
             .await?;
         ensure_state_model_permission(&actor, "manage")?;
-        self.repository
+        let previous_model = self
+            .repository
             .get_model_definition(actor.current_workspace_id, command.model_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        let previous_effective = self.effective_api_exposure_status(&previous_model).await?;
 
-        let api_exposure_status =
-            normalize_api_exposure_for_status(command.status, command.api_exposure_status)?;
+        let candidate = domain::ModelDefinitionRecord {
+            status: command.status,
+            api_exposure_status: command.api_exposure_status,
+            ..previous_model
+        };
+        let api_exposure_status = self.normalized_api_exposure_for_status(&candidate).await?;
         let model = self
             .repository
             .update_model_definition_status(&UpdateModelDefinitionStatusInput {
@@ -319,6 +337,23 @@ where
                 }),
             ))
             .await?;
+        let model = self.with_effective_exposure(model).await?;
+        if previous_effective != model.api_exposure_status {
+            self.repository
+                .append_audit_log(&audit_log(
+                    Some(actor.current_workspace_id),
+                    Some(command.actor_user_id),
+                    "state_model",
+                    Some(command.model_id),
+                    "state_model.api_exposure_status_changed",
+                    serde_json::json!({
+                        "from": previous_effective.as_str(),
+                        "to": model.api_exposure_status.as_str(),
+                        "status": model.status.as_str(),
+                    }),
+                ))
+                .await?;
+        }
 
         Ok(model)
     }
@@ -334,10 +369,12 @@ where
             .await?;
         ensure_state_model_permission(&actor, "view")?;
 
-        self.repository
+        let model = self
+            .repository
             .get_model_definition(actor.current_workspace_id, model_id)
             .await?
-            .ok_or_else(|| ControlPlaneError::NotFound("model_definition").into())
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        self.with_effective_exposure(model).await
     }
 
     pub async fn update_model(
@@ -369,7 +406,7 @@ where
             ))
             .await?;
 
-        Ok(model)
+        self.with_effective_exposure(model).await
     }
 
     pub async fn add_field(
@@ -588,6 +625,178 @@ where
 
         Ok(grant)
     }
+
+    pub async fn update_scope_grant(
+        &self,
+        command: UpdateScopeDataModelGrantCommand,
+    ) -> Result<domain::ScopeDataModelGrantRecord> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
+        ensure_state_model_permission(&actor, "manage")?;
+        self.repository
+            .get_model_definition(actor.current_workspace_id, command.data_model_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+
+        let permission_profile =
+            domain::ScopeDataModelPermissionProfile::parse(&command.permission_profile)
+                .ok_or(ControlPlaneError::InvalidInput("permission_profile"))?;
+
+        let grant = self
+            .repository
+            .update_scope_data_model_grant(&UpdateScopeDataModelGrantInput {
+                scope_kind: command.scope_kind,
+                scope_id: command.scope_id,
+                data_model_id: command.data_model_id,
+                enabled: command.enabled,
+                permission_profile,
+            })
+            .await?;
+        self.repository
+            .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
+                Some(command.actor_user_id),
+                "state_model",
+                Some(command.data_model_id),
+                "state_model.scope_grant_updated",
+                serde_json::json!({
+                    "scope_kind": grant.scope_kind.as_str(),
+                    "scope_id": grant.scope_id,
+                    "enabled": grant.enabled,
+                    "permission_profile": grant.permission_profile.as_str(),
+                }),
+            ))
+            .await?;
+
+        Ok(grant)
+    }
+
+    async fn with_effective_exposures(
+        &self,
+        models: Vec<domain::ModelDefinitionRecord>,
+    ) -> Result<Vec<domain::ModelDefinitionRecord>> {
+        let mut effective_models = Vec::with_capacity(models.len());
+        for model in models {
+            effective_models.push(self.with_effective_exposure(model).await?);
+        }
+        Ok(effective_models)
+    }
+
+    async fn with_effective_exposure(
+        &self,
+        mut model: domain::ModelDefinitionRecord,
+    ) -> Result<domain::ModelDefinitionRecord> {
+        model.api_exposure_status = self.effective_api_exposure_status(&model).await?;
+        Ok(model)
+    }
+
+    async fn normalized_api_exposure_for_status(
+        &self,
+        model: &domain::ModelDefinitionRecord,
+    ) -> Result<domain::ApiExposureStatus> {
+        if model.status == domain::DataModelStatus::Draft {
+            return Ok(domain::ApiExposureStatus::Draft);
+        }
+        let effective = self.effective_api_exposure_status(model).await?;
+        if model.api_exposure_status == domain::ApiExposureStatus::ApiExposedReady {
+            return Ok(effective);
+        }
+        normalize_api_exposure_for_status(model.status, model.api_exposure_status)
+    }
+
+    async fn effective_api_exposure_status(
+        &self,
+        model: &domain::ModelDefinitionRecord,
+    ) -> Result<domain::ApiExposureStatus> {
+        match model.status {
+            domain::DataModelStatus::Draft => return Ok(domain::ApiExposureStatus::Draft),
+            domain::DataModelStatus::Disabled | domain::DataModelStatus::Broken => {
+                return Ok(match model.api_exposure_status {
+                    domain::ApiExposureStatus::Draft
+                    | domain::ApiExposureStatus::ApiExposedReady => {
+                        domain::ApiExposureStatus::ApiExposedNoPermission
+                    }
+                    exposure => exposure,
+                });
+            }
+            domain::DataModelStatus::Published => {}
+        }
+
+        let readiness = self.api_exposure_readiness(model).await?;
+        if !readiness.has_active_api_key {
+            return Ok(match model.api_exposure_status {
+                domain::ApiExposureStatus::ApiExposedReady
+                | domain::ApiExposureStatus::ApiExposedNoPermission => {
+                    domain::ApiExposureStatus::ApiExposedNoPermission
+                }
+                _ => domain::ApiExposureStatus::PublishedNotExposed,
+            });
+        }
+        if readiness.has_ready_path {
+            return Ok(domain::ApiExposureStatus::ApiExposedReady);
+        }
+        Ok(domain::ApiExposureStatus::ApiExposedNoPermission)
+    }
+
+    async fn api_exposure_readiness(
+        &self,
+        model: &domain::ModelDefinitionRecord,
+    ) -> Result<ApiExposureReadinessFacts> {
+        let api_key_facts = self
+            .repository
+            .list_api_key_data_model_readiness(model.id)
+            .await?;
+        let active_api_key_facts = api_key_facts
+            .into_iter()
+            .filter(active_api_key_readiness)
+            .collect::<Vec<_>>();
+        let has_active_api_key = !active_api_key_facts.is_empty();
+        let audit_configured = !model.audit_namespace.trim().is_empty();
+
+        let mut has_ready_path = false;
+        for key_fact in active_api_key_facts {
+            if !key_fact.has_any_action_permission() {
+                continue;
+            }
+            let grants = self
+                .repository
+                .list_scope_data_model_grants(key_fact.scope_kind, key_fact.scope_id)
+                .await?;
+            let has_scope_filter = grants.iter().any(|grant| {
+                grant.data_model_id == model.id
+                    && grant.enabled
+                    && matches!(
+                        grant.permission_profile,
+                        ScopeDataModelPermissionProfile::Owner
+                            | ScopeDataModelPermissionProfile::ScopeAll
+                            | ScopeDataModelPermissionProfile::SystemAll
+                    )
+            });
+            if has_scope_filter && audit_configured {
+                has_ready_path = true;
+                break;
+            }
+        }
+
+        Ok(ApiExposureReadinessFacts {
+            has_active_api_key,
+            has_ready_path,
+        })
+    }
+}
+
+struct ApiExposureReadinessFacts {
+    has_active_api_key: bool,
+    has_ready_path: bool,
+}
+
+fn active_api_key_readiness(readiness: &ApiKeyDataModelReadinessRecord) -> bool {
+    readiness.key_enabled
+        && readiness
+            .expires_at
+            .is_none_or(|expires_at| expires_at > OffsetDateTime::now_utc())
 }
 
 #[derive(Default, Clone)]
@@ -595,6 +804,8 @@ pub struct InMemoryModelDefinitionRepository {
     models: Arc<Mutex<HashMap<Uuid, domain::ModelDefinitionRecord>>>,
     data_source_defaults: Arc<Mutex<HashMap<(Uuid, Uuid), domain::DataSourceDefaults>>>,
     grants: Arc<Mutex<Vec<domain::ScopeDataModelGrantRecord>>>,
+    api_key_readiness: Arc<Mutex<Vec<ApiKeyDataModelReadinessRecord>>>,
+    audit_logs: Arc<Mutex<Vec<domain::AuditLogRecord>>>,
 }
 
 impl InMemoryModelDefinitionRepository {
@@ -609,7 +820,25 @@ impl InMemoryModelDefinitionRepository {
                 defaults,
             )]))),
             grants: Arc::default(),
+            api_key_readiness: Arc::default(),
+            audit_logs: Arc::default(),
         }
+    }
+
+    pub fn add_api_key_readiness(&self, readiness: ApiKeyDataModelReadinessRecord) {
+        self.api_key_readiness
+            .lock()
+            .expect("in-memory api key readiness lock poisoned")
+            .push(readiness);
+    }
+
+    pub fn audit_events(&self) -> Vec<String> {
+        self.audit_logs
+            .lock()
+            .expect("in-memory audit log lock poisoned")
+            .iter()
+            .map(|event| event.event_code.clone())
+            .collect()
     }
 
     fn upsert_placeholder(&self, model_id: Uuid) -> domain::ModelDefinitionRecord {
@@ -908,7 +1137,25 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
             .collect())
     }
 
-    async fn append_audit_log(&self, _event: &domain::AuditLogRecord) -> Result<()> {
+    async fn list_api_key_data_model_readiness(
+        &self,
+        data_model_id: Uuid,
+    ) -> Result<Vec<ApiKeyDataModelReadinessRecord>> {
+        Ok(self
+            .api_key_readiness
+            .lock()
+            .expect("in-memory api key readiness lock poisoned")
+            .iter()
+            .filter(|readiness| readiness.data_model_id == data_model_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn append_audit_log(&self, event: &domain::AuditLogRecord) -> Result<()> {
+        self.audit_logs
+            .lock()
+            .expect("in-memory audit log lock poisoned")
+            .push(event.clone());
         Ok(())
     }
 }

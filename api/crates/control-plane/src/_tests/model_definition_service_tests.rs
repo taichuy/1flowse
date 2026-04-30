@@ -1,11 +1,12 @@
 use control_plane::model_definition::{
     AddModelFieldCommand, CreateModelDefinitionCommand, DeleteModelDefinitionCommand,
     InMemoryModelDefinitionRepository, ModelDefinitionService, UpdateModelDefinitionStatusCommand,
+    UpdateScopeDataModelGrantCommand,
 };
 use control_plane::ports::{
-    AddModelFieldInput, CreateModelDefinitionInput, CreateScopeDataModelGrantInput,
-    ModelDefinitionRepository, UpdateModelDefinitionInput, UpdateModelDefinitionStatusInput,
-    UpdateModelFieldInput,
+    AddModelFieldInput, ApiKeyDataModelReadinessRecord, CreateModelDefinitionInput,
+    CreateScopeDataModelGrantInput, ModelDefinitionRepository, UpdateModelDefinitionInput,
+    UpdateModelDefinitionStatusInput, UpdateModelFieldInput,
 };
 use domain::{
     ActorContext, ApiExposureStatus, AuditLogRecord, DataModelProtection, DataModelScopeKind,
@@ -504,7 +505,7 @@ async fn create_model_rejects_data_source_defaults_outside_actor_workspace() {
 }
 
 #[tokio::test]
-async fn update_model_status_forces_draft_exposure_and_blocks_direct_ready() {
+async fn update_model_status_forces_draft_exposure_and_downgrades_direct_ready() {
     let service = ModelDefinitionService::for_tests();
     let created = service
         .create_model(CreateModelDefinitionCommand {
@@ -538,9 +539,177 @@ async fn update_model_status_forces_draft_exposure_and_blocks_direct_ready() {
             api_exposure_status: ApiExposureStatus::ApiExposedReady,
         })
         .await
-        .unwrap_err();
+        .unwrap();
 
-    assert!(direct_ready.to_string().contains("api_exposure_status"));
+    assert_eq!(
+        direct_ready.api_exposure_status,
+        ApiExposureStatus::ApiExposedNoPermission
+    );
+}
+
+#[tokio::test]
+async fn update_model_status_downgrades_raw_ready_without_readiness_facts() {
+    let service = ModelDefinitionService::for_tests();
+    let created = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
+            code: "raw_ready_orders".into(),
+            title: "Raw Ready Orders".into(),
+            status: None,
+        })
+        .await
+        .unwrap();
+
+    let updated = service
+        .update_model_status(UpdateModelDefinitionStatusCommand {
+            actor_user_id: Uuid::nil(),
+            model_id: created.id,
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::ApiExposedReady,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(updated.status, DataModelStatus::Published);
+    assert_eq!(
+        updated.api_exposure_status,
+        ApiExposureStatus::ApiExposedNoPermission
+    );
+}
+
+#[tokio::test]
+async fn get_model_computes_ready_from_api_key_scope_grant_and_audit_facts() {
+    let repository = InMemoryModelDefinitionRepository::default();
+    let service = ModelDefinitionService::new(repository.clone());
+    let created = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
+            code: "ready_orders".into(),
+            title: "Ready Orders".into(),
+            status: None,
+        })
+        .await
+        .unwrap();
+    repository.add_api_key_readiness(ApiKeyDataModelReadinessRecord {
+        api_key_id: Uuid::now_v7(),
+        data_model_id: created.id,
+        scope_kind: DataModelScopeKind::Workspace,
+        scope_id: Uuid::nil(),
+        key_enabled: true,
+        expires_at: None,
+        allow_list: true,
+        allow_get: false,
+        allow_create: false,
+        allow_update: false,
+        allow_delete: false,
+    });
+
+    let ready = service.get_model(Uuid::nil(), created.id).await.unwrap();
+
+    assert_eq!(
+        ready.api_exposure_status,
+        ApiExposureStatus::ApiExposedReady
+    );
+}
+
+#[tokio::test]
+async fn update_model_status_keeps_disabled_effective_exposure_not_ready() {
+    let service = ModelDefinitionService::for_tests();
+    let created = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
+            code: "disabled_ready_orders".into(),
+            title: "Disabled Ready Orders".into(),
+            status: None,
+        })
+        .await
+        .unwrap();
+
+    let updated = service
+        .update_model_status(UpdateModelDefinitionStatusCommand {
+            actor_user_id: Uuid::nil(),
+            model_id: created.id,
+            status: DataModelStatus::Disabled,
+            api_exposure_status: ApiExposureStatus::ApiExposedReady,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(updated.status, DataModelStatus::Disabled);
+    assert_eq!(
+        updated.api_exposure_status,
+        ApiExposureStatus::ApiExposedNoPermission
+    );
+}
+
+#[tokio::test]
+async fn update_model_status_audits_effective_api_exposure_transition() {
+    let repository = InMemoryModelDefinitionRepository::default();
+    let service = ModelDefinitionService::new(repository.clone());
+    let created = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
+            code: "transition_audit_orders".into(),
+            title: "Transition Audit Orders".into(),
+            status: None,
+        })
+        .await
+        .unwrap();
+
+    service
+        .update_model_status(UpdateModelDefinitionStatusCommand {
+            actor_user_id: Uuid::nil(),
+            model_id: created.id,
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::ApiExposedReady,
+        })
+        .await
+        .unwrap();
+
+    assert!(repository
+        .audit_events()
+        .contains(&"state_model.api_exposure_status_changed".to_string()));
+}
+
+#[tokio::test]
+async fn update_scope_grant_records_audit_event() {
+    let repository = InMemoryModelDefinitionRepository::default();
+    let service = ModelDefinitionService::new(repository.clone());
+    let created = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
+            code: "scope_grant_audit_orders".into(),
+            title: "Scope Grant Audit Orders".into(),
+            status: None,
+        })
+        .await
+        .unwrap();
+
+    service
+        .update_scope_grant(UpdateScopeDataModelGrantCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: Uuid::nil(),
+            data_model_id: created.id,
+            enabled: false,
+            permission_profile: "owner".into(),
+        })
+        .await
+        .unwrap();
+
+    assert!(repository
+        .audit_events()
+        .contains(&"state_model.scope_grant_updated".to_string()));
 }
 
 #[tokio::test]

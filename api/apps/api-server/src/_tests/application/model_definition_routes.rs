@@ -135,6 +135,39 @@ async fn replace_member_roles(
     assert_eq!(replace_response.status(), StatusCode::NO_CONTENT);
 }
 
+async fn create_api_key(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    name: &str,
+    permissions: serde_json::Value,
+) -> String {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/api-keys")
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "name": name,
+                        "permissions": permissions
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let payload: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    payload["data"]["token"].as_str().unwrap().to_string()
+}
+
 #[tokio::test]
 async fn model_definition_routes_manage_models_and_fields_without_publish() {
     let app = test_app().await;
@@ -552,6 +585,159 @@ async fn create_model_route_rejects_invalid_status_without_creating_model() {
     assert!(!models
         .iter()
         .any(|model| model["code"] == json!("invalid_status_orders")));
+}
+
+#[tokio::test]
+async fn model_definition_routes_compute_ready_exposure_from_persisted_facts() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/models")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "scope_kind": "workspace",
+                        "code": "ready_fact_orders",
+                        "title": "Ready Fact Orders"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+    let created: serde_json::Value = serde_json::from_slice(
+        &to_bytes(create_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let model_id = created["data"]["id"].as_str().unwrap().to_string();
+    assert_eq!(
+        created["data"]["api_exposure_status"],
+        json!("published_not_exposed")
+    );
+
+    create_api_key(
+        &app,
+        &cookie,
+        &csrf,
+        "ready fact key",
+        json!([
+            {
+                "data_model_id": model_id,
+                "list": true,
+                "get": false,
+                "create": false,
+                "update": false,
+                "delete": false
+            }
+        ]),
+    )
+    .await;
+
+    let get_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/console/models/{model_id}"))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(get_response.status(), StatusCode::OK);
+    let ready: serde_json::Value = serde_json::from_slice(
+        &to_bytes(get_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        ready["data"]["api_exposure_status"],
+        json!("api_exposed_ready")
+    );
+}
+
+#[tokio::test]
+async fn model_definition_routes_do_not_trust_raw_ready_on_status_update() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/models")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "scope_kind": "workspace",
+                        "code": "raw_update_ready_orders",
+                        "title": "Raw Update Ready Orders",
+                        "status": "draft"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+    let created: serde_json::Value = serde_json::from_slice(
+        &to_bytes(create_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let model_id = created["data"]["id"].as_str().unwrap().to_string();
+
+    let update_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/api/console/models/{model_id}"))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "status": "published",
+                        "api_exposure_status": "api_exposed_ready"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(update_response.status(), StatusCode::OK);
+    let updated: serde_json::Value = serde_json::from_slice(
+        &to_bytes(update_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(updated["data"]["status"], json!("published"));
+    assert_eq!(
+        updated["data"]["api_exposure_status"],
+        json!("published_not_exposed")
+    );
 }
 
 #[tokio::test]

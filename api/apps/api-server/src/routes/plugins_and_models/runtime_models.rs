@@ -19,6 +19,7 @@ use crate::{
     },
     response::ApiSuccess,
 };
+use control_plane::{audit::audit_log, ports::AuthRepository};
 
 fn map_runtime_error(error: anyhow::Error) -> ApiError {
     if let Some(runtime_core::runtime_acl::RuntimeAclError::PermissionDenied(reason)) =
@@ -246,6 +247,41 @@ fn ensure_api_key_action_allowed(
     )
 }
 
+async fn append_api_key_runtime_audit(
+    state: &ApiState,
+    credential: &RuntimeCredential,
+    model_code: &str,
+    action: domain::ApiKeyDataModelAction,
+    event_code: &str,
+    reason: Option<&str>,
+) -> Result<(), ApiError> {
+    let RuntimeCredential::ApiKey(api_key) = credential else {
+        return Ok(());
+    };
+    let model_id =
+        resolve_runtime_model(state, credential.actor(), model_code).map(|model| model.model_id);
+    AuthRepository::append_audit_log(
+        &state.store,
+        &audit_log(
+            Some(api_key.actor.current_workspace_id),
+            Some(api_key.actor.user_id),
+            "state_model",
+            model_id,
+            event_code,
+            serde_json::json!({
+                "api_key_id": api_key.api_key.id,
+                "model_code": model_code,
+                "action": action.as_str(),
+                "scope_kind": api_key.api_key.scope_kind.as_str(),
+                "scope_id": api_key.api_key.scope_id,
+                "reason": reason,
+            }),
+        ),
+    )
+    .await?;
+    Ok(())
+}
+
 async fn runtime_authorization(
     state: &ApiState,
     headers: &HeaderMap,
@@ -263,18 +299,42 @@ async fn runtime_authorization(
         return Ok((credential, None));
     };
     if let RuntimeCredential::ApiKey(api_key) = &credential {
-        ensure_api_key_action_allowed(api_key, model.model_id, action)?;
+        if let Err(error) = ensure_api_key_action_allowed(api_key, model.model_id, action) {
+            append_api_key_runtime_audit(
+                state,
+                &credential,
+                model_code,
+                action,
+                "state_model.api_key_runtime_access_denied",
+                Some("api_key_action_not_allowed"),
+            )
+            .await?;
+            return Err(error);
+        }
     }
 
     let scope_grant = match &credential {
         RuntimeCredential::ApiKey(api_key) => {
-            control_plane::model_definition::ModelDefinitionService::new(state.store.clone())
-                .load_runtime_scope_grant_for_scope(
-                    api_key.api_key.scope_kind,
-                    api_key.api_key.scope_id,
-                    model.model_id,
+            let grant =
+                control_plane::model_definition::ModelDefinitionService::new(state.store.clone())
+                    .load_runtime_scope_grant_for_scope(
+                        api_key.api_key.scope_kind,
+                        api_key.api_key.scope_id,
+                        model.model_id,
+                    )
+                    .await?;
+            if grant.is_none() {
+                append_api_key_runtime_audit(
+                    state,
+                    &credential,
+                    model_code,
+                    action,
+                    "state_model.api_key_runtime_access_denied",
+                    Some("data_model_scope_not_granted"),
                 )
-                .await?
+                .await?;
+            }
+            grant
         }
         RuntimeCredential::Session(_) => {
             load_runtime_scope_grant(state, credential.actor(), model.model_id).await?
@@ -393,16 +453,42 @@ pub async fn create_record(
     .await?;
     require_session_csrf_for_write(&headers, &credential)?;
 
-    let record = state
+    let result = state
         .runtime_engine
         .create_record(runtime_core::runtime_engine::RuntimeCreateInput {
-            actor: credential.into_actor(),
-            model_code,
+            actor: credential.actor().clone(),
+            model_code: model_code.clone(),
             payload,
             scope_grant,
         })
-        .await
-        .map_err(map_runtime_error)?;
+        .await;
+    let record = match result {
+        Ok(record) => {
+            append_api_key_runtime_audit(
+                &state,
+                &credential,
+                &model_code,
+                domain::ApiKeyDataModelAction::Create,
+                "state_model.api_key_runtime_write_succeeded",
+                None,
+            )
+            .await?;
+            record
+        }
+        Err(error) => {
+            let reason = error.to_string();
+            append_api_key_runtime_audit(
+                &state,
+                &credential,
+                &model_code,
+                domain::ApiKeyDataModelAction::Create,
+                "state_model.api_key_runtime_write_failed",
+                Some(&reason),
+            )
+            .await?;
+            return Err(map_runtime_error(error));
+        }
+    };
 
     Ok((StatusCode::CREATED, Json(ApiSuccess::new(record))))
 }
@@ -432,17 +518,43 @@ pub async fn update_record(
     .await?;
     require_session_csrf_for_write(&headers, &credential)?;
 
-    let record = state
+    let result = state
         .runtime_engine
         .update_record(runtime_core::runtime_engine::RuntimeUpdateInput {
-            actor: credential.into_actor(),
-            model_code,
+            actor: credential.actor().clone(),
+            model_code: model_code.clone(),
             record_id,
             payload,
             scope_grant,
         })
-        .await
-        .map_err(map_runtime_error)?;
+        .await;
+    let record = match result {
+        Ok(record) => {
+            append_api_key_runtime_audit(
+                &state,
+                &credential,
+                &model_code,
+                domain::ApiKeyDataModelAction::Update,
+                "state_model.api_key_runtime_write_succeeded",
+                None,
+            )
+            .await?;
+            record
+        }
+        Err(error) => {
+            let reason = error.to_string();
+            append_api_key_runtime_audit(
+                &state,
+                &credential,
+                &model_code,
+                domain::ApiKeyDataModelAction::Update,
+                "state_model.api_key_runtime_write_failed",
+                Some(&reason),
+            )
+            .await?;
+            return Err(map_runtime_error(error));
+        }
+    };
 
     Ok(Json(ApiSuccess::new(record)))
 }
@@ -470,16 +582,42 @@ pub async fn delete_record(
     .await?;
     require_session_csrf_for_write(&headers, &credential)?;
 
-    let result = state
+    let delete_result = state
         .runtime_engine
         .delete_record(runtime_core::runtime_engine::RuntimeDeleteInput {
-            actor: credential.into_actor(),
-            model_code,
+            actor: credential.actor().clone(),
+            model_code: model_code.clone(),
             record_id,
             scope_grant,
         })
-        .await
-        .map_err(map_runtime_error)?;
+        .await;
+    let result = match delete_result {
+        Ok(result) => {
+            append_api_key_runtime_audit(
+                &state,
+                &credential,
+                &model_code,
+                domain::ApiKeyDataModelAction::Delete,
+                "state_model.api_key_runtime_write_succeeded",
+                None,
+            )
+            .await?;
+            result
+        }
+        Err(error) => {
+            let reason = error.to_string();
+            append_api_key_runtime_audit(
+                &state,
+                &credential,
+                &model_code,
+                domain::ApiKeyDataModelAction::Delete,
+                "state_model.api_key_runtime_write_failed",
+                Some(&reason),
+            )
+            .await?;
+            return Err(map_runtime_error(error));
+        }
+    };
 
     Ok(Json(ApiSuccess::new(result)))
 }

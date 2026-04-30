@@ -36,6 +36,15 @@ async fn set_model_grant_permission_profile(database_url: &str, model_id: &str, 
     .unwrap();
 }
 
+async fn audit_event_count(database_url: &str, event_code: &str) -> i64 {
+    let pool = sqlx::PgPool::connect(database_url).await.unwrap();
+    sqlx::query_scalar("select count(*) from audit_logs where event_code = $1")
+        .bind(event_code)
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+}
+
 async fn create_api_key(
     app: &axum::Router,
     cookie: &str,
@@ -286,6 +295,108 @@ async fn runtime_model_routes_api_key_cannot_call_disabled_action() {
     let payload: serde_json::Value =
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(payload["code"], json!("api_key_action_not_allowed"));
+}
+
+#[tokio::test]
+async fn runtime_model_routes_audit_api_key_denied_and_write_results() {
+    let (app, database_url) = test_app_with_database_url().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let model_code = "api_key_audit_orders";
+    let model_id =
+        create_model_with_status(&app, &cookie, &csrf, model_code, Some("published")).await;
+    create_text_field(&app, &cookie, &csrf, &model_id, "title").await;
+
+    let read_only_token = create_api_key(
+        &app,
+        &cookie,
+        &csrf,
+        "runtime audit denied key",
+        json!([
+            {
+                "data_model_id": model_id,
+                "list": true,
+                "get": false,
+                "create": false,
+                "update": false,
+                "delete": false
+            }
+        ]),
+    )
+    .await;
+    let denied = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/runtime/models/{model_code}/records"))
+                .header("authorization", format!("Bearer {read_only_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "title": "denied" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+    assert_eq!(
+        audit_event_count(&database_url, "state_model.api_key_runtime_access_denied").await,
+        1
+    );
+
+    let write_token = create_api_key(
+        &app,
+        &cookie,
+        &csrf,
+        "runtime audit write key",
+        json!([
+            {
+                "data_model_id": model_id,
+                "list": false,
+                "get": false,
+                "create": true,
+                "update": false,
+                "delete": false
+            }
+        ]),
+    )
+    .await;
+    let success = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/runtime/models/{model_code}/records"))
+                .header("authorization", format!("Bearer {write_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "title": "success" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(success.status(), StatusCode::CREATED);
+    assert_eq!(
+        audit_event_count(&database_url, "state_model.api_key_runtime_write_succeeded").await,
+        1
+    );
+
+    drop_runtime_table(&database_url, &model_id).await;
+    let failure = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/runtime/models/{model_code}/records"))
+                .header("authorization", format!("Bearer {write_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "title": "failure" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(failure.status(), StatusCode::CONFLICT);
+    assert_eq!(
+        audit_event_count(&database_url, "state_model.api_key_runtime_write_failed").await,
+        1
+    );
 }
 
 #[tokio::test]

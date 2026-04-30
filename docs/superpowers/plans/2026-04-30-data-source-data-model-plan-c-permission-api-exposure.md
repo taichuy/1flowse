@@ -154,10 +154,14 @@ Task 2 spec review concern fix, 2026-04-30:
 **Files:**
 - Modify: `api/crates/control-plane/src/model_definition.rs`
 - Modify: `api/apps/api-server/src/routes/plugins_and_models/model_definitions.rs`
+- Modify: `api/apps/api-server/src/routes/plugins_and_models/runtime_models.rs`
+- Modify: `api/crates/control-plane/src/ports/model_definition.rs`
+- Modify: `api/crates/storage-durable/postgres/src/model_definition_repository/mod.rs`
 - Test: `api/crates/control-plane/src/_tests/model_definition_service_tests.rs`
 - Test: `api/apps/api-server/src/_tests/application/model_definition_routes.rs`
+- Test: `api/apps/api-server/src/_tests/application/runtime_model_routes.rs`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Cover:
 
@@ -169,11 +173,11 @@ draft model exposure stays draft
 disabled/broken model effective exposure is unavailable
 ```
 
-- [ ] **Step 2: Implement readiness proof**
+- [x] **Step 2: Implement readiness proof**
 
 Compute readiness from persisted facts. Do not accept `api_exposed_ready` from raw user input.
 
-- [ ] **Step 3: Add audit events**
+- [x] **Step 3: Add audit events**
 
 Emit audit for:
 
@@ -184,12 +188,29 @@ API Key runtime access denied
 API Key runtime write success/failure
 ```
 
-- [ ] **Step 4: Run tests**
+Scope grant create already had audit payload; update service path now emits audit and is tested. No delete route/service path exists in this slice, so no delete action was added.
+
+- [x] **Step 4: Run tests**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests
 cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes runtime_model_routes
 ```
+
+Task 3 validation record, 2026-04-30:
+
+- RED confirmed:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests -- --nocapture` failed because raw `api_exposed_ready` still rejected or persisted as ready for disabled status instead of becoming a computed non-ready state.
+  - `cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes -- --nocapture` failed because console DTO returned stored `published_not_exposed` instead of computed `api_exposed_ready`.
+  - `cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes_audit_api_key_denied_and_write_results -- --nocapture` failed because API Key runtime denied/write audit events were not emitted.
+- GREEN confirmed:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
 
 ### Task 4: Plan C Verification And Commit
 
