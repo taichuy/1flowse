@@ -276,6 +276,7 @@ where
                 data_source_instance_id: command.data_source_instance_id,
                 source_kind,
                 external_resource_key,
+                external_capability_snapshot: None,
                 code: command.code,
                 title: command.title,
                 status,
@@ -823,6 +824,9 @@ where
         if !readiness.has_active_api_key {
             return Ok(domain::ApiExposureStatus::PublishedNotExposed);
         }
+        if external_source_is_unsafe(model) {
+            return Ok(domain::ApiExposureStatus::UnsafeExternalSource);
+        }
         if readiness.has_ready_path {
             return Ok(domain::ApiExposureStatus::ApiExposedReady);
         }
@@ -890,6 +894,21 @@ fn api_key_runtime_can_use_grant_profile(
         ScopeDataModelPermissionProfile::Owner | ScopeDataModelPermissionProfile::ScopeAll => true,
         ScopeDataModelPermissionProfile::SystemAll => false,
     }
+}
+
+fn external_source_is_unsafe(model: &domain::ModelDefinitionRecord) -> bool {
+    if model.source_kind != domain::DataModelSourceKind::ExternalSource {
+        return false;
+    }
+
+    let Some(snapshot) = &model.external_capability_snapshot else {
+        return true;
+    };
+
+    !snapshot
+        .get("supports_scope_filter")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
 }
 
 fn normalize_external_resource_key(
@@ -1010,6 +1029,7 @@ impl InMemoryModelDefinitionRepository {
                 data_source_instance_id: None,
                 source_kind: domain::DataModelSourceKind::MainSource,
                 external_resource_key: None,
+                external_capability_snapshot: None,
                 status: domain::DataModelStatus::Published,
                 api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
                 protection: domain::DataModelProtection::default(),
@@ -1079,6 +1099,7 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
             data_source_instance_id: input.data_source_instance_id,
             source_kind: input.source_kind,
             external_resource_key: input.external_resource_key.clone(),
+            external_capability_snapshot: input.external_capability_snapshot.clone(),
             code: input.code.clone(),
             title: input.title.clone(),
             physical_table_name: build_physical_table_name(input.scope_kind, &input.code),

@@ -164,6 +164,7 @@ async fn model_definition_repository_creates_scope_bound_metadata_without_publis
             data_source_instance_id: None,
             source_kind: domain::DataModelSourceKind::MainSource,
             external_resource_key: None,
+            external_capability_snapshot: None,
             code: code.clone(),
             title: "Orders".into(),
             status: DataModelStatus::Published,
@@ -190,6 +191,7 @@ async fn model_definition_repository_creates_scope_bound_metadata_without_publis
             data_source_instance_id: None,
             source_kind: domain::DataModelSourceKind::MainSource,
             external_resource_key: None,
+            external_capability_snapshot: None,
             code: format!("system_{}", Uuid::now_v7().simple()),
             title: "System Orders".into(),
             status: DataModelStatus::Published,
@@ -233,6 +235,7 @@ async fn model_definition_repository_persists_status_exposure_owner_and_scope_gr
             data_source_instance_id: None,
             source_kind: domain::DataModelSourceKind::MainSource,
             external_resource_key: None,
+            external_capability_snapshot: None,
             code: format!("customers_{}", Uuid::now_v7().simple()),
             title: "Customers".into(),
             status: DataModelStatus::Draft,
@@ -278,6 +281,7 @@ async fn model_definition_repository_persists_status_exposure_owner_and_scope_gr
             data_source_instance_id: None,
             source_kind: domain::DataModelSourceKind::MainSource,
             external_resource_key: None,
+            external_capability_snapshot: None,
             code: format!("system_customers_{}", Uuid::now_v7().simple()),
             title: "System Customers".into(),
             status: DataModelStatus::Published,
@@ -347,6 +351,7 @@ async fn model_definition_repository_rejects_scope_grant_for_workspace_model() {
             data_source_instance_id: None,
             source_kind: domain::DataModelSourceKind::MainSource,
             external_resource_key: None,
+            external_capability_snapshot: None,
             code: format!("workspace_grant_{}", Uuid::now_v7().simple()),
             title: "Workspace Grant Model".into(),
             status: DataModelStatus::Published,
@@ -400,6 +405,7 @@ async fn model_definition_repository_rejects_scope_grant_update_for_workspace_mo
             data_source_instance_id: None,
             source_kind: domain::DataModelSourceKind::MainSource,
             external_resource_key: None,
+            external_capability_snapshot: None,
             code: format!("workspace_grant_update_{}", Uuid::now_v7().simple()),
             title: "Workspace Grant Update Model".into(),
             status: DataModelStatus::Published,
@@ -449,6 +455,7 @@ async fn model_definition_repository_blocks_duplicate_code_inside_same_data_sour
         data_source_instance_id: Some(data_source_instance_id),
         source_kind: DataModelSourceKind::ExternalSource,
         external_resource_key: Some("orders".into()),
+        external_capability_snapshot: None,
         code,
         title: "Orders".into(),
         status: DataModelStatus::Published,
@@ -488,6 +495,7 @@ async fn model_definition_repository_blocks_duplicate_code_inside_main_source() 
         data_source_instance_id: None,
         source_kind: domain::DataModelSourceKind::MainSource,
         external_resource_key: None,
+        external_capability_snapshot: None,
         code,
         title: "Orders".into(),
         status: DataModelStatus::Published,
@@ -538,6 +546,7 @@ async fn model_definition_repository_allows_duplicate_code_across_data_sources_i
             data_source_instance_id: Some(first_data_source_id),
             source_kind: DataModelSourceKind::ExternalSource,
             external_resource_key: Some("orders".into()),
+            external_capability_snapshot: None,
             code: code.clone(),
             title: "Orders".into(),
             status: DataModelStatus::Published,
@@ -557,6 +566,7 @@ async fn model_definition_repository_allows_duplicate_code_across_data_sources_i
             data_source_instance_id: Some(second_data_source_id),
             source_kind: DataModelSourceKind::ExternalSource,
             external_resource_key: Some("orders".into()),
+            external_capability_snapshot: None,
             code: code.clone(),
             title: "Orders Copy".into(),
             status: DataModelStatus::Published,
@@ -605,6 +615,7 @@ async fn model_definition_repository_rejects_workspace_model_with_foreign_data_s
             data_source_instance_id: Some(foreign_data_source_id),
             source_kind: DataModelSourceKind::ExternalSource,
             external_resource_key: Some("orders".into()),
+            external_capability_snapshot: None,
             code: format!("orders_{}", Uuid::now_v7().simple()),
             title: "Orders".into(),
             status: DataModelStatus::Published,
@@ -680,6 +691,11 @@ async fn model_definition_repository_deletes_external_source_field_without_local
             data_source_instance_id: Some(data_source_instance_id),
             source_kind: DataModelSourceKind::ExternalSource,
             external_resource_key: Some("crm.contacts".into()),
+            external_capability_snapshot: Some(serde_json::json!({
+                "supports_owner_filter": true,
+                "supports_scope_filter": true,
+                "supports_write": false
+            })),
             code: format!("external_contacts_{}", Uuid::now_v7().simple()),
             title: "External Contacts".into(),
             status: DataModelStatus::Published,
@@ -748,6 +764,14 @@ async fn model_definition_repository_deletes_external_source_field_without_local
         reloaded.external_resource_key.as_deref(),
         Some("crm.contacts")
     );
+    assert_eq!(
+        reloaded.external_capability_snapshot,
+        Some(serde_json::json!({
+            "supports_owner_filter": true,
+            "supports_scope_filter": true,
+            "supports_write": false
+        }))
+    );
     assert_eq!(reloaded.fields.len(), 1);
     assert_eq!(
         reloaded.fields[0].external_field_key.as_deref(),
@@ -802,6 +826,7 @@ async fn model_definition_repository_status_update_requires_visible_workspace() 
             data_source_instance_id: None,
             source_kind: domain::DataModelSourceKind::MainSource,
             external_resource_key: None,
+            external_capability_snapshot: None,
             code: format!("foreign_orders_{}", Uuid::now_v7().simple()),
             title: "Foreign Orders".into(),
             status: DataModelStatus::Published,

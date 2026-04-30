@@ -8,6 +8,7 @@ pub struct CreateModelDefinitionInput {
     pub data_source_instance_id: Option<Uuid>,
     pub source_kind: domain::DataModelSourceKind,
     pub external_resource_key: Option<String>,
+    pub external_capability_snapshot: Option<serde_json::Value>,
     pub code: String,
     pub title: String,
     pub status: domain::DataModelStatus,

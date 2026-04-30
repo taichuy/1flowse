@@ -417,6 +417,7 @@ pub struct ModelDefinitionRecord {
     pub data_source_instance_id: Option<Uuid>,
     pub source_kind: DataModelSourceKind,
     pub external_resource_key: Option<String>,
+    pub external_capability_snapshot: Option<Value>,
     pub code: String,
     pub title: String,
     pub physical_table_name: String,

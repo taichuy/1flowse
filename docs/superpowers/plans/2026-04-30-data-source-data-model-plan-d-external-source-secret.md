@@ -245,6 +245,16 @@ Task 3a-2a validation record, 2026-04-30:
   - `git diff --check`
 - Scope note: Task 3a-2a only completes service/API external mapping input and validation. Console model create accepts `data_source_instance_id` and `external_resource_key`; console field create accepts `external_field_key`; model/field responses expose source and external mapping keys. External-source model create requires a non-empty `external_resource_key`, external-source field create requires a non-empty `external_field_key`, and main-source model/field create reject external keys. Task 3a-2b still owns data-source catalog/describe-resource mapping, plugin capability snapshot persistence, `unsafe_external_source` readiness, and explicit `system_all` confirmation. Runtime CRUD dispatch remains Task 3b; REST fixture remains Task 4.
 
+Task 3a-2b narrowed validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests` failed before implementation because `ModelDefinitionRecord.external_capability_snapshot` and `CreateModelDefinitionInput.external_capability_snapshot` did not exist, and external-source readiness did not derive `unsafe_external_source` from missing scope-filter capability.
+- Green evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p storage-postgres model_definition_repository_deletes_external_source_field_without_local_ddl -- --test-threads=1`
+  - Full task-agent verification pending below for the final commit.
+- Scope note: This narrowed 3a-2b slice persists `external_capability_snapshot` on Data Model records and makes effective API exposure return `unsafe_external_source` for external-source models that lack `supports_scope_filter`; `main_source` readiness remains unchanged. Data-source catalog/describe-resource mapping and explicit `system_all` risk confirmation are still follow-up 3a-2b sub-slices. Runtime CRUD dispatch remains Task 3b; REST fixture remains Task 4.
+
 ### Task 4: REST API Connector Rules
 
 **Files:**
