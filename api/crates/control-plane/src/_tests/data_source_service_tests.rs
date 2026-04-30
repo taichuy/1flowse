@@ -442,17 +442,25 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
             .get(&input.data_source_instance_id)
             .map(|record| record.secret_version + 1)
             .unwrap_or(1);
+        let existing_secret_json = self
+            .secrets
+            .read()
+            .await
+            .get(&input.data_source_instance_id)
+            .cloned();
+        let secret_json =
+            merge_config_marker_secret_values(existing_secret_json.as_ref(), &input.secret_json);
         let record = DataSourceSecretRecord {
             data_source_instance_id: input.data_source_instance_id,
             secret_ref: input.secret_ref.clone(),
-            encrypted_secret_json: input.secret_json.clone(),
+            encrypted_secret_json: secret_json.clone(),
             secret_version,
             updated_at: OffsetDateTime::now_utc(),
         };
         self.secrets
             .write()
             .await
-            .insert(input.data_source_instance_id, input.secret_json.clone());
+            .insert(input.data_source_instance_id, secret_json);
         secret_records.insert(input.data_source_instance_id, record.clone());
         let mut instances = self.instances.write().await;
         let instance = instances
@@ -567,6 +575,35 @@ fn is_test_secret_reference_marker(value: &Value) -> bool {
         .as_object()
         .map(|object| object.contains_key("secret_ref") && object.contains_key("secret_version"))
         .unwrap_or(false)
+}
+
+fn merge_config_marker_secret_values(existing: Option<&Value>, incoming: &Value) -> Value {
+    let mut merged = incoming.clone();
+    let Some(merged_object) = merged.as_object_mut() else {
+        return merged;
+    };
+
+    let mut marker_values = existing
+        .and_then(|value| value.get("__config_secret_values"))
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    if let Some(incoming_marker_values) = merged_object
+        .get("__config_secret_values")
+        .and_then(Value::as_object)
+    {
+        for (key, value) in incoming_marker_values {
+            marker_values.insert(key.clone(), value.clone());
+        }
+    }
+    if !marker_values.is_empty() {
+        merged_object.insert(
+            "__config_secret_values".to_string(),
+            Value::Object(marker_values),
+        );
+    }
+
+    merged
 }
 
 #[derive(Clone)]
@@ -857,13 +894,17 @@ async fn create_instance_extracts_generic_secret_bearing_value_shapes() {
     let config_text = created.instance.config_json.to_string();
     assert!(!config_text.contains(header_plaintext));
     assert!(!config_text.contains(credential_plaintext));
-    assert!(!config_text.contains("not-secret"));
+    assert!(config_text.contains("not-secret"));
     assert_eq!(
         created.instance.config_json["headers"][0]["value"],
         json!({
             "secret_ref": created.instance.secret_ref.as_ref().unwrap(),
             "secret_version": created.instance.secret_version.unwrap(),
         })
+    );
+    assert_eq!(
+        created.instance.config_json["headers"][1]["value"],
+        json!("not-secret")
     );
     assert_eq!(
         created.instance.config_json["credentials"]["value"],
@@ -879,12 +920,84 @@ async fn create_instance_extracts_generic_secret_bearing_value_shapes() {
         header_plaintext
     );
     assert_eq!(
-        stored_secret["__config_secret_values"]["/headers/1/value"],
-        "not-secret"
+        stored_secret["__config_secret_values"].get("/headers/1/value"),
+        None
     );
     assert_eq!(
         stored_secret["__config_secret_values"]["/credentials/value"],
         credential_plaintext
+    );
+}
+
+#[tokio::test]
+async fn rotate_secret_preserves_config_marker_values_when_payload_is_partial() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::ready();
+    let service = DataSourceService::new(repository.clone(), runtime);
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({
+                "access_token": "config-token-secret",
+                "headers": [
+                    { "name": "Authorization", "value": "authorization-secret" },
+                    { "name": "X-Trace", "value": "not-secret" }
+                ]
+            }),
+            secret_json: json!({
+                "client_secret": "initial-client-secret",
+                "__config_secret_values": {
+                    "/manual/marker": "explicit-marker"
+                }
+            }),
+        })
+        .await
+        .unwrap();
+
+    let rotated = service
+        .rotate_secret(RotateDataSourceSecretCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            secret_json: json!({ "client_secret": "rotated-client-secret" }),
+        })
+        .await
+        .unwrap();
+
+    let stored_secret = repository.stored_secret_json(created.instance.id).await;
+    assert_eq!(stored_secret["client_secret"], "rotated-client-secret");
+    assert_eq!(
+        stored_secret["__config_secret_values"]["/access_token"],
+        "config-token-secret"
+    );
+    assert_eq!(
+        stored_secret["__config_secret_values"]["/headers/0/value"],
+        "authorization-secret"
+    );
+    assert_eq!(
+        stored_secret["__config_secret_values"]["/manual/marker"],
+        "explicit-marker"
+    );
+    assert_eq!(
+        stored_secret["__config_secret_values"].get("/headers/1/value"),
+        None
+    );
+    assert_eq!(
+        rotated.instance.config_json["access_token"]["secret_version"],
+        json!(2)
+    );
+    assert_eq!(
+        rotated.instance.config_json["headers"][0]["value"]["secret_version"],
+        json!(2)
+    );
+    assert_eq!(
+        rotated.instance.config_json["headers"][1]["value"],
+        json!("not-secret")
     );
 }
 

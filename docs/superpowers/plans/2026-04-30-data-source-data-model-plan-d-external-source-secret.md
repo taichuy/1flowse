@@ -111,6 +111,20 @@ Task 1 spec review FAIL second follow-up validation record, 2026-04-30:
   - `git diff --check`
 - QA note: Runtime `discover_catalog` output is now recursively redacted before contract parsing, catalog cache upsert, and validate response mapping. Recursive redaction now replaces stored secret substrings inside string values, so validate output, preview rows/cursor, and catalog JSON redact shapes like `Bearer <secret>` to `Bearer ***` while preserving prior exact-value behavior.
 
+Task 1 code quality REQUEST_CHANGES validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests` failed because `X-Trace: not-secret` was extracted from `headers[].value` and partial secret rotation dropped existing `__config_secret_values`.
+  - `cargo test --manifest-path api/Cargo.toml -p storage-postgres data_source_repository_tests -- --test-threads=1` failed because repository `rotate_secret` overwrote existing config marker secret values with the partial payload.
+- Green evidence:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p storage-postgres data_source_repository_tests -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server data_sources_routes -- --test-threads=1`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- QA note: Header config extraction now only treats secret-bearing header names as secret (`Authorization`, `Proxy-Authorization`, `X-API-Key`, `Api-Key`, `X-Auth-Token`, `Cookie`). Secret rotation now merges the incoming explicit payload with existing `__config_secret_values`, preserving marker resolver inputs unless a marker path is explicitly replaced.
+
 ### Task 2: Data Source Plugin CRUD Contract
 
 **Files:**

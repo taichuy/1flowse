@@ -611,7 +611,7 @@ fn scrub_secret_like_config_values(
             let mut sanitized = Map::new();
             for (key, child) in object {
                 path.push(key.clone());
-                let next = if is_secret_bearing_config_value(key, child, path)
+                let next = if is_secret_bearing_config_value(key, child, path, object)
                     && !is_secret_reference_marker(child)
                 {
                     store_config_secret_value(secret_json, path, child.clone());
@@ -690,16 +690,38 @@ fn is_secret_like_config_key(key: &str) -> bool {
         || normalized.contains("private_key")
 }
 
-fn is_secret_bearing_config_value(key: &str, child: &Value, path: &[String]) -> bool {
+fn is_secret_bearing_config_value(
+    key: &str,
+    child: &Value,
+    path: &[String],
+    parent: &Map<String, Value>,
+) -> bool {
     if is_secret_like_config_key(key) {
         return true;
     }
 
     if key == "value" && path_matches_headers_value(path) {
-        return true;
+        return parent
+            .get("name")
+            .or_else(|| parent.get("key"))
+            .and_then(Value::as_str)
+            .map(is_secret_bearing_header_name)
+            .unwrap_or(false);
     }
 
     key == "value" && path_matches_credentials_value(path) && !child.is_null()
+}
+
+fn is_secret_bearing_header_name(name: &str) -> bool {
+    matches!(
+        name.trim().to_ascii_lowercase().as_str(),
+        "authorization"
+            | "proxy-authorization"
+            | "x-api-key"
+            | "api-key"
+            | "x-auth-token"
+            | "cookie"
+    )
 }
 
 fn path_matches_headers_value(path: &[String]) -> bool {

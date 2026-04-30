@@ -331,6 +331,104 @@ async fn rotate_secret_increments_version_inside_repository_update() {
 }
 
 #[tokio::test]
+async fn rotate_secret_preserves_existing_config_marker_values_when_payload_is_partial() {
+    let (store, workspace, actor, installation_id) = seed_store().await;
+    let instance_id = Uuid::now_v7();
+    let secret_ref = domain::data_source_secret_ref(instance_id);
+    let created = <PgControlPlaneStore as DataSourceRepository>::create_instance(
+        &store,
+        &CreateDataSourceInstanceInput {
+            instance_id,
+            workspace_id: workspace.id,
+            installation_id,
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            status: DataSourceInstanceStatus::Draft,
+            config_json: json!({
+                "access_token": {
+                    "secret_ref": secret_ref,
+                    "secret_version": 1
+                },
+                "headers": [
+                    {
+                        "name": "Authorization",
+                        "value": {
+                            "secret_ref": secret_ref,
+                            "secret_version": 1
+                        }
+                    },
+                    { "name": "X-Trace", "value": "not-secret" }
+                ]
+            }),
+            metadata_json: json!({}),
+            defaults: DataSourceDefaults::default(),
+            created_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as DataSourceRepository>::upsert_secret(
+        &store,
+        &UpsertDataSourceSecretInput {
+            data_source_instance_id: created.id,
+            secret_ref: domain::data_source_secret_ref(created.id),
+            secret_json: json!({
+                "client_secret": "initial-client-secret",
+                "__config_secret_values": {
+                    "/access_token": "config-token-secret",
+                    "/headers/0/value": "authorization-secret"
+                }
+            }),
+            secret_version: 1,
+        },
+    )
+    .await
+    .unwrap();
+
+    let rotated = <PgControlPlaneStore as DataSourceRepository>::rotate_secret(
+        &store,
+        &RotateDataSourceSecretInput {
+            workspace_id: workspace.id,
+            data_source_instance_id: created.id,
+            secret_ref: domain::data_source_secret_ref(created.id),
+            secret_json: json!({ "client_secret": "rotated-client-secret" }),
+            updated_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    let stored_secret =
+        <PgControlPlaneStore as DataSourceRepository>::get_secret_json(&store, created.id)
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(stored_secret["client_secret"], "rotated-client-secret");
+    assert_eq!(
+        stored_secret["__config_secret_values"]["/access_token"],
+        "config-token-secret"
+    );
+    assert_eq!(
+        stored_secret["__config_secret_values"]["/headers/0/value"],
+        "authorization-secret"
+    );
+    assert_eq!(rotated.secret.secret_version, 2);
+    assert_eq!(
+        rotated.instance.config_json["access_token"]["secret_version"],
+        json!(2)
+    );
+    assert_eq!(
+        rotated.instance.config_json["headers"][0]["value"]["secret_version"],
+        json!(2)
+    );
+    assert_eq!(
+        rotated.instance.config_json["headers"][1]["value"],
+        json!("not-secret")
+    );
+}
+
+#[tokio::test]
 async fn creates_preview_session_rows() {
     let (store, workspace, actor, installation_id) = seed_store().await;
     let instance_id = Uuid::now_v7();

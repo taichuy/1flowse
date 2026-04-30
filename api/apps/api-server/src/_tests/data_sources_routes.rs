@@ -276,6 +276,10 @@ async fn data_source_routes_create_validate_preview_and_catalog() {
         create_payload["data"]["config_json"]["headers"][0]["value"]["secret_ref"],
         create_payload["data"]["secret_ref"]
     );
+    assert_eq!(
+        create_payload["data"]["config_json"]["headers"][1]["value"].as_str(),
+        Some("not-secret")
+    );
 
     let validate = app
         .clone()
