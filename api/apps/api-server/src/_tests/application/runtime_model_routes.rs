@@ -1745,25 +1745,54 @@ async fn runtime_model_routes_gate_crud_by_model_status_changes() {
 }
 
 #[tokio::test]
-async fn runtime_model_routes_use_default_scope_id_for_system_model_crud() {
+async fn runtime_model_routes_use_default_scope_id_for_workspace_model_crud() {
     let (app, database_url) = test_app_with_database_url().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
-    let model_code = "system_route_orders";
-    let model_id = create_system_model(&app, &cookie, &csrf, model_code).await;
+    let model_code = "default_route_orders";
+    let model_id =
+        create_model_with_status(&app, &cookie, &csrf, model_code, Some("published")).await;
     create_text_field(&app, &cookie, &csrf, &model_id, "title").await;
 
-    create_runtime_record(&app, &cookie, &csrf, model_code, "system scoped").await;
+    create_runtime_record(&app, &cookie, &csrf, model_code, "default scoped").await;
 
     let durable = storage_durable::build_main_durable_postgres(&database_url)
         .await
         .unwrap();
     let pool = durable.store;
-    let physical_table_name: String =
-        sqlx::query_scalar("select physical_table_name from model_definitions where id = $1")
-            .bind(uuid::Uuid::parse_str(&model_id).unwrap())
-            .fetch_one(pool.pool())
-            .await
-            .unwrap();
+    let model_id = uuid::Uuid::parse_str(&model_id).unwrap();
+    let (metadata_scope_kind, metadata_scope_id, physical_table_name): (
+        String,
+        uuid::Uuid,
+        String,
+    ) = sqlx::query_as(
+        r#"
+        select scope_kind, scope_id, physical_table_name
+        from model_definitions
+        where id = $1
+        "#,
+    )
+    .bind(model_id)
+    .fetch_one(pool.pool())
+    .await
+    .unwrap();
+    assert_eq!(metadata_scope_kind, "system");
+    assert_eq!(metadata_scope_id, domain::SYSTEM_SCOPE_ID);
+
+    let grant_scope_id: uuid::Uuid = sqlx::query_scalar(
+        r#"
+        select scope_id
+        from scope_data_model_grants
+        where data_model_id = $1
+          and scope_kind = 'workspace'
+        "#,
+    )
+    .bind(model_id)
+    .fetch_one(pool.pool())
+    .await
+    .unwrap();
+    assert_eq!(grant_scope_id, domain::DEFAULT_SCOPE_ID);
+    assert_ne!(grant_scope_id, domain::SYSTEM_SCOPE_ID);
+
     let scope_id: uuid::Uuid = sqlx::query_scalar(&format!(
         "select scope_id from \"{physical_table_name}\" limit 1"
     ))
@@ -1771,7 +1800,9 @@ async fn runtime_model_routes_use_default_scope_id_for_system_model_crud() {
     .await
     .unwrap();
 
-    assert_eq!(scope_id, domain::SYSTEM_SCOPE_ID);
+    assert_eq!(scope_id, grant_scope_id);
+    assert_eq!(scope_id, domain::DEFAULT_SCOPE_ID);
+    assert_ne!(scope_id, domain::SYSTEM_SCOPE_ID);
 }
 
 #[tokio::test]

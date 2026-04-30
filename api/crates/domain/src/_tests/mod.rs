@@ -3,3 +3,4 @@ mod host_extension_tests;
 mod modeling_tests;
 mod resource_tests;
 mod runtime_observability_tests;
+mod scope_tests;

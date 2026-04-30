@@ -80,7 +80,7 @@ pub use runtime_observability::{
     RuntimeItemRecord, RuntimeItemStatus, RuntimeSpanKind, RuntimeSpanRecord, RuntimeSpanStatus,
     RuntimeTrustLevel, UsageLedgerRecord, UsageLedgerStatus,
 };
-pub use scope::{ScopeContext, TenantRecord, WorkspaceRecord, SYSTEM_SCOPE_ID};
+pub use scope::{ScopeContext, TenantRecord, WorkspaceRecord, DEFAULT_SCOPE_ID, SYSTEM_SCOPE_ID};
 
 pub fn crate_name() -> &'static str {
     "domain"

@@ -2,6 +2,9 @@ use serde::Deserialize;
 
 use crate::error::{FrameworkResult, PluginFrameworkError};
 use crate::provider_contract::PluginFormFieldSchema;
+use crate::scope_provider_contract::{
+    validate_scope_provider_contribution, ScopeProviderContributionManifest,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -82,6 +85,8 @@ pub struct HostExtensionContributionManifest {
     pub owned_resources: Vec<String>,
     pub extends_resources: Vec<String>,
     pub infrastructure_providers: Vec<HostInfrastructureProviderManifest>,
+    #[serde(default)]
+    pub scope_providers: Vec<ScopeProviderContributionManifest>,
     pub routes: Vec<HostExtensionRouteManifest>,
     pub workers: Vec<HostExtensionWorkerManifest>,
     pub migrations: Vec<HostExtensionMigrationManifest>,
@@ -140,6 +145,9 @@ fn validate_host_extension_contribution_manifest(
                 "infrastructure_providers[].config_schema[].type",
             )?;
         }
+    }
+    for provider in &manifest.scope_providers {
+        validate_scope_provider_contribution(provider)?;
     }
     for route in &manifest.routes {
         validate_non_empty(&route.route_id, "routes[].route_id")?;

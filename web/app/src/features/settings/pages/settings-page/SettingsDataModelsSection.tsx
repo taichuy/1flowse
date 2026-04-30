@@ -53,6 +53,7 @@ export function SettingsDataModelsSection({
   canManage: boolean;
 }) {
   const queryClient = useQueryClient();
+  const [messageApi, contextHolder] = message.useMessage();
   const csrfToken = useAuthStore((state) => state.csrfToken);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
@@ -129,7 +130,7 @@ export function SettingsDataModelsSection({
       return updateSettingsDataSourceDefaults(source.id, patch, csrfToken);
     },
     onSuccess: async () => {
-      message.success('默认状态已保存');
+      messageApi.success('默认状态已保存');
       await queryClient.invalidateQueries({ queryKey: settingsDataSourcesQueryKey });
     }
   });
@@ -148,7 +149,7 @@ export function SettingsDataModelsSection({
       return updateSettingsDataModel(model.id, input, csrfToken);
     },
     onSuccess: async () => {
-      message.success('Data Model 已保存');
+      messageApi.success('Data Model 已保存');
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -165,7 +166,7 @@ export function SettingsDataModelsSection({
       return createSettingsDataModel(input, csrfToken);
     },
     onSuccess: async (model) => {
-      message.success('Data Model 已创建');
+      messageApi.success('Data Model 已创建');
       setSelectedModelId(model.id);
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
@@ -189,7 +190,7 @@ export function SettingsDataModelsSection({
       return updateSettingsDataModelApiExposure(model.id, input, csrfToken);
     },
     onSuccess: async () => {
-      message.success('API 暴露请求已保存');
+      messageApi.success('API 暴露请求已保存');
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -212,7 +213,7 @@ export function SettingsDataModelsSection({
       return createSettingsDataModelField(model.id, input, csrfToken);
     },
     onSuccess: async () => {
-      message.success('字段已创建');
+      messageApi.success('字段已创建');
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -237,7 +238,7 @@ export function SettingsDataModelsSection({
       return updateSettingsDataModelField(model.id, field.id, input, csrfToken);
     },
     onSuccess: async () => {
-      message.success('字段已保存');
+      messageApi.success('字段已保存');
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -260,7 +261,7 @@ export function SettingsDataModelsSection({
       return deleteSettingsDataModelField(model.id, field.id, csrfToken);
     },
     onSuccess: async () => {
-      message.success('字段已删除');
+      messageApi.success('字段已删除');
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -319,6 +320,7 @@ export function SettingsDataModelsSection({
         errorMessage ? <Alert type="error" showIcon message={errorMessage} /> : null
       }
     >
+      {contextHolder}
       <div className="data-model-panel">
         <DataSourcePanel
           sources={sources}

@@ -271,7 +271,19 @@ impl BootstrapRepository for PgControlPlaneStore {
             }));
         }
 
-        let id = Uuid::now_v7();
+        let has_workspace = sqlx::query_scalar::<_, bool>(
+            "select exists(select 1 from workspaces where tenant_id = $1)",
+        )
+        .bind(tenant_id)
+        .fetch_one(self.pool())
+        .await?;
+        let root_tenant_id =
+            Uuid::parse_str(ROOT_TENANT_ID).expect("root tenant id should be valid");
+        let id = if tenant_id == root_tenant_id && !has_workspace {
+            domain::DEFAULT_SCOPE_ID
+        } else {
+            Uuid::now_v7()
+        };
         sqlx::query(
             "insert into workspaces (id, tenant_id, name, logo_url, introduction) values ($1, $2, $3, null, '')",
         )

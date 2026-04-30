@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Grid } from 'antd';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const membersApi = vi.hoisted(() => ({
   settingsMembersQueryKey: ['settings', 'members'],
@@ -166,6 +166,12 @@ import { AppRouterProvider } from '../../../app/router';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
 
 const useBreakpointSpy = vi.spyOn(Grid, 'useBreakpoint');
+const antdStaticMessageWarning =
+  'Static function can not consume context like dynamic theme';
+const consoleWarn = console.warn;
+const consoleError = console.error;
+let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 function authenticate() {
   useAuthStore.getState().setAuthenticated({
@@ -211,6 +217,13 @@ function findDataModelsNavigation() {
 
 describe('Settings data models page', () => {
   beforeEach(() => {
+    consoleWarnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation((...args) => consoleWarn(...args));
+    consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation((...args) => consoleError(...args));
+
     resetAuthStore();
     authenticate();
     useBreakpointSpy.mockReturnValue({
@@ -414,6 +427,20 @@ describe('Settings data models page', () => {
     dataModelsApi.createSettingsDataModelScopeGrant.mockResolvedValue({
       id: 'grant-new'
     });
+  });
+
+  afterEach(() => {
+    const warningCalls = [
+      ...consoleWarnSpy.mock.calls,
+      ...consoleErrorSpy.mock.calls
+    ].filter((args) =>
+      args.some((arg) => String(arg).includes(antdStaticMessageWarning))
+    );
+
+    consoleWarnSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+
+    expect(warningCalls).toEqual([]);
   });
 
   test('shows data source navigation, defaults, and the Data Model table', async () => {

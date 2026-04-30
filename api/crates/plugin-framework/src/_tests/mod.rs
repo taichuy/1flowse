@@ -13,3 +13,4 @@ mod provider_contract_tests;
 mod provider_manifest_adapter_tests;
 mod provider_package_tests;
 mod runtime_target_tests;
+mod scope_provider_contract_tests;

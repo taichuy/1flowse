@@ -10,6 +10,7 @@ pub enum HostContractCode {
     FileManagement,
     DataAccess,
     ModelRuntime,
+    ScopeProvider,
     Observability,
 }
 
@@ -26,6 +27,7 @@ impl HostContractCode {
             Self::FileManagement => "file_management",
             Self::DataAccess => "data_access",
             Self::ModelRuntime => "model_runtime",
+            Self::ScopeProvider => "scope-provider",
             Self::Observability => "observability",
         }
     }

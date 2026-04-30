@@ -17,6 +17,7 @@ pub mod package_intake;
 pub mod provider_contract;
 pub mod provider_package;
 pub mod runtime_target;
+pub mod scope_provider_contract;
 
 pub use artifact_reconcile::*;
 pub use assignment::*;
@@ -48,6 +49,7 @@ pub use package_intake::*;
 pub use provider_contract::*;
 pub use provider_package::*;
 pub use runtime_target::*;
+pub use scope_provider_contract::*;
 
 pub fn crate_name() -> &'static str {
     "plugin-framework"
