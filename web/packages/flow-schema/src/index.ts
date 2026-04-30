@@ -11,6 +11,7 @@ export type BuiltinFlowNodeType =
   | 'template_transform'
   | 'http_request'
   | 'tool'
+  | 'data_model'
   | 'variable_assigner'
   | 'parameter_extractor'
   | 'iteration'

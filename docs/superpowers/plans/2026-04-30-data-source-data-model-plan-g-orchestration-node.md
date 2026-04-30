@@ -28,7 +28,7 @@
 - Modify: `api/crates/control-plane/src/orchestration_runtime/live_debug_run.rs`
 - Test: `api/crates/control-plane/src/_tests/orchestration_runtime/service.rs`
 
-- [ ] **Step 1: Write failing backend tests**
+- [x] **Step 1: Write failing backend tests**
 
 Cover:
 
@@ -41,7 +41,7 @@ delete action returns deletion result
 permission denied is recorded as node error
 ```
 
-- [ ] **Step 2: Implement runtime adapter**
+- [x] **Step 2: Implement runtime adapter**
 
 Add an internal adapter:
 
@@ -56,7 +56,7 @@ WorkflowDataModelRuntime
 
 The adapter must reuse runtime-core authorization and actor context.
 
-- [ ] **Step 3: Run backend tests**
+- [x] **Step 3: Run backend tests**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p control-plane orchestration_runtime
@@ -70,7 +70,7 @@ cargo test --manifest-path api/Cargo.toml -p control-plane orchestration_runtime
 - Modify: `web/app/src/features/agent-flow/schema/node-schema-registry.ts`
 - Test: `web/app/src/features/agent-flow/_tests/node-schema-registry.test.tsx`
 
-- [ ] **Step 1: Write failing frontend tests**
+- [x] **Step 1: Write failing frontend tests**
 
 Cover:
 
@@ -82,7 +82,7 @@ record_id field appears only for get/update/delete
 payload editor appears for create/update
 ```
 
-- [ ] **Step 2: Implement node definition**
+- [x] **Step 2: Implement node definition**
 
 Use existing node definition patterns. Add output contracts:
 
@@ -94,7 +94,7 @@ update => record
 delete => deleted_id
 ```
 
-- [ ] **Step 3: Run frontend tests**
+- [x] **Step 3: Run frontend tests**
 
 ```bash
 node scripts/node/test-frontend.js fast
@@ -107,7 +107,7 @@ node scripts/node/test-frontend.js fast
 - Modify: `web/app/src/features/agent-flow/components/inspector/use-node-schema-runtime.ts`
 - Test: `web/app/src/features/agent-flow/_tests/node-inspector.test.tsx`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Cover:
 
@@ -117,11 +117,11 @@ field schema updates when selected model changes
 unpublished/disabled/broken models show disabled option state
 ```
 
-- [ ] **Step 2: Implement query wrapper and schema runtime hook**
+- [x] **Step 2: Implement query wrapper and schema runtime hook**
 
 Keep query code under `features/agent-flow/api`; do not call `@1flowbase/api-client` directly from components.
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 node scripts/node/test-frontend.js fast
@@ -129,17 +129,40 @@ node scripts/node/test-frontend.js fast
 
 ### Task 4: Plan G Verification And Commit
 
-- [ ] **Step 1: Format and test**
+- [x] **Step 1: Format and test**
 
 ```bash
-cargo fmt --manifest-path api/Cargo.toml
+cargo fmt --manifest-path api/Cargo.toml --all
 cargo test --manifest-path api/Cargo.toml -p control-plane orchestration_runtime
 node scripts/node/test-frontend.js fast
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add api/crates/domain api/crates/control-plane web/app/src/features/agent-flow
 git commit -m "feat: add orchestration data model node"
 ```
+
+## Implementation Evidence
+
+- Backend runtime binding implemented in control-plane by adding `WorkflowDataModelRuntime`; Data Model nodes execute `list/get/create/update/delete` through runtime-core CRUD with actor scope grants.
+- Frontend node definition implemented as built-in `data_model`, with Data Model picker, action selector, action-scoped `record_id` / `payload` fields, and output contracts for each action.
+- `payload` uses the existing `named_bindings` object-capable editor instead of `templated_text`, so `create/update` bindings resolve to a JSON object before hitting runtime CRUD.
+- Dynamic Data Model options load from `features/agent-flow/api/data-model-options.ts`; unavailable Data Models render as disabled picker options.
+- Main-thread verification:
+  - `git diff --check`
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane orchestration_runtime -- --test-threads=1` — 48 passed.
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `scripts/node/exec-with-real-node.sh scripts/node/run-frontend-vitest.js run src/features/agent-flow/_tests/node-schema-registry.test.tsx src/features/agent-flow/_tests/node-inspector.test.tsx` — 19 passed.
+  - `pnpm --dir web lint`
+  - `node scripts/node/test-frontend.js fast` — 66 files / 260 tests passed.
+- QA feedback fix:
+  - Added a schema regression that first failed while `bindings.payload` rendered as `templated_text`.
+  - Switched `bindings.payload` to `named_bindings`.
+  - Re-ran the main-thread verification chain above after the fix.
+
+## Residual Notes
+
+- The full debug-run path executes Data Model nodes through runtime CRUD. Single-node preview still uses the existing preview executor fallback for non-LLM nodes and is left unchanged in this slice.

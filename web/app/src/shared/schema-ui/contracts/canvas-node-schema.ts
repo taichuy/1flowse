@@ -17,8 +17,16 @@ export interface SchemaFieldBlock extends SchemaBlockBase {
   renderer: string;
   path: string;
   label: string;
+  options?: SchemaFieldOption[];
   disabledWhen?: SchemaRule;
   requiredWhen?: SchemaRule;
+}
+
+export interface SchemaFieldOption {
+  value: string;
+  label: string;
+  disabled?: boolean;
+  disabledReason?: string | null;
 }
 
 export interface SchemaViewBlock extends SchemaBlockBase {

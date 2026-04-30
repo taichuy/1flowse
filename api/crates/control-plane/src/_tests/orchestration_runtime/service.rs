@@ -2,6 +2,15 @@ use control_plane::orchestration_runtime::{
     ContinueFlowDebugRunCommand, OrchestrationRuntimeService, StartFlowDebugRunCommand,
     StartNodeDebugPreviewCommand,
 };
+use control_plane::{
+    capability_plugin_runtime::CapabilityPluginRuntimePort,
+    ports::{
+        ApplicationRepository, FlowRepository, ModelDefinitionRepository, ModelProviderRepository,
+        NodeContributionRepository, OrchestrationRuntimeRepository, PluginRepository,
+        ProviderRuntimePort,
+    },
+};
+use serde_json::{json, Value};
 use time::Duration;
 use uuid::Uuid;
 
@@ -273,4 +282,397 @@ async fn continue_flow_debug_run_executes_plugin_node_through_capability_runtime
     assert_eq!(detail.flow_run.status, domain::FlowRunStatus::Succeeded);
     assert_eq!(detail.node_runs[1].node_type, "plugin_node");
     assert_eq!(detail.node_runs[1].output_payload["answer"], "world");
+}
+
+#[tokio::test]
+async fn orchestration_runtime_data_model_node_compiles_with_code_and_action() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Data Model Agent").await;
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({}),
+            document_snapshot: Some(data_model_flow_document(
+                seeded.flow_id,
+                vec![data_model_node("node-list", "list", json!({}), json!({}))],
+                vec![],
+            )),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(started.flow_run.status, domain::FlowRunStatus::Running);
+}
+
+#[tokio::test]
+async fn orchestration_runtime_data_model_list_returns_records_and_total() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Data Model Agent").await;
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({}),
+            document_snapshot: Some(data_model_flow_document(
+                seeded.flow_id,
+                vec![
+                    data_model_node(
+                        "node-create",
+                        "create",
+                        json!({ "payload": { "title": "Order A", "status": "draft" } }),
+                        json!({}),
+                    ),
+                    data_model_node("node-list", "list", json!({}), json!({})),
+                ],
+                vec![("node-create", "node-list")],
+            )),
+        })
+        .await
+        .unwrap();
+    let detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(detail.flow_run.status, domain::FlowRunStatus::Succeeded);
+    let list_node = node_run(&detail, "node-list");
+    assert_eq!(list_node.output_payload["total"], json!(1));
+    assert_eq!(
+        list_node.output_payload["records"][0]["title"],
+        json!("Order A")
+    );
+}
+
+#[tokio::test]
+async fn orchestration_runtime_data_model_get_requires_record_id() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Data Model Agent").await;
+
+    let detail = run_data_model_flow(
+        &service,
+        seeded.actor_user_id,
+        seeded.application_id,
+        seeded.flow_id,
+        vec![data_model_node("node-get", "get", json!({}), json!({}))],
+        vec![],
+    )
+    .await;
+
+    assert_eq!(detail.flow_run.status, domain::FlowRunStatus::Failed);
+    let get_node = node_run(&detail, "node-get");
+    assert_eq!(get_node.status, domain::NodeRunStatus::Failed);
+    assert!(get_node
+        .error_payload
+        .as_ref()
+        .and_then(|payload| payload["message"].as_str())
+        .is_some_and(|message| message.contains("record_id")));
+}
+
+#[tokio::test]
+async fn orchestration_runtime_data_model_create_rejects_non_object_payload() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Data Model Agent").await;
+
+    let detail = run_data_model_flow(
+        &service,
+        seeded.actor_user_id,
+        seeded.application_id,
+        seeded.flow_id,
+        vec![data_model_node(
+            "node-create",
+            "create",
+            json!({ "payload": "not-object" }),
+            json!({}),
+        )],
+        vec![],
+    )
+    .await;
+
+    assert_eq!(detail.flow_run.status, domain::FlowRunStatus::Failed);
+    let create_node = node_run(&detail, "node-create");
+    assert_eq!(create_node.status, domain::NodeRunStatus::Failed);
+    assert!(create_node
+        .error_payload
+        .as_ref()
+        .and_then(|payload| payload["message"].as_str())
+        .is_some_and(|message| message.contains("payload")));
+}
+
+#[tokio::test]
+async fn orchestration_runtime_data_model_update_rejects_non_object_payload() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Data Model Agent").await;
+
+    let detail = run_data_model_flow(
+        &service,
+        seeded.actor_user_id,
+        seeded.application_id,
+        seeded.flow_id,
+        vec![
+            data_model_node(
+                "node-create",
+                "create",
+                json!({ "payload": { "title": "Order A", "status": "draft" } }),
+                json!({}),
+            ),
+            data_model_node(
+                "node-update",
+                "update",
+                json!({ "payload": "not-object" }),
+                json!({ "record_id": selector_binding(["node-create", "record", "id"]) }),
+            ),
+        ],
+        vec![("node-create", "node-update")],
+    )
+    .await;
+
+    assert_eq!(detail.flow_run.status, domain::FlowRunStatus::Failed);
+    let update_node = node_run(&detail, "node-update");
+    assert_eq!(update_node.status, domain::NodeRunStatus::Failed);
+    assert!(update_node
+        .error_payload
+        .as_ref()
+        .and_then(|payload| payload["message"].as_str())
+        .is_some_and(|message| message.contains("payload")));
+}
+
+#[tokio::test]
+async fn orchestration_runtime_data_model_create_update_delete_runtime_crud() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Data Model Agent").await;
+
+    let detail = run_data_model_flow(
+        &service,
+        seeded.actor_user_id,
+        seeded.application_id,
+        seeded.flow_id,
+        vec![
+            data_model_node(
+                "node-create",
+                "create",
+                json!({ "payload": { "title": "Order A", "status": "draft" } }),
+                json!({}),
+            ),
+            data_model_node(
+                "node-update",
+                "update",
+                json!({ "payload": { "status": "paid" } }),
+                json!({ "record_id": selector_binding(["node-create", "record", "id"]) }),
+            ),
+            data_model_node(
+                "node-delete",
+                "delete",
+                json!({}),
+                json!({ "record_id": selector_binding(["node-update", "record", "id"]) }),
+            ),
+        ],
+        vec![
+            ("node-create", "node-update"),
+            ("node-update", "node-delete"),
+        ],
+    )
+    .await;
+
+    assert_eq!(detail.flow_run.status, domain::FlowRunStatus::Succeeded);
+    let create_node = node_run(&detail, "node-create");
+    let update_node = node_run(&detail, "node-update");
+    let delete_node = node_run(&detail, "node-delete");
+    assert_eq!(
+        create_node.output_payload["record"]["title"],
+        json!("Order A")
+    );
+    assert_eq!(
+        update_node.output_payload["record"]["status"],
+        json!("paid")
+    );
+    assert_eq!(
+        delete_node.output_payload["deleted_id"],
+        update_node.output_payload["record"]["id"]
+    );
+}
+
+#[tokio::test]
+async fn orchestration_runtime_data_model_permission_denied_records_node_error() {
+    let service = OrchestrationRuntimeService::for_tests_without_data_model_scope_grant();
+    let seeded = service.seed_application_with_flow("Data Model Agent").await;
+
+    let detail = run_data_model_flow(
+        &service,
+        seeded.actor_user_id,
+        seeded.application_id,
+        seeded.flow_id,
+        vec![data_model_node("node-list", "list", json!({}), json!({}))],
+        vec![],
+    )
+    .await;
+
+    assert_eq!(detail.flow_run.status, domain::FlowRunStatus::Failed);
+    let list_node = node_run(&detail, "node-list");
+    assert_eq!(list_node.status, domain::NodeRunStatus::Failed);
+    assert!(list_node
+        .error_payload
+        .as_ref()
+        .and_then(|payload| payload["message"].as_str())
+        .is_some_and(|message| message.contains("permission denied")));
+}
+
+async fn run_data_model_flow(
+    service: &OrchestrationRuntimeService<impl RuntimeRepositoryBounds, impl RuntimeHostBounds>,
+    actor_user_id: Uuid,
+    application_id: Uuid,
+    flow_id: Uuid,
+    nodes: Vec<Value>,
+    edges: Vec<(&str, &str)>,
+) -> domain::ApplicationRunDetail {
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id,
+            application_id,
+            input_payload: json!({}),
+            document_snapshot: Some(data_model_flow_document(flow_id, nodes, edges)),
+        })
+        .await
+        .expect("data model debug run should start");
+
+    service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .expect("data model debug run should return persisted detail")
+}
+
+trait RuntimeRepositoryBounds:
+    ApplicationRepository
+    + FlowRepository
+    + OrchestrationRuntimeRepository
+    + ModelDefinitionRepository
+    + ModelProviderRepository
+    + NodeContributionRepository
+    + PluginRepository
+    + Clone
+    + Send
+    + Sync
+    + 'static
+{
+}
+
+impl<T> RuntimeRepositoryBounds for T where
+    T: ApplicationRepository
+        + FlowRepository
+        + OrchestrationRuntimeRepository
+        + ModelDefinitionRepository
+        + ModelProviderRepository
+        + NodeContributionRepository
+        + PluginRepository
+        + Clone
+        + Send
+        + Sync
+        + 'static
+{
+}
+
+trait RuntimeHostBounds: ProviderRuntimePort + CapabilityPluginRuntimePort + Clone {}
+
+impl<T> RuntimeHostBounds for T where T: ProviderRuntimePort + CapabilityPluginRuntimePort + Clone {}
+
+fn node_run<'a>(
+    detail: &'a domain::ApplicationRunDetail,
+    node_id: &str,
+) -> &'a domain::NodeRunRecord {
+    detail
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == node_id)
+        .unwrap_or_else(|| panic!("node run {node_id} should exist"))
+}
+
+fn data_model_flow_document(
+    flow_id: Uuid,
+    data_model_nodes: Vec<Value>,
+    edges: Vec<(&str, &str)>,
+) -> Value {
+    let mut nodes = vec![json!({
+        "id": "node-start",
+        "type": "start",
+        "alias": "Start",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 0, "y": 0 },
+        "configVersion": 1,
+        "config": {},
+        "bindings": {},
+        "outputs": [{ "key": "query", "title": "Input", "valueType": "string" }]
+    })];
+    nodes.extend(data_model_nodes);
+
+    json!({
+        "schemaVersion": "1flowbase.flow/v1",
+        "meta": {
+            "flowId": flow_id.to_string(),
+            "name": "Data Model Agent",
+            "description": "",
+            "tags": []
+        },
+        "graph": {
+            "nodes": nodes,
+            "edges": edges.into_iter().enumerate().map(|(index, (source, target))| {
+                json!({
+                    "id": format!("edge-{index}"),
+                    "source": source,
+                    "target": target,
+                    "sourceHandle": null,
+                    "targetHandle": null,
+                    "containerId": null,
+                    "points": []
+                })
+            }).collect::<Vec<_>>()
+        },
+        "editor": {
+            "viewport": { "x": 0, "y": 0, "zoom": 1 },
+            "annotations": [],
+            "activeContainerPath": []
+        }
+    })
+}
+
+fn data_model_node(id: &str, action: &str, config_patch: Value, bindings: Value) -> Value {
+    let mut config = serde_json::Map::from_iter([
+        ("data_model_code".to_string(), json!("orders")),
+        ("action".to_string(), json!(action)),
+    ]);
+    if let Some(patch) = config_patch.as_object() {
+        config.extend(patch.clone());
+    }
+
+    json!({
+        "id": id,
+        "type": "data_model",
+        "alias": "Data Model",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 240, "y": 0 },
+        "configVersion": 1,
+        "config": Value::Object(config),
+        "bindings": bindings,
+        "outputs": [{ "key": "record", "title": "Record", "valueType": "object" }]
+    })
+}
+
+fn selector_binding<const N: usize>(path: [&str; N]) -> Value {
+    let path = path.into_iter().collect::<Vec<_>>();
+
+    json!({
+        "kind": "selector",
+        "value": path
+    })
 }

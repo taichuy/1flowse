@@ -11,6 +11,10 @@ import {
   toPluginContributionRef,
   type NodePickerOption
 } from '../plugin-node-definitions';
+import {
+  defaultDataModelNodeConfig,
+  getDataModelNodeOutputs
+} from '../node-definitions/nodes/data-model';
 
 type NodeFactoryInput = FlowNodeType | NodePickerOption;
 
@@ -49,6 +53,8 @@ function defaultOutputs(
       return [{ key: 'body', title: '响应正文', valueType: 'json' }];
     case 'tool':
       return [{ key: 'result', title: '工具输出', valueType: 'unknown' }];
+    case 'data_model':
+      return getDataModelNodeOutputs('list');
     case 'variable_assigner':
       return [{ key: 'state', title: '状态结果', valueType: 'json' }];
     case 'parameter_extractor':
@@ -94,6 +100,8 @@ function defaultConfig(nodeType: BuiltinFlowNodeType): Record<string, unknown> {
       return { method: 'GET', url: '' };
     case 'tool':
       return { tool_name: '' };
+    case 'data_model':
+      return { ...defaultDataModelNodeConfig };
     case 'variable_assigner':
       return { writes: [] };
     case 'parameter_extractor':

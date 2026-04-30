@@ -34,7 +34,7 @@ Related completed design work:
    Adds protected-model enforcement, Data Model Advisor findings, and dynamic Data Model API documentation.
 6. [x] [Plan F: Settings Data Source UI](./2026-04-30-data-source-data-model-plan-f-settings-ui.md)
    Adds Settings / 数据源 with data source defaults, Data Model create/edit, field create/edit/delete, permissions, API exposure request/close, Advisor, record preview, and style-boundary coverage.
-7. [ ] [Plan G: Orchestration Data Model Node](./2026-04-30-data-source-data-model-plan-g-orchestration-node.md)
+7. [x] [Plan G: Orchestration Data Model Node](./2026-04-30-data-source-data-model-plan-g-orchestration-node.md)
    Adds the generic Data Model node, dynamic schema loading, runtime CRUD execution, and workflow actor checks.
 8. [ ] [Plan H: Scope Provider And Final QA](./2026-04-30-data-source-data-model-plan-h-scope-provider-qa.md)
    Verifies the core does not depend on workspace UI, defines the future scope provider contract, and runs final backend/frontend QA gates.

@@ -39,6 +39,7 @@ where
     R: crate::ports::ApplicationRepository
         + crate::ports::FlowRepository
         + OrchestrationRuntimeRepository
+        + crate::ports::ModelDefinitionRepository
         + crate::ports::ModelProviderRepository
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
@@ -50,10 +51,11 @@ where
         + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
         + Clone,
 {
-    let actor = service
-        .repository
-        .load_actor_context_for_user(command.actor_user_id)
-        .await?;
+    let actor = crate::ports::ApplicationRepository::load_actor_context_for_user(
+        &service.repository,
+        command.actor_user_id,
+    )
+    .await?;
     let editor_state = FlowService::new(service.repository.clone())
         .get_or_create_editor_state(command.actor_user_id, command.application_id)
         .await?;
@@ -302,6 +304,7 @@ where
     R: crate::ports::ApplicationRepository
         + crate::ports::FlowRepository
         + OrchestrationRuntimeRepository
+        + crate::ports::ModelDefinitionRepository
         + crate::ports::ModelProviderRepository
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
@@ -325,6 +328,7 @@ where
     R: crate::ports::ApplicationRepository
         + crate::ports::FlowRepository
         + OrchestrationRuntimeRepository
+        + crate::ports::ModelDefinitionRepository
         + crate::ports::ModelProviderRepository
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
@@ -353,6 +357,7 @@ where
     R: crate::ports::ApplicationRepository
         + crate::ports::FlowRepository
         + OrchestrationRuntimeRepository
+        + crate::ports::ModelDefinitionRepository
         + crate::ports::ModelProviderRepository
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
@@ -382,6 +387,7 @@ where
     R: crate::ports::ApplicationRepository
         + crate::ports::FlowRepository
         + OrchestrationRuntimeRepository
+        + crate::ports::ModelDefinitionRepository
         + crate::ports::ModelProviderRepository
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
@@ -393,10 +399,11 @@ where
         + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
         + Clone,
 {
-    let actor = service
-        .repository
-        .load_actor_context_for_user(command.actor_user_id)
-        .await?;
+    let actor = crate::ports::ApplicationRepository::load_actor_context_for_user(
+        &service.repository,
+        command.actor_user_id,
+    )
+    .await?;
     service
         .repository
         .get_application(actor.current_workspace_id, command.application_id)
@@ -446,6 +453,7 @@ where
     R: crate::ports::ApplicationRepository
         + crate::ports::FlowRepository
         + OrchestrationRuntimeRepository
+        + crate::ports::ModelDefinitionRepository
         + crate::ports::ModelProviderRepository
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository
@@ -465,6 +473,11 @@ where
     if flow_run.status != domain::FlowRunStatus::Running {
         return load_run_detail(&service.repository, command.application_id, flow_run.id).await;
     }
+    let actor = crate::ports::ApplicationRepository::load_actor_context_for_user(
+        &service.repository,
+        flow_run.created_by,
+    )
+    .await?;
     let application = service
         .repository
         .get_application(command.workspace_id, command.application_id)
@@ -761,6 +774,73 @@ where
 
                 variable_pool.insert(node.node_id.clone(), execution.output_payload);
             }
+            "data_model" => {
+                let execution = super::data_model_runtime::execute_data_model_node(
+                    service.repository.clone(),
+                    service.runtime_engine.clone(),
+                    &actor,
+                    node,
+                    &resolved_inputs,
+                )
+                .await;
+                last_output_payload = execution.output_payload.clone();
+                let node_status = if execution.error_payload.is_some() {
+                    domain::NodeRunStatus::Failed
+                } else {
+                    domain::NodeRunStatus::Succeeded
+                };
+                ensure_node_run_transition(
+                    domain::NodeRunStatus::Running,
+                    node_status,
+                    "continue_flow_debug_run",
+                )?;
+                service
+                    .repository
+                    .update_node_run(&UpdateNodeRunInput {
+                        node_run_id: node_run.id,
+                        status: node_status,
+                        output_payload: execution.output_payload.clone(),
+                        error_payload: execution.error_payload.clone(),
+                        metrics_payload: execution.metrics_payload.clone(),
+                        finished_at: Some(OffsetDateTime::now_utc()),
+                    })
+                    .await?;
+
+                if let Some(error_payload) = execution.error_payload {
+                    ensure_flow_run_transition(
+                        domain::FlowRunStatus::Running,
+                        domain::FlowRunStatus::Failed,
+                        "continue_flow_debug_run",
+                    )?;
+                    service
+                        .repository
+                        .update_flow_run(&UpdateFlowRunInput {
+                            flow_run_id: flow_run.id,
+                            status: domain::FlowRunStatus::Failed,
+                            output_payload: last_output_payload.clone(),
+                            error_payload: Some(error_payload.clone()),
+                            finished_at: Some(OffsetDateTime::now_utc()),
+                        })
+                        .await?;
+                    service
+                        .repository
+                        .append_run_event(&AppendRunEventInput {
+                            flow_run_id: flow_run.id,
+                            node_run_id: Some(node_run.id),
+                            event_type: "flow_run_failed".to_string(),
+                            payload: error_payload,
+                        })
+                        .await?;
+                    return load_run_detail(
+                        &service.repository,
+                        command.application_id,
+                        flow_run.id,
+                    )
+                    .await;
+                }
+
+                variable_pool.insert(node.node_id.clone(), execution.output_payload);
+            }
             "template_transform" | "answer" => {
                 let output_key = first_output_key(node);
                 let output_value =
@@ -979,6 +1059,7 @@ where
     R: crate::ports::ApplicationRepository
         + crate::ports::FlowRepository
         + OrchestrationRuntimeRepository
+        + crate::ports::ModelDefinitionRepository
         + crate::ports::ModelProviderRepository
         + crate::ports::NodeContributionRepository
         + crate::ports::PluginRepository

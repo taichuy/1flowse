@@ -13,6 +13,8 @@ import {
 
 const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
   text: 'text',
+  static_select: 'static_select',
+  data_model: 'data_model',
   llm_model: 'llm_model',
   llm_prompt_messages: 'llm_prompt_messages',
   llm_response_format: 'llm_response_format',
@@ -32,7 +34,9 @@ function createFieldBlock(field: NodeDefinitionField): SchemaFieldBlock {
     kind: 'field',
     renderer: FIELD_RENDERER_BY_EDITOR[field.editor],
     path: field.key,
-    label: field.label
+    label: field.label,
+    options: field.options,
+    visibleWhen: field.visibleWhen
   };
 }
 

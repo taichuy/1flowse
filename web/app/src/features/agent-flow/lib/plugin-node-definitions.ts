@@ -33,6 +33,7 @@ export const BUILTIN_NODE_PICKER_OPTIONS: BuiltinNodePickerOption[] = [
   { kind: 'builtin', type: 'if_else', label: 'If / Else' },
   { kind: 'builtin', type: 'http_request', label: 'HTTP Request' },
   { kind: 'builtin', type: 'tool', label: 'Tool' },
+  { kind: 'builtin', type: 'data_model', label: 'Data Model' },
   { kind: 'builtin', type: 'variable_assigner', label: 'Variable Assigner' },
   { kind: 'builtin', type: 'iteration', label: 'Iteration' },
   { kind: 'builtin', type: 'loop', label: 'Loop' }

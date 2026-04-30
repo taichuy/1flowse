@@ -1,4 +1,8 @@
 import type { FlowNodeType } from '@1flowbase/flow-schema';
+import type {
+  SchemaFieldOption,
+  SchemaRule
+} from '../../../../shared/schema-ui/contracts/canvas-node-schema';
 
 export type InspectorSectionKey =
   | 'basics'
@@ -9,6 +13,8 @@ export type InspectorSectionKey =
 
 export type NodeEditorKind =
   | 'text'
+  | 'static_select'
+  | 'data_model'
   | 'llm_model'
   | 'llm_prompt_messages'
   | 'llm_response_format'
@@ -27,6 +33,8 @@ export interface NodeDefinitionField {
   label: string;
   editor: NodeEditorKind;
   required?: boolean;
+  options?: SchemaFieldOption[];
+  visibleWhen?: SchemaRule;
 }
 
 export interface NodeDefinitionSection {
