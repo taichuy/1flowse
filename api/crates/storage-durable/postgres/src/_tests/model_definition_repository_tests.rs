@@ -333,6 +333,43 @@ async fn model_definition_repository_blocks_duplicate_code_inside_same_data_sour
 }
 
 #[tokio::test]
+async fn model_definition_repository_blocks_duplicate_code_inside_main_source() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let workspace_id = Uuid::now_v7();
+    let tenant_id = root_tenant_id(&store).await;
+    sqlx::query(
+        "insert into workspaces (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
+    )
+    .bind(workspace_id)
+    .bind(tenant_id)
+    .bind(format!("Main Source Workspace {}", workspace_id.simple()))
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    let code = format!("orders_{}", Uuid::now_v7().simple());
+    let input = CreateModelDefinitionInput {
+        actor_user_id: Uuid::nil(),
+        scope_kind: DataModelScopeKind::Workspace,
+        scope_id: workspace_id,
+        data_source_instance_id: None,
+        code,
+        title: "Orders".into(),
+        status: DataModelStatus::Published,
+        api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+        protection: DataModelProtection::default(),
+    };
+    ModelDefinitionRepository::create_model_definition(&store, &input)
+        .await
+        .unwrap();
+
+    let duplicate = ModelDefinitionRepository::create_model_definition(&store, &input).await;
+    assert!(duplicate.is_err());
+}
+
+#[tokio::test]
 async fn model_definition_repository_allows_duplicate_code_across_data_sources_in_same_workspace() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();

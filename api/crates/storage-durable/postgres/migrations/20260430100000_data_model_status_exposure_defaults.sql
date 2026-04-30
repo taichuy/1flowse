@@ -96,6 +96,10 @@ create unique index if not exists model_definitions_data_source_code_uidx
   on model_definitions (data_source_instance_id, code)
   where data_source_instance_id is not null;
 
+create unique index if not exists model_definitions_main_source_code_uidx
+  on model_definitions (code)
+  where data_source_instance_id is null;
+
 create table if not exists scope_data_model_grants (
   id uuid primary key,
   scope_kind text not null check (scope_kind in ('system', 'workspace')),
