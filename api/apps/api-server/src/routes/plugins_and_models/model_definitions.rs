@@ -83,12 +83,16 @@ pub struct CreateScopeGrantBody {
     #[serde(default = "default_true")]
     pub enabled: bool,
     pub permission_profile: String,
+    #[serde(default)]
+    pub confirm_unsafe_external_source_system_all: bool,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateScopeGrantBody {
     pub enabled: Option<bool>,
     pub permission_profile: Option<String>,
+    #[serde(default)]
+    pub confirm_unsafe_external_source_system_all: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -592,6 +596,8 @@ pub async fn create_scope_grant(
             data_model_id: parse_uuid(&model_id, "model_id")?,
             enabled: body.enabled,
             permission_profile: body.permission_profile,
+            confirm_unsafe_external_source_system_all: body
+                .confirm_unsafe_external_source_system_all,
         })
         .await?;
 
@@ -632,6 +638,8 @@ pub async fn update_scope_grant(
             grant_id: parse_uuid(&grant_id, "grant_id")?,
             enabled: body.enabled,
             permission_profile: body.permission_profile,
+            confirm_unsafe_external_source_system_all: body
+                .confirm_unsafe_external_source_system_all,
         })
         .await?;
 

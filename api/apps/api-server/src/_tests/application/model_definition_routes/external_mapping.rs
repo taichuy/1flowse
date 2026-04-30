@@ -159,3 +159,142 @@ async fn create_external_model_and_field_mapping_keys() {
         json!("properties.email")
     );
 }
+
+#[tokio::test]
+async fn unsafe_external_system_all_scope_grant_route_requires_confirmation() {
+    let (app, database_url) = test_app_with_database_url().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let data_source_instance_id = seed_external_data_source_instance(&database_url).await;
+
+    let create_model_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/models")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "scope_kind": "workspace",
+                        "data_source_instance_id": data_source_instance_id,
+                        "external_resource_key": "unsafe.contacts",
+                        "code": "unsafe_external_contacts",
+                        "title": "Unsafe External Contacts"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_model_response.status(), StatusCode::CREATED);
+    let created_model: serde_json::Value = serde_json::from_slice(
+        &to_bytes(create_model_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let model_id = created_model["data"]["id"].as_str().unwrap();
+
+    let without_confirmation = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/console/models/{model_id}/scope-grants"))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "scope_kind": "system",
+                        "scope_id": domain::SYSTEM_SCOPE_ID,
+                        "enabled": true,
+                        "permission_profile": "system_all"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(without_confirmation.status(), StatusCode::BAD_REQUEST);
+
+    let with_confirmation = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/console/models/{model_id}/scope-grants"))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "scope_kind": "system",
+                        "scope_id": domain::SYSTEM_SCOPE_ID,
+                        "enabled": true,
+                        "permission_profile": "system_all",
+                        "confirm_unsafe_external_source_system_all": true
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(with_confirmation.status(), StatusCode::CREATED);
+    let created_grant: serde_json::Value = serde_json::from_slice(
+        &to_bytes(with_confirmation.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let grant_id = created_grant["data"]["id"].as_str().unwrap();
+
+    let update_without_confirmation = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!(
+                    "/api/console/models/{model_id}/scope-grants/{grant_id}"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "enabled": false }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        update_without_confirmation.status(),
+        StatusCode::BAD_REQUEST
+    );
+
+    let update_with_confirmation = app
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!(
+                    "/api/console/models/{model_id}/scope-grants/{grant_id}"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "enabled": false,
+                        "confirm_unsafe_external_source_system_all": true
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(update_with_confirmation.status(), StatusCode::OK);
+}

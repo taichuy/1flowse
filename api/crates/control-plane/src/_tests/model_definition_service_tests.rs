@@ -1,7 +1,8 @@
 use control_plane::model_definition::{
-    AddModelFieldCommand, CreateModelDefinitionCommand, DeleteModelDefinitionCommand,
-    DeleteScopeDataModelGrantCommand, InMemoryModelDefinitionRepository, ModelDefinitionService,
-    UpdateModelDefinitionStatusCommand, UpdateScopeDataModelGrantCommand,
+    AddModelFieldCommand, CreateModelDefinitionCommand, CreateScopeDataModelGrantCommand,
+    DeleteModelDefinitionCommand, DeleteScopeDataModelGrantCommand,
+    InMemoryModelDefinitionRepository, ModelDefinitionService, UpdateModelDefinitionStatusCommand,
+    UpdateScopeDataModelGrantCommand,
 };
 use control_plane::ports::{
     AddModelFieldInput, ApiKeyDataModelReadinessRecord, CreateModelDefinitionInput,
@@ -371,6 +372,19 @@ fn system_model(model_id: Uuid) -> ModelDefinitionRecord {
         status: DataModelStatus::Published,
         api_exposure_status: ApiExposureStatus::PublishedNotExposed,
         protection: DataModelProtection::default(),
+    }
+}
+
+fn unsafe_external_system_model(model_id: Uuid) -> ModelDefinitionRecord {
+    ModelDefinitionRecord {
+        data_source_instance_id: Some(Uuid::now_v7()),
+        source_kind: domain::DataModelSourceKind::ExternalSource,
+        external_resource_key: Some("unsafe.contacts".into()),
+        external_capability_snapshot: Some(json!({
+            "supports_list": true,
+            "supports_scope_filter": false
+        })),
+        ..system_model(model_id)
     }
 }
 
@@ -1212,6 +1226,7 @@ async fn update_scope_grant_records_audit_event() {
                 data_model_id: created.id,
                 enabled: true,
                 permission_profile: "scope_all".into(),
+                confirm_unsafe_external_source_system_all: false,
             },
         )
         .await
@@ -1224,6 +1239,7 @@ async fn update_scope_grant_records_audit_event() {
             grant_id: grant.id,
             enabled: Some(false),
             permission_profile: Some("owner".into()),
+            confirm_unsafe_external_source_system_all: false,
         })
         .await
         .unwrap();
@@ -1255,6 +1271,7 @@ async fn non_root_scope_grant_create_rejects_system_and_other_workspace_scope() 
                 data_model_id: model_id,
                 enabled: true,
                 permission_profile: "scope_all".into(),
+                confirm_unsafe_external_source_system_all: false,
             },
         )
         .await
@@ -1270,6 +1287,7 @@ async fn non_root_scope_grant_create_rejects_system_and_other_workspace_scope() 
                 data_model_id: model_id,
                 enabled: true,
                 permission_profile: "scope_all".into(),
+                confirm_unsafe_external_source_system_all: false,
             },
         )
         .await
@@ -1287,6 +1305,7 @@ async fn non_root_scope_grant_create_rejects_system_and_other_workspace_scope() 
                 data_model_id: model_id,
                 enabled: true,
                 permission_profile: "scope_all".into(),
+                confirm_unsafe_external_source_system_all: false,
             },
         )
         .await
@@ -1336,6 +1355,7 @@ async fn non_root_scope_grant_update_delete_authorizes_existing_grant_scope() {
                 grant_id,
                 enabled: Some(false),
                 permission_profile: None,
+                confirm_unsafe_external_source_system_all: false,
             })
             .await
             .unwrap_err();
@@ -1359,6 +1379,7 @@ async fn non_root_scope_grant_update_delete_authorizes_existing_grant_scope() {
             grant_id: current_workspace_grant_id,
             enabled: Some(false),
             permission_profile: Some("owner".into()),
+            confirm_unsafe_external_source_system_all: false,
         })
         .await
         .unwrap();
@@ -1396,6 +1417,7 @@ async fn root_scope_grant_lifecycle_can_manage_any_scope() {
                 data_model_id: model_id,
                 enabled: true,
                 permission_profile: "scope_all".into(),
+                confirm_unsafe_external_source_system_all: false,
             },
         )
         .await
@@ -1411,6 +1433,7 @@ async fn root_scope_grant_lifecycle_can_manage_any_scope() {
                 data_model_id: model_id,
                 enabled: true,
                 permission_profile: "scope_all".into(),
+                confirm_unsafe_external_source_system_all: false,
             },
         )
         .await
@@ -1424,6 +1447,7 @@ async fn root_scope_grant_lifecycle_can_manage_any_scope() {
             grant_id: system_grant.id,
             enabled: Some(false),
             permission_profile: Some("owner".into()),
+            confirm_unsafe_external_source_system_all: false,
         })
         .await
         .unwrap();
@@ -1439,6 +1463,124 @@ async fn root_scope_grant_lifecycle_can_manage_any_scope() {
         .await
         .unwrap();
     assert_eq!(deleted.scope_id, other_workspace_id);
+}
+
+#[tokio::test]
+async fn unsafe_external_system_all_scope_grant_requires_explicit_confirmation() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let repository =
+        ScopedModelDefinitionRepository::new(actor_in_workspace(actor_user_id, actor_workspace_id))
+            .with_model(unsafe_external_system_model(model_id));
+    let service = ModelDefinitionService::new(repository);
+
+    let error = service
+        .create_scope_grant(CreateScopeDataModelGrantCommand {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::System,
+            scope_id: SYSTEM_SCOPE_ID,
+            data_model_id: model_id,
+            enabled: true,
+            permission_profile: "system_all".into(),
+            confirm_unsafe_external_source_system_all: false,
+        })
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("confirmation"));
+
+    let grant = service
+        .create_scope_grant(CreateScopeDataModelGrantCommand {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::System,
+            scope_id: SYSTEM_SCOPE_ID,
+            data_model_id: model_id,
+            enabled: true,
+            permission_profile: "system_all".into(),
+            confirm_unsafe_external_source_system_all: true,
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        grant.permission_profile,
+        domain::ScopeDataModelPermissionProfile::SystemAll
+    );
+}
+
+#[tokio::test]
+async fn unsafe_external_system_all_scope_grant_update_requires_explicit_confirmation() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let grant_id = Uuid::now_v7();
+    let repository =
+        ScopedModelDefinitionRepository::new(actor_in_workspace(actor_user_id, actor_workspace_id))
+            .with_model(unsafe_external_system_model(model_id))
+            .with_grant(scope_grant(
+                grant_id,
+                model_id,
+                DataModelScopeKind::System,
+                SYSTEM_SCOPE_ID,
+            ));
+    let service = ModelDefinitionService::new(repository);
+
+    let error = service
+        .update_scope_grant(UpdateScopeDataModelGrantCommand {
+            actor_user_id,
+            data_model_id: model_id,
+            grant_id,
+            enabled: Some(true),
+            permission_profile: Some("system_all".into()),
+            confirm_unsafe_external_source_system_all: false,
+        })
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("confirmation"));
+
+    let grant = service
+        .update_scope_grant(UpdateScopeDataModelGrantCommand {
+            actor_user_id,
+            data_model_id: model_id,
+            grant_id,
+            enabled: Some(true),
+            permission_profile: Some("system_all".into()),
+            confirm_unsafe_external_source_system_all: true,
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        grant.permission_profile,
+        domain::ScopeDataModelPermissionProfile::SystemAll
+    );
+}
+
+#[tokio::test]
+async fn main_source_system_all_scope_grant_does_not_require_external_risk_confirmation() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let repository =
+        ScopedModelDefinitionRepository::new(actor_in_workspace(actor_user_id, actor_workspace_id))
+            .with_model(system_model(model_id));
+    let service = ModelDefinitionService::new(repository);
+
+    let grant = service
+        .create_scope_grant(CreateScopeDataModelGrantCommand {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::System,
+            scope_id: SYSTEM_SCOPE_ID,
+            data_model_id: model_id,
+            enabled: true,
+            permission_profile: "system_all".into(),
+            confirm_unsafe_external_source_system_all: false,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        grant.permission_profile,
+        domain::ScopeDataModelPermissionProfile::SystemAll
+    );
 }
 
 #[tokio::test]
@@ -1466,6 +1608,7 @@ async fn delete_scope_grant_records_audit_event() {
                 data_model_id: created.id,
                 enabled: true,
                 permission_profile: "scope_all".into(),
+                confirm_unsafe_external_source_system_all: false,
             },
         )
         .await
@@ -1508,6 +1651,7 @@ async fn delete_scope_grant_rejects_invisible_model_and_wrong_model_grant_pair()
                 data_model_id: grant_model_id,
                 enabled: true,
                 permission_profile: "scope_all".into(),
+                confirm_unsafe_external_source_system_all: false,
             },
         )
         .await

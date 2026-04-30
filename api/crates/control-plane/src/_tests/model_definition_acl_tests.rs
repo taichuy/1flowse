@@ -250,6 +250,7 @@ async fn system_creates_scope_grant_for_single_machine_default_scope() {
             data_model_id: model_id,
             enabled: true,
             permission_profile: "scope_all".into(),
+            confirm_unsafe_external_source_system_all: false,
         })
         .await
         .unwrap();
@@ -279,6 +280,7 @@ async fn scope_grant_rejects_unknown_permission_profile_at_service_boundary() {
             data_model_id: model_id,
             enabled: true,
             permission_profile: "workspace_admin".into(),
+            confirm_unsafe_external_source_system_all: false,
         })
         .await
         .unwrap_err();
@@ -311,6 +313,7 @@ async fn runtime_scope_grant_loader_converts_current_workspace_persisted_grant()
             data_model_id: model_id,
             enabled: true,
             permission_profile: "scope_all".into(),
+            confirm_unsafe_external_source_system_all: false,
         })
         .await
         .unwrap();
@@ -351,6 +354,7 @@ async fn runtime_scope_grant_loader_does_not_select_system_default_for_non_syste
             data_model_id: model_id,
             enabled: true,
             permission_profile: "system_all".into(),
+            confirm_unsafe_external_source_system_all: false,
         })
         .await
         .unwrap();

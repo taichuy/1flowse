@@ -97,6 +97,7 @@ pub struct CreateScopeDataModelGrantCommand {
     pub data_model_id: Uuid,
     pub enabled: bool,
     pub permission_profile: String,
+    pub confirm_unsafe_external_source_system_all: bool,
 }
 
 pub struct UpdateScopeDataModelGrantCommand {
@@ -105,6 +106,7 @@ pub struct UpdateScopeDataModelGrantCommand {
     pub grant_id: Uuid,
     pub enabled: Option<bool>,
     pub permission_profile: Option<String>,
+    pub confirm_unsafe_external_source_system_all: bool,
 }
 
 pub struct DeleteScopeDataModelGrantCommand {
@@ -627,15 +629,22 @@ where
             .load_actor_context_for_user(command.actor_user_id)
             .await?;
         ensure_state_model_permission(&actor, "manage")?;
-        self.repository
+        let permission_profile =
+            domain::ScopeDataModelPermissionProfile::parse(&command.permission_profile)
+                .ok_or(ControlPlaneError::InvalidInput("permission_profile"))?;
+        let model = self
+            .repository
             .get_model_definition(actor.current_workspace_id, command.data_model_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
         ensure_scope_grant_lifecycle_authorized(&actor, command.scope_kind, command.scope_id)?;
-
-        let permission_profile =
-            domain::ScopeDataModelPermissionProfile::parse(&command.permission_profile)
-                .ok_or(ControlPlaneError::InvalidInput("permission_profile"))?;
+        ensure_unsafe_external_system_all_confirmed(
+            &model,
+            command.scope_kind,
+            command.scope_id,
+            permission_profile,
+            command.confirm_unsafe_external_source_system_all,
+        )?;
 
         let grant = self
             .repository
@@ -677,7 +686,8 @@ where
             .load_actor_context_for_user(command.actor_user_id)
             .await?;
         ensure_state_model_permission(&actor, "manage")?;
-        self.repository
+        let model = self
+            .repository
             .get_model_definition(actor.current_workspace_id, command.data_model_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
@@ -696,6 +706,13 @@ where
             None => existing.permission_profile,
         };
         let enabled = command.enabled.unwrap_or(existing.enabled);
+        ensure_unsafe_external_system_all_confirmed(
+            &model,
+            existing.scope_kind,
+            existing.scope_id,
+            permission_profile,
+            command.confirm_unsafe_external_source_system_all,
+        )?;
 
         let grant = self
             .repository
@@ -909,6 +926,25 @@ fn external_source_is_unsafe(model: &domain::ModelDefinitionRecord) -> bool {
         .get("supports_scope_filter")
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(false)
+}
+
+fn ensure_unsafe_external_system_all_confirmed(
+    model: &domain::ModelDefinitionRecord,
+    scope_kind: DataModelScopeKind,
+    scope_id: Uuid,
+    permission_profile: ScopeDataModelPermissionProfile,
+    confirmed: bool,
+) -> Result<(), ControlPlaneError> {
+    if scope_kind == DataModelScopeKind::System
+        && scope_id == domain::SYSTEM_SCOPE_ID
+        && permission_profile == ScopeDataModelPermissionProfile::SystemAll
+        && external_source_is_unsafe(model)
+        && !confirmed
+    {
+        return Err(ControlPlaneError::InvalidInput("confirmation"));
+    }
+
+    Ok(())
 }
 
 fn normalize_external_resource_key(

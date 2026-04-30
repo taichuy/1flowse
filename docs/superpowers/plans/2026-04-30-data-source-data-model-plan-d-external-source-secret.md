@@ -255,6 +255,16 @@ Task 3a-2b narrowed validation record, 2026-04-30:
   - Full task-agent verification pending below for the final commit.
 - Scope note: This narrowed 3a-2b slice persists `external_capability_snapshot` on Data Model records and makes effective API exposure return `unsafe_external_source` for external-source models that lack `supports_scope_filter`; `main_source` readiness remains unchanged. Data-source catalog/describe-resource mapping and explicit `system_all` risk confirmation are still follow-up 3a-2b sub-slices. Runtime CRUD dispatch remains Task 3b; REST fixture remains Task 4.
 
+Task 3a-2b-2 explicit confirmation validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests::unsafe_external_system_all_scope_grant_requires_explicit_confirmation` failed before implementation because `CreateScopeDataModelGrantCommand` and `UpdateScopeDataModelGrantCommand` had no explicit unsafe external `system_all` confirmation field.
+- Green evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_acl_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes`
+- Scope note: This slice completes explicit confirmation for creating or updating `system_all` grants on unsafe external-source Data Models through control-plane commands and console route DTOs. `main_source` Data Models and safe external-source Data Models do not require the confirmation. Data-source catalog/describe-resource mapping is deferred to the next 3a-2b slice. Runtime CRUD dispatch remains Task 3b; REST fixture remains Task 4.
+
 ### Task 4: REST API Connector Rules
 
 **Files:**
