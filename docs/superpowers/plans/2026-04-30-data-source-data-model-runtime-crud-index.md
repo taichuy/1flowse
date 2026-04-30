@@ -24,7 +24,7 @@ Related completed design work:
 
 1. [x] [Plan A: Domain, Storage, And Defaults](./2026-04-30-data-source-data-model-plan-a-domain-storage-defaults.md)
    Adds Data Model status, API exposure status, data source defaults, protected-model metadata, and scope grant persistence.
-2. [ ] [Plan B: main_source Runtime CRUD](./2026-04-30-data-source-data-model-plan-b-main-source-runtime-crud.md)
+2. [x] [Plan B: main_source Runtime CRUD](./2026-04-30-data-source-data-model-plan-b-main-source-runtime-crud.md)
    Makes `main_source` create system-owned dynamic tables, enforces status gates, and keeps runtime CRUD scoped through `DEFAULT_SCOPE_ID`.
 3. [ ] [Plan C: Permission And API Exposure](./2026-04-30-data-source-data-model-plan-c-permission-api-exposure.md)
    Adds API Key actor support, scope grants, exposure readiness calculation, runtime permission checks, and audit events.

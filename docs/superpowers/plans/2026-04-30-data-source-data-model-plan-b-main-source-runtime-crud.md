@@ -234,22 +234,30 @@ cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes
 
 ### Task 4: Plan B Verification And Commit
 
-- [ ] **Step 1: Format**
+- [x] **Step 1: Format**
 
 ```bash
-cargo fmt --manifest-path api/Cargo.toml
+cargo fmt --manifest-path api/Cargo.toml --all --check
 ```
 
-- [ ] **Step 2: Targeted regression**
+- [x] **Step 2: Targeted regression**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p runtime-core
-cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes runtime_model_routes openapi_alignment
+cargo test --manifest-path api/Cargo.toml -p storage-postgres physical_schema_repository_tests
+cargo test --manifest-path api/Cargo.toml -p storage-postgres runtime_record_repository_tests
+cargo test --manifest-path api/Cargo.toml -p storage-postgres runtime_registry_health_tests
+cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests
+cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes
+cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes
+cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
-git add api/crates/runtime-core api/crates/control-plane api/crates/storage-durable/postgres api/apps/api-server
-git commit -m "feat: gate runtime crud by data model status"
+git add docs/superpowers/plans/2026-04-30-data-source-data-model-plan-b-main-source-runtime-crud.md docs/superpowers/plans/2026-04-30-data-source-data-model-runtime-crud-index.md
+git commit -m "docs: mark data model plan b complete"
 ```
+
+Task-scoped QA passed with `qa-evaluation`: runtime status gates, registry status preservation, relation expansion target gates, `main_source` physical schema rules, route status DTOs, atomic create status, invalid status no-write, platform-column field rejection, and OpenAPI alignment all have direct test evidence. Plan C API Key, scope grant, audit, and exposure readiness behavior were intentionally left for Plan C.
