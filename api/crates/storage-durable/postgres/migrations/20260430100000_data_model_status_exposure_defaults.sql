@@ -80,12 +80,15 @@ end $$;
 
 do $$
 begin
+  alter table model_definitions
+    drop constraint if exists model_definitions_owner_kind_check;
+
   if not exists (
     select 1 from pg_constraint where conname = 'model_definitions_owner_kind_check'
   ) then
     alter table model_definitions
       add constraint model_definitions_owner_kind_check
-      check (owner_kind in ('core', 'data_source'));
+      check (owner_kind in ('core', 'host_extension', 'runtime_extension'));
   end if;
 end $$;
 

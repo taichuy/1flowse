@@ -202,20 +202,23 @@ impl ExposureCompatibility {
 #[serde(rename_all = "snake_case")]
 pub enum DataModelOwnerKind {
     Core,
-    DataSource,
+    HostExtension,
+    RuntimeExtension,
 }
 
 impl DataModelOwnerKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Core => "core",
-            Self::DataSource => "data_source",
+            Self::HostExtension => "host_extension",
+            Self::RuntimeExtension => "runtime_extension",
         }
     }
 
     pub fn from_db(value: &str) -> Self {
         match value {
-            "data_source" => Self::DataSource,
+            "host_extension" => Self::HostExtension,
+            "runtime_extension" => Self::RuntimeExtension,
             _ => Self::Core,
         }
     }
