@@ -686,6 +686,7 @@ impl CapturingDataSourceBackend {
 impl DataSourceRuntimeRecordBackend for CapturingDataSourceBackend {
     async fn list_records(
         &self,
+        _workspace_id: Uuid,
         data_source_instance_id: Uuid,
         input: DataSourceListRecordsInput,
     ) -> anyhow::Result<DataSourceListRecordsOutput> {
@@ -706,6 +707,7 @@ impl DataSourceRuntimeRecordBackend for CapturingDataSourceBackend {
 
     async fn get_record(
         &self,
+        _workspace_id: Uuid,
         data_source_instance_id: Uuid,
         input: DataSourceGetRecordInput,
     ) -> anyhow::Result<DataSourceGetRecordOutput> {
@@ -724,6 +726,7 @@ impl DataSourceRuntimeRecordBackend for CapturingDataSourceBackend {
 
     async fn create_record(
         &self,
+        _workspace_id: Uuid,
         data_source_instance_id: Uuid,
         input: DataSourceCreateRecordInput,
     ) -> anyhow::Result<DataSourceCreateRecordOutput> {
@@ -741,6 +744,7 @@ impl DataSourceRuntimeRecordBackend for CapturingDataSourceBackend {
 
     async fn update_record(
         &self,
+        _workspace_id: Uuid,
         data_source_instance_id: Uuid,
         input: DataSourceUpdateRecordInput,
     ) -> anyhow::Result<DataSourceUpdateRecordOutput> {
@@ -757,6 +761,7 @@ impl DataSourceRuntimeRecordBackend for CapturingDataSourceBackend {
 
     async fn delete_record(
         &self,
+        _workspace_id: Uuid,
         data_source_instance_id: Uuid,
         input: DataSourceDeleteRecordInput,
     ) -> anyhow::Result<DataSourceDeleteRecordOutput> {

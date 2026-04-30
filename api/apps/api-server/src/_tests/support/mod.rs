@@ -38,7 +38,7 @@ use crate::{
     app_state::ApiState,
     config::ApiConfig,
     host_infrastructure::build_local_host_infrastructure,
-    provider_runtime::ApiRuntimeServices,
+    provider_runtime::{ApiProviderRuntime, ApiRuntimeServices},
     runtime_profile_client::{
         ApiRuntimeProfilePort, HostApiRuntimeProfileCollector, PluginRunnerSystemPort,
     },

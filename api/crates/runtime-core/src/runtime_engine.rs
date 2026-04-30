@@ -80,30 +80,35 @@ pub struct RuntimeDeleteInput {
 pub trait DataSourceRuntimeRecordBackend: Send + Sync {
     async fn list_records(
         &self,
+        workspace_id: Uuid,
         data_source_instance_id: Uuid,
         input: DataSourceListRecordsInput,
     ) -> Result<DataSourceListRecordsOutput>;
 
     async fn get_record(
         &self,
+        workspace_id: Uuid,
         data_source_instance_id: Uuid,
         input: DataSourceGetRecordInput,
     ) -> Result<DataSourceGetRecordOutput>;
 
     async fn create_record(
         &self,
+        workspace_id: Uuid,
         data_source_instance_id: Uuid,
         input: DataSourceCreateRecordInput,
     ) -> Result<DataSourceCreateRecordOutput>;
 
     async fn update_record(
         &self,
+        workspace_id: Uuid,
         data_source_instance_id: Uuid,
         input: DataSourceUpdateRecordInput,
     ) -> Result<DataSourceUpdateRecordOutput>;
 
     async fn delete_record(
         &self,
+        workspace_id: Uuid,
         data_source_instance_id: Uuid,
         input: DataSourceDeleteRecordInput,
     ) -> Result<DataSourceDeleteRecordOutput>;
@@ -246,7 +251,8 @@ impl RuntimeEngine {
                 self.records.list_records(&metadata, query).await
             }
             domain::DataModelSourceKind::ExternalSource => {
-                self.list_external_records(&metadata, query).await
+                self.list_external_records(input.actor.current_workspace_id, &metadata, query)
+                    .await
             }
         }
     }
@@ -273,8 +279,13 @@ impl RuntimeEngine {
                     .await
             }
             domain::DataModelSourceKind::ExternalSource => {
-                self.get_external_record(&metadata, access_scope, input.record_id)
-                    .await
+                self.get_external_record(
+                    input.actor.current_workspace_id,
+                    &metadata,
+                    access_scope,
+                    input.record_id,
+                )
+                .await
             }
         }
     }
@@ -307,6 +318,7 @@ impl RuntimeEngine {
             }
             domain::DataModelSourceKind::ExternalSource => {
                 self.create_external_record(
+                    input.actor.current_workspace_id,
                     &metadata,
                     access_scope.scope_id,
                     Some(input.actor.user_id),
@@ -344,8 +356,14 @@ impl RuntimeEngine {
                     .await
             }
             domain::DataModelSourceKind::ExternalSource => {
-                self.update_external_record(&metadata, access_scope, input.record_id, input.payload)
-                    .await
+                self.update_external_record(
+                    input.actor.current_workspace_id,
+                    &metadata,
+                    access_scope,
+                    input.record_id,
+                    input.payload,
+                )
+                .await
             }
         }
     }
@@ -371,8 +389,13 @@ impl RuntimeEngine {
                     .await?
             }
             domain::DataModelSourceKind::ExternalSource => {
-                self.delete_external_record(&metadata, access_scope, input.record_id)
-                    .await?
+                self.delete_external_record(
+                    input.actor.current_workspace_id,
+                    &metadata,
+                    access_scope,
+                    input.record_id,
+                )
+                .await?
             }
         };
 
@@ -423,12 +446,14 @@ impl RuntimeEngine {
 
     async fn list_external_records(
         &self,
+        workspace_id: Uuid,
         metadata: &ModelMetadata,
         query: RuntimeListQuery,
     ) -> Result<RuntimeListResult> {
         let output = self
             .external_backend()?
             .list_records(
+                workspace_id,
                 external_data_source_instance_id(metadata)?,
                 DataSourceListRecordsInput {
                     connection: DataSourceConfigInput::default(),
@@ -456,12 +481,14 @@ impl RuntimeEngine {
 
     async fn get_external_record(
         &self,
+        workspace_id: Uuid,
         metadata: &ModelMetadata,
         access_scope: crate::runtime_acl::RuntimeAccessScope,
         record_id: String,
     ) -> Result<Option<Value>> {
         self.external_backend()?
             .get_record(
+                workspace_id,
                 external_data_source_instance_id(metadata)?,
                 DataSourceGetRecordInput {
                     connection: DataSourceConfigInput::default(),
@@ -481,6 +508,7 @@ impl RuntimeEngine {
 
     async fn create_external_record(
         &self,
+        workspace_id: Uuid,
         metadata: &ModelMetadata,
         scope_id: Option<Uuid>,
         owner_user_id: Option<Uuid>,
@@ -489,6 +517,7 @@ impl RuntimeEngine {
         let record = runtime_payload_to_external(metadata, payload)?;
         self.external_backend()?
             .create_record(
+                workspace_id,
                 external_data_source_instance_id(metadata)?,
                 DataSourceCreateRecordInput {
                     connection: DataSourceConfigInput::default(),
@@ -505,6 +534,7 @@ impl RuntimeEngine {
 
     async fn update_external_record(
         &self,
+        workspace_id: Uuid,
         metadata: &ModelMetadata,
         access_scope: crate::runtime_acl::RuntimeAccessScope,
         record_id: String,
@@ -513,6 +543,7 @@ impl RuntimeEngine {
         let patch = runtime_payload_to_external(metadata, payload)?;
         self.external_backend()?
             .update_record(
+                workspace_id,
                 external_data_source_instance_id(metadata)?,
                 DataSourceUpdateRecordInput {
                     connection: DataSourceConfigInput::default(),
@@ -530,12 +561,14 @@ impl RuntimeEngine {
 
     async fn delete_external_record(
         &self,
+        workspace_id: Uuid,
         metadata: &ModelMetadata,
         access_scope: crate::runtime_acl::RuntimeAccessScope,
         record_id: String,
     ) -> Result<bool> {
         self.external_backend()?
             .delete_record(
+                workspace_id,
                 external_data_source_instance_id(metadata)?,
                 DataSourceDeleteRecordInput {
                     connection: DataSourceConfigInput::default(),

@@ -4,7 +4,243 @@ use axum::{
     http::{Request, StatusCode},
 };
 use serde_json::json;
+use sqlx::Row;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tower::ServiceExt;
+
+struct TempDataSourcePackage {
+    root: PathBuf,
+}
+
+impl TempDataSourcePackage {
+    fn new() -> Self {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "api-runtime-model-data-source-test-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        Self { root }
+    }
+
+    fn path(&self) -> &Path {
+        &self.root
+    }
+
+    fn write(&self, relative_path: &str, content: &str) {
+        let path = self.root.join(relative_path);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(path, content).unwrap();
+    }
+}
+
+impl Drop for TempDataSourcePackage {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+fn write_external_runtime_package(package: &TempDataSourcePackage) {
+    let list_output = json!({
+        "ok": true,
+        "result": {
+            "rows": [{
+                "id": "contact-1",
+                "email_address": "list@example.com",
+                "secret_echo": "Bearer route-runtime-secret"
+            }],
+            "total_count": 1,
+            "metadata": {}
+        }
+    })
+    .to_string();
+    let get_output = json!({
+        "ok": true,
+        "result": {
+            "record": {
+                "id": "contact-1",
+                "email_address": "get@example.com",
+                "secret_echo": "Bearer route-runtime-secret"
+            },
+            "metadata": {}
+        }
+    })
+    .to_string();
+    let create_output = json!({
+        "ok": true,
+        "result": {
+            "record": {
+                "id": "contact-created",
+                "email_address": "created@example.com",
+                "secret_echo": "Bearer route-runtime-secret"
+            },
+            "metadata": {}
+        }
+    })
+    .to_string();
+    let update_output = json!({
+        "ok": true,
+        "result": {
+            "record": {
+                "id": "contact-1",
+                "email_address": "updated@example.com",
+                "secret_echo": "Bearer route-runtime-secret"
+            },
+            "metadata": {}
+        }
+    })
+    .to_string();
+    let delete_output = json!({
+        "ok": true,
+        "result": {
+            "deleted": true,
+            "metadata": {}
+        }
+    })
+    .to_string();
+    let error_output = json!({
+        "ok": false,
+        "error": {
+            "message": "runtime CRUD request missing connection secret or unsupported method",
+            "provider_summary": null
+        }
+    })
+    .to_string();
+
+    package.write(
+        "bin/fixture_external_data_source",
+        &format!(
+            r#"#!/usr/bin/env bash
+set -euo pipefail
+
+payload="$(cat)"
+case "${{payload}}" in
+  *'"method":"list_records"'*)
+    if [[ "${{payload}}" == *'"client_secret":"route-runtime-secret"'* && "${{payload}}" == *'"resource_key":"contacts"'* ]]; then
+      printf '%s' '{list_output}'
+    else
+      printf '%s' '{error_output}'
+      exit 1
+    fi
+    ;;
+  *'"method":"get_record"'*)
+    if [[ "${{payload}}" == *'"client_secret":"route-runtime-secret"'* && "${{payload}}" == *'"record_id":"contact-1"'* ]]; then
+      printf '%s' '{get_output}'
+    else
+      printf '%s' '{error_output}'
+      exit 1
+    fi
+    ;;
+  *'"method":"create_record"'*)
+    if [[ "${{payload}}" == *'"client_secret":"route-runtime-secret"'* && "${{payload}}" == *'"transaction_id":null'* ]]; then
+      printf '%s' '{create_output}'
+    else
+      printf '%s' '{error_output}'
+      exit 1
+    fi
+    ;;
+  *'"method":"update_record"'*)
+    if [[ "${{payload}}" == *'"client_secret":"route-runtime-secret"'* && "${{payload}}" == *'"transaction_id":null'* ]]; then
+      printf '%s' '{update_output}'
+    else
+      printf '%s' '{error_output}'
+      exit 1
+    fi
+    ;;
+  *'"method":"delete_record"'*)
+    if [[ "${{payload}}" == *'"client_secret":"route-runtime-secret"'* && "${{payload}}" == *'"transaction_id":null'* ]]; then
+      printf '%s' '{delete_output}'
+    else
+      printf '%s' '{error_output}'
+      exit 1
+    fi
+    ;;
+  *)
+    printf '%s' '{error_output}'
+    exit 1
+    ;;
+esac
+"#
+        ),
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = package.path().join("bin/fixture_external_data_source");
+        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).unwrap();
+    }
+
+    package.write(
+        "manifest.yaml",
+        r#"manifest_version: 1
+plugin_id: fixture_external_data_source@0.1.0
+version: 0.1.0
+vendor: taichuy
+display_name: Fixture External Data Source
+description: Fixture External Data Source
+source_kind: uploaded
+trust_level: unverified
+consumption_kind: runtime_extension
+execution_mode: process_per_call
+slot_codes:
+  - data_source
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.data_source/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: outbound_only
+  secrets: provider_instance_only
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/fixture_external_data_source
+  limits:
+    memory_bytes: 134217728
+    timeout_ms: 5000
+node_contributions: []
+"#,
+    );
+    package.write(
+        "datasource/fixture_external_data_source.yaml",
+        r#"source_code: fixture_external_data_source
+display_name: Fixture External Data Source
+auth_modes:
+  - api_key
+capabilities:
+  - list_records
+  - get_record
+  - create_record
+  - update_record
+  - delete_record
+supports_sync: false
+supports_webhook: false
+resource_kinds:
+  - object
+config_schema:
+  - key: client_id
+    label: Client ID
+    type: string
+    required: true
+"#,
+    );
+}
 
 async fn revoke_model_grant(database_url: &str, model_id: &str) {
     let pool = sqlx::PgPool::connect(database_url).await.unwrap();
@@ -18,6 +254,88 @@ async fn revoke_model_grant(database_url: &str, model_id: &str) {
     .execute(&pool)
     .await
     .unwrap();
+}
+
+async fn seed_runtime_data_source_instance(
+    database_url: &str,
+    package: &TempDataSourcePackage,
+) -> String {
+    let pool = sqlx::PgPool::connect(database_url).await.unwrap();
+    let actor = sqlx::query(
+        r#"
+        select users.id as user_id, workspace_memberships.workspace_id as workspace_id
+        from users
+        join workspace_memberships on workspace_memberships.user_id = users.id
+        where users.account = 'root'
+        order by workspace_memberships.created_at asc
+        limit 1
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let actor_user_id: uuid::Uuid = actor.get("user_id");
+    let workspace_id: uuid::Uuid = actor.get("workspace_id");
+    let installation_id = uuid::Uuid::now_v7();
+    let data_source_instance_id = uuid::Uuid::now_v7();
+
+    sqlx::query(
+        r#"
+        insert into plugin_installations (
+            id, provider_code, plugin_id, plugin_version, contract_version, protocol,
+            display_name, source_kind, trust_level, verification_status, desired_state,
+            artifact_status, runtime_status, availability_status, installed_path,
+            metadata_json, created_by
+        ) values (
+            $1, 'fixture_external_data_source', 'fixture_external_data_source@0.1.0',
+            '0.1.0', '1flowbase.data_source/v1', 'stdio_json',
+            'Fixture External Data Source', 'uploaded', 'unverified', 'valid',
+            'active_requested', 'ready', 'active', 'available', $2,
+            '{}', $3
+        )
+        "#,
+    )
+    .bind(installation_id)
+    .bind(package.path().display().to_string())
+    .bind(actor_user_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        insert into data_source_instances (
+            id, workspace_id, installation_id, source_code, display_name, status,
+            config_json, metadata_json, default_data_model_status,
+            default_api_exposure_status, created_by
+        ) values (
+            $1, $2, $3, 'fixture_external_data_source', 'Fixture External Data Source',
+            'ready', '{"client_id":"route-runtime-client"}', '{}',
+            'published', 'published_not_exposed', $4
+        )
+        "#,
+    )
+    .bind(data_source_instance_id)
+    .bind(workspace_id)
+    .bind(installation_id)
+    .bind(actor_user_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        insert into data_source_secrets (
+            data_source_instance_id, encrypted_secret_json, secret_version
+        ) values ($1, '{"client_secret":"route-runtime-secret"}', 1)
+        "#,
+    )
+    .bind(data_source_instance_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    data_source_instance_id.to_string()
 }
 
 async fn set_model_grant_permission_profile(database_url: &str, model_id: &str, profile: &str) {
@@ -736,6 +1054,201 @@ async fn runtime_model_routes_create_fetch_update_delete_and_filter_records() {
 }
 
 #[tokio::test]
+async fn runtime_model_routes_dispatch_external_source_crud_to_data_source_runtime() {
+    let package = TempDataSourcePackage::new();
+    write_external_runtime_package(&package);
+    let (app, database_url) = test_app_with_database_url().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let data_source_instance_id = seed_runtime_data_source_instance(&database_url, &package).await;
+
+    let create_model_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/models")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "scope_kind": "workspace",
+                        "data_source_instance_id": data_source_instance_id,
+                        "external_resource_key": "contacts",
+                        "code": "external_runtime_contacts",
+                        "title": "External Runtime Contacts",
+                        "status": "published"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_model_response.status(), StatusCode::CREATED);
+    let model_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(create_model_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let model_id = model_payload["data"]["id"].as_str().unwrap().to_string();
+    assert_eq!(
+        model_payload["data"]["source_kind"],
+        json!("external_source")
+    );
+
+    create_text_field_with_external_key(&app, &cookie, &csrf, &model_id, "email", "email_address")
+        .await;
+    create_text_field_with_external_key(
+        &app,
+        &cookie,
+        &csrf,
+        &model_id,
+        "token_echo",
+        "secret_echo",
+    )
+    .await;
+
+    let list_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/runtime/models/external_runtime_contacts/records")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let list_status = list_response.status();
+    let list_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(list_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        list_status,
+        StatusCode::OK,
+        "unexpected list payload: {list_payload}"
+    );
+    assert_eq!(list_payload["data"]["total"], json!(1));
+    assert_eq!(
+        list_payload["data"]["items"][0]["email"],
+        json!("list@example.com")
+    );
+    assert_eq!(
+        list_payload["data"]["items"][0]["token_echo"],
+        json!("Bearer ***")
+    );
+    assert!(!list_payload.to_string().contains("route-runtime-secret"));
+
+    let get_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/runtime/models/external_runtime_contacts/records/contact-1")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(get_response.status(), StatusCode::OK);
+    let get_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(get_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(get_payload["data"]["email"], json!("get@example.com"));
+    assert_eq!(get_payload["data"]["token_echo"], json!("Bearer ***"));
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/runtime/models/external_runtime_contacts/records")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "email": "created@example.com" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+    let create_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(create_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(create_payload["data"]["id"], json!("contact-created"));
+    assert_eq!(
+        create_payload["data"]["email"],
+        json!("created@example.com")
+    );
+    assert_eq!(create_payload["data"]["token_echo"], json!("Bearer ***"));
+
+    let update_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri("/api/runtime/models/external_runtime_contacts/records/contact-1")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "email": "updated@example.com" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(update_response.status(), StatusCode::OK);
+    let update_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(update_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        update_payload["data"]["email"],
+        json!("updated@example.com")
+    );
+    assert_eq!(update_payload["data"]["token_echo"], json!("Bearer ***"));
+
+    let delete_response = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri("/api/runtime/models/external_runtime_contacts/records/contact-1")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(delete_response.status(), StatusCode::OK);
+    let delete_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(delete_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(delete_payload["data"]["deleted"], json!(true));
+}
+
+#[tokio::test]
 async fn runtime_model_routes_apply_persisted_scope_all_grant_for_session_actors() {
     let app = test_app().await;
     let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
@@ -1256,6 +1769,42 @@ async fn create_text_field(
                         "title": code,
                         "field_kind": "text",
                         "is_required": true,
+                        "is_unique": false,
+                        "display_options": {}
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+}
+
+async fn create_text_field_with_external_key(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    model_id: &str,
+    code: &str,
+    external_field_key: &str,
+) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/console/models/{model_id}/fields"))
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "code": code,
+                        "title": code,
+                        "external_field_key": external_field_key,
+                        "field_kind": "text",
+                        "is_required": false,
                         "is_unique": false,
                         "display_options": {}
                     })

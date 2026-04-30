@@ -11,8 +11,11 @@ use axum::{
 };
 use plugin_framework::{
     data_source_contract::{
-        DataSourceConfigInput, DataSourceImportSnapshotInput, DataSourceImportSnapshotOutput,
-        DataSourcePreviewReadInput, DataSourcePreviewReadOutput,
+        DataSourceConfigInput, DataSourceCreateRecordInput, DataSourceCreateRecordOutput,
+        DataSourceDeleteRecordInput, DataSourceDeleteRecordOutput, DataSourceGetRecordInput,
+        DataSourceGetRecordOutput, DataSourceImportSnapshotInput, DataSourceImportSnapshotOutput,
+        DataSourceListRecordsInput, DataSourceListRecordsOutput, DataSourcePreviewReadInput,
+        DataSourcePreviewReadOutput, DataSourceUpdateRecordInput, DataSourceUpdateRecordOutput,
     },
     error::{PluginFrameworkError, PluginFrameworkErrorKind},
     provider_contract::ProviderInvocationInput,
@@ -143,6 +146,36 @@ struct PreviewDataSourceRequest {
 struct ImportDataSourceRequest {
     plugin_id: String,
     input: DataSourceImportSnapshotInput,
+}
+
+#[derive(Debug, Deserialize)]
+struct ListDataSourceRecordsRequest {
+    plugin_id: String,
+    input: DataSourceListRecordsInput,
+}
+
+#[derive(Debug, Deserialize)]
+struct GetDataSourceRecordRequest {
+    plugin_id: String,
+    input: DataSourceGetRecordInput,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateDataSourceRecordRequest {
+    plugin_id: String,
+    input: DataSourceCreateRecordInput,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateDataSourceRecordRequest {
+    plugin_id: String,
+    input: DataSourceUpdateRecordInput,
+}
+
+#[derive(Debug, Deserialize)]
+struct DeleteDataSourceRecordRequest {
+    plugin_id: String,
+    input: DataSourceDeleteRecordInput,
 }
 
 #[derive(Debug, Deserialize)]
@@ -334,6 +367,61 @@ async fn import_data_source_snapshot(
         .map_err(map_framework_error)
 }
 
+async fn list_data_source_records(
+    State(state): State<AppState>,
+    Json(request): Json<ListDataSourceRecordsRequest>,
+) -> Result<Json<DataSourceListRecordsOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.data_source_host.read().await;
+    host.list_records(&request.plugin_id, request.input)
+        .await
+        .map(Json)
+        .map_err(map_framework_error)
+}
+
+async fn get_data_source_record(
+    State(state): State<AppState>,
+    Json(request): Json<GetDataSourceRecordRequest>,
+) -> Result<Json<DataSourceGetRecordOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.data_source_host.read().await;
+    host.get_record(&request.plugin_id, request.input)
+        .await
+        .map(Json)
+        .map_err(map_framework_error)
+}
+
+async fn create_data_source_record(
+    State(state): State<AppState>,
+    Json(request): Json<CreateDataSourceRecordRequest>,
+) -> Result<Json<DataSourceCreateRecordOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.data_source_host.read().await;
+    host.create_record(&request.plugin_id, request.input)
+        .await
+        .map(Json)
+        .map_err(map_framework_error)
+}
+
+async fn update_data_source_record(
+    State(state): State<AppState>,
+    Json(request): Json<UpdateDataSourceRecordRequest>,
+) -> Result<Json<DataSourceUpdateRecordOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.data_source_host.read().await;
+    host.update_record(&request.plugin_id, request.input)
+        .await
+        .map(Json)
+        .map_err(map_framework_error)
+}
+
+async fn delete_data_source_record(
+    State(state): State<AppState>,
+    Json(request): Json<DeleteDataSourceRecordRequest>,
+) -> Result<Json<DataSourceDeleteRecordOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.data_source_host.read().await;
+    host.delete_record(&request.plugin_id, request.input)
+        .await
+        .map(Json)
+        .map_err(map_framework_error)
+}
+
 async fn resolve_capability_dynamic_options(
     State(state): State<AppState>,
     Json(request): Json<ValidateCapabilityRequest>,
@@ -421,6 +509,20 @@ pub fn app_with_state(state: AppState) -> Router {
         .route(
             "/data-sources/import-snapshot",
             post(import_data_source_snapshot),
+        )
+        .route("/data-sources/list-records", post(list_data_source_records))
+        .route("/data-sources/get-record", post(get_data_source_record))
+        .route(
+            "/data-sources/create-record",
+            post(create_data_source_record),
+        )
+        .route(
+            "/data-sources/update-record",
+            post(update_data_source_record),
+        )
+        .route(
+            "/data-sources/delete-record",
+            post(delete_data_source_record),
         )
         .route(
             "/capabilities/validate-config",

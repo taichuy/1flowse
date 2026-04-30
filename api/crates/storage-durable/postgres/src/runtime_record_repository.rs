@@ -60,6 +60,31 @@ impl PgControlPlaneStore {
         &self,
         mut model: domain::ModelDefinitionRecord,
     ) -> Result<Option<domain::ModelDefinitionRecord>> {
+        if model.source_kind == domain::DataModelSourceKind::ExternalSource {
+            let mut fields = Vec::with_capacity(model.fields.len());
+            for mut field in model.fields {
+                if field.availability_status != domain::MetadataAvailabilityStatus::Available {
+                    self.update_model_field_availability(
+                        field.id,
+                        domain::MetadataAvailabilityStatus::Available,
+                    )
+                    .await?;
+                }
+                field.availability_status = domain::MetadataAvailabilityStatus::Available;
+                fields.push(field);
+            }
+            if model.availability_status != domain::MetadataAvailabilityStatus::Available {
+                self.update_model_availability(
+                    model.id,
+                    domain::MetadataAvailabilityStatus::Available,
+                )
+                .await?;
+            }
+            model.availability_status = domain::MetadataAvailabilityStatus::Available;
+            model.fields = fields;
+            return Ok(Some(model));
+        }
+
         let table_exists = self
             .runtime_table_exists(&model.physical_table_name)
             .await?;

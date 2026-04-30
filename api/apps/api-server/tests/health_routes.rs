@@ -4,7 +4,7 @@ use api_server::{
     app_with_state_and_config,
     config::{ApiConfig, ApiEnvironment},
     host_infrastructure::build_local_host_infrastructure,
-    provider_runtime::ApiRuntimeServices,
+    provider_runtime::{ApiDataSourceRuntimeRecordBackend, ApiProviderRuntime, ApiRuntimeServices},
     runtime_profile_client::{HostApiRuntimeProfileCollector, PluginRunnerSystemPort},
 };
 use argon2::{
@@ -120,12 +120,30 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
         .await
         .unwrap();
 
+    let provider_runtime = std::sync::Arc::new(ApiRuntimeServices::new(
+        std::sync::Arc::new(RwLock::new(
+            plugin_runner::provider_host::ProviderHost::default(),
+        )),
+        std::sync::Arc::new(RwLock::new(
+            plugin_runner::capability_host::CapabilityHost::default(),
+        )),
+        std::sync::Arc::new(RwLock::new(
+            plugin_runner::data_source_host::DataSourceHost::default(),
+        )),
+    ));
+    let api_provider_runtime = ApiProviderRuntime::new(provider_runtime.clone());
     let runtime_registry = runtime_core::runtime_model_registry::RuntimeModelRegistry::default();
     runtime_registry.rebuild(store.list_runtime_model_metadata().await.unwrap());
-    let runtime_engine = std::sync::Arc::new(runtime_core::runtime_engine::RuntimeEngine::new(
-        runtime_registry,
-        std::sync::Arc::new(store.clone()),
-    ));
+    let runtime_engine = std::sync::Arc::new(
+        runtime_core::runtime_engine::RuntimeEngine::new_with_data_source_backend(
+            runtime_registry,
+            std::sync::Arc::new(store.clone()),
+            std::sync::Arc::new(ApiDataSourceRuntimeRecordBackend::new(
+                store.clone(),
+                api_provider_runtime,
+            )),
+        ),
+    );
     let api_docs =
         std::sync::Arc::new(api_server::openapi_docs::build_default_api_docs_registry().unwrap());
     let infrastructure = std::sync::Arc::new(build_local_host_infrastructure());
@@ -139,17 +157,7 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
             infrastructure,
             file_storage_registry: std::sync::Arc::new(storage_object::builtin_driver_registry()),
             runtime_engine,
-            provider_runtime: std::sync::Arc::new(ApiRuntimeServices::new(
-                std::sync::Arc::new(RwLock::new(
-                    plugin_runner::provider_host::ProviderHost::default(),
-                )),
-                std::sync::Arc::new(RwLock::new(
-                    plugin_runner::capability_host::CapabilityHost::default(),
-                )),
-                std::sync::Arc::new(RwLock::new(
-                    plugin_runner::data_source_host::DataSourceHost::default(),
-                )),
-            )),
+            provider_runtime,
             process_started_at: OffsetDateTime::now_utc(),
             api_runtime_profile: std::sync::Arc::new(HostApiRuntimeProfileCollector),
             plugin_runner_system: std::sync::Arc::new(UnreachablePluginRunnerSystemClient),

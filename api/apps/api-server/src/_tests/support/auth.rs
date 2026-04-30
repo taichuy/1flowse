@@ -143,12 +143,32 @@ async fn test_state_with_runtime_profile_state(
         .ensure_builtin_attachments(bootstrap.root_user_id, default_storage.id, "attachments")
         .await
         .unwrap();
+    let provider_runtime = Arc::new(ApiRuntimeServices::new(
+        Arc::new(RwLock::new(
+            plugin_runner::provider_host::ProviderHost::default(),
+        )),
+        Arc::new(RwLock::new(
+            plugin_runner::capability_host::CapabilityHost::default(),
+        )),
+        Arc::new(RwLock::new(
+            plugin_runner::data_source_host::DataSourceHost::default(),
+        )),
+    ));
+    let api_provider_runtime = ApiProviderRuntime::new(provider_runtime.clone());
     let runtime_registry = runtime_core::runtime_model_registry::RuntimeModelRegistry::default();
     runtime_registry.rebuild(store.list_runtime_model_metadata().await.unwrap());
-    let runtime_engine = std::sync::Arc::new(runtime_core::runtime_engine::RuntimeEngine::new(
-        runtime_registry,
-        std::sync::Arc::new(store.clone()),
-    ));
+    let runtime_engine = std::sync::Arc::new(
+        runtime_core::runtime_engine::RuntimeEngine::new_with_data_source_backend(
+            runtime_registry,
+            std::sync::Arc::new(store.clone()),
+            std::sync::Arc::new(
+                crate::provider_runtime::ApiDataSourceRuntimeRecordBackend::new(
+                    store.clone(),
+                    api_provider_runtime,
+                ),
+            ),
+        ),
+    );
     let api_docs = std::sync::Arc::new(
         crate::openapi_docs::build_default_api_docs_registry_with_cookie_name(&config.cookie_name)
             .unwrap(),
@@ -164,17 +184,7 @@ async fn test_state_with_runtime_profile_state(
             infrastructure,
             file_storage_registry,
             runtime_engine,
-            provider_runtime: Arc::new(ApiRuntimeServices::new(
-                Arc::new(RwLock::new(
-                    plugin_runner::provider_host::ProviderHost::default(),
-                )),
-                Arc::new(RwLock::new(
-                    plugin_runner::capability_host::CapabilityHost::default(),
-                )),
-                Arc::new(RwLock::new(
-                    plugin_runner::data_source_host::DataSourceHost::default(),
-                )),
-            )),
+            provider_runtime,
             process_started_at,
             api_runtime_profile,
             plugin_runner_system,

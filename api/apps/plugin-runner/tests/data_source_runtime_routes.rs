@@ -110,6 +110,70 @@ fn write_fixture_runtime(package: &TempDataSourcePackage) {
         }
     })
     .to_string();
+    let list_records_output = json!({
+        "ok": true,
+        "result": {
+            "rows": [{
+                "id": "contact-1",
+                "email": "person@example.com"
+            }],
+            "next_cursor": null,
+            "total_count": 1,
+            "metadata": {
+                "method": "list_records"
+            }
+        }
+    })
+    .to_string();
+    let get_record_output = json!({
+        "ok": true,
+        "result": {
+            "record": {
+                "id": "contact-1",
+                "email": "person@example.com"
+            },
+            "metadata": {
+                "method": "get_record"
+            }
+        }
+    })
+    .to_string();
+    let create_record_output = json!({
+        "ok": true,
+        "result": {
+            "record": {
+                "id": "contact-created",
+                "email": "created@example.com"
+            },
+            "metadata": {
+                "method": "create_record"
+            }
+        }
+    })
+    .to_string();
+    let update_record_output = json!({
+        "ok": true,
+        "result": {
+            "record": {
+                "id": "contact-1",
+                "email": "updated@example.com"
+            },
+            "metadata": {
+                "method": "update_record"
+            }
+        }
+    })
+    .to_string();
+    let delete_record_output = json!({
+        "ok": true,
+        "result": {
+            "deleted": true,
+            "metadata": {
+                "method": "delete_record"
+            }
+        }
+    })
+    .to_string();
     let error_output = json!({
         "ok": false,
         "error": {
@@ -144,6 +208,21 @@ case "${{payload}}" in
     ;;
   *'"method":"import_snapshot"'*)
     printf '%s' '{import_output}'
+    ;;
+  *'"method":"list_records"'*)
+    printf '%s' '{list_records_output}'
+    ;;
+  *'"method":"get_record"'*)
+    printf '%s' '{get_record_output}'
+    ;;
+  *'"method":"create_record"'*)
+    printf '%s' '{create_record_output}'
+    ;;
+  *'"method":"update_record"'*)
+    printf '%s' '{update_record_output}'
+    ;;
+  *'"method":"delete_record"'*)
+    printf '%s' '{delete_record_output}'
     ;;
   *)
     printf '%s' '{error_output}'
@@ -245,7 +324,11 @@ async fn request_json(app: &Router, method: Method, uri: &str, body: Value) -> (
 
     let status = response.status();
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let payload = serde_json::from_slice(&body).unwrap();
+    let payload = if body.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&body).unwrap()
+    };
     (status, payload)
 }
 
@@ -409,4 +492,155 @@ async fn loads_checked_in_data_source_template_package() {
         payload["plugin_id"].as_str(),
         Some("data_source_http_fixture@0.1.0")
     );
+}
+
+#[tokio::test]
+async fn crud_routes_call_data_source_stdio_methods() {
+    let package = make_fixture_package();
+    let app = app();
+
+    let (status, load_payload) = request_json(
+        &app,
+        Method::POST,
+        "/data-sources/load",
+        json!({
+            "package_root": package.path(),
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let plugin_id = load_payload["plugin_id"].as_str().unwrap().to_string();
+
+    let connection = json!({
+        "config_json": {
+            "client_id": "abc"
+        },
+        "secret_json": {
+            "client_secret": "secret"
+        }
+    });
+
+    let (status, list_payload) = request_json(
+        &app,
+        Method::POST,
+        "/data-sources/list-records",
+        json!({
+            "plugin_id": plugin_id,
+            "input": {
+                "config_json": connection["config_json"],
+                "secret_json": connection["secret_json"],
+                "resource_key": "contacts",
+                "context": {
+                    "owner_id": "owner-1",
+                    "scope_id": "scope-1"
+                },
+                "filters": [{
+                    "field_key": "email",
+                    "operator": "eq",
+                    "value": "person@example.com"
+                }],
+                "sort": [{
+                    "field_key": "email",
+                    "descending": false
+                }],
+                "page": {
+                    "limit": 20,
+                    "offset": 0
+                },
+                "options_json": {}
+            }
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list_payload["rows"][0]["id"], "contact-1");
+    assert_eq!(list_payload["metadata"]["method"], "list_records");
+
+    let (status, get_payload) = request_json(
+        &app,
+        Method::POST,
+        "/data-sources/get-record",
+        json!({
+            "plugin_id": plugin_id,
+            "input": {
+                "config_json": connection["config_json"],
+                "secret_json": connection["secret_json"],
+                "resource_key": "contacts",
+                "record_id": "contact-1",
+                "context": {},
+                "options_json": {}
+            }
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(get_payload["record"]["email"], "person@example.com");
+
+    let (status, create_payload) = request_json(
+        &app,
+        Method::POST,
+        "/data-sources/create-record",
+        json!({
+            "plugin_id": plugin_id,
+            "input": {
+                "config_json": connection["config_json"],
+                "secret_json": connection["secret_json"],
+                "resource_key": "contacts",
+                "record": {
+                    "email": "created@example.com"
+                },
+                "context": {},
+                "transaction_id": null,
+                "options_json": {}
+            }
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(create_payload["record"]["id"], "contact-created");
+
+    let (status, update_payload) = request_json(
+        &app,
+        Method::POST,
+        "/data-sources/update-record",
+        json!({
+            "plugin_id": plugin_id,
+            "input": {
+                "config_json": connection["config_json"],
+                "secret_json": connection["secret_json"],
+                "resource_key": "contacts",
+                "record_id": "contact-1",
+                "patch": {
+                    "email": "updated@example.com"
+                },
+                "context": {},
+                "transaction_id": null,
+                "options_json": {}
+            }
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(update_payload["record"]["email"], "updated@example.com");
+
+    let (status, delete_payload) = request_json(
+        &app,
+        Method::POST,
+        "/data-sources/delete-record",
+        json!({
+            "plugin_id": plugin_id,
+            "input": {
+                "config_json": connection["config_json"],
+                "secret_json": connection["secret_json"],
+                "resource_key": "contacts",
+                "record_id": "contact-1",
+                "context": {},
+                "transaction_id": null,
+                "options_json": {}
+            }
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(delete_payload["deleted"], true);
 }

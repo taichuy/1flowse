@@ -975,7 +975,7 @@ fn is_secret_reference_marker(value: &Value) -> bool {
         .unwrap_or(false)
 }
 
-fn collect_secret_strings(value: &Value) -> HashSet<String> {
+pub fn collect_secret_strings(value: &Value) -> HashSet<String> {
     let mut secrets = HashSet::new();
     collect_secret_strings_into(value, &mut secrets);
     secrets
@@ -1000,7 +1000,7 @@ fn collect_secret_strings_into(value: &Value, secrets: &mut HashSet<String>) {
     }
 }
 
-fn redact_value(value: &Value, secrets: &HashSet<String>) -> Value {
+pub fn redact_value(value: &Value, secrets: &HashSet<String>) -> Value {
     match value {
         Value::String(raw) => Value::String(redact_string(raw, secrets)),
         Value::Array(items) => Value::Array(

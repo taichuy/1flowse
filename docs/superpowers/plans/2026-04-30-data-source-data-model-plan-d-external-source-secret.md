@@ -319,6 +319,21 @@ Task 3b runtime-core field mapping quality fix validation record, 2026-04-30:
   - `cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_engine_tests`
 - Scope note: This quality fix keeps the Task 3b scope narrowed to runtime-core. External-source filters, sorts, create payloads, and update patches now accept declared Data Model field codes plus platform runtime fields only, then map declared fields to `external_field_key` before calling the data-source backend. External list/get/create/update responses map external keys back to Data Model field codes, preserve platform runtime fields such as `id` and `created_by`, and drop external-only unknown keys. Host wiring and REST fixture behavior remain outside this fix.
 
+Task 3b host wiring slice validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p plugin-runner data_source -- --test-threads=1` failed because `/data-sources/list-records` returned 404 before plugin-runner exposed CRUD routes.
+  - `cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes_dispatch_external_source_crud_to_data_source_runtime -- --test-threads=1` failed because external-source runtime list returned `runtime_model_unavailable`; after wiring registry health for external-source metadata, it reached the data-source runtime and exposed a test fixture request-shape issue.
+- Green evidence:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p plugin-runner data_source -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes_dispatch_external_source_crud_to_data_source_runtime -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_engine_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server runtime_model -- --test-threads=1`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- Scope note: This slice wires plugin-runner DataSourceHost stdio CRUD methods and HTTP routes, adds api-server `ApiDataSourceRuntimeRecordBackend`, resolves data-source instance config/secret/installation at runtime, fills runtime-core external CRUD DTO connection fields, forces V1 write `transaction_id` to `None`, redacts plugin CRUD outputs using stored secret values, and keeps `main_source` on the existing runtime record repository. It does not add REST connector fixture behavior or connector-specific REST branches.
+
 ### Task 4: REST API Connector Rules
 
 **Files:**
