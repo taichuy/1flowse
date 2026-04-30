@@ -181,7 +181,7 @@ Task 2 validation record, 2026-04-30:
 - Test: `api/crates/control-plane/src/_tests/data_source_service_tests.rs`
 - Test: `api/apps/api-server/src/_tests/data_sources_routes.rs`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Cover:
 
@@ -193,7 +193,7 @@ unsafe external source cannot become api_exposed_ready
 system_all risk grant requires explicit confirmation
 ```
 
-- [ ] **Step 2: Implement mapping**
+- [x] **Step 2: Implement mapping**
 
 Persist:
 
@@ -204,7 +204,7 @@ source_kind
 plugin capability snapshot
 ```
 
-- [ ] **Step 3: Implement runtime dispatch**
+- [x] **Step 3: Implement runtime dispatch**
 
 Runtime CRUD must call a `RuntimeRecordBackend` abstraction:
 
@@ -213,7 +213,7 @@ main_source => storage-postgres runtime_record_repository
 external_source => data-source RuntimeExtension client
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests
@@ -334,6 +334,21 @@ Task 3b host wiring slice validation record, 2026-04-30:
   - `git diff --check`
 - Scope note: This slice wires plugin-runner DataSourceHost stdio CRUD methods and HTTP routes, adds api-server `ApiDataSourceRuntimeRecordBackend`, resolves data-source instance config/secret/installation at runtime, fills runtime-core external CRUD DTO connection fields, forces V1 write `transaction_id` to `None`, redacts plugin CRUD outputs using stored secret values, and keeps `main_source` on the existing runtime record repository. It does not add REST connector fixture behavior or connector-specific REST branches.
 
+Task 3 final closeout validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p api-server data_source_routes_map_resource_to_model_returns_external_mapping_and_redacts_descriptor -- --test-threads=1` failed with `404` before adding the console map route.
+  - `cargo test --manifest-path api/Cargo.toml -p plugin-runner checked_in_http_fixture_covers_rest_crud_mapping_and_header_secret_reference -- --test-threads=1` failed before Task 4 fixture work because the checked-in HTTP fixture definition did not declare `list_records` / CRUD capabilities.
+- Green evidence:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server data_sources_routes -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p storage-postgres runtime_registry_health_tests -- --test-threads=1`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- Scope note: This closeout adds `POST /api/console/data-sources/instances/{instance_id}/resources/map-to-model` as a thin console DTO -> `DataSourceService::map_resource_to_model` adapter returning the existing Data Model response shape, and registers it in OpenAPI. It also hardens api-server external-source runtime pre-call guards for not-ready data-source instances, missing assignment, disabled/load_failed/artifact-missing installations, contract mismatch, and provider/source mismatch. Storage registry health remains metadata-only: it does not depend on local runtime tables for external-source models and does not validate plugin assignment or installation availability; it only requires `data_source_instance_id`, `external_resource_key`, and physical-mapped fields' `external_field_key`.
+
 ### Task 4: REST API Connector Rules
 
 **Files:**
@@ -341,7 +356,7 @@ Task 3b host wiring slice validation record, 2026-04-30:
 - Modify: `api/plugins/templates/data_source_http_fixture/`: data-source fixture contract example.
 - Test: `api/apps/api-server/src/_tests/data_sources_routes.rs`
 
-- [ ] **Step 1: Add fixture tests**
+- [x] **Step 1: Add fixture tests**
 
 Cover REST mapping requirements:
 
@@ -354,25 +369,34 @@ error mapping
 header secret reference
 ```
 
-- [ ] **Step 2: Implement fixture/contract support**
+- [x] **Step 2: Implement fixture/contract support**
 
 Keep REST plugin generic. Do not add REST-specific branches to core runtime CRUD.
 
-- [ ] **Step 3: Run route tests**
+- [x] **Step 3: Run route tests**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p api-server data_sources_routes
 ```
 
+Task 4 validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p plugin-runner checked_in_http_fixture_covers_rest_crud_mapping_and_header_secret_reference -- --test-threads=1` failed because `api/plugins/templates/data_source_http_fixture/datasource/data_source_http_fixture.yaml` did not declare CRUD capabilities or header `secret_ref`.
+- Green evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p plugin-runner checked_in_http_fixture_covers_rest_crud_mapping_and_header_secret_reference -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p plugin-runner data_source -- --test-threads=1`
+- Scope note: The checked-in HTTP fixture now demonstrates generic REST adapter behavior inside the plugin package: list/get/create/update/delete request mapping, filter/sort/pagination request shape, response metadata mapping, error mapping, and header secret-reference declaration. No REST-specific branches were added to runtime-core or api-server.
+
 ### Task 5: Plan D Verification And Commit
 
-- [ ] **Step 1: Format**
+- [x] **Step 1: Format**
 
 ```bash
 cargo fmt --manifest-path api/Cargo.toml
 ```
 
-- [ ] **Step 2: Targeted regression**
+- [x] **Step 2: Targeted regression**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p plugin-framework data_source
@@ -380,9 +404,23 @@ cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_t
 cargo test --manifest-path api/Cargo.toml -p api-server data_sources_routes runtime_model_routes
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Handoff without commit**
 
 ```bash
 git add api/crates/domain api/crates/plugin-framework api/crates/control-plane api/crates/runtime-core api/crates/storage-durable/postgres api/apps
 git commit -m "feat: map external data sources to data models"
 ```
+
+Task 5 validation record, 2026-04-30:
+
+- Green evidence:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p plugin-runner data_source -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p plugin-runner checked_in_http_fixture_covers_rest_crud_mapping_and_header_secret_reference -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server data_sources_routes -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p storage-postgres runtime_registry_health_tests -- --test-threads=1`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- Handoff note: No commit was created because this worker was explicitly instructed not to create a commit. The original multi-filter api-server recommendation was split into serial `data_sources_routes` and `runtime_model_routes` commands because Cargo accepts one primary test filter cleanly.

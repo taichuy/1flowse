@@ -260,6 +260,49 @@ async fn seed_runtime_data_source_instance(
     database_url: &str,
     package: &TempDataSourcePackage,
 ) -> String {
+    seed_runtime_data_source_instance_with_options(
+        database_url,
+        package,
+        RuntimeDataSourceSeedOptions::default(),
+    )
+    .await
+}
+
+struct RuntimeDataSourceSeedOptions<'a> {
+    provider_code: &'a str,
+    source_code: &'a str,
+    contract_version: &'a str,
+    desired_state: &'a str,
+    artifact_status: &'a str,
+    runtime_status: &'a str,
+    availability_status: &'a str,
+    instance_status: &'a str,
+    installed_path: Option<&'a str>,
+    assign: bool,
+}
+
+impl Default for RuntimeDataSourceSeedOptions<'_> {
+    fn default() -> Self {
+        Self {
+            provider_code: "fixture_external_data_source",
+            source_code: "fixture_external_data_source",
+            contract_version: "1flowbase.data_source/v1",
+            desired_state: "active_requested",
+            artifact_status: "ready",
+            runtime_status: "active",
+            availability_status: "available",
+            instance_status: "ready",
+            installed_path: None,
+            assign: true,
+        }
+    }
+}
+
+async fn seed_runtime_data_source_instance_with_options(
+    database_url: &str,
+    package: &TempDataSourcePackage,
+    options: RuntimeDataSourceSeedOptions<'_>,
+) -> String {
     let pool = sqlx::PgPool::connect(database_url).await.unwrap();
     let actor = sqlx::query(
         r#"
@@ -277,6 +320,7 @@ async fn seed_runtime_data_source_instance(
     let actor_user_id: uuid::Uuid = actor.get("user_id");
     let workspace_id: uuid::Uuid = actor.get("workspace_id");
     let installation_id = uuid::Uuid::now_v7();
+    let assignment_id = uuid::Uuid::now_v7();
     let data_source_instance_id = uuid::Uuid::now_v7();
 
     sqlx::query(
@@ -287,20 +331,49 @@ async fn seed_runtime_data_source_instance(
             artifact_status, runtime_status, availability_status, installed_path,
             metadata_json, created_by
         ) values (
-            $1, 'fixture_external_data_source', 'fixture_external_data_source@0.1.0',
-            '0.1.0', '1flowbase.data_source/v1', 'stdio_json',
+            $1, $2, 'fixture_external_data_source@0.1.0',
+            '0.1.0', $3, 'stdio_json',
             'Fixture External Data Source', 'uploaded', 'unverified', 'valid',
-            'active_requested', 'ready', 'active', 'available', $2,
-            '{}', $3
+            $4, $5, $6, $7, $8,
+            '{}', $9
         )
         "#,
     )
     .bind(installation_id)
-    .bind(package.path().display().to_string())
+    .bind(options.provider_code)
+    .bind(options.contract_version)
+    .bind(options.desired_state)
+    .bind(options.artifact_status)
+    .bind(options.runtime_status)
+    .bind(options.availability_status)
+    .bind(
+        options
+            .installed_path
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| package.path().display().to_string()),
+    )
     .bind(actor_user_id)
     .execute(&pool)
     .await
     .unwrap();
+
+    if options.assign {
+        sqlx::query(
+            r#"
+            insert into plugin_assignments (
+                id, installation_id, workspace_id, provider_code, assigned_by
+            ) values ($1, $2, $3, $4, $5)
+            "#,
+        )
+        .bind(assignment_id)
+        .bind(installation_id)
+        .bind(workspace_id)
+        .bind(options.provider_code)
+        .bind(actor_user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
 
     sqlx::query(
         r#"
@@ -309,15 +382,17 @@ async fn seed_runtime_data_source_instance(
             config_json, metadata_json, default_data_model_status,
             default_api_exposure_status, created_by
         ) values (
-            $1, $2, $3, 'fixture_external_data_source', 'Fixture External Data Source',
-            'ready', '{"client_id":"route-runtime-client"}', '{}',
-            'published', 'published_not_exposed', $4
+            $1, $2, $3, $4, 'Fixture External Data Source',
+            $5, '{"client_id":"route-runtime-client"}', '{}',
+            'published', 'published_not_exposed', $6
         )
         "#,
     )
     .bind(data_source_instance_id)
     .bind(workspace_id)
     .bind(installation_id)
+    .bind(options.source_code)
+    .bind(options.instance_status)
     .bind(actor_user_id)
     .execute(&pool)
     .await
@@ -1246,6 +1321,170 @@ async fn runtime_model_routes_dispatch_external_source_crud_to_data_source_runti
     )
     .unwrap();
     assert_eq!(delete_payload["data"]["deleted"], json!(true));
+}
+
+#[tokio::test]
+async fn runtime_model_routes_external_source_runtime_blocks_unassigned_or_unavailable_installations(
+) {
+    let cases = [
+        (
+            "instance_not_ready",
+            RuntimeDataSourceSeedOptions {
+                provider_code: "fixture_external_data_source_instance_not_ready",
+                source_code: "fixture_external_data_source_instance_not_ready",
+                instance_status: "draft",
+                ..RuntimeDataSourceSeedOptions::default()
+            },
+            StatusCode::CONFLICT,
+            "data_source_instance_not_ready",
+        ),
+        (
+            "unassigned",
+            RuntimeDataSourceSeedOptions {
+                provider_code: "fixture_external_data_source_unassigned",
+                source_code: "fixture_external_data_source_unassigned",
+                assign: false,
+                ..RuntimeDataSourceSeedOptions::default()
+            },
+            StatusCode::CONFLICT,
+            "plugin_assignment_required",
+        ),
+        (
+            "disabled",
+            RuntimeDataSourceSeedOptions {
+                provider_code: "fixture_external_data_source_disabled",
+                source_code: "fixture_external_data_source_disabled",
+                desired_state: "disabled",
+                runtime_status: "active",
+                availability_status: "disabled",
+                ..RuntimeDataSourceSeedOptions::default()
+            },
+            StatusCode::CONFLICT,
+            "plugin_installation_unavailable",
+        ),
+        (
+            "load_failed",
+            RuntimeDataSourceSeedOptions {
+                provider_code: "fixture_external_data_source_load_failed",
+                source_code: "fixture_external_data_source_load_failed",
+                desired_state: "active_requested",
+                runtime_status: "load_failed",
+                availability_status: "load_failed",
+                ..RuntimeDataSourceSeedOptions::default()
+            },
+            StatusCode::CONFLICT,
+            "plugin_installation_unavailable",
+        ),
+        (
+            "artifact_missing",
+            RuntimeDataSourceSeedOptions {
+                provider_code: "fixture_external_data_source_artifact_missing",
+                source_code: "fixture_external_data_source_artifact_missing",
+                installed_path: Some(
+                    "/tmp/1flowbase-plan-d-runtime-artifact-missing-does-not-exist",
+                ),
+                ..RuntimeDataSourceSeedOptions::default()
+            },
+            StatusCode::CONFLICT,
+            "plugin_installation_unavailable",
+        ),
+        (
+            "contract_mismatch",
+            RuntimeDataSourceSeedOptions {
+                provider_code: "fixture_external_data_source_contract_mismatch",
+                source_code: "fixture_external_data_source_contract_mismatch",
+                contract_version: "1flowbase.model_provider/v1",
+                ..RuntimeDataSourceSeedOptions::default()
+            },
+            StatusCode::BAD_REQUEST,
+            "plugin_installation",
+        ),
+        (
+            "source_code_mismatch",
+            RuntimeDataSourceSeedOptions {
+                provider_code: "fixture_external_data_source_source_mismatch",
+                source_code: "fixture_external_data_source_other",
+                ..RuntimeDataSourceSeedOptions::default()
+            },
+            StatusCode::BAD_REQUEST,
+            "source_code",
+        ),
+    ];
+
+    for (case_name, options, expected_status, expected_code) in cases {
+        let package = TempDataSourcePackage::new();
+        write_external_runtime_package(&package);
+        let (app, database_url) = test_app_with_database_url().await;
+        let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+        let data_source_instance_id =
+            seed_runtime_data_source_instance_with_options(&database_url, &package, options).await;
+        let model_code = format!("external_runtime_blocked_{case_name}");
+
+        let create_model_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/console/models")
+                    .header("cookie", &cookie)
+                    .header("x-csrf-token", &csrf)
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "scope_kind": "workspace",
+                            "data_source_instance_id": data_source_instance_id,
+                            "external_resource_key": "contacts",
+                            "code": model_code,
+                            "title": format!("External Runtime Blocked {case_name}"),
+                            "status": "published"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(create_model_response.status(), StatusCode::CREATED);
+        let model_payload: serde_json::Value = serde_json::from_slice(
+            &to_bytes(create_model_response.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let model_id = model_payload["data"]["id"].as_str().unwrap().to_string();
+        create_text_field_with_external_key(&app, &cookie, &csrf, &model_id, "email", "email")
+            .await;
+
+        let list_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(format!("/api/runtime/models/{model_code}/records"))
+                    .header("cookie", &cookie)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = list_response.status();
+        let payload: serde_json::Value = serde_json::from_slice(
+            &to_bytes(list_response.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            status, expected_status,
+            "unexpected status for {case_name}: {payload}"
+        );
+        assert_eq!(payload["code"], json!(expected_code));
+        assert!(
+            !payload.to_string().contains("list@example.com"),
+            "runtime fixture was called for {case_name}: {payload}"
+        );
+    }
 }
 
 #[tokio::test]

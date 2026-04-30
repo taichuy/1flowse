@@ -81,6 +81,7 @@ async fn openapi_contains_runtime_and_model_detail_routes() {
         "/api/console/session/actions/revoke-all",
         "/api/console/me/actions/change-password",
         "/api/console/data-sources/instances/{instance_id}/secret/rotate",
+        "/api/console/data-sources/instances/{instance_id}/resources/map-to-model",
     ] {
         assert!(
             paths.contains_key(route),

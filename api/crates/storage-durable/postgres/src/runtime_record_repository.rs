@@ -61,28 +61,38 @@ impl PgControlPlaneStore {
         mut model: domain::ModelDefinitionRecord,
     ) -> Result<Option<domain::ModelDefinitionRecord>> {
         if model.source_kind == domain::DataModelSourceKind::ExternalSource {
+            let model_metadata_available = model.data_source_instance_id.is_some()
+                && required_text(model.external_resource_key.as_deref());
+            let mut next_model_status = if model_metadata_available {
+                domain::MetadataAvailabilityStatus::Available
+            } else {
+                domain::MetadataAvailabilityStatus::Unavailable
+            };
             let mut fields = Vec::with_capacity(model.fields.len());
             for mut field in model.fields {
-                if field.availability_status != domain::MetadataAvailabilityStatus::Available {
-                    self.update_model_field_availability(
-                        field.id,
-                        domain::MetadataAvailabilityStatus::Available,
-                    )
-                    .await?;
+                let next_field_status = if !model_metadata_available
+                    || (field_requires_external_mapping(&field)
+                        && !required_text(field.external_field_key.as_deref()))
+                {
+                    next_model_status = domain::MetadataAvailabilityStatus::Unavailable;
+                    domain::MetadataAvailabilityStatus::Unavailable
+                } else {
+                    domain::MetadataAvailabilityStatus::Available
+                };
+                if field.availability_status != next_field_status {
+                    self.update_model_field_availability(field.id, next_field_status)
+                        .await?;
                 }
-                field.availability_status = domain::MetadataAvailabilityStatus::Available;
+                field.availability_status = next_field_status;
                 fields.push(field);
             }
-            if model.availability_status != domain::MetadataAvailabilityStatus::Available {
-                self.update_model_availability(
-                    model.id,
-                    domain::MetadataAvailabilityStatus::Available,
-                )
-                .await?;
+            if model.availability_status != next_model_status {
+                self.update_model_availability(model.id, next_model_status)
+                    .await?;
             }
-            model.availability_status = domain::MetadataAvailabilityStatus::Available;
+            model.availability_status = next_model_status;
             model.fields = fields;
-            return Ok(Some(model));
+            return Ok(model.availability_status.is_healthy().then_some(model));
         }
 
         let table_exists = self
@@ -758,6 +768,14 @@ fn nullable_actor_user_id(actor_user_id: Uuid) -> Option<Uuid> {
 
 fn field_requires_physical_column(field: &domain::ModelFieldRecord) -> bool {
     !matches!(field.field_kind, domain::ModelFieldKind::OneToMany)
+}
+
+fn field_requires_external_mapping(field: &domain::ModelFieldRecord) -> bool {
+    field_requires_physical_column(field)
+}
+
+fn required_text(value: Option<&str>) -> bool {
+    value.is_some_and(|value| !value.trim().is_empty())
 }
 
 fn is_runtime_object_missing_error(error: &sqlx::Error) -> bool {

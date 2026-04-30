@@ -8,8 +8,8 @@ use axum::{
 };
 use control_plane::data_source::{
     CreateDataSourceInstanceCommand, DataSourceCatalogEntryView, DataSourceInstanceView,
-    DataSourceService, PreviewDataSourceReadCommand, PreviewDataSourceReadResult,
-    RotateDataSourceSecretCommand, ValidateDataSourceInstanceCommand,
+    DataSourceService, MapDataSourceResourceToModelCommand, PreviewDataSourceReadCommand,
+    PreviewDataSourceReadResult, RotateDataSourceSecretCommand, ValidateDataSourceInstanceCommand,
     ValidateDataSourceInstanceResult,
 };
 use serde::{Deserialize, Serialize};
@@ -25,6 +25,8 @@ use crate::{
     provider_runtime::ApiProviderRuntime,
     response::ApiSuccess,
 };
+
+use super::model_definitions::{to_model_definition_response, ModelDefinitionResponse};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateDataSourceInstanceBody {
@@ -50,6 +52,11 @@ pub struct PreviewDataSourceReadBody {
 pub struct RotateDataSourceSecretBody {
     #[schema(value_type = Object)]
     pub secret_json: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct MapDataSourceResourceToModelBody {
+    pub resource_key: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -129,6 +136,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/data-sources/instances/:instance_id/preview-read",
             post(preview_read),
+        )
+        .route(
+            "/data-sources/instances/:instance_id/resources/map-to-model",
+            post(map_resource_to_model),
         )
 }
 
@@ -343,4 +354,36 @@ pub async fn preview_read(
         })
         .await?;
     Ok(Json(ApiSuccess::new(to_preview_response(result))))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/data-sources/instances/{instance_id}/resources/map-to-model",
+    operation_id = "data_source_map_resource_to_model",
+    request_body = MapDataSourceResourceToModelBody,
+    responses((status = 201, body = ModelDefinitionResponse), (status = 400, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn map_resource_to_model(
+    State(state): State<Arc<ApiState>>,
+    Path(instance_id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<MapDataSourceResourceToModelBody>,
+) -> Result<(StatusCode, Json<ApiSuccess<ModelDefinitionResponse>>), ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let result = service(&state)
+        .map_resource_to_model(MapDataSourceResourceToModelCommand {
+            actor_user_id: context.user.id,
+            workspace_id: context.actor.current_workspace_id,
+            instance_id: parse_uuid(&instance_id, "instance_id")?,
+            resource_key: body.resource_key,
+        })
+        .await?;
+    let mut model = result.model;
+    model.fields = result.fields;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(ApiSuccess::new(to_model_definition_response(model))),
+    ))
 }

@@ -9,6 +9,7 @@ use control_plane::{
     },
     data_source::{collect_secret_strings, redact_value},
     errors::ControlPlaneError,
+    plugin_lifecycle::reconcile_installation_snapshot,
     ports::{
         DataSourceCrudRuntimePort, DataSourceRepository, DataSourceRuntimePort, PluginRepository,
         ProviderRuntimeInvocationOutput, ProviderRuntimePort,
@@ -99,9 +100,25 @@ impl ApiDataSourceRuntimeRecordBackend {
         }
 
         let installation =
-            PluginRepository::get_installation(&self.repository, instance.installation_id)
-                .await?
-                .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+            reconcile_installation_snapshot(&self.repository, instance.installation_id).await?;
+        let assigned = PluginRepository::list_assignments(&self.repository, workspace_id)
+            .await?
+            .into_iter()
+            .any(|assignment| assignment.installation_id == installation.id);
+        if !assigned {
+            return Err(ControlPlaneError::Conflict("plugin_assignment_required").into());
+        }
+        if installation.desired_state == domain::PluginDesiredState::Disabled
+            || installation.availability_status != domain::PluginAvailabilityStatus::Available
+        {
+            return Err(ControlPlaneError::Conflict("plugin_installation_unavailable").into());
+        }
+        if installation.contract_version != "1flowbase.data_source/v1" {
+            return Err(ControlPlaneError::InvalidInput("plugin_installation").into());
+        }
+        if installation.provider_code != instance.source_code {
+            return Err(ControlPlaneError::InvalidInput("source_code").into());
+        }
         let secret_json = DataSourceRepository::get_secret_json(&self.repository, instance.id)
             .await?
             .unwrap_or_else(|| serde_json::json!({}));

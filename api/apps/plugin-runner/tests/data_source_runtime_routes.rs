@@ -495,6 +495,221 @@ async fn loads_checked_in_data_source_template_package() {
 }
 
 #[tokio::test]
+async fn checked_in_http_fixture_covers_rest_crud_mapping_and_header_secret_reference() {
+    let package_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../plugins/templates/data_source_http_fixture");
+    let definition =
+        fs::read_to_string(package_root.join("datasource/data_source_http_fixture.yaml")).unwrap();
+    assert!(definition.contains("list_records"));
+    assert!(definition.contains("delete_record"));
+    assert!(definition.contains("send_mode: secret_ref"));
+    assert!(definition.contains("Authorization"));
+
+    let app = app();
+    let (status, load_payload) = request_json(
+        &app,
+        Method::POST,
+        "/data-sources/load",
+        json!({
+            "package_root": package_root,
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let plugin_id = load_payload["plugin_id"].as_str().unwrap().to_string();
+    let connection = json!({
+        "config_json": {
+            "base_url": "https://api.example.test",
+            "headers": [{
+                "name": "Authorization",
+                "value": {
+                    "secret_ref": "secret:data-source-http-fixture",
+                    "secret_version": 7
+                }
+            }]
+        },
+        "secret_json": {
+            "authorization_header": "Bearer fixture-secret"
+        }
+    });
+
+    let (status, list_payload) = request_json(
+        &app,
+        Method::POST,
+        "/data-sources/list-records",
+        json!({
+            "plugin_id": plugin_id,
+            "input": {
+                "config_json": connection["config_json"],
+                "secret_json": connection["secret_json"],
+                "resource_key": "contacts",
+                "context": {
+                    "owner_id": "owner-1",
+                    "scope_id": "scope-1"
+                },
+                "filters": [{
+                    "field_key": "email",
+                    "operator": "eq",
+                    "value": "person@example.com"
+                }],
+                "sort": [{
+                    "field_key": "created_at",
+                    "descending": true
+                }],
+                "page": {
+                    "limit": 20,
+                    "cursor": "cursor-1",
+                    "offset": 40
+                },
+                "options_json": {
+                    "response_map": "items"
+                }
+            }
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list_payload["rows"][0]["email"], "person@example.com");
+    assert_eq!(list_payload["next_cursor"], "cursor-2");
+    assert_eq!(list_payload["metadata"]["request"]["method"], "GET");
+    assert_eq!(list_payload["metadata"]["request"]["path"], "/contacts");
+    assert_eq!(
+        list_payload["metadata"]["request"]["query"]["email"],
+        "person@example.com"
+    );
+    assert_eq!(
+        list_payload["metadata"]["request"]["query"]["sort"],
+        "-created_at"
+    );
+    assert_eq!(list_payload["metadata"]["request"]["query"]["limit"], 20);
+    assert_eq!(
+        list_payload["metadata"]["request"]["query"]["cursor"],
+        "cursor-1"
+    );
+    assert_eq!(
+        list_payload["metadata"]["request"]["header_secret_ref"],
+        true
+    );
+    assert!(!list_payload.to_string().contains("fixture-secret"));
+
+    let (status, get_payload) = request_json(
+        &app,
+        Method::POST,
+        "/data-sources/get-record",
+        json!({
+            "plugin_id": plugin_id,
+            "input": {
+                "config_json": connection["config_json"],
+                "secret_json": connection["secret_json"],
+                "resource_key": "contacts",
+                "record_id": "contact-1",
+                "context": {},
+                "options_json": {}
+            }
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(get_payload["record"]["id"], "contact-1");
+    assert_eq!(get_payload["metadata"]["request"]["method"], "GET");
+    assert_eq!(get_payload["metadata"]["response_map"], "data");
+
+    let (status, create_payload) = request_json(
+        &app,
+        Method::POST,
+        "/data-sources/create-record",
+        json!({
+            "plugin_id": plugin_id,
+            "input": {
+                "config_json": connection["config_json"],
+                "secret_json": connection["secret_json"],
+                "resource_key": "contacts",
+                "record": {
+                    "email": "created@example.com"
+                },
+                "context": {},
+                "transaction_id": null,
+                "options_json": {}
+            }
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(create_payload["record"]["email"], "created@example.com");
+    assert_eq!(create_payload["metadata"]["request"]["method"], "POST");
+
+    let (status, update_payload) = request_json(
+        &app,
+        Method::POST,
+        "/data-sources/update-record",
+        json!({
+            "plugin_id": plugin_id,
+            "input": {
+                "config_json": connection["config_json"],
+                "secret_json": connection["secret_json"],
+                "resource_key": "contacts",
+                "record_id": "contact-1",
+                "patch": {
+                    "email": "updated@example.com"
+                },
+                "context": {},
+                "transaction_id": null,
+                "options_json": {}
+            }
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(update_payload["record"]["email"], "updated@example.com");
+    assert_eq!(update_payload["metadata"]["request"]["method"], "PATCH");
+
+    let (status, delete_payload) = request_json(
+        &app,
+        Method::POST,
+        "/data-sources/delete-record",
+        json!({
+            "plugin_id": plugin_id,
+            "input": {
+                "config_json": connection["config_json"],
+                "secret_json": connection["secret_json"],
+                "resource_key": "contacts",
+                "record_id": "contact-1",
+                "context": {},
+                "transaction_id": null,
+                "options_json": {}
+            }
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(delete_payload["deleted"], true);
+    assert_eq!(delete_payload["metadata"]["request"]["method"], "DELETE");
+
+    let (status, error_payload) = request_json(
+        &app,
+        Method::POST,
+        "/data-sources/get-record",
+        json!({
+            "plugin_id": plugin_id,
+            "input": {
+                "config_json": connection["config_json"],
+                "secret_json": connection["secret_json"],
+                "resource_key": "contacts",
+                "record_id": "missing",
+                "context": {},
+                "options_json": {}
+            }
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY);
+    assert!(error_payload["message"]
+        .as_str()
+        .unwrap()
+        .contains("rest_fixture_record_not_found"));
+}
+
+#[tokio::test]
 async fn crud_routes_call_data_source_stdio_methods() {
     let package = make_fixture_package();
     let app = app();

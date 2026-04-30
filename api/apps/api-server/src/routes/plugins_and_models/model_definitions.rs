@@ -201,7 +201,9 @@ fn to_model_field_response(field: domain::ModelFieldRecord) -> ModelFieldRespons
     }
 }
 
-fn to_model_definition_response(model: domain::ModelDefinitionRecord) -> ModelDefinitionResponse {
+pub(super) fn to_model_definition_response(
+    model: domain::ModelDefinitionRecord,
+) -> ModelDefinitionResponse {
     ModelDefinitionResponse {
         id: model.id.to_string(),
         scope_kind: model.scope_kind.as_str().to_string(),
