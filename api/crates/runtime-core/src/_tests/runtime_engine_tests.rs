@@ -1,4 +1,5 @@
 use domain::ActorContext;
+use runtime_core::runtime_acl::RuntimeScopeGrant;
 use runtime_core::runtime_engine::{
     RuntimeCreateInput, RuntimeDeleteInput, RuntimeEngine, RuntimeFilterInput, RuntimeGetInput,
     RuntimeListInput, RuntimeModelError, RuntimeSortInput, RuntimeUpdateInput,
@@ -7,15 +8,27 @@ use runtime_core::{model_metadata::ModelMetadata, resource_descriptor::ResourceD
 use serde_json::json;
 use uuid::Uuid;
 
+fn scope_grant(model_id: Uuid, scope_id: Uuid) -> RuntimeScopeGrant {
+    RuntimeScopeGrant {
+        data_model_id: model_id,
+        scope_kind: domain::DataModelScopeKind::Workspace,
+        scope_id,
+        enabled: true,
+        permission_profile: domain::ScopeDataModelPermissionProfile::ScopeAll,
+    }
+}
+
 #[tokio::test]
 async fn runtime_engine_runs_full_crud_against_repository_and_scope_context() {
     let engine = RuntimeEngine::for_tests();
     let root = ActorContext::root(Uuid::nil(), Uuid::nil(), "root");
+    let grant = scope_grant(Uuid::nil(), Uuid::nil());
     let first = engine
         .create_record(RuntimeCreateInput {
             actor: root.clone(),
             model_code: "orders".into(),
             payload: json!({ "title": "A-001", "status": "draft" }),
+            scope_grant: Some(grant.clone()),
         })
         .await
         .unwrap();
@@ -25,6 +38,7 @@ async fn runtime_engine_runs_full_crud_against_repository_and_scope_context() {
             actor: root.clone(),
             model_code: "orders".into(),
             payload: json!({ "title": "A-002", "status": "paid" }),
+            scope_grant: Some(grant.clone()),
         })
         .await
         .unwrap();
@@ -48,6 +62,7 @@ async fn runtime_engine_runs_full_crud_against_repository_and_scope_context() {
             expand_relations: vec![],
             page: 1,
             page_size: 20,
+            scope_grant: Some(grant.clone()),
         })
         .await
         .unwrap();
@@ -59,6 +74,7 @@ async fn runtime_engine_runs_full_crud_against_repository_and_scope_context() {
             actor: root.clone(),
             model_code: "orders".into(),
             record_id: first_record_id,
+            scope_grant: Some(grant.clone()),
         })
         .await
         .unwrap()
@@ -71,6 +87,7 @@ async fn runtime_engine_runs_full_crud_against_repository_and_scope_context() {
             model_code: "orders".into(),
             record_id: record_id.clone(),
             payload: json!({ "title": "A-002" }),
+            scope_grant: Some(grant.clone()),
         })
         .await
         .unwrap();
@@ -81,6 +98,7 @@ async fn runtime_engine_runs_full_crud_against_repository_and_scope_context() {
             actor: root,
             model_code: "orders".into(),
             record_id,
+            scope_grant: Some(grant),
         })
         .await
         .unwrap();
@@ -92,8 +110,9 @@ async fn runtime_engine_uses_fixed_system_scope_id_for_system_models() {
     let engine = RuntimeEngine::for_tests();
     let actor = ActorContext::root(Uuid::now_v7(), Uuid::now_v7(), "root");
     let model_code = "system_orders";
+    let model_id = Uuid::now_v7();
     engine.registry().rebuild(vec![ModelMetadata {
-        model_id: Uuid::now_v7(),
+        model_id,
         model_code: model_code.into(),
         status: domain::DataModelStatus::Published,
         scope_kind: domain::DataModelScopeKind::System,
@@ -109,6 +128,7 @@ async fn runtime_engine_uses_fixed_system_scope_id_for_system_models() {
             actor: actor.clone(),
             model_code: model_code.into(),
             payload: json!({ "title": "system-order" }),
+            scope_grant: Some(scope_grant(model_id, domain::SYSTEM_SCOPE_ID)),
         })
         .await
         .unwrap();
@@ -119,6 +139,7 @@ async fn runtime_engine_uses_fixed_system_scope_id_for_system_models() {
             actor,
             model_code: model_code.into(),
             record_id,
+            scope_grant: Some(scope_grant(model_id, domain::SYSTEM_SCOPE_ID)),
         })
         .await
         .unwrap()
@@ -161,12 +182,14 @@ async fn runtime_engine_prefers_workspace_metadata_before_system_fallback() {
     engine
         .registry()
         .rebuild(vec![workspace_metadata.clone(), system_metadata]);
+    let grant = scope_grant(workspace_metadata.model_id, workspace_id);
 
     engine
         .create_record(RuntimeCreateInput {
             actor: actor.clone(),
             model_code: model_code.into(),
             payload: json!({ "title": "workspace-order" }),
+            scope_grant: Some(grant.clone()),
         })
         .await
         .unwrap();
@@ -182,6 +205,7 @@ async fn runtime_engine_prefers_workspace_metadata_before_system_fallback() {
             expand_relations: vec![],
             page: 1,
             page_size: 20,
+            scope_grant: Some(grant),
         })
         .await
         .unwrap();
@@ -250,6 +274,7 @@ async fn api_exposure_status_does_not_by_itself_enable_runtime_crud() {
                 actor,
                 model_code: "status_orders".into(),
                 payload: json!({ "title": "A-001" }),
+                scope_grant: Some(scope_grant(Uuid::nil(), Uuid::nil())),
             })
             .await
             .unwrap_err(),
@@ -297,6 +322,7 @@ async fn assert_crud_blocked_by_model_error(
                 expand_relations: vec![],
                 page: 1,
                 page_size: 20,
+                scope_grant: Some(scope_grant(Uuid::nil(), Uuid::nil())),
             })
             .await
             .unwrap_err(),
@@ -308,6 +334,7 @@ async fn assert_crud_blocked_by_model_error(
                 actor: actor.clone(),
                 model_code: "status_orders".into(),
                 record_id: "missing".into(),
+                scope_grant: Some(scope_grant(Uuid::nil(), Uuid::nil())),
             })
             .await
             .unwrap_err(),
@@ -319,6 +346,7 @@ async fn assert_crud_blocked_by_model_error(
                 actor: actor.clone(),
                 model_code: "status_orders".into(),
                 payload: json!({ "title": "A-001" }),
+                scope_grant: Some(scope_grant(Uuid::nil(), Uuid::nil())),
             })
             .await
             .unwrap_err(),
@@ -331,6 +359,7 @@ async fn assert_crud_blocked_by_model_error(
                 model_code: "status_orders".into(),
                 record_id: "missing".into(),
                 payload: json!({ "title": "A-002" }),
+                scope_grant: Some(scope_grant(Uuid::nil(), Uuid::nil())),
             })
             .await
             .unwrap_err(),
@@ -342,6 +371,7 @@ async fn assert_crud_blocked_by_model_error(
                 actor,
                 model_code: "status_orders".into(),
                 record_id: "missing".into(),
+                scope_grant: Some(scope_grant(Uuid::nil(), Uuid::nil())),
             })
             .await
             .unwrap_err(),

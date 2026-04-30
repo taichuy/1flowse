@@ -258,6 +258,15 @@ impl ScopeDataModelPermissionProfile {
         }
     }
 
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "owner" => Some(Self::Owner),
+            "scope_all" => Some(Self::ScopeAll),
+            "system_all" => Some(Self::SystemAll),
+            _ => None,
+        }
+    }
+
     pub fn from_db(value: &str) -> Self {
         match value {
             "scope_all" => Self::ScopeAll,

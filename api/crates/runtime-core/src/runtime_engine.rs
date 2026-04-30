@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::{
     capability_slots::{DefaultValueResolver, RecordValidator},
     model_metadata::ModelMetadata,
-    runtime_acl::{resolve_access_scope, RuntimeDataAction},
+    runtime_acl::{resolve_access_scope, RuntimeDataAction, RuntimeScopeGrant},
     runtime_model_registry::{
         RegisteredRuntimeModel, RuntimeDataModelAvailability, RuntimeModelRegistry,
     },
@@ -28,6 +28,7 @@ pub use crate::runtime_record_repository::{
 pub struct RuntimeListInput {
     pub actor: domain::ActorContext,
     pub model_code: String,
+    pub scope_grant: Option<RuntimeScopeGrant>,
     pub filters: Vec<RuntimeFilterInput>,
     pub sorts: Vec<RuntimeSortInput>,
     pub expand_relations: Vec<String>,
@@ -40,6 +41,7 @@ pub struct RuntimeGetInput {
     pub actor: domain::ActorContext,
     pub model_code: String,
     pub record_id: String,
+    pub scope_grant: Option<RuntimeScopeGrant>,
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +49,7 @@ pub struct RuntimeCreateInput {
     pub actor: domain::ActorContext,
     pub model_code: String,
     pub payload: Value,
+    pub scope_grant: Option<RuntimeScopeGrant>,
 }
 
 #[derive(Debug, Clone)]
@@ -55,6 +58,7 @@ pub struct RuntimeUpdateInput {
     pub model_code: String,
     pub record_id: String,
     pub payload: Value,
+    pub scope_grant: Option<RuntimeScopeGrant>,
 }
 
 #[derive(Debug, Clone)]
@@ -62,6 +66,7 @@ pub struct RuntimeDeleteInput {
     pub actor: domain::ActorContext,
     pub model_code: String,
     pub record_id: String,
+    pub scope_grant: Option<RuntimeScopeGrant>,
 }
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
@@ -129,8 +134,12 @@ impl RuntimeEngine {
     }
 
     pub fn for_tests() -> Self {
+        Self::for_tests_with_models(vec![test_model_metadata()])
+    }
+
+    pub fn for_tests_with_models(models: Vec<ModelMetadata>) -> Self {
         let registry = RuntimeModelRegistry::default();
-        registry.rebuild(vec![test_model_metadata()]);
+        registry.rebuild(models);
 
         Self::new(
             registry,
@@ -145,14 +154,18 @@ impl RuntimeEngine {
     pub async fn list_records(&self, input: RuntimeListInput) -> Result<RuntimeListResult> {
         let metadata =
             self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
-        let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::View)?;
+        let access_scope = resolve_access_scope(
+            &input.actor,
+            RuntimeDataAction::View,
+            metadata.model_id,
+            input.scope_grant.as_ref(),
+        )?;
 
         self.records
             .list_records(
                 &metadata,
                 RuntimeListQuery {
-                    scope_id,
+                    scope_id: access_scope.scope_id,
                     owner_user_id: access_scope.owner_user_id,
                     filters: input.filters,
                     sorts: input.sorts,
@@ -167,13 +180,17 @@ impl RuntimeEngine {
     pub async fn get_record(&self, input: RuntimeGetInput) -> Result<Option<Value>> {
         let metadata =
             self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
-        let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::View)?;
+        let access_scope = resolve_access_scope(
+            &input.actor,
+            RuntimeDataAction::View,
+            metadata.model_id,
+            input.scope_grant.as_ref(),
+        )?;
 
         self.records
             .get_record(
                 &metadata,
-                scope_id,
+                access_scope.scope_id,
                 access_scope.owner_user_id,
                 &input.record_id,
             )
@@ -183,8 +200,15 @@ impl RuntimeEngine {
     pub async fn create_record(&self, input: RuntimeCreateInput) -> Result<Value> {
         let metadata =
             self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
-        resolve_access_scope(&input.actor, RuntimeDataAction::Create)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
+        let access_scope = resolve_access_scope(
+            &input.actor,
+            RuntimeDataAction::Create,
+            metadata.model_id,
+            input.scope_grant.as_ref(),
+        )?;
+        let scope_id = access_scope
+            .scope_id
+            .unwrap_or(input.actor.current_workspace_id);
         let payload = self
             .default_value_resolver
             .apply(input.actor.user_id, &input.model_code, input.payload)
@@ -201,8 +225,12 @@ impl RuntimeEngine {
     pub async fn update_record(&self, input: RuntimeUpdateInput) -> Result<Value> {
         let metadata =
             self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
-        let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::Edit)?;
+        let access_scope = resolve_access_scope(
+            &input.actor,
+            RuntimeDataAction::Edit,
+            metadata.model_id,
+            input.scope_grant.as_ref(),
+        )?;
         self.validator
             .validate(input.actor.user_id, &input.model_code, &input.payload)
             .await?;
@@ -211,7 +239,7 @@ impl RuntimeEngine {
             .update_record(
                 &metadata,
                 input.actor.user_id,
-                scope_id,
+                access_scope.scope_id,
                 access_scope.owner_user_id,
                 &input.record_id,
                 input.payload,
@@ -222,13 +250,17 @@ impl RuntimeEngine {
     pub async fn delete_record(&self, input: RuntimeDeleteInput) -> Result<Value> {
         let metadata =
             self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
-        let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::Delete)?;
+        let access_scope = resolve_access_scope(
+            &input.actor,
+            RuntimeDataAction::Delete,
+            metadata.model_id,
+            input.scope_grant.as_ref(),
+        )?;
         let deleted = self
             .records
             .delete_record(
                 &metadata,
-                scope_id,
+                access_scope.scope_id,
                 access_scope.owner_user_id,
                 &input.record_id,
             )
@@ -278,13 +310,6 @@ impl RuntimeEngine {
             runtime_model.availability,
         )
     }
-
-    fn scope_id_for(&self, metadata: &ModelMetadata, workspace_id: Uuid) -> Uuid {
-        match metadata.scope_kind {
-            domain::DataModelScopeKind::Workspace => workspace_id,
-            domain::DataModelScopeKind::System => domain::SYSTEM_SCOPE_ID,
-        }
-    }
 }
 
 #[derive(Default)]
@@ -304,8 +329,13 @@ impl RuntimeRecordRepository for InMemoryRuntimeRecordRepository {
         let records = self.records.lock().expect("runtime record lock poisoned");
         let mut items = records
             .get(&metadata.model_code)
-            .and_then(|scopes| scopes.get(&query.scope_id))
-            .cloned()
+            .map(|scopes| match query.scope_id {
+                Some(scope_id) => scopes.get(&scope_id).cloned().unwrap_or_default(),
+                None => scopes
+                    .values()
+                    .flat_map(|items| items.iter().cloned())
+                    .collect(),
+            })
             .unwrap_or_default();
         items.retain(|item| owner_matches(item, query.owner_user_id));
         items.retain(|item| filter_matches(item, &query.filters));
@@ -324,22 +354,27 @@ impl RuntimeRecordRepository for InMemoryRuntimeRecordRepository {
     async fn get_record(
         &self,
         metadata: &ModelMetadata,
-        scope_id: Uuid,
+        scope_id: Option<Uuid>,
         owner_user_id: Option<Uuid>,
         record_id: &str,
     ) -> Result<Option<Value>> {
         let records = self.records.lock().expect("runtime record lock poisoned");
-        Ok(records
-            .get(&metadata.model_code)
-            .and_then(|scopes| scopes.get(&scope_id))
-            .and_then(|items| {
-                items
-                    .iter()
-                    .find(|item| {
-                        item["id"].as_str() == Some(record_id) && owner_matches(item, owner_user_id)
-                    })
-                    .cloned()
-            }))
+        let Some(scopes) = records.get(&metadata.model_code) else {
+            return Ok(None);
+        };
+        let find_record = |items: &Vec<Value>| {
+            items
+                .iter()
+                .find(|item| {
+                    item["id"].as_str() == Some(record_id) && owner_matches(item, owner_user_id)
+                })
+                .cloned()
+        };
+
+        Ok(match scope_id {
+            Some(scope_id) => scopes.get(&scope_id).and_then(find_record),
+            None => scopes.values().find_map(find_record),
+        })
     }
 
     async fn create_record(
@@ -376,18 +411,25 @@ impl RuntimeRecordRepository for InMemoryRuntimeRecordRepository {
         &self,
         metadata: &ModelMetadata,
         _actor_user_id: Uuid,
-        scope_id: Uuid,
+        scope_id: Option<Uuid>,
         owner_user_id: Option<Uuid>,
         record_id: &str,
         payload: Value,
     ) -> Result<Value> {
         let patch = object_payload(payload);
         let mut records = self.records.lock().expect("runtime record lock poisoned");
-        let scoped_records = records
-            .entry(metadata.model_code.clone())
-            .or_default()
-            .entry(scope_id)
-            .or_default();
+        let scopes = records.entry(metadata.model_code.clone()).or_default();
+        let scoped_records = match scope_id {
+            Some(scope_id) => scopes.entry(scope_id).or_default(),
+            None => scopes
+                .values_mut()
+                .find(|items| {
+                    items.iter().any(|item| {
+                        item["id"].as_str() == Some(record_id) && owner_matches(item, owner_user_id)
+                    })
+                })
+                .ok_or_else(|| anyhow!("runtime record not found"))?,
+        };
         let record = scoped_records
             .iter_mut()
             .find(|item| {
@@ -408,18 +450,13 @@ impl RuntimeRecordRepository for InMemoryRuntimeRecordRepository {
     async fn delete_record(
         &self,
         metadata: &ModelMetadata,
-        scope_id: Uuid,
+        scope_id: Option<Uuid>,
         owner_user_id: Option<Uuid>,
         record_id: &str,
     ) -> Result<bool> {
         let mut records = self.records.lock().expect("runtime record lock poisoned");
-        let scoped_records = records
-            .entry(metadata.model_code.clone())
-            .or_default()
-            .entry(scope_id)
-            .or_default();
         let mut deleted = false;
-        scoped_records.retain(|item| {
+        let mut retain_record = |item: &Value| {
             let matches =
                 item["id"].as_str() == Some(record_id) && owner_matches(item, owner_user_id);
             if matches {
@@ -428,7 +465,21 @@ impl RuntimeRecordRepository for InMemoryRuntimeRecordRepository {
             } else {
                 true
             }
-        });
+        };
+        let scopes = records.entry(metadata.model_code.clone()).or_default();
+        match scope_id {
+            Some(scope_id) => {
+                scopes
+                    .entry(scope_id)
+                    .or_default()
+                    .retain(&mut retain_record);
+            }
+            None => {
+                for records in scopes.values_mut() {
+                    records.retain(&mut retain_record);
+                }
+            }
+        }
 
         Ok(deleted)
     }

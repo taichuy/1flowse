@@ -163,6 +163,7 @@ pub async fn list_records(
         .list_records(runtime_core::runtime_engine::RuntimeListInput {
             actor: context.actor.clone(),
             model_code,
+            scope_grant: None,
             filters: parse_filters(query.filter.as_deref())?,
             sorts: parse_sorts(query.sort.as_deref())?,
             expand_relations: parse_expand(query.expand.as_deref()),
@@ -199,6 +200,7 @@ pub async fn get_record(
             actor: context.actor.clone(),
             model_code,
             record_id,
+            scope_grant: None,
         })
         .await
         .map_err(map_runtime_error)?
@@ -231,6 +233,7 @@ pub async fn create_record(
             actor: context.actor.clone(),
             model_code,
             payload,
+            scope_grant: None,
         })
         .await
         .map_err(map_runtime_error)?;
@@ -264,6 +267,7 @@ pub async fn update_record(
             model_code,
             record_id,
             payload,
+            scope_grant: None,
         })
         .await
         .map_err(map_runtime_error)?;
@@ -294,6 +298,7 @@ pub async fn delete_record(
             actor: context.actor.clone(),
             model_code,
             record_id,
+            scope_grant: None,
         })
         .await
         .map_err(map_runtime_error)?;

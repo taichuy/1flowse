@@ -87,6 +87,15 @@ pub struct DeleteModelFieldCommand {
     pub confirmed: bool,
 }
 
+pub struct CreateScopeDataModelGrantCommand {
+    pub actor_user_id: Uuid,
+    pub scope_kind: DataModelScopeKind,
+    pub scope_id: Uuid,
+    pub data_model_id: Uuid,
+    pub enabled: bool,
+    pub permission_profile: String,
+}
+
 pub struct PublishedModel {
     pub model: domain::ModelDefinitionRecord,
     pub resource: runtime_core::resource_descriptor::ResourceDescriptor,
@@ -445,12 +454,62 @@ where
             model,
         })
     }
+
+    pub async fn create_scope_grant(
+        &self,
+        command: CreateScopeDataModelGrantCommand,
+    ) -> Result<domain::ScopeDataModelGrantRecord> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
+        ensure_state_model_permission(&actor, "manage")?;
+        self.repository
+            .get_model_definition(actor.current_workspace_id, command.data_model_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+
+        let permission_profile =
+            domain::ScopeDataModelPermissionProfile::parse(&command.permission_profile)
+                .ok_or(ControlPlaneError::InvalidInput("permission_profile"))?;
+
+        let grant = self
+            .repository
+            .create_scope_data_model_grant(&CreateScopeDataModelGrantInput {
+                grant_id: Uuid::now_v7(),
+                scope_kind: command.scope_kind,
+                scope_id: command.scope_id,
+                data_model_id: command.data_model_id,
+                enabled: command.enabled,
+                permission_profile,
+                created_by: Some(command.actor_user_id),
+            })
+            .await?;
+        self.repository
+            .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
+                Some(command.actor_user_id),
+                "state_model",
+                Some(command.data_model_id),
+                "state_model.scope_grant_created",
+                serde_json::json!({
+                    "scope_kind": grant.scope_kind.as_str(),
+                    "scope_id": grant.scope_id,
+                    "enabled": grant.enabled,
+                    "permission_profile": grant.permission_profile.as_str(),
+                }),
+            ))
+            .await?;
+
+        Ok(grant)
+    }
 }
 
 #[derive(Default, Clone)]
 pub struct InMemoryModelDefinitionRepository {
     models: Arc<Mutex<HashMap<Uuid, domain::ModelDefinitionRecord>>>,
     data_source_defaults: Arc<Mutex<HashMap<(Uuid, Uuid), domain::DataSourceDefaults>>>,
+    grants: Arc<Mutex<Vec<domain::ScopeDataModelGrantRecord>>>,
 }
 
 impl InMemoryModelDefinitionRepository {
@@ -464,6 +523,7 @@ impl InMemoryModelDefinitionRepository {
                 (Uuid::nil(), data_source_instance_id),
                 defaults,
             )]))),
+            grants: Arc::default(),
         }
     }
 
@@ -706,7 +766,7 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
             .filter(|model| matches!(model.scope_kind, DataModelScopeKind::System))
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
 
-        Ok(domain::ScopeDataModelGrantRecord {
+        let grant = domain::ScopeDataModelGrantRecord {
             id: input.grant_id,
             scope_kind: input.scope_kind,
             scope_id: input.scope_id,
@@ -716,7 +776,12 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
             created_by: input.created_by,
             created_at: time::OffsetDateTime::now_utc(),
             updated_at: time::OffsetDateTime::now_utc(),
-        })
+        };
+        self.grants
+            .lock()
+            .expect("in-memory grant lock poisoned")
+            .push(grant.clone());
+        Ok(grant)
     }
 
     async fn update_scope_data_model_grant(
@@ -745,10 +810,17 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
 
     async fn list_scope_data_model_grants(
         &self,
-        _scope_kind: DataModelScopeKind,
-        _scope_id: Uuid,
+        scope_kind: DataModelScopeKind,
+        scope_id: Uuid,
     ) -> Result<Vec<domain::ScopeDataModelGrantRecord>> {
-        Ok(Vec::new())
+        Ok(self
+            .grants
+            .lock()
+            .expect("in-memory grant lock poisoned")
+            .iter()
+            .filter(|grant| grant.scope_kind == scope_kind && grant.scope_id == scope_id)
+            .cloned()
+            .collect())
     }
 
     async fn append_audit_log(&self, _event: &domain::AuditLogRecord) -> Result<()> {

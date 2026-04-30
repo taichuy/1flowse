@@ -268,6 +268,13 @@ pub async fn read_file_content(
             actor: context.actor,
             model_code: model.code,
             record_id,
+            scope_grant: Some(runtime_core::runtime_acl::RuntimeScopeGrant {
+                data_model_id: model.id,
+                scope_kind: model.scope_kind,
+                scope_id: model.scope_id,
+                enabled: true,
+                permission_profile: domain::ScopeDataModelPermissionProfile::ScopeAll,
+            }),
         })
         .await
         .map_err(map_runtime_error)?

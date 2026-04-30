@@ -43,7 +43,7 @@ impl RuntimeRecordRepository for TestRuntimeRecordRepository {
     async fn get_record(
         &self,
         metadata: &ModelMetadata,
-        _scope_id: Uuid,
+        _scope_id: Option<Uuid>,
         _owner_user_id: Option<Uuid>,
         record_id: &str,
     ) -> Result<Option<Value>> {
@@ -87,7 +87,7 @@ impl RuntimeRecordRepository for TestRuntimeRecordRepository {
         &self,
         _metadata: &ModelMetadata,
         _actor_user_id: Uuid,
-        _scope_id: Uuid,
+        _scope_id: Option<Uuid>,
         _owner_user_id: Option<Uuid>,
         _record_id: &str,
         _payload: Value,
@@ -98,7 +98,7 @@ impl RuntimeRecordRepository for TestRuntimeRecordRepository {
     async fn delete_record(
         &self,
         _metadata: &ModelMetadata,
-        _scope_id: Uuid,
+        _scope_id: Option<Uuid>,
         _owner_user_id: Option<Uuid>,
         _record_id: &str,
     ) -> Result<bool> {

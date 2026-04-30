@@ -31,7 +31,7 @@
 - Test: `api/crates/control-plane/src/_tests/model_definition_acl_tests.rs`
 - Test: `api/crates/runtime-core/src/_tests/runtime_acl_tests.rs`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Cover:
 
@@ -43,7 +43,7 @@ scope_all returns all records inside scope_id
 system_all returns all granted data for system actor only
 ```
 
-- [ ] **Step 2: Implement permission profile parsing**
+- [x] **Step 2: Implement permission profile parsing**
 
 Use explicit profile values:
 
@@ -55,12 +55,26 @@ system_all
 
 Reject unknown values at service boundary.
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_acl_tests
 cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_acl_tests
 ```
+
+Task 1 validation record, 2026-04-30:
+
+- RED confirmed:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_acl_tests` failed because `CreateScopeDataModelGrantCommand` and `create_scope_grant` were missing.
+  - `cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_acl_tests` failed because `RuntimeScopeGrant`, `scope_grant` input fields, and `RuntimeEngine::for_tests_with_models` were missing.
+- GREEN confirmed:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_acl_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_acl_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_engine_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p storage-postgres runtime_record_repository_tests --no-run`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+- Scope constant note: current domain exposes `SYSTEM_SCOPE_ID` and no separate `DEFAULT_SCOPE_ID`; Task 1 used `SYSTEM_SCOPE_ID` as the single-machine default scope constant and did not introduce workspace/team/app aliases.
 
 ### Task 2: API Key Actor And Runtime Access
 

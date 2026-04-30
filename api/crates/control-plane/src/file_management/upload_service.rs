@@ -123,6 +123,13 @@ where
                 actor: command.actor,
                 model_code: model.code,
                 payload: serde_json::Value::Object(payload),
+                scope_grant: Some(runtime_core::runtime_acl::RuntimeScopeGrant {
+                    data_model_id: model.id,
+                    scope_kind: model.scope_kind,
+                    scope_id: model.scope_id,
+                    enabled: true,
+                    permission_profile: domain::ScopeDataModelPermissionProfile::ScopeAll,
+                }),
             })
             .await?;
 

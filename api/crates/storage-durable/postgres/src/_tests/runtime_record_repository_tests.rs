@@ -282,7 +282,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         &store,
         &order_metadata,
         RuntimeListQuery {
-            scope_id: workspace_id,
+            scope_id: Some(workspace_id),
             owner_user_id: None,
             filters: vec![RuntimeFilterInput {
                 field_code: "status".into(),
@@ -304,18 +304,23 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
     assert_eq!(listed.items[0]["title"], json!("A-002"));
     assert_eq!(listed.items[0]["customer"]["name"], json!("Bob"));
 
-    let fetched =
-        RuntimeRecordRepository::get_record(&store, &order_metadata, workspace_id, None, &first_id)
-            .await
-            .unwrap()
-            .unwrap();
+    let fetched = RuntimeRecordRepository::get_record(
+        &store,
+        &order_metadata,
+        Some(workspace_id),
+        None,
+        &first_id,
+    )
+    .await
+    .unwrap()
+    .unwrap();
     assert_eq!(fetched["title"], json!("A-001"));
 
     let updated = RuntimeRecordRepository::update_record(
         &store,
         &order_metadata,
         Uuid::nil(),
-        workspace_id,
+        Some(workspace_id),
         None,
         &order_id,
         json!({ "title": "A-002X", "status": "paid", "customer": bob_id }),
@@ -328,7 +333,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         &store,
         &customer_metadata,
         RuntimeListQuery {
-            scope_id: workspace_id,
+            scope_id: Some(workspace_id),
             owner_user_id: None,
             filters: vec![],
             sorts: vec![],
@@ -349,7 +354,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
     let deleted = RuntimeRecordRepository::delete_record(
         &store,
         &order_metadata,
-        workspace_id,
+        Some(workspace_id),
         None,
         &order_id,
     )
@@ -493,7 +498,7 @@ async fn runtime_record_repository_blocks_expanding_draft_relation_targets() {
         &store,
         &order_metadata,
         RuntimeListQuery {
-            scope_id: workspace_id,
+            scope_id: Some(workspace_id),
             owner_user_id: None,
             filters: vec![],
             sorts: vec![],
@@ -605,7 +610,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         &store,
         &metadata,
         RuntimeListQuery {
-            scope_id: workspace_id,
+            scope_id: Some(workspace_id),
             owner_user_id: Some(owner_user_id),
             filters: vec![],
             sorts: vec![],
@@ -622,7 +627,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
     let own_get = RuntimeRecordRepository::get_record(
         &store,
         &metadata,
-        workspace_id,
+        Some(workspace_id),
         Some(owner_user_id),
         &owner_record_id,
     )
@@ -632,7 +637,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
     let blocked_get = RuntimeRecordRepository::get_record(
         &store,
         &metadata,
-        workspace_id,
+        Some(workspace_id),
         Some(owner_user_id),
         &other_record_id,
     )
@@ -644,7 +649,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         &store,
         &metadata,
         owner_user_id,
-        workspace_id,
+        Some(workspace_id),
         Some(owner_user_id),
         &owner_record_id,
         json!({ "title": "owner-record-updated" }),
@@ -657,7 +662,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         &store,
         &metadata,
         owner_user_id,
-        workspace_id,
+        Some(workspace_id),
         Some(owner_user_id),
         &other_record_id,
         json!({ "title": "blocked-update" }),
@@ -668,7 +673,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
     let blocked_delete = RuntimeRecordRepository::delete_record(
         &store,
         &metadata,
-        workspace_id,
+        Some(workspace_id),
         Some(owner_user_id),
         &other_record_id,
     )
@@ -680,7 +685,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         &store,
         &metadata,
         RuntimeListQuery {
-            scope_id: workspace_id,
+            scope_id: Some(workspace_id),
             owner_user_id: None,
             filters: vec![],
             sorts: vec![],
@@ -696,7 +701,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
     let all_get = RuntimeRecordRepository::get_record(
         &store,
         &metadata,
-        workspace_id,
+        Some(workspace_id),
         None,
         &other_record_id,
     )
@@ -708,7 +713,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         &store,
         &metadata,
         owner_user_id,
-        workspace_id,
+        Some(workspace_id),
         None,
         &other_record_id,
         json!({ "title": "other-record-updated" }),
@@ -720,7 +725,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
     let all_deleted = RuntimeRecordRepository::delete_record(
         &store,
         &metadata,
-        workspace_id,
+        Some(workspace_id),
         None,
         &other_record_id,
     )
