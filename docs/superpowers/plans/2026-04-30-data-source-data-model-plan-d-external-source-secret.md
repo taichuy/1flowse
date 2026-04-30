@@ -31,7 +31,7 @@
 - Test: `api/crates/control-plane/src/_tests/data_source_service_tests.rs`
 - Test: `api/crates/storage-durable/postgres/src/_tests/data_source_repository_tests.rs`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Cover:
 
@@ -42,16 +42,28 @@ secret rotation updates version and audit event
 audit payload never includes cleartext secret
 ```
 
-- [ ] **Step 2: Implement secret reference persistence**
+- [x] **Step 2: Implement secret reference persistence**
 
 Keep actual secret resolution behind a host secret resolver. Do not store connector tokens in Data Model metadata.
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests
 cargo test --manifest-path api/Cargo.toml -p storage-postgres data_source_repository_tests
 ```
+
+Task 1 validation record, 2026-04-30:
+
+- Red evidence: `cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests` failed before implementation because `RotateDataSourceSecretCommand`, `secret_ref`, `secret_version`, and `get_secret_record` did not exist.
+- Green evidence:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p storage-postgres data_source_repository_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server data_sources_routes`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- Scope note: Task 1 added data-source secret reference/version records, config secret extraction, console DTO reference output, and `data_source.secret_rotated` audit. It did not implement plugin CRUD contracts, external Data Model mapping, REST connector fixtures, or `unsafe_external_source`.
 
 ### Task 2: Data Source Plugin CRUD Contract
 

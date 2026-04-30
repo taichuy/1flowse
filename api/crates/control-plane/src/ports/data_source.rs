@@ -32,8 +32,17 @@ pub struct UpdateDataSourceDefaultsInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpdateDataSourceInstanceConfigInput {
+    pub workspace_id: Uuid,
+    pub instance_id: Uuid,
+    pub config_json: serde_json::Value,
+    pub updated_by: Uuid,
+}
+
+#[derive(Debug, Clone)]
 pub struct UpsertDataSourceSecretInput {
     pub data_source_instance_id: Uuid,
+    pub secret_ref: String,
     pub secret_json: serde_json::Value,
     pub secret_version: i32,
 }
@@ -72,6 +81,10 @@ pub trait DataSourceRepository: Send + Sync {
         &self,
         input: &UpdateDataSourceDefaultsInput,
     ) -> anyhow::Result<domain::DataSourceInstanceRecord>;
+    async fn update_instance_config(
+        &self,
+        input: &UpdateDataSourceInstanceConfigInput,
+    ) -> anyhow::Result<domain::DataSourceInstanceRecord>;
     async fn get_instance(
         &self,
         workspace_id: Uuid,
@@ -81,6 +94,10 @@ pub trait DataSourceRepository: Send + Sync {
         &self,
         input: &UpsertDataSourceSecretInput,
     ) -> anyhow::Result<domain::DataSourceSecretRecord>;
+    async fn get_secret_record(
+        &self,
+        instance_id: Uuid,
+    ) -> anyhow::Result<Option<domain::DataSourceSecretRecord>>;
     async fn get_secret_json(&self, instance_id: Uuid)
         -> anyhow::Result<Option<serde_json::Value>>;
     async fn upsert_catalog_cache(

@@ -4,8 +4,8 @@ use control_plane::{
     errors::ControlPlaneError,
     ports::{
         CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput, DataSourceRepository,
-        UpdateDataSourceInstanceStatusInput, UpsertDataSourceCatalogCacheInput,
-        UpsertDataSourceSecretInput,
+        UpdateDataSourceInstanceConfigInput, UpdateDataSourceInstanceStatusInput,
+        UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
     },
 };
 use sqlx::Row;
@@ -33,8 +33,10 @@ fn parse_refresh_status(value: &str) -> Result<domain::DataSourceCatalogRefreshS
 }
 
 fn map_instance(row: sqlx::postgres::PgRow) -> Result<domain::DataSourceInstanceRecord> {
+    let id = row.get("id");
+    let secret_version: Option<i32> = row.get("secret_version");
     Ok(domain::DataSourceInstanceRecord {
-        id: row.get("id"),
+        id,
         workspace_id: row.get("workspace_id"),
         installation_id: row.get("installation_id"),
         source_code: row.get("source_code"),
@@ -42,6 +44,8 @@ fn map_instance(row: sqlx::postgres::PgRow) -> Result<domain::DataSourceInstance
         status: parse_instance_status(row.get::<String, _>("status").as_str())?,
         config_json: row.get("config_json"),
         metadata_json: row.get("metadata_json"),
+        secret_ref: secret_version.map(|_| domain::data_source_secret_ref(id)),
+        secret_version,
         defaults: domain::DataSourceDefaults {
             data_model_status: domain::DataModelStatus::from_db(
                 row.get::<String, _>("default_data_model_status").as_str(),
@@ -59,6 +63,7 @@ fn map_instance(row: sqlx::postgres::PgRow) -> Result<domain::DataSourceInstance
 fn map_secret(row: sqlx::postgres::PgRow) -> Result<domain::DataSourceSecretRecord> {
     Ok(domain::DataSourceSecretRecord {
         data_source_instance_id: row.get("data_source_instance_id"),
+        secret_ref: domain::data_source_secret_ref(row.get("data_source_instance_id")),
         encrypted_secret_json: row.get("encrypted_secret_json"),
         secret_version: row.get("secret_version"),
         updated_at: row.get("updated_at"),
@@ -127,7 +132,8 @@ impl DataSourceRepository for PgControlPlaneStore {
                 default_api_exposure_status,
                 created_by,
                 created_at,
-                updated_at
+                updated_at,
+                null::integer as secret_version
             "#,
         )
         .bind(input.instance_id)
@@ -153,27 +159,47 @@ impl DataSourceRepository for PgControlPlaneStore {
     ) -> Result<domain::DataSourceInstanceRecord> {
         let row = sqlx::query(
             r#"
-            update data_source_instances
-            set
-                status = $3,
-                metadata_json = $4,
-                updated_at = now()
-            where workspace_id = $1
-              and id = $2
-            returning
-                id,
-                workspace_id,
-                installation_id,
-                source_code,
-                display_name,
-                status,
-                config_json,
-                metadata_json,
-                default_data_model_status,
-                default_api_exposure_status,
-                created_by,
-                created_at,
-                updated_at
+            with updated as (
+                update data_source_instances
+                set
+                    status = $3,
+                    metadata_json = $4,
+                    updated_at = now()
+                where workspace_id = $1
+                  and id = $2
+                returning
+                    id,
+                    workspace_id,
+                    installation_id,
+                    source_code,
+                    display_name,
+                    status,
+                    config_json,
+                    metadata_json,
+                    default_data_model_status,
+                    default_api_exposure_status,
+                    created_by,
+                    created_at,
+                    updated_at
+            )
+            select
+                updated.id,
+                updated.workspace_id,
+                updated.installation_id,
+                updated.source_code,
+                updated.display_name,
+                updated.status,
+                updated.config_json,
+                updated.metadata_json,
+                updated.default_data_model_status,
+                updated.default_api_exposure_status,
+                updated.created_by,
+                updated.created_at,
+                updated.updated_at,
+                secrets.secret_version
+            from updated
+            left join data_source_secrets secrets
+              on secrets.data_source_instance_id = updated.id
             "#,
         )
         .bind(input.workspace_id)
@@ -192,33 +218,110 @@ impl DataSourceRepository for PgControlPlaneStore {
     ) -> Result<domain::DataSourceInstanceRecord> {
         let row = sqlx::query(
             r#"
-            update data_source_instances
-            set
-                default_data_model_status = $3,
-                default_api_exposure_status = $4,
-                updated_at = now()
-            where workspace_id = $1
-              and id = $2
-            returning
-                id,
-                workspace_id,
-                installation_id,
-                source_code,
-                display_name,
-                status,
-                config_json,
-                metadata_json,
-                default_data_model_status,
-                default_api_exposure_status,
-                created_by,
-                created_at,
-                updated_at
+            with updated as (
+                update data_source_instances
+                set
+                    default_data_model_status = $3,
+                    default_api_exposure_status = $4,
+                    updated_at = now()
+                where workspace_id = $1
+                  and id = $2
+                returning
+                    id,
+                    workspace_id,
+                    installation_id,
+                    source_code,
+                    display_name,
+                    status,
+                    config_json,
+                    metadata_json,
+                    default_data_model_status,
+                    default_api_exposure_status,
+                    created_by,
+                    created_at,
+                    updated_at
+            )
+            select
+                updated.id,
+                updated.workspace_id,
+                updated.installation_id,
+                updated.source_code,
+                updated.display_name,
+                updated.status,
+                updated.config_json,
+                updated.metadata_json,
+                updated.default_data_model_status,
+                updated.default_api_exposure_status,
+                updated.created_by,
+                updated.created_at,
+                updated.updated_at,
+                secrets.secret_version
+            from updated
+            left join data_source_secrets secrets
+              on secrets.data_source_instance_id = updated.id
             "#,
         )
         .bind(input.workspace_id)
         .bind(input.instance_id)
         .bind(input.defaults.data_model_status.as_str())
         .bind(input.defaults.api_exposure_status.as_str())
+        .fetch_one(self.pool())
+        .await?;
+
+        map_instance(row)
+    }
+
+    async fn update_instance_config(
+        &self,
+        input: &UpdateDataSourceInstanceConfigInput,
+    ) -> Result<domain::DataSourceInstanceRecord> {
+        let row = sqlx::query(
+            r#"
+            with updated as (
+                update data_source_instances
+                set
+                    config_json = $3,
+                    updated_at = now()
+                where workspace_id = $1
+                  and id = $2
+                returning
+                    id,
+                    workspace_id,
+                    installation_id,
+                    source_code,
+                    display_name,
+                    status,
+                    config_json,
+                    metadata_json,
+                    default_data_model_status,
+                    default_api_exposure_status,
+                    created_by,
+                    created_at,
+                    updated_at
+            )
+            select
+                updated.id,
+                updated.workspace_id,
+                updated.installation_id,
+                updated.source_code,
+                updated.display_name,
+                updated.status,
+                updated.config_json,
+                updated.metadata_json,
+                updated.default_data_model_status,
+                updated.default_api_exposure_status,
+                updated.created_by,
+                updated.created_at,
+                updated.updated_at,
+                secrets.secret_version
+            from updated
+            left join data_source_secrets secrets
+              on secrets.data_source_instance_id = updated.id
+            "#,
+        )
+        .bind(input.workspace_id)
+        .bind(input.instance_id)
+        .bind(&input.config_json)
         .fetch_one(self.pool())
         .await?;
 
@@ -245,10 +348,13 @@ impl DataSourceRepository for PgControlPlaneStore {
                 default_api_exposure_status,
                 created_by,
                 created_at,
-                updated_at
+                data_source_instances.updated_at,
+                secrets.secret_version
             from data_source_instances
+            left join data_source_secrets secrets
+              on secrets.data_source_instance_id = data_source_instances.id
             where workspace_id = $1
-              and id = $2
+              and data_source_instances.id = $2
             "#,
         )
         .bind(workspace_id)
@@ -291,6 +397,28 @@ impl DataSourceRepository for PgControlPlaneStore {
         .await?;
 
         map_secret(row)
+    }
+
+    async fn get_secret_record(
+        &self,
+        instance_id: Uuid,
+    ) -> Result<Option<domain::DataSourceSecretRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                data_source_instance_id,
+                encrypted_secret_json,
+                secret_version,
+                updated_at
+            from data_source_secrets
+            where data_source_instance_id = $1
+            "#,
+        )
+        .bind(instance_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_secret).transpose()
     }
 
     async fn get_secret_json(&self, instance_id: Uuid) -> Result<Option<serde_json::Value>> {

@@ -30,9 +30,9 @@ pub use auth::{
 };
 pub use base::BaseFields;
 pub use data_source::{
-    DataSourceCatalogCacheRecord, DataSourceCatalogRefreshStatus, DataSourceDefaults,
-    DataSourceInstanceRecord, DataSourceInstanceStatus, DataSourcePreviewSessionRecord,
-    DataSourceSecretRecord,
+    data_source_secret_ref, DataSourceCatalogCacheRecord, DataSourceCatalogRefreshStatus,
+    DataSourceDefaults, DataSourceInstanceRecord, DataSourceInstanceStatus,
+    DataSourcePreviewSessionRecord, DataSourceSecretRecord,
 };
 pub use file_management::{
     FileStorageHealthStatus, FileStorageRecord, FileTableRecord, FileTableScopeKind,

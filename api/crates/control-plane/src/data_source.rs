@@ -5,7 +5,7 @@ use plugin_framework::data_source_contract::{
     DataSourceCatalogEntry, DataSourceConfigInput, DataSourcePreviewReadInput,
     DataSourcePreviewReadOutput,
 };
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
@@ -15,8 +15,9 @@ use crate::{
     ports::{
         AuthRepository, CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput,
         DataSourceRepository, DataSourceRuntimePort, PluginRepository,
-        UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceStatusInput,
-        UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
+        UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceConfigInput,
+        UpdateDataSourceInstanceStatusInput, UpsertDataSourceCatalogCacheInput,
+        UpsertDataSourceSecretInput,
     },
 };
 
@@ -44,6 +45,14 @@ pub struct UpdateDataSourceDefaultsCommand {
     pub workspace_id: Uuid,
     pub instance_id: Uuid,
     pub defaults: domain::DataSourceDefaults,
+}
+
+#[derive(Debug, Clone)]
+pub struct RotateDataSourceSecretCommand {
+    pub actor_user_id: Uuid,
+    pub workspace_id: Uuid,
+    pub instance_id: Uuid,
+    pub secret_json: Value,
 }
 
 #[derive(Debug, Clone)]
@@ -161,16 +170,25 @@ where
         .await?;
         ensure_data_source_installation(&installation, &command.source_code)?;
 
+        let instance_id = Uuid::now_v7();
+        let secret_ref = domain::data_source_secret_ref(instance_id);
+        let (config_json, secret_json) = sanitize_config_and_merge_secrets(
+            &command.config_json,
+            &command.secret_json,
+            &secret_ref,
+            1,
+        )?;
+
         let instance = self
             .repository
             .create_instance(&CreateDataSourceInstanceInput {
-                instance_id: Uuid::now_v7(),
+                instance_id,
                 workspace_id: command.workspace_id,
                 installation_id: command.installation_id,
                 source_code: normalize_required_text(&command.source_code, "source_code")?,
                 display_name: normalize_required_text(&command.display_name, "display_name")?,
                 status: domain::DataSourceInstanceStatus::Draft,
-                config_json: ensure_json_object(&command.config_json, "config_json")?,
+                config_json,
                 metadata_json: json!({}),
                 defaults: domain::DataSourceDefaults::default(),
                 created_by: actor.user_id,
@@ -180,10 +198,16 @@ where
         self.repository
             .upsert_secret(&UpsertDataSourceSecretInput {
                 data_source_instance_id: instance.id,
-                secret_json: ensure_json_object(&command.secret_json, "secret_json")?,
+                secret_ref: secret_ref.clone(),
+                secret_json,
                 secret_version: 1,
             })
             .await?;
+        let instance = self
+            .repository
+            .get_instance(command.workspace_id, instance.id)
+            .await?
+            .unwrap_or(instance);
 
         self.repository
             .append_audit_log(&audit_log(
@@ -195,6 +219,8 @@ where
                 json!({
                     "installation_id": command.installation_id,
                     "source_code": instance.source_code,
+                    "secret_ref": secret_ref,
+                    "secret_version": 1,
                 }),
             ))
             .await?;
@@ -335,6 +361,72 @@ where
             .await?;
 
         Ok(instance)
+    }
+
+    pub async fn rotate_secret(
+        &self,
+        command: RotateDataSourceSecretCommand,
+    ) -> Result<DataSourceInstanceView> {
+        let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
+        ensure_workspace_matches(&actor, command.workspace_id)?;
+        ensure_state_model_permission(&actor, "manage")?;
+
+        let existing = self
+            .repository
+            .get_instance(command.workspace_id, command.instance_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("data_source_instance"))?;
+        let secret_ref = existing
+            .secret_ref
+            .clone()
+            .unwrap_or_else(|| domain::data_source_secret_ref(existing.id));
+        let secret_version = self
+            .repository
+            .get_secret_record(existing.id)
+            .await?
+            .map(|record| record.secret_version + 1)
+            .unwrap_or(1);
+        let secret_json = ensure_json_object(&command.secret_json, "secret_json")?;
+
+        self.repository
+            .upsert_secret(&UpsertDataSourceSecretInput {
+                data_source_instance_id: existing.id,
+                secret_ref: secret_ref.clone(),
+                secret_json,
+                secret_version,
+            })
+            .await?;
+
+        let config_json =
+            refresh_secret_reference_versions(&existing.config_json, &secret_ref, secret_version);
+        let instance = self
+            .repository
+            .update_instance_config(&UpdateDataSourceInstanceConfigInput {
+                workspace_id: command.workspace_id,
+                instance_id: existing.id,
+                config_json,
+                updated_by: actor.user_id,
+            })
+            .await?;
+
+        self.repository
+            .append_audit_log(&audit_log(
+                Some(command.workspace_id),
+                Some(actor.user_id),
+                "data_source_instance",
+                Some(instance.id),
+                "data_source.secret_rotated",
+                json!({
+                    "secret_ref": secret_ref,
+                    "secret_version": secret_version,
+                }),
+            ))
+            .await?;
+
+        Ok(DataSourceInstanceView {
+            instance,
+            catalog: None,
+        })
     }
 
     pub async fn preview_read(
@@ -497,6 +589,166 @@ fn ensure_json_object(value: &Value, field: &'static str) -> Result<Value> {
         Ok(value.clone())
     } else {
         Err(ControlPlaneError::InvalidInput(field).into())
+    }
+}
+
+fn sanitize_config_and_merge_secrets(
+    config_json: &Value,
+    secret_json: &Value,
+    secret_ref: &str,
+    secret_version: i32,
+) -> Result<(Value, Value)> {
+    let config_json = ensure_json_object(config_json, "config_json")?;
+    let mut merged_secret_json = ensure_json_object(secret_json, "secret_json")?;
+    let sanitized_config = scrub_secret_like_config_values(
+        &config_json,
+        &mut merged_secret_json,
+        secret_ref,
+        secret_version,
+        &mut Vec::new(),
+    );
+    Ok((sanitized_config, merged_secret_json))
+}
+
+fn scrub_secret_like_config_values(
+    value: &Value,
+    secret_json: &mut Value,
+    secret_ref: &str,
+    secret_version: i32,
+    path: &mut Vec<String>,
+) -> Value {
+    match value {
+        Value::Object(object) => {
+            let mut sanitized = Map::new();
+            for (key, child) in object {
+                path.push(key.clone());
+                let next = if is_secret_like_config_key(key) && !is_secret_reference_marker(child) {
+                    store_config_secret_value(secret_json, path, child.clone());
+                    secret_reference_marker(secret_ref, secret_version)
+                } else {
+                    scrub_secret_like_config_values(
+                        child,
+                        secret_json,
+                        secret_ref,
+                        secret_version,
+                        path,
+                    )
+                };
+                path.pop();
+                sanitized.insert(key.clone(), next);
+            }
+            Value::Object(sanitized)
+        }
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .enumerate()
+                .map(|(index, item)| {
+                    path.push(index.to_string());
+                    let next = scrub_secret_like_config_values(
+                        item,
+                        secret_json,
+                        secret_ref,
+                        secret_version,
+                        path,
+                    );
+                    path.pop();
+                    next
+                })
+                .collect(),
+        ),
+        _ => value.clone(),
+    }
+}
+
+fn store_config_secret_value(secret_json: &mut Value, path: &[String], value: Value) {
+    if let Some(last) = path.last() {
+        if path.len() == 1 {
+            if let Some(secret_object) = secret_json.as_object_mut() {
+                secret_object
+                    .entry(last.clone())
+                    .or_insert_with(|| value.clone());
+            }
+        }
+    }
+
+    let pointer = format!("/{}", path.join("/"));
+    if let Some(secret_object) = secret_json.as_object_mut() {
+        let entry = secret_object
+            .entry("__config_secret_values")
+            .or_insert_with(|| Value::Object(Map::new()));
+        if let Some(config_secret_values) = entry.as_object_mut() {
+            config_secret_values.insert(pointer, value);
+        }
+    }
+}
+
+fn is_secret_like_config_key(key: &str) -> bool {
+    let normalized = key.to_ascii_lowercase().replace(['-', ' '], "_");
+    if normalized == "secret_ref" || normalized == "secret_version" || normalized.ends_with("_ref")
+    {
+        return false;
+    }
+
+    normalized.contains("secret")
+        || normalized.contains("password")
+        || normalized.contains("token")
+        || normalized.contains("api_key")
+        || normalized.contains("apikey")
+        || normalized.contains("authorization")
+        || normalized.contains("private_key")
+}
+
+fn is_secret_reference_marker(value: &Value) -> bool {
+    value
+        .as_object()
+        .map(|object| object.contains_key("secret_ref") && object.contains_key("secret_version"))
+        .unwrap_or(false)
+}
+
+fn secret_reference_marker(secret_ref: &str, secret_version: i32) -> Value {
+    json!({
+        "secret_ref": secret_ref,
+        "secret_version": secret_version,
+    })
+}
+
+fn refresh_secret_reference_versions(
+    value: &Value,
+    secret_ref: &str,
+    secret_version: i32,
+) -> Value {
+    match value {
+        Value::Object(object) if is_secret_reference_marker(value) => {
+            let mut updated = object.clone();
+            if updated
+                .get("secret_ref")
+                .and_then(Value::as_str)
+                .map(|value| value == secret_ref)
+                .unwrap_or(false)
+            {
+                updated.insert("secret_version".to_string(), json!(secret_version));
+            }
+            Value::Object(updated)
+        }
+        Value::Object(object) => Value::Object(
+            object
+                .iter()
+                .map(|(key, child)| {
+                    (
+                        key.clone(),
+                        refresh_secret_reference_versions(child, secret_ref, secret_version),
+                    )
+                })
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| refresh_secret_reference_versions(item, secret_ref, secret_version))
+                .collect(),
+        ),
+        _ => value.clone(),
     }
 }
 

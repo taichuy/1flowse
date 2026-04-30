@@ -14,16 +14,17 @@ use uuid::Uuid;
 use crate::{
     data_source::{
         CreateDataSourceInstanceCommand, DataSourceService, PreviewDataSourceReadCommand,
-        UpdateDataSourceDefaultsCommand, ValidateDataSourceInstanceCommand,
+        RotateDataSourceSecretCommand, UpdateDataSourceDefaultsCommand,
+        ValidateDataSourceInstanceCommand,
     },
     ports::{
         AuthRepository, CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput,
         CreatePluginAssignmentInput, CreatePluginTaskInput, DataSourceRepository,
-        DataSourceRuntimePort, UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceStatusInput,
-        UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
-        UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
-        UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
-        UpsertPluginInstallationInput,
+        DataSourceRuntimePort, UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceConfigInput,
+        UpdateDataSourceInstanceStatusInput, UpdatePluginArtifactSnapshotInput,
+        UpdatePluginDesiredStateInput, UpdatePluginRuntimeSnapshotInput,
+        UpdatePluginTaskStatusInput, UpdateProfileInput, UpsertDataSourceCatalogCacheInput,
+        UpsertDataSourceSecretInput, UpsertPluginInstallationInput,
     },
 };
 use domain::{
@@ -93,8 +94,10 @@ struct InMemoryDataSourceRepository {
     assignments: Arc<RwLock<Vec<PluginAssignmentRecord>>>,
     instances: Arc<RwLock<HashMap<Uuid, DataSourceInstanceRecord>>>,
     secrets: Arc<RwLock<HashMap<Uuid, Value>>>,
+    secret_records: Arc<RwLock<HashMap<Uuid, DataSourceSecretRecord>>>,
     caches: Arc<RwLock<HashMap<Uuid, DataSourceCatalogCacheRecord>>>,
     preview_sessions: Arc<RwLock<HashMap<Uuid, DataSourcePreviewSessionRecord>>>,
+    audit_logs: Arc<RwLock<Vec<AuditLogRecord>>>,
 }
 
 impl Default for InMemoryDataSourceRepository {
@@ -118,8 +121,10 @@ impl Default for InMemoryDataSourceRepository {
             assignments: Arc::new(RwLock::new(vec![assignment])),
             instances: Arc::new(RwLock::new(HashMap::new())),
             secrets: Arc::new(RwLock::new(HashMap::new())),
+            secret_records: Arc::new(RwLock::new(HashMap::new())),
             caches: Arc::new(RwLock::new(HashMap::new())),
             preview_sessions: Arc::new(RwLock::new(HashMap::new())),
+            audit_logs: Arc::new(RwLock::new(Vec::new())),
         }
     }
 }
@@ -136,6 +141,10 @@ impl InMemoryDataSourceRepository {
             .get(&instance_id)
             .cloned()
             .unwrap_or_else(|| json!({}))
+    }
+
+    async fn audit_events(&self) -> Vec<AuditLogRecord> {
+        self.audit_logs.read().await.clone()
     }
 }
 
@@ -205,7 +214,8 @@ impl AuthRepository for InMemoryDataSourceRepository {
         Ok(Vec::new())
     }
 
-    async fn append_audit_log(&self, _event: &AuditLogRecord) -> Result<()> {
+    async fn append_audit_log(&self, event: &AuditLogRecord) -> Result<()> {
+        self.audit_logs.write().await.push(event.clone());
         Ok(())
     }
 }
@@ -317,6 +327,8 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
             status: input.status,
             config_json: input.config_json.clone(),
             metadata_json: input.metadata_json.clone(),
+            secret_ref: None,
+            secret_version: None,
             defaults: input.defaults,
             created_by: input.created_by,
             created_at: OffsetDateTime::now_utc(),
@@ -356,6 +368,19 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
         Ok(instance.clone())
     }
 
+    async fn update_instance_config(
+        &self,
+        input: &UpdateDataSourceInstanceConfigInput,
+    ) -> Result<DataSourceInstanceRecord> {
+        let mut instances = self.instances.write().await;
+        let instance = instances
+            .get_mut(&input.instance_id)
+            .expect("instance should exist for test");
+        instance.config_json = input.config_json.clone();
+        instance.updated_at = OffsetDateTime::now_utc();
+        Ok(instance.clone())
+    }
+
     async fn get_instance(
         &self,
         workspace_id: Uuid,
@@ -374,16 +399,35 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
         &self,
         input: &UpsertDataSourceSecretInput,
     ) -> Result<DataSourceSecretRecord> {
+        let record = DataSourceSecretRecord {
+            data_source_instance_id: input.data_source_instance_id,
+            secret_ref: input.secret_ref.clone(),
+            encrypted_secret_json: input.secret_json.clone(),
+            secret_version: input.secret_version,
+            updated_at: OffsetDateTime::now_utc(),
+        };
         self.secrets
             .write()
             .await
             .insert(input.data_source_instance_id, input.secret_json.clone());
-        Ok(DataSourceSecretRecord {
-            data_source_instance_id: input.data_source_instance_id,
-            encrypted_secret_json: input.secret_json.clone(),
-            secret_version: input.secret_version,
-            updated_at: OffsetDateTime::now_utc(),
-        })
+        self.secret_records
+            .write()
+            .await
+            .insert(input.data_source_instance_id, record.clone());
+        if let Some(instance) = self
+            .instances
+            .write()
+            .await
+            .get_mut(&input.data_source_instance_id)
+        {
+            instance.secret_ref = Some(record.secret_ref.clone());
+            instance.secret_version = Some(record.secret_version);
+        }
+        Ok(record)
+    }
+
+    async fn get_secret_record(&self, instance_id: Uuid) -> Result<Option<DataSourceSecretRecord>> {
+        Ok(self.secret_records.read().await.get(&instance_id).cloned())
     }
 
     async fn get_secret_json(&self, instance_id: Uuid) -> Result<Option<Value>> {
@@ -536,6 +580,103 @@ async fn validate_instance_updates_status_and_catalog_cache() {
         repository.stored_secret_json(created.instance.id).await,
         json!({ "client_secret": "secret" })
     );
+}
+
+#[tokio::test]
+async fn create_instance_extracts_secret_like_config_values_to_reference_boundary() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::ready();
+    let service = DataSourceService::new(repository.clone(), runtime);
+    let plaintext_token = "plain-token-from-config";
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({
+                "base_url": "https://api.example.test",
+                "access_token": plaintext_token,
+            }),
+            secret_json: json!({ "client_secret": "plain-secret-body" }),
+        })
+        .await
+        .unwrap();
+
+    let stored_config_text = created.instance.config_json.to_string();
+    assert!(!stored_config_text.contains(plaintext_token));
+    assert_eq!(
+        created.instance.config_json["access_token"],
+        json!({
+            "secret_ref": created.instance.secret_ref.as_ref().unwrap(),
+            "secret_version": created.instance.secret_version.unwrap(),
+        })
+    );
+    assert!(created
+        .instance
+        .secret_ref
+        .as_ref()
+        .unwrap()
+        .starts_with("secret://workspace/"));
+    assert_eq!(created.instance.secret_version, Some(1));
+
+    let stored_secret = repository.stored_secret_json(created.instance.id).await;
+    assert_eq!(stored_secret["access_token"], plaintext_token);
+    assert_eq!(stored_secret["client_secret"], "plain-secret-body");
+
+    let audit_text = serde_json::to_string(&repository.audit_events().await).unwrap();
+    assert!(!audit_text.contains(plaintext_token));
+    assert!(!audit_text.contains("plain-secret-body"));
+}
+
+#[tokio::test]
+async fn rotate_secret_updates_version_and_audit_without_cleartext() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::ready();
+    let service = DataSourceService::new(repository.clone(), runtime);
+    let rotated_plaintext = "rotated-secret-value";
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "base_url": "https://api.example.test" }),
+            secret_json: json!({ "client_secret": "initial-secret-value" }),
+        })
+        .await
+        .unwrap();
+
+    let rotated = service
+        .rotate_secret(RotateDataSourceSecretCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            secret_json: json!({ "client_secret": rotated_plaintext }),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(rotated.instance.secret_ref, created.instance.secret_ref);
+    assert_eq!(rotated.instance.secret_version, Some(2));
+    assert_eq!(
+        repository.stored_secret_json(created.instance.id).await["client_secret"],
+        rotated_plaintext
+    );
+
+    let audit_events = repository.audit_events().await;
+    assert!(audit_events
+        .iter()
+        .any(|event| event.event_code == "data_source.secret_rotated"
+            && event.payload["secret_ref"] == rotated.instance.secret_ref.clone().unwrap()
+            && event.payload["secret_version"] == json!(2)));
+    let audit_text = serde_json::to_string(&audit_events).unwrap();
+    assert!(!audit_text.contains(rotated_plaintext));
+    assert!(!audit_text.contains("initial-secret-value"));
 }
 
 #[tokio::test]

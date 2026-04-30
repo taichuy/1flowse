@@ -78,6 +78,8 @@ pub struct DataSourceInstanceResponse {
     pub status: String,
     #[schema(value_type = Object)]
     pub config_json: serde_json::Value,
+    pub secret_ref: Option<String>,
+    pub secret_version: Option<i32>,
     pub catalog_refresh_status: Option<String>,
     pub catalog_last_error_message: Option<String>,
     pub catalog_refreshed_at: Option<String>,
@@ -170,6 +172,8 @@ fn to_instance_response(view: DataSourceInstanceView) -> DataSourceInstanceRespo
         display_name: view.instance.display_name,
         status: view.instance.status.as_str().to_string(),
         config_json: view.instance.config_json,
+        secret_ref: view.instance.secret_ref,
+        secret_version: view.instance.secret_version,
         catalog_refresh_status: catalog
             .as_ref()
             .map(|cache| cache.refresh_status.as_str().to_string()),
