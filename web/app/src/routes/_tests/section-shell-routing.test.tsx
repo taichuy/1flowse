@@ -87,12 +87,34 @@ const fileManagementApi = vi.hoisted(() => ({
   updateSettingsFileTableBinding: vi.fn()
 }));
 
+const dataModelsApi = vi.hoisted(() => ({
+  settingsDataSourcesQueryKey: ['settings', 'data-models', 'sources'],
+  settingsDataModelsQueryKey: vi.fn((sourceId: string) => [
+    'settings',
+    'data-models',
+    'models',
+    sourceId
+  ]),
+  settingsDataModelScopeGrantsQueryKey: vi.fn(),
+  settingsDataModelAdvisorFindingsQueryKey: vi.fn(),
+  settingsDataModelRecordPreviewQueryKey: vi.fn(),
+  fetchSettingsDataSourceInstances: vi.fn(),
+  fetchSettingsDataModels: vi.fn(),
+  fetchSettingsDataModelScopeGrants: vi.fn(),
+  fetchSettingsDataModelAdvisorFindings: vi.fn(),
+  fetchSettingsDataModelRecordPreview: vi.fn(),
+  updateSettingsDataSourceDefaults: vi.fn(),
+  updateSettingsDataModel: vi.fn(),
+  updateSettingsDataModelScopeGrant: vi.fn()
+}));
+
 vi.mock('../../features/settings/api/members', () => membersApi);
 vi.mock('../../features/settings/api/roles', () => rolesApi);
 vi.mock('../../features/settings/api/permissions', () => permissionsApi);
 vi.mock('../../features/settings/api/api-docs', () => docsApi);
 vi.mock('../../features/settings/api/model-providers', () => modelProvidersApi);
 vi.mock('../../features/settings/api/file-management', () => fileManagementApi);
+vi.mock('../../features/settings/api/data-models', () => dataModelsApi);
 
 import { AppProviders } from '../../app/AppProviders';
 import { AppRouterProvider } from '../../app/router';
@@ -177,6 +199,14 @@ describe('section shell routing', () => {
       provider_code: 'openai_compatible',
       auto_include_new_instances: true
     });
+    dataModelsApi.fetchSettingsDataSourceInstances.mockResolvedValue([]);
+    dataModelsApi.fetchSettingsDataModels.mockResolvedValue([]);
+    dataModelsApi.fetchSettingsDataModelScopeGrants.mockResolvedValue([]);
+    dataModelsApi.fetchSettingsDataModelAdvisorFindings.mockResolvedValue([]);
+    dataModelsApi.fetchSettingsDataModelRecordPreview.mockResolvedValue({
+      items: [],
+      total: 0
+    });
     fileManagementApi.fetchSettingsFileStorages.mockResolvedValue([]);
     fileManagementApi.fetchSettingsFileTables.mockResolvedValue([
       {
@@ -237,17 +267,17 @@ describe('section shell routing', () => {
     );
   });
 
-  test('redirects /settings/docs to /settings/model-providers when model providers is the only visible section', async () => {
+  test('redirects /settings/docs to /settings/data-models when state model settings are visible', async () => {
     authenticateWithPermissions(['route_page.view.all', 'state_model.view.all']);
 
     renderApp('/settings/docs');
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/settings/model-providers');
+      expect(window.location.pathname).toBe('/settings/data-models');
     });
-    expect(await screen.findByRole('link', { name: '模型供应商' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: '数据源' })).toHaveAttribute(
       'href',
-      '/settings/model-providers'
+      '/settings/data-models'
     );
   });
 

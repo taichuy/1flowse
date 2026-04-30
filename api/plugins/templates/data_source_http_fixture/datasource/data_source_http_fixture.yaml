@@ -9,6 +9,11 @@ capabilities:
   - describe_resource
   - preview_read
   - import_snapshot
+  - list_records
+  - get_record
+  - create_record
+  - update_record
+  - delete_record
 supports_sync: true
 supports_webhook: false
 resource_kinds:
@@ -22,3 +27,9 @@ config_schema:
     label: API Key
     type: string
     required: true
+    send_mode: secret_ref
+  - key: authorization_header
+    label: Authorization Header
+    type: string
+    required: true
+    send_mode: secret_ref

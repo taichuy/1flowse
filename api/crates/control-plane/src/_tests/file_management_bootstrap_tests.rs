@@ -3,7 +3,10 @@ use control_plane::file_management::{
     attachments_template_fields, CreateWorkspaceFileTableCommand, FileManagementBootstrapService,
     FileTableProvisioningService,
 };
-use domain::FileTableScopeKind;
+use control_plane::ports::ModelDefinitionRepository;
+use domain::{
+    DataModelScopeKind, FileTableScopeKind, ScopeDataModelPermissionProfile, SYSTEM_SCOPE_ID,
+};
 use uuid::Uuid;
 
 #[test]
@@ -46,18 +49,44 @@ async fn bootstrap_creates_builtin_attachments_once() {
     assert_eq!(first.id, second.id);
     assert_eq!(first.scope_kind, FileTableScopeKind::System);
     assert_eq!(repository.recorded_file_tables().len(), 1);
+
+    let model = ModelDefinitionRepository::get_model_definition(
+        &repository,
+        SYSTEM_SCOPE_ID,
+        first.model_definition_id,
+    )
+    .await
+    .unwrap()
+    .expect("builtin attachments should create a model definition");
+    assert_eq!(model.scope_kind, DataModelScopeKind::System);
+    assert_eq!(model.scope_id, SYSTEM_SCOPE_ID);
+
+    let grants = ModelDefinitionRepository::list_scope_data_model_grants(
+        &repository,
+        DataModelScopeKind::System,
+        SYSTEM_SCOPE_ID,
+    )
+    .await
+    .unwrap();
+    assert_eq!(grants.len(), 1);
+    assert_eq!(grants[0].data_model_id, model.id);
+    assert_eq!(
+        grants[0].permission_profile,
+        ScopeDataModelPermissionProfile::ScopeAll
+    );
 }
 
 #[tokio::test]
-async fn workspace_file_tables_reuse_the_same_template_and_default_storage() {
+async fn workspace_file_tables_create_system_model_and_workspace_grant() {
     let repository = MemoryProvisioningRepository::default();
     let service = FileTableProvisioningService::new(repository.clone());
     let default_storage_id = Uuid::now_v7();
+    let workspace_id = Uuid::now_v7();
 
     let created = service
         .create_workspace_file_table(CreateWorkspaceFileTableCommand {
             actor_user_id: Uuid::now_v7(),
-            workspace_id: Uuid::now_v7(),
+            workspace_id,
             code: "project_assets".into(),
             title: "Project Assets".into(),
             default_storage_id,
@@ -66,6 +95,32 @@ async fn workspace_file_tables_reuse_the_same_template_and_default_storage() {
         .unwrap();
 
     assert_eq!(created.scope_kind, FileTableScopeKind::Workspace);
+    assert_eq!(created.scope_id, workspace_id);
     assert_eq!(created.bound_storage_id, default_storage_id);
     assert_eq!(repository.recorded_file_tables().len(), 1);
+
+    let model = ModelDefinitionRepository::get_model_definition(
+        &repository,
+        workspace_id,
+        created.model_definition_id,
+    )
+    .await
+    .unwrap()
+    .expect("workspace file table should create a model definition");
+    assert_eq!(model.scope_kind, DataModelScopeKind::System);
+    assert_eq!(model.scope_id, SYSTEM_SCOPE_ID);
+
+    let grants = ModelDefinitionRepository::list_scope_data_model_grants(
+        &repository,
+        DataModelScopeKind::Workspace,
+        workspace_id,
+    )
+    .await
+    .unwrap();
+    assert_eq!(grants.len(), 1);
+    assert_eq!(grants[0].data_model_id, model.id);
+    assert_eq!(
+        grants[0].permission_profile,
+        ScopeDataModelPermissionProfile::ScopeAll
+    );
 }

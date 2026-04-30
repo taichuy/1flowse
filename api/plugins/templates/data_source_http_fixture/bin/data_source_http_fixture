@@ -10,16 +10,40 @@ case "${payload}" in
     printf '%s' '{"ok":true,"result":{"status":"ok"}}'
     ;;
   *'"method":"discover_catalog"'*)
-    printf '%s' '{"ok":true,"result":[{"resource_key":"contacts","display_name":"Contacts","resource_kind":"endpoint","metadata":{}}]}'
+    printf '%s' '{"ok":true,"result":[{"resource_key":"contacts","display_name":"Contacts","resource_kind":"endpoint","capabilities":{"supports_list":true,"supports_get":true,"supports_create":true,"supports_update":true,"supports_delete":true,"supports_filter":true,"supports_sort":true,"supports_pagination":true,"supports_owner_filter":false,"supports_scope_filter":true,"supports_write":true,"supports_transactions":false},"metadata":{"rest_path":"/contacts"}}]}'
     ;;
   *'"method":"describe_resource"'*)
-    printf '%s' '{"ok":true,"result":{"resource_key":"contacts","primary_key":"id","fields":[],"supports_preview_read":true,"supports_import_snapshot":true,"metadata":{}}}'
+    printf '%s' '{"ok":true,"result":{"resource_key":"contacts","primary_key":"contact_id","fields":[{"key":"contact_id","label":"Contact ID","type":"string","required":true},{"key":"email","label":"Email","type":"string","control":"input"},{"key":"created_at","label":"Created At","type":"datetime"}],"supports_preview_read":true,"supports_import_snapshot":true,"capabilities":{"supports_list":true,"supports_get":true,"supports_create":true,"supports_update":true,"supports_delete":true,"supports_filter":true,"supports_sort":true,"supports_pagination":true,"supports_owner_filter":false,"supports_scope_filter":true,"supports_write":true,"supports_transactions":false},"metadata":{"display_name":"Contacts","rest_path":"/contacts","response_map":"data"}}}'
     ;;
   *'"method":"preview_read"'*)
     printf '%s' '{"ok":true,"result":{"rows":[{"id":"1","email":"person@example.com"}],"next_cursor":null}}'
     ;;
   *'"method":"import_snapshot"'*)
     printf '%s' '{"ok":true,"result":{"rows":[{"id":"1","email":"person@example.com"}],"schema_version":"v1","metadata":{}}}'
+    ;;
+  *'"method":"list_records"'*)
+    if [[ "${payload}" == *'"authorization_header":"Bearer fixture-secret"'* && "${payload}" == *'"secret_ref":"secret:data-source-http-fixture"'* ]]; then
+      printf '%s' '{"ok":true,"result":{"rows":[{"id":"contact-1","contact_id":"contact-1","email":"person@example.com","created_at":"2026-04-30T00:00:00Z"}],"next_cursor":"cursor-2","total_count":1,"metadata":{"request":{"method":"GET","path":"/contacts","query":{"email":"person@example.com","sort":"-created_at","limit":20,"cursor":"cursor-1","offset":40},"header_secret_ref":true},"response_map":"items"}}}'
+    else
+      printf '%s' '{"ok":false,"error":{"message":"rest_fixture_missing_header_secret_reference","provider_summary":null}}'
+      exit 1
+    fi
+    ;;
+  *'"method":"get_record"'*)
+    if [[ "${payload}" == *'"record_id":"missing"'* ]]; then
+      printf '%s' '{"ok":false,"error":{"message":"rest_fixture_record_not_found","provider_summary":"GET /contacts/missing returned 404"}}'
+      exit 1
+    fi
+    printf '%s' '{"ok":true,"result":{"record":{"id":"contact-1","email":"person@example.com"},"metadata":{"request":{"method":"GET","path":"/contacts/contact-1"},"response_map":"data"}}}'
+    ;;
+  *'"method":"create_record"'*)
+    printf '%s' '{"ok":true,"result":{"record":{"id":"contact-created","email":"created@example.com"},"metadata":{"request":{"method":"POST","path":"/contacts","body_map":"record"},"response_map":"data"}}}'
+    ;;
+  *'"method":"update_record"'*)
+    printf '%s' '{"ok":true,"result":{"record":{"id":"contact-1","email":"updated@example.com"},"metadata":{"request":{"method":"PATCH","path":"/contacts/contact-1","body_map":"patch"},"response_map":"data"}}}'
+    ;;
+  *'"method":"delete_record"'*)
+    printf '%s' '{"ok":true,"result":{"deleted":true,"metadata":{"request":{"method":"DELETE","path":"/contacts/contact-1"},"response_map":"status_code"}}}'
     ;;
   *)
     printf '%s' '{"ok":false,"error":{"kind":"provider_invalid_response","message":"unknown method","provider_summary":null}}'

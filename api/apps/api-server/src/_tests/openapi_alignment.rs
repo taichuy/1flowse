@@ -70,19 +70,118 @@ async fn openapi_contains_runtime_and_model_detail_routes() {
     for route in [
         "/api/console/models/{id}",
         "/api/console/models/{id}/fields",
+        "/api/console/models/{id}/advisor-findings",
+        "/api/console/models/{id}/scope-grants",
+        "/api/console/models/{id}/scope-grants/{grant_id}",
+        "/api/console/docs/data-models/{model_id}/openapi.json",
         "/api/console/model-providers/catalog",
         "/api/console/model-providers/options",
         "/api/console/system/runtime-profile",
+        "/api/console/api-keys",
         "/api/runtime/models/{model_code}/records",
         "/api/runtime/models/{model_code}/records/{id}",
         "/api/console/session/actions/revoke-all",
         "/api/console/me/actions/change-password",
+        "/api/console/data-sources/instances/{instance_id}/secret/rotate",
+        "/api/console/data-sources/instances/{instance_id}/resources/map-to-model",
     ] {
         assert!(
             paths.contains_key(route),
             "expected openapi to contain path {route}, got: {:?}",
             paths.keys().collect::<Vec<_>>()
         );
+    }
+}
+
+#[tokio::test]
+async fn openapi_contains_advisor_and_dynamic_data_model_doc_schemas() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/openapi.json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    let components = payload["components"]["schemas"]
+        .as_object()
+        .cloned()
+        .unwrap_or_default();
+
+    for schema in [
+        "DataModelAdvisorFindingResponse",
+        "DataModelOpenApiDocumentResponse",
+    ] {
+        assert!(components.contains_key(schema), "missing schema {schema}");
+    }
+
+    assert_eq!(
+        payload["paths"]["/api/console/models/{id}/advisor-findings"]["get"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["items"]["$ref"]
+            .as_str(),
+        Some("#/components/schemas/DataModelAdvisorFindingResponse")
+    );
+    assert!(
+        payload["paths"]["/api/console/docs/data-models/{model_id}/openapi.json"]["get"]
+            ["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+            .as_str()
+            .is_some()
+    );
+}
+
+#[tokio::test]
+async fn openapi_documents_model_mutation_bad_request_responses() {
+    let paths = openapi_paths().await;
+
+    for (route, method) in [
+        ("/api/console/models", "post"),
+        ("/api/console/models/{id}/fields", "post"),
+        ("/api/console/models/{id}/fields/{field_id}", "patch"),
+    ] {
+        assert_eq!(
+            paths[route][method]["responses"]["400"]["content"]["application/json"]["schema"]
+                ["$ref"]
+                .as_str(),
+            Some("#/components/schemas/ErrorBody"),
+            "expected {method} {route} to document 400 ErrorBody"
+        );
+    }
+}
+
+#[tokio::test]
+async fn openapi_contains_api_key_create_schemas() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/openapi.json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    let components = payload["components"]["schemas"]
+        .as_object()
+        .cloned()
+        .unwrap_or_default();
+
+    for schema in [
+        "CreateApiKeyRequest",
+        "CreateApiKeyResponse",
+        "ApiKeyDataModelPermissionRequest",
+        "ApiKeyDataModelPermissionResponse",
+    ] {
+        assert!(components.contains_key(schema), "missing schema {schema}");
     }
 }
 

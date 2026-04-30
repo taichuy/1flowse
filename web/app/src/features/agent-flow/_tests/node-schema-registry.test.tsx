@@ -2,11 +2,14 @@ import {
   createDefaultAgentFlowDocument,
   type FlowNodeDocument
 } from '@1flowbase/flow-schema';
+import type { SchemaBlock } from '../../../shared/schema-ui/contracts/canvas-node-schema';
 import { describe, expect, test, vi } from 'vitest';
 
 import { agentFlowRendererRegistry } from '../schema/agent-flow-renderer-registry';
 import { createAgentFlowNodeSchemaAdapter } from '../schema/node-schema-adapter';
 import { resolveAgentFlowNodeSchema } from '../schema/node-schema-registry';
+import { createNodeDocument } from '../lib/document/node-factory';
+import { BUILTIN_NODE_PICKER_OPTIONS } from '../lib/plugin-node-definitions';
 
 function getNode(
   document: ReturnType<typeof createDefaultAgentFlowDocument>,
@@ -21,6 +24,24 @@ function getNode(
   }
 
   return node;
+}
+
+function findFieldBlock(blocks: SchemaBlock[], path: string) {
+  for (const block of blocks) {
+    if (block.kind === 'field' && block.path === path) {
+      return block;
+    }
+
+    if ('blocks' in block) {
+      const found = findFieldBlock(block.blocks, path);
+
+      if (found) {
+        return found;
+      }
+    }
+  }
+
+  return null;
 }
 
 describe('agent-flow node schema registry', () => {
@@ -111,6 +132,57 @@ describe('agent-flow node schema registry', () => {
     );
   });
 
+  test('registers the built-in Data Model node for picker and schema-driven config', () => {
+    const schema = resolveAgentFlowNodeSchema('data_model' as never);
+    const serializedConfigBlocks = JSON.stringify(schema.detail.tabs.config.blocks);
+
+    expect(BUILTIN_NODE_PICKER_OPTIONS.map((option) => option.type)).toContain(
+      'data_model'
+    );
+    expect(schema.nodeType).toBe('data_model');
+    expect(serializedConfigBlocks).toContain('"path":"config.data_model_code"');
+    expect(serializedConfigBlocks).toContain('"renderer":"data_model"');
+    expect(serializedConfigBlocks).toContain('"path":"config.action"');
+    expect(serializedConfigBlocks).toContain('"renderer":"static_select"');
+    expect(serializedConfigBlocks).toContain('"value":"list"');
+    expect(serializedConfigBlocks).toContain('"value":"get"');
+    expect(serializedConfigBlocks).toContain('"value":"create"');
+    expect(serializedConfigBlocks).toContain('"value":"update"');
+    expect(serializedConfigBlocks).toContain('"value":"delete"');
+  });
+
+  test('keeps Data Model record and payload fields action-scoped in schema', () => {
+    const schema = resolveAgentFlowNodeSchema('data_model' as never);
+    const serializedConfigBlocks = JSON.stringify(schema.detail.tabs.config.blocks);
+    const payloadField = findFieldBlock(
+      schema.detail.tabs.config.blocks,
+      'bindings.payload'
+    );
+
+    expect(serializedConfigBlocks).toContain('"path":"bindings.record_id"');
+    expect(serializedConfigBlocks).toContain('"values":["get","update","delete"]');
+    expect(serializedConfigBlocks).toContain('"path":"bindings.payload"');
+    expect(serializedConfigBlocks).toContain('"values":["create","update"]');
+    expect(payloadField).toEqual(
+      expect.objectContaining({
+        renderer: 'named_bindings'
+      })
+    );
+  });
+
+  test('creates Data Model nodes with list outputs by default', () => {
+    const node = createNodeDocument('data_model' as never, 'node-data-model');
+
+    expect(node.config).toMatchObject({
+      data_model_code: '',
+      action: 'list'
+    });
+    expect(node.outputs).toEqual([
+      { key: 'records', title: '记录列表', valueType: 'array' },
+      { key: 'total', title: '记录总数', valueType: 'number' }
+    ]);
+  });
+
   test('reads relative node values and preserves output contract writes on the document', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const setWorkingDocument = vi.fn();
@@ -150,5 +222,41 @@ describe('agent-flow node schema registry', () => {
     expect(nextNode.config).not.toHaveProperty('output_contract');
     expect(nextNode.alias).toBe('LLM');
     expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  test('updates Data Model output contract when the action changes', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const dataModelNode = createNodeDocument(
+      'data_model' as never,
+      'node-data-model'
+    );
+    const documentWithDataModel = {
+      ...document,
+      graph: {
+        ...document.graph,
+        nodes: [...document.graph.nodes, dataModelNode]
+      }
+    };
+    const setWorkingDocument = vi.fn();
+    const adapter = createAgentFlowNodeSchemaAdapter({
+      document: documentWithDataModel,
+      nodeId: 'node-data-model',
+      setWorkingDocument,
+      dispatch: vi.fn()
+    });
+
+    adapter.setValue('config.action', 'delete');
+
+    const update = setWorkingDocument.mock.calls[0]?.[0] as
+      | typeof documentWithDataModel
+      | ((currentDocument: typeof documentWithDataModel) => typeof documentWithDataModel);
+    const nextDocument =
+      typeof update === 'function' ? update(documentWithDataModel) : update;
+    const nextNode = getNode(nextDocument, 'node-data-model');
+
+    expect(nextNode.config.action).toBe('delete');
+    expect(nextNode.outputs).toEqual([
+      { key: 'deleted_id', title: '删除记录 ID', valueType: 'string' }
+    ]);
   });
 });

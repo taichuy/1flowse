@@ -291,45 +291,66 @@ pub struct SeededWaitingCallbackRun {
 
 impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemoryProviderRuntime> {
     pub fn for_tests() -> Self {
+        let repository = InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
+            "application.view.all",
+            "application.create.all",
+        ]);
         Self::new(
-            InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
-                "application.view.all",
-                "application.create.all",
-            ]),
+            repository,
             InMemoryProviderRuntime::default(),
+            std::sync::Arc::new(runtime_core::runtime_engine::RuntimeEngine::for_tests()),
+            "test-master-key",
+        )
+    }
+
+    pub fn for_tests_without_data_model_scope_grant() -> Self {
+        let repository =
+            InMemoryOrchestrationRuntimeRepository::with_permissions_without_data_model_scope_grant(
+                vec!["application.view.all", "application.create.all"],
+            );
+        Self::new(
+            repository,
+            InMemoryProviderRuntime::default(),
+            std::sync::Arc::new(runtime_core::runtime_engine::RuntimeEngine::for_tests()),
             "test-master-key",
         )
     }
 
     pub fn for_tests_with_provider_delay(invoke_delay: std::time::Duration) -> Self {
+        let repository = InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
+            "application.view.all",
+            "application.create.all",
+        ]);
         Self::new(
-            InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
-                "application.view.all",
-                "application.create.all",
-            ]),
+            repository,
             InMemoryProviderRuntime::with_invoke_delay(invoke_delay),
+            std::sync::Arc::new(runtime_core::runtime_engine::RuntimeEngine::for_tests()),
             "test-master-key",
         )
     }
 
     pub fn for_tests_with_provider_events(provider_events: Vec<ProviderStreamEvent>) -> Self {
+        let repository = InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
+            "application.view.all",
+            "application.create.all",
+        ]);
         Self::new(
-            InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
-                "application.view.all",
-                "application.create.all",
-            ]),
+            repository,
             InMemoryProviderRuntime::with_provider_events(provider_events),
+            std::sync::Arc::new(runtime_core::runtime_engine::RuntimeEngine::for_tests()),
             "test-master-key",
         )
     }
 
     pub fn for_tests_with_fail_before_token_models(models: Vec<&str>) -> Self {
+        let repository = InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
+            "application.view.all",
+            "application.create.all",
+        ]);
         Self::new(
-            InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
-                "application.view.all",
-                "application.create.all",
-            ]),
+            repository,
             InMemoryProviderRuntime::with_fail_before_token_models(models),
+            std::sync::Arc::new(runtime_core::runtime_engine::RuntimeEngine::for_tests()),
             "test-master-key",
         )
     }

@@ -46,8 +46,7 @@ use crate::{
     config::{ApiConfig, ApiEnvironment},
     host_extension_loader::load_host_extensions_at_startup,
     host_infrastructure::build_local_host_infrastructure,
-    provider_runtime::ApiProviderRuntime,
-    provider_runtime::ApiRuntimeServices,
+    provider_runtime::{ApiDataSourceRuntimeRecordBackend, ApiProviderRuntime, ApiRuntimeServices},
     runtime_profile_client::{HostApiRuntimeProfileCollector, HttpPluginRunnerSystemClient},
 };
 
@@ -136,6 +135,7 @@ fn console_router(state: Arc<ApiState>) -> Router {
         .nest("/api/console", routes::file_storages::router())
         .nest("/api/console", routes::file_tables::router())
         .nest("/api/console", routes::host_infrastructure::router())
+        .nest("/api/console", routes::api_keys::router())
         .nest("/api/console", routes::me::router())
         .nest("/api/console", routes::workspace::router())
         .nest("/api/console", routes::members::router())
@@ -218,12 +218,31 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
             "attachments",
         )
         .await?;
-    let runtime_registry = runtime_core::runtime_model_registry::RuntimeModelRegistry::default();
-    runtime_registry.rebuild(store.list_runtime_model_metadata().await?);
-    let runtime_engine = Arc::new(runtime_core::runtime_engine::RuntimeEngine::new(
-        runtime_registry,
-        Arc::new(store.clone()),
+    let provider_runtime = Arc::new(ApiRuntimeServices::new(
+        Arc::new(RwLock::new(
+            plugin_runner::provider_host::ProviderHost::default(),
+        )),
+        Arc::new(RwLock::new(
+            plugin_runner::capability_host::CapabilityHost::default(),
+        )),
+        Arc::new(RwLock::new(
+            plugin_runner::data_source_host::DataSourceHost::default(),
+        )),
     ));
+    let api_provider_runtime = ApiProviderRuntime::new(provider_runtime.clone());
+    let runtime_registry = runtime_core::runtime_model_registry::RuntimeModelRegistry::default();
+    let runtime_metadata = store.list_runtime_model_metadata().await?;
+    runtime_registry.rebuild(runtime_metadata);
+    let runtime_engine = Arc::new(
+        runtime_core::runtime_engine::RuntimeEngine::new_with_data_source_backend(
+            runtime_registry,
+            Arc::new(store.clone()),
+            Arc::new(ApiDataSourceRuntimeRecordBackend::new(
+                store.clone(),
+                api_provider_runtime.clone(),
+            )),
+        ),
+    );
     let api_docs = Arc::new(
         openapi_docs::build_default_api_docs_registry_with_cookie_name(&config.cookie_name)?,
     );
@@ -236,17 +255,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
         infrastructure,
         file_storage_registry,
         runtime_engine,
-        provider_runtime: Arc::new(ApiRuntimeServices::new(
-            Arc::new(RwLock::new(
-                plugin_runner::provider_host::ProviderHost::default(),
-            )),
-            Arc::new(RwLock::new(
-                plugin_runner::capability_host::CapabilityHost::default(),
-            )),
-            Arc::new(RwLock::new(
-                plugin_runner::data_source_host::DataSourceHost::default(),
-            )),
-        )),
+        provider_runtime,
         process_started_at,
         api_runtime_profile: Arc::new(HostApiRuntimeProfileCollector),
         plugin_runner_system: Arc::new(HttpPluginRunnerSystemClient::new(

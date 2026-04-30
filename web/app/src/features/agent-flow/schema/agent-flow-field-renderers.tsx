@@ -1,5 +1,5 @@
 import type { FlowNodeDocument } from '@1flowbase/flow-schema';
-import { Input, InputNumber } from 'antd';
+import { Input, InputNumber, Select } from 'antd';
 
 import type {
   SchemaFieldRenderer,
@@ -12,6 +12,7 @@ import { SelectorField } from '../components/bindings/SelectorField';
 import { StateWriteField } from '../components/bindings/StateWriteField';
 import { TemplatedTextField } from '../components/bindings/TemplatedTextField';
 import { OutputContractDefinitionField } from '../components/detail/fields/OutputContractDefinitionField';
+import { DataModelField } from '../components/detail/fields/DataModelField';
 import { LlmModelField } from '../components/detail/fields/LlmModelField';
 import { LlmPromptMessagesField } from '../components/detail/fields/LlmPromptMessagesField';
 import { LlmResponseFormatField } from '../components/detail/fields/LlmResponseFormatField';
@@ -69,6 +70,19 @@ function renderNumberField({ adapter, block }: SchemaFieldRendererProps) {
       aria-label={block.label}
       className="agent-flow-editor__number-field"
       value={typeof value === 'number' && Number.isFinite(value) ? value : null}
+      onChange={(nextValue) => adapter.setValue(block.path, nextValue)}
+    />
+  );
+}
+
+function renderStaticSelectField({ adapter, block }: SchemaFieldRendererProps) {
+  const value = adapter.getValue(block.path);
+
+  return (
+    <Select
+      aria-label={block.label}
+      options={block.options ?? []}
+      value={typeof value === 'string' ? value : undefined}
       onChange={(nextValue) => adapter.setValue(block.path, nextValue)}
     />
   );
@@ -275,6 +289,8 @@ function renderStartInputFieldsField({
 
 export const agentFlowFieldRenderers = {
   text: renderTextField,
+  static_select: renderStaticSelectField,
+  data_model: DataModelField,
   llm_model: LlmModelField,
   llm_prompt_messages: renderLlmPromptMessagesField,
   llm_response_format: LlmResponseFormatField,

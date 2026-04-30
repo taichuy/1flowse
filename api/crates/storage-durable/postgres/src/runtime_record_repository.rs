@@ -5,6 +5,8 @@ use async_trait::async_trait;
 use control_plane::ports::ModelDefinitionRepository;
 use runtime_core::{
     model_metadata::ModelMetadata,
+    runtime_engine::ensure_runtime_model_available,
+    runtime_model_registry::RuntimeDataModelAvailability,
     runtime_record_repository::{
         RuntimeFilterInput, RuntimeListQuery, RuntimeListResult, RuntimeRecordRepository,
         RuntimeSortInput,
@@ -40,10 +42,59 @@ impl PgControlPlaneStore {
             .map(to_runtime_model_metadata))
     }
 
+    async fn available_relation_target_metadata(
+        &self,
+        model_id: Uuid,
+    ) -> Result<Option<ModelMetadata>> {
+        let Some(metadata) = self.runtime_model_metadata_by_id(model_id).await? else {
+            return Ok(None);
+        };
+        ensure_runtime_model_available(
+            &metadata.model_code,
+            RuntimeDataModelAvailability::from_status(metadata.status),
+        )?;
+        Ok(Some(metadata))
+    }
+
     async fn refresh_runtime_model_health(
         &self,
         mut model: domain::ModelDefinitionRecord,
     ) -> Result<Option<domain::ModelDefinitionRecord>> {
+        if model.source_kind == domain::DataModelSourceKind::ExternalSource {
+            let model_metadata_available = model.data_source_instance_id.is_some()
+                && required_text(model.external_resource_key.as_deref());
+            let mut next_model_status = if model_metadata_available {
+                domain::MetadataAvailabilityStatus::Available
+            } else {
+                domain::MetadataAvailabilityStatus::Unavailable
+            };
+            let mut fields = Vec::with_capacity(model.fields.len());
+            for mut field in model.fields {
+                let next_field_status = if !model_metadata_available
+                    || (field_requires_external_mapping(&field)
+                        && !required_text(field.external_field_key.as_deref()))
+                {
+                    next_model_status = domain::MetadataAvailabilityStatus::Unavailable;
+                    domain::MetadataAvailabilityStatus::Unavailable
+                } else {
+                    domain::MetadataAvailabilityStatus::Available
+                };
+                if field.availability_status != next_field_status {
+                    self.update_model_field_availability(field.id, next_field_status)
+                        .await?;
+                }
+                field.availability_status = next_field_status;
+                fields.push(field);
+            }
+            if model.availability_status != next_model_status {
+                self.update_model_availability(model.id, next_model_status)
+                    .await?;
+            }
+            model.availability_status = next_model_status;
+            model.fields = fields;
+            return Ok(model.availability_status.is_healthy().then_some(model));
+        }
+
         let table_exists = self
             .runtime_table_exists(&model.physical_table_name)
             .await?;
@@ -204,9 +255,9 @@ impl RuntimeRecordRepository for PgControlPlaneStore {
         let offset = (page - 1) * page_size;
 
         let mut count_builder = QueryBuilder::<Postgres>::new(format!(
-            "select count(*)::bigint from {table_name} where {scope_column_name} = "
+            "select count(*)::bigint from {table_name} where true"
         ));
-        count_builder.push_bind(query.scope_id);
+        append_scope_clause(&mut count_builder, &scope_column_name, query.scope_id);
         append_owner_scope_clause(&mut count_builder, query.owner_user_id);
         append_filter_clause(&mut count_builder, metadata, &query.filters)?;
         let total = self
@@ -219,9 +270,9 @@ impl RuntimeRecordRepository for PgControlPlaneStore {
             .await?;
 
         let mut list_builder = QueryBuilder::<Postgres>::new(format!(
-            "select row_to_json(t) from (select * from {table_name} where {scope_column_name} = "
+            "select row_to_json(t) from (select * from {table_name} where true"
         ));
-        list_builder.push_bind(query.scope_id);
+        append_scope_clause(&mut list_builder, &scope_column_name, query.scope_id);
         append_owner_scope_clause(&mut list_builder, query.owner_user_id);
         append_filter_clause(&mut list_builder, metadata, &query.filters)?;
         append_sort_clause(&mut list_builder, metadata, &query.sorts)?;
@@ -260,7 +311,7 @@ impl RuntimeRecordRepository for PgControlPlaneStore {
     async fn get_record(
         &self,
         metadata: &ModelMetadata,
-        scope_id: Uuid,
+        scope_id: Option<Uuid>,
         owner_user_id: Option<Uuid>,
         record_id: &str,
     ) -> Result<Option<Value>> {
@@ -268,9 +319,9 @@ impl RuntimeRecordRepository for PgControlPlaneStore {
         let scope_column_name = quote_identifier(&metadata.scope_column_name)?;
         let record_id = parse_record_id(record_id)?;
         let mut builder = QueryBuilder::<Postgres>::new(format!(
-            "select row_to_json(t) from (select * from {table_name} where {scope_column_name} = "
+            "select row_to_json(t) from (select * from {table_name} where true"
         ));
-        builder.push_bind(scope_id);
+        append_scope_clause(&mut builder, &scope_column_name, scope_id);
         append_owner_scope_clause(&mut builder, owner_user_id);
         builder.push(" and id = ");
         builder.push_bind(record_id);
@@ -331,7 +382,7 @@ impl RuntimeRecordRepository for PgControlPlaneStore {
         self.run_runtime_query(metadata, builder.build().execute(self.pool()))
             .await?;
 
-        self.get_record(metadata, scope_id, None, &record_id.to_string())
+        self.get_record(metadata, Some(scope_id), None, &record_id.to_string())
             .await?
             .ok_or_else(|| anyhow!("runtime record not found after create"))
     }
@@ -340,7 +391,7 @@ impl RuntimeRecordRepository for PgControlPlaneStore {
         &self,
         metadata: &ModelMetadata,
         actor_user_id: Uuid,
-        scope_id: Uuid,
+        scope_id: Option<Uuid>,
         owner_user_id: Option<Uuid>,
         record_id: &str,
         payload: Value,
@@ -375,10 +426,8 @@ impl RuntimeRecordRepository for PgControlPlaneStore {
             builder.push(" = ");
             push_field_value(&mut builder, field, value)?;
         }
-        builder.push(" where ");
-        builder.push(scope_column_name);
-        builder.push(" = ");
-        builder.push_bind(scope_id);
+        builder.push(" where true");
+        append_scope_clause(&mut builder, &scope_column_name, scope_id);
         append_owner_scope_clause(&mut builder, owner_user_id);
         builder.push(" and id = ");
         builder.push_bind(record_id);
@@ -393,17 +442,16 @@ impl RuntimeRecordRepository for PgControlPlaneStore {
     async fn delete_record(
         &self,
         metadata: &ModelMetadata,
-        scope_id: Uuid,
+        scope_id: Option<Uuid>,
         owner_user_id: Option<Uuid>,
         record_id: &str,
     ) -> Result<bool> {
         let table_name = quote_identifier(&metadata.physical_table_name)?;
         let scope_column_name = quote_identifier(&metadata.scope_column_name)?;
         let record_id = parse_record_id(record_id)?;
-        let mut builder = QueryBuilder::<Postgres>::new(format!(
-            "delete from {table_name} where {scope_column_name} = "
-        ));
-        builder.push_bind(scope_id);
+        let mut builder =
+            QueryBuilder::<Postgres>::new(format!("delete from {table_name} where true"));
+        append_scope_clause(&mut builder, &scope_column_name, scope_id);
         append_owner_scope_clause(&mut builder, owner_user_id);
         builder.push(" and id = ");
         builder.push_bind(record_id);
@@ -419,7 +467,7 @@ impl PgControlPlaneStore {
     async fn expand_relations(
         &self,
         metadata: &ModelMetadata,
-        scope_id: Uuid,
+        scope_id: Option<Uuid>,
         owner_user_id: Option<Uuid>,
         record: Value,
         expand_relations: &[String],
@@ -446,8 +494,9 @@ impl PgControlPlaneStore {
                     else {
                         continue;
                     };
-                    let Some(target_metadata) =
-                        self.runtime_model_metadata_by_id(target_model_id).await?
+                    let Some(target_metadata) = self
+                        .available_relation_target_metadata(target_model_id)
+                        .await?
                     else {
                         continue;
                     };
@@ -466,8 +515,9 @@ impl PgControlPlaneStore {
                     let Some(target_model_id) = field.relation_target_model_id else {
                         continue;
                     };
-                    let Some(target_metadata) =
-                        self.runtime_model_metadata_by_id(target_model_id).await?
+                    let Some(target_metadata) = self
+                        .available_relation_target_metadata(target_model_id)
+                        .await?
                     else {
                         continue;
                     };
@@ -519,12 +569,29 @@ fn append_owner_scope_clause(
     }
 }
 
+fn append_scope_clause(
+    builder: &mut QueryBuilder<'_, Postgres>,
+    scope_column_name: &str,
+    scope_id: Option<Uuid>,
+) {
+    if let Some(scope_id) = scope_id {
+        builder.push(" and ");
+        builder.push(scope_column_name);
+        builder.push(" = ");
+        builder.push_bind(scope_id);
+    }
+}
+
 fn to_runtime_model_metadata(model: domain::ModelDefinitionRecord) -> ModelMetadata {
     ModelMetadata {
         model_id: model.id,
         model_code: model.code.clone(),
+        status: model.status,
         scope_kind: model.scope_kind,
         scope_id: model.scope_id,
+        data_source_instance_id: model.data_source_instance_id,
+        source_kind: model.source_kind,
+        external_resource_key: model.external_resource_key,
         physical_table_name: model.physical_table_name,
         scope_column_name: "scope_id".into(),
         fields: model
@@ -703,6 +770,14 @@ fn field_requires_physical_column(field: &domain::ModelFieldRecord) -> bool {
     !matches!(field.field_kind, domain::ModelFieldKind::OneToMany)
 }
 
+fn field_requires_external_mapping(field: &domain::ModelFieldRecord) -> bool {
+    field_requires_physical_column(field)
+}
+
+fn required_text(value: Option<&str>) -> bool {
+    value.is_some_and(|value| !value.trim().is_empty())
+}
+
 fn is_runtime_object_missing_error(error: &sqlx::Error) -> bool {
     match error {
         sqlx::Error::Database(database_error) => {
@@ -720,6 +795,7 @@ fn to_model_field_record(row: PgRow) -> domain::ModelFieldRecord {
         code: row.get("code"),
         title: row.get("title"),
         physical_column_name: row.get("physical_column_name"),
+        external_field_key: row.get("external_field_key"),
         field_kind: domain::ModelFieldKind::from_db(row.get("field_kind")),
         is_required: row.get("is_required"),
         is_unique: row.get("is_unique"),

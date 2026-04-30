@@ -65,6 +65,15 @@ where
             .registry
             .get(&storage.driver_type)
             .ok_or(ControlPlaneError::Conflict("storage_driver_not_registered"))?;
+        let scope_grant =
+            crate::model_definition::ModelDefinitionService::new(self.repository.clone())
+                .load_runtime_scope_grant(&command.actor, model.id)
+                .await?
+                .ok_or(
+                    runtime_core::runtime_acl::RuntimeAclError::PermissionDenied(
+                        "data_model_scope_not_granted",
+                    ),
+                )?;
 
         let file_id = Uuid::now_v7();
         let extname = std::path::Path::new(&command.original_filename)
@@ -123,6 +132,7 @@ where
                 actor: command.actor,
                 model_code: model.code,
                 payload: serde_json::Value::Object(payload),
+                scope_grant: Some(scope_grant),
             })
             .await?;
 

@@ -1,5 +1,6 @@
 import type { SchemaBlock, CanvasNodeSchema } from '../../../../shared/schema-ui/contracts/canvas-node-schema';
 import { SchemaRenderer } from '../../../../shared/schema-ui/runtime/SchemaRenderer';
+import { evaluateSchemaRule } from '../../../../shared/schema-ui/runtime/rule-evaluator';
 import type { SchemaAdapter } from '../../../../shared/schema-ui/registry/create-renderer-registry';
 import { useEffect, useRef } from 'react';
 import { Typography } from 'antd';
@@ -42,6 +43,21 @@ function resolveFocusableFieldKey(fieldKey: string) {
   }
 
   return fieldKey;
+}
+
+function getRootValues(adapter: SchemaAdapter) {
+  return (adapter.getDerived('rootValues') as Record<string, unknown> | null) ?? {};
+}
+
+function shouldRenderFieldBlock(
+  block: Extract<SchemaBlock, { kind: 'field' }>,
+  adapter: SchemaAdapter,
+  capabilities: readonly string[]
+) {
+  return evaluateSchemaRule(block.visibleWhen, {
+    values: getRootValues(adapter),
+    capabilities
+  });
 }
 
 export function NodeInspector({
@@ -92,6 +108,7 @@ export function NodeInspector({
               adapter={activeAdapter}
               blocks={[block]}
               registry={agentFlowRendererRegistry}
+              capabilities={activeSchema.capabilities}
             />
           );
         }
@@ -116,6 +133,16 @@ export function NodeInspector({
               {block.blocks.map((childBlock, index) => {
                 if (isFieldBlock(childBlock)) {
                   if (childBlock.path === 'config.output_contract') {
+                    return null;
+                  }
+
+                  if (
+                    !shouldRenderFieldBlock(
+                      childBlock,
+                      activeAdapter,
+                      activeSchema.capabilities
+                    )
+                  ) {
                     return null;
                   }
 
@@ -146,6 +173,7 @@ export function NodeInspector({
                           adapter={activeAdapter}
                           blocks={[childBlock]}
                           registry={agentFlowRendererRegistry}
+                          capabilities={activeSchema.capabilities}
                         />
                       </div>
                     </div>
@@ -158,6 +186,7 @@ export function NodeInspector({
                     adapter={activeAdapter}
                     blocks={[childBlock]}
                     registry={agentFlowRendererRegistry}
+                    capabilities={activeSchema.capabilities}
                   />
                 );
               })}

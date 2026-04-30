@@ -2644,6 +2644,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "domain",
+ "plugin-framework",
  "serde",
  "serde_json",
  "thiserror",

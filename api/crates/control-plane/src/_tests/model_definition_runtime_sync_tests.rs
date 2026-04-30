@@ -46,8 +46,11 @@ async fn create_model_rebuilds_runtime_registry_once() {
         .create_model(CreateModelDefinitionCommand {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
+            external_resource_key: None,
             code: "orders".into(),
             title: "Orders".into(),
+            status: None,
         })
         .await
         .unwrap();
@@ -64,6 +67,13 @@ async fn add_field_rebuilds_runtime_registry_once() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: Uuid::nil(),
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
+            status: domain::DataModelStatus::Published,
+            api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            protection: domain::DataModelProtection::default(),
             code: "orders".into(),
             title: "Orders".into(),
         })
@@ -78,6 +88,7 @@ async fn add_field_rebuilds_runtime_registry_once() {
             model_id: seeded.id,
             code: "status".into(),
             title: "Status".into(),
+            external_field_key: None,
             field_kind: ModelFieldKind::Enum,
             is_required: true,
             is_unique: false,
@@ -102,6 +113,13 @@ async fn delete_model_rebuilds_runtime_registry_once() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: Uuid::nil(),
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
+            status: domain::DataModelStatus::Published,
+            api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            protection: domain::DataModelProtection::default(),
             code: "orders".into(),
             title: "Orders".into(),
         })

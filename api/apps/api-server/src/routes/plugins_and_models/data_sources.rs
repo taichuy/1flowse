@@ -3,12 +3,13 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
-    routing::{get, post},
+    routing::{get, patch, post},
     Json, Router,
 };
 use control_plane::data_source::{
     CreateDataSourceInstanceCommand, DataSourceCatalogEntryView, DataSourceInstanceView,
-    DataSourceService, PreviewDataSourceReadCommand, PreviewDataSourceReadResult,
+    DataSourceService, MapDataSourceResourceToModelCommand, PreviewDataSourceReadCommand,
+    PreviewDataSourceReadResult, RotateDataSourceSecretCommand, UpdateDataSourceDefaultsCommand,
     ValidateDataSourceInstanceCommand, ValidateDataSourceInstanceResult,
 };
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,8 @@ use crate::{
     provider_runtime::ApiProviderRuntime,
     response::ApiSuccess,
 };
+
+use super::model_definitions::{to_model_definition_response, ModelDefinitionResponse};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateDataSourceInstanceBody {
@@ -43,6 +46,23 @@ pub struct PreviewDataSourceReadBody {
     pub cursor: Option<String>,
     #[schema(value_type = Object)]
     pub options_json: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RotateDataSourceSecretBody {
+    #[schema(value_type = Object)]
+    pub secret_json: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateDataSourceDefaultsBody {
+    pub default_data_model_status: String,
+    pub default_api_exposure_status: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct MapDataSourceResourceToModelBody {
+    pub resource_key: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -72,12 +92,17 @@ pub struct DataSourceCatalogCacheResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct DataSourceInstanceResponse {
     pub id: String,
+    pub source_kind: String,
     pub installation_id: String,
     pub source_code: String,
     pub display_name: String,
     pub status: String,
+    pub default_data_model_status: String,
+    pub default_api_exposure_status: String,
     #[schema(value_type = Object)]
     pub config_json: serde_json::Value,
+    pub secret_ref: Option<String>,
+    pub secret_version: Option<i32>,
     pub catalog_refresh_status: Option<String>,
     pub catalog_last_error_message: Option<String>,
     pub catalog_refreshed_at: Option<String>,
@@ -108,14 +133,29 @@ pub struct PreviewDataSourceReadResponse {
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route("/data-sources/catalog", get(list_catalog))
-        .route("/data-sources/instances", post(create_instance))
+        .route(
+            "/data-sources/instances",
+            get(list_instances).post(create_instance),
+        )
+        .route(
+            "/data-sources/instances/:instance_id/defaults",
+            patch(update_defaults),
+        )
         .route(
             "/data-sources/instances/:instance_id/validate",
             post(validate_instance),
         )
         .route(
+            "/data-sources/instances/:instance_id/secret/rotate",
+            post(rotate_secret),
+        )
+        .route(
             "/data-sources/instances/:instance_id/preview-read",
             post(preview_read),
+        )
+        .route(
+            "/data-sources/instances/:instance_id/resources/map-to-model",
+            post(map_resource_to_model),
         )
 }
 
@@ -165,11 +205,28 @@ fn to_instance_response(view: DataSourceInstanceView) -> DataSourceInstanceRespo
     let catalog = view.catalog;
     DataSourceInstanceResponse {
         id: view.instance.id.to_string(),
+        source_kind: domain::DataModelSourceKind::ExternalSource
+            .as_str()
+            .to_string(),
         installation_id: view.instance.installation_id.to_string(),
         source_code: view.instance.source_code,
         display_name: view.instance.display_name,
         status: view.instance.status.as_str().to_string(),
+        default_data_model_status: view
+            .instance
+            .defaults
+            .data_model_status
+            .as_str()
+            .to_string(),
+        default_api_exposure_status: view
+            .instance
+            .defaults
+            .api_exposure_status
+            .as_str()
+            .to_string(),
         config_json: view.instance.config_json,
+        secret_ref: view.instance.secret_ref,
+        secret_version: view.instance.secret_version,
         catalog_refresh_status: catalog
             .as_ref()
             .map(|cache| cache.refresh_status.as_str().to_string()),
@@ -177,6 +234,56 @@ fn to_instance_response(view: DataSourceInstanceView) -> DataSourceInstanceRespo
             .as_ref()
             .and_then(|cache| cache.last_error_message.clone()),
         catalog_refreshed_at: catalog.and_then(|cache| format_optional_time(cache.refreshed_at)),
+    }
+}
+
+fn main_source_response() -> DataSourceInstanceResponse {
+    let defaults = domain::DataSourceDefaults::default();
+    DataSourceInstanceResponse {
+        id: "main_source".to_string(),
+        source_kind: domain::DataModelSourceKind::MainSource.as_str().to_string(),
+        installation_id: "main_source".to_string(),
+        source_code: "main_source".to_string(),
+        display_name: "主数据源".to_string(),
+        status: "ready".to_string(),
+        default_data_model_status: defaults.data_model_status.as_str().to_string(),
+        default_api_exposure_status: defaults.api_exposure_status.as_str().to_string(),
+        config_json: serde_json::json!({}),
+        secret_ref: None,
+        secret_version: None,
+        catalog_refresh_status: None,
+        catalog_last_error_message: None,
+        catalog_refreshed_at: None,
+    }
+}
+
+fn parse_model_status(raw: &str) -> Result<domain::DataModelStatus, ApiError> {
+    match raw {
+        "draft" => Ok(domain::DataModelStatus::Draft),
+        "published" => Ok(domain::DataModelStatus::Published),
+        "disabled" => Ok(domain::DataModelStatus::Disabled),
+        "broken" => Ok(domain::DataModelStatus::Broken),
+        _ => Err(control_plane::errors::ControlPlaneError::InvalidInput(
+            "default_data_model_status",
+        )
+        .into()),
+    }
+}
+
+fn parse_api_exposure_status(raw: &str) -> Result<domain::ApiExposureStatus, ApiError> {
+    match raw {
+        "draft" => Ok(domain::ApiExposureStatus::Draft),
+        "published_not_exposed" => Ok(domain::ApiExposureStatus::PublishedNotExposed),
+        "api_exposed_no_permission" => Ok(domain::ApiExposureStatus::ApiExposedNoPermission),
+        "unsafe_external_source" => Ok(domain::ApiExposureStatus::UnsafeExternalSource),
+        "api_exposed_ready" => Err(control_plane::errors::ControlPlaneError::InvalidInput(
+            "default_api_exposure_status",
+        )
+        .into()),
+        _ => Err(control_plane::errors::ControlPlaneError::InvalidInput(
+            "default_api_exposure_status",
+        )
+        .into()),
     }
 }
 
@@ -222,6 +329,28 @@ pub async fn list_catalog(
 }
 
 #[utoipa::path(
+    get,
+    path = "/api/console/data-sources/instances",
+    operation_id = "data_source_list_instances",
+    responses((status = 200, body = [DataSourceInstanceResponse]), (status = 401, body = crate::error_response::ErrorBody))
+)]
+pub async fn list_instances(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<Vec<DataSourceInstanceResponse>>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let mut sources = vec![main_source_response()];
+    sources.extend(
+        service(&state)
+            .list_instances(context.user.id, context.actor.current_workspace_id)
+            .await?
+            .into_iter()
+            .map(to_instance_response),
+    );
+    Ok(Json(ApiSuccess::new(sources)))
+}
+
+#[utoipa::path(
     post,
     path = "/api/console/data-sources/instances",
     operation_id = "data_source_create_instance",
@@ -253,6 +382,45 @@ pub async fn create_instance(
 }
 
 #[utoipa::path(
+    patch,
+    path = "/api/console/data-sources/instances/{instance_id}/defaults",
+    operation_id = "data_source_update_defaults",
+    request_body = UpdateDataSourceDefaultsBody,
+    responses((status = 200, body = DataSourceInstanceResponse), (status = 400, body = crate::error_response::ErrorBody), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn update_defaults(
+    State(state): State<Arc<ApiState>>,
+    Path(instance_id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<UpdateDataSourceDefaultsBody>,
+) -> Result<Json<ApiSuccess<DataSourceInstanceResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let defaults = domain::DataSourceDefaults {
+        data_model_status: parse_model_status(&body.default_data_model_status)?,
+        api_exposure_status: parse_api_exposure_status(&body.default_api_exposure_status)?,
+    };
+    if instance_id == "main_source" {
+        return Ok(Json(ApiSuccess::new(main_source_response())));
+    }
+
+    let instance = service(&state)
+        .update_defaults(UpdateDataSourceDefaultsCommand {
+            actor_user_id: context.user.id,
+            workspace_id: context.actor.current_workspace_id,
+            instance_id: parse_uuid(&instance_id, "instance_id")?,
+            defaults,
+        })
+        .await?;
+    Ok(Json(ApiSuccess::new(to_instance_response(
+        DataSourceInstanceView {
+            instance,
+            catalog: None,
+        },
+    ))))
+}
+
+#[utoipa::path(
     post,
     path = "/api/console/data-sources/instances/{instance_id}/validate",
     operation_id = "data_source_validate_instance",
@@ -273,6 +441,32 @@ pub async fn validate_instance(
         })
         .await?;
     Ok(Json(ApiSuccess::new(to_validate_response(result))))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/data-sources/instances/{instance_id}/secret/rotate",
+    operation_id = "data_source_rotate_secret",
+    request_body = RotateDataSourceSecretBody,
+    responses((status = 200, body = DataSourceInstanceResponse), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn rotate_secret(
+    State(state): State<Arc<ApiState>>,
+    Path(instance_id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<RotateDataSourceSecretBody>,
+) -> Result<Json<ApiSuccess<DataSourceInstanceResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let result = service(&state)
+        .rotate_secret(RotateDataSourceSecretCommand {
+            actor_user_id: context.user.id,
+            workspace_id: context.actor.current_workspace_id,
+            instance_id: parse_uuid(&instance_id, "instance_id")?,
+            secret_json: body.secret_json,
+        })
+        .await?;
+    Ok(Json(ApiSuccess::new(to_instance_response(result))))
 }
 
 #[utoipa::path(
@@ -302,4 +496,36 @@ pub async fn preview_read(
         })
         .await?;
     Ok(Json(ApiSuccess::new(to_preview_response(result))))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/data-sources/instances/{instance_id}/resources/map-to-model",
+    operation_id = "data_source_map_resource_to_model",
+    request_body = MapDataSourceResourceToModelBody,
+    responses((status = 201, body = ModelDefinitionResponse), (status = 400, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn map_resource_to_model(
+    State(state): State<Arc<ApiState>>,
+    Path(instance_id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<MapDataSourceResourceToModelBody>,
+) -> Result<(StatusCode, Json<ApiSuccess<ModelDefinitionResponse>>), ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let result = service(&state)
+        .map_resource_to_model(MapDataSourceResourceToModelCommand {
+            actor_user_id: context.user.id,
+            workspace_id: context.actor.current_workspace_id,
+            instance_id: parse_uuid(&instance_id, "instance_id")?,
+            resource_key: body.resource_key,
+        })
+        .await?;
+    let mut model = result.model;
+    model.fields = result.fields;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(ApiSuccess::new(to_model_definition_response(model))),
+    ))
 }

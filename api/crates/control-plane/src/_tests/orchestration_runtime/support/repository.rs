@@ -29,6 +29,7 @@ struct InMemoryOrchestrationRuntimeState {
         HashMap<Uuid, Vec<domain::ModelFailoverAttemptLedgerRecord>>,
     secret_json_by_instance_id: HashMap<Uuid, Value>,
     main_instances_by_provider: HashMap<(Uuid, String), domain::ModelProviderMainInstanceRecord>,
+    scope_data_model_grants: Vec<domain::ScopeDataModelGrantRecord>,
 }
 
 #[derive(Clone)]
@@ -63,6 +64,17 @@ impl InMemoryOrchestrationRuntimeRepository {
     }
 
     pub(crate) fn with_permissions(permissions: Vec<&str>) -> Self {
+        Self::with_permissions_and_data_model_scope_grant(permissions, true)
+    }
+
+    pub(crate) fn with_permissions_without_data_model_scope_grant(permissions: Vec<&str>) -> Self {
+        Self::with_permissions_and_data_model_scope_grant(permissions, false)
+    }
+
+    fn with_permissions_and_data_model_scope_grant(
+        permissions: Vec<&str>,
+        include_data_model_scope_grant: bool,
+    ) -> Self {
         let flow = InMemoryFlowRepository::with_permissions(permissions);
         let installation_id = Uuid::now_v7();
         let capability_installation_id = Uuid::now_v7();
@@ -209,6 +221,21 @@ impl InMemoryOrchestrationRuntimeRepository {
             refreshed_at: Some(now),
             updated_at: now,
         };
+        let scope_data_model_grants = include_data_model_scope_grant
+            .then(|| {
+                vec![domain::ScopeDataModelGrantRecord {
+                    id: Uuid::now_v7(),
+                    scope_kind: domain::DataModelScopeKind::Workspace,
+                    scope_id: workspace_id,
+                    data_model_id: Uuid::nil(),
+                    enabled: true,
+                    permission_profile: domain::ScopeDataModelPermissionProfile::ScopeAll,
+                    created_by: None,
+                    created_at: now,
+                    updated_at: now,
+                }]
+            })
+            .unwrap_or_default();
 
         Self {
             flow,
@@ -231,6 +258,7 @@ impl InMemoryOrchestrationRuntimeRepository {
                     provider_instance_id,
                     json!({ "api_key": "test-secret" }),
                 )]),
+                scope_data_model_grants,
                 ..InMemoryOrchestrationRuntimeState::default()
             })),
             default_provider_instance_id: provider_instance_id,
@@ -643,6 +671,56 @@ impl InMemoryOrchestrationRuntimeRepository {
     }
 }
 
+fn test_data_model_definition() -> domain::ModelDefinitionRecord {
+    domain::ModelDefinitionRecord {
+        id: Uuid::nil(),
+        scope_kind: domain::DataModelScopeKind::Workspace,
+        scope_id: Uuid::nil(),
+        data_source_instance_id: None,
+        source_kind: domain::DataModelSourceKind::MainSource,
+        external_resource_key: None,
+        external_capability_snapshot: None,
+        code: "orders".to_string(),
+        title: "Orders".to_string(),
+        physical_table_name: "rtm_workspace_test_orders".to_string(),
+        acl_namespace: "runtime_model:orders".to_string(),
+        audit_namespace: "runtime_model:orders".to_string(),
+        fields: vec![
+            test_data_model_field("title", domain::ModelFieldKind::String, 0),
+            test_data_model_field("status", domain::ModelFieldKind::Enum, 1),
+        ],
+        availability_status: domain::MetadataAvailabilityStatus::Available,
+        status: domain::DataModelStatus::Published,
+        api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+        protection: domain::DataModelProtection::default(),
+    }
+}
+
+fn test_data_model_field(
+    code: &str,
+    field_kind: domain::ModelFieldKind,
+    sort_order: i32,
+) -> domain::ModelFieldRecord {
+    domain::ModelFieldRecord {
+        id: Uuid::now_v7(),
+        data_model_id: Uuid::nil(),
+        code: code.to_string(),
+        title: code.to_string(),
+        physical_column_name: code.to_string(),
+        external_field_key: None,
+        field_kind,
+        is_required: false,
+        is_unique: false,
+        default_value: None,
+        display_interface: None,
+        display_options: json!({}),
+        relation_target_model_id: None,
+        relation_options: json!({}),
+        sort_order,
+        availability_status: domain::MetadataAvailabilityStatus::Available,
+    }
+}
+
 #[async_trait]
 impl ApplicationRepository for InMemoryOrchestrationRuntimeRepository {
     async fn load_actor_context_for_user(
@@ -773,6 +851,165 @@ impl FlowRepository for InMemoryOrchestrationRuntimeRepository {
             version_id,
         )
         .await
+    }
+}
+
+#[async_trait]
+impl ModelDefinitionRepository for InMemoryOrchestrationRuntimeRepository {
+    async fn load_actor_context_for_user(
+        &self,
+        actor_user_id: Uuid,
+    ) -> Result<domain::ActorContext> {
+        ApplicationRepository::load_actor_context_for_user(&self.flow, actor_user_id).await
+    }
+
+    async fn list_model_definitions(
+        &self,
+        _workspace_id: Uuid,
+    ) -> Result<Vec<domain::ModelDefinitionRecord>> {
+        Ok(vec![test_data_model_definition()])
+    }
+
+    async fn get_model_definition(
+        &self,
+        _workspace_id: Uuid,
+        model_id: Uuid,
+    ) -> Result<Option<domain::ModelDefinitionRecord>> {
+        Ok((model_id == Uuid::nil()).then(test_data_model_definition))
+    }
+
+    async fn create_model_definition(
+        &self,
+        _input: &CreateModelDefinitionInput,
+    ) -> Result<domain::ModelDefinitionRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn update_model_definition(
+        &self,
+        _input: &UpdateModelDefinitionInput,
+    ) -> Result<domain::ModelDefinitionRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn add_model_field(
+        &self,
+        _input: &crate::ports::AddModelFieldInput,
+    ) -> Result<domain::ModelFieldRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn update_model_field(
+        &self,
+        _input: &UpdateModelFieldInput,
+    ) -> Result<domain::ModelFieldRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn delete_model_definition(&self, _actor_user_id: Uuid, _model_id: Uuid) -> Result<()> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn delete_model_field(
+        &self,
+        _actor_user_id: Uuid,
+        _model_id: Uuid,
+        _field_id: Uuid,
+    ) -> Result<()> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn publish_model_definition(
+        &self,
+        _actor_user_id: Uuid,
+        _model_id: Uuid,
+    ) -> Result<domain::ModelDefinitionRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn create_scope_data_model_grant(
+        &self,
+        input: &CreateScopeDataModelGrantInput,
+    ) -> Result<domain::ScopeDataModelGrantRecord> {
+        let now = OffsetDateTime::now_utc();
+        let grant = domain::ScopeDataModelGrantRecord {
+            id: input.grant_id,
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            data_model_id: input.data_model_id,
+            enabled: input.enabled,
+            permission_profile: input.permission_profile,
+            created_by: input.created_by,
+            created_at: now,
+            updated_at: now,
+        };
+        self.inner
+            .lock()
+            .expect("runtime repo mutex poisoned")
+            .scope_data_model_grants
+            .push(grant.clone());
+        Ok(grant)
+    }
+
+    async fn update_scope_data_model_grant(
+        &self,
+        input: &UpdateScopeDataModelGrantInput,
+    ) -> Result<domain::ScopeDataModelGrantRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let grant = inner
+            .scope_data_model_grants
+            .iter_mut()
+            .find(|grant| grant.id == input.grant_id && grant.data_model_id == input.data_model_id)
+            .ok_or(ControlPlaneError::NotFound("scope_data_model_grant"))?;
+        grant.enabled = input.enabled;
+        grant.permission_profile = input.permission_profile;
+        grant.updated_at = OffsetDateTime::now_utc();
+        Ok(grant.clone())
+    }
+
+    async fn get_scope_data_model_grant(
+        &self,
+        data_model_id: Uuid,
+        grant_id: Uuid,
+    ) -> Result<Option<domain::ScopeDataModelGrantRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .scope_data_model_grants
+            .iter()
+            .find(|grant| grant.id == grant_id && grant.data_model_id == data_model_id)
+            .cloned())
+    }
+
+    async fn delete_scope_data_model_grant(
+        &self,
+        data_model_id: Uuid,
+        grant_id: Uuid,
+    ) -> Result<domain::ScopeDataModelGrantRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let index = inner
+            .scope_data_model_grants
+            .iter()
+            .position(|grant| grant.id == grant_id && grant.data_model_id == data_model_id)
+            .ok_or(ControlPlaneError::NotFound("scope_data_model_grant"))?;
+        Ok(inner.scope_data_model_grants.remove(index))
+    }
+
+    async fn list_scope_data_model_grants(
+        &self,
+        scope_kind: domain::DataModelScopeKind,
+        scope_id: Uuid,
+    ) -> Result<Vec<domain::ScopeDataModelGrantRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .scope_data_model_grants
+            .iter()
+            .filter(|grant| grant.scope_kind == scope_kind && grant.scope_id == scope_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn append_audit_log(&self, event: &domain::AuditLogRecord) -> Result<()> {
+        ApplicationRepository::append_audit_log(&self.flow, event).await
     }
 }
 

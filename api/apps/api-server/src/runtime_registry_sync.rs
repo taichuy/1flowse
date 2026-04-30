@@ -19,8 +19,8 @@ impl ApiRuntimeRegistrySync {
 #[async_trait]
 impl RuntimeRegistrySync for ApiRuntimeRegistrySync {
     async fn rebuild(&self) -> Result<()> {
-        let metadata = self.store.list_runtime_model_metadata().await?;
-        self.registry.rebuild(metadata);
+        let runtime_metadata = self.store.list_runtime_model_metadata().await?;
+        self.registry.rebuild(runtime_metadata);
         Ok(())
     }
 }

@@ -525,6 +525,7 @@ async fn send_debug_run_stream_events(
         let background_service = OrchestrationRuntimeService::new(
             background_state.store.clone(),
             ApiProviderRuntime::new(background_state.provider_runtime.clone()),
+            background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
         );
         if let Err(error) = background_service
@@ -648,6 +649,7 @@ pub async fn start_flow_debug_run(
     let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
         ApiProviderRuntime::new(state.provider_runtime.clone()),
+        state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     );
     let detail = runtime_service
@@ -666,6 +668,7 @@ pub async fn start_flow_debug_run(
         let background_service = OrchestrationRuntimeService::new(
             background_state.store.clone(),
             ApiProviderRuntime::new(background_state.provider_runtime.clone()),
+            background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
         );
         if let Err(error) = background_service
@@ -703,6 +706,7 @@ pub async fn start_flow_debug_run_stream(
     let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
         ApiProviderRuntime::new(state.provider_runtime.clone()),
+        state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     );
     let detail = runtime_service
@@ -753,6 +757,7 @@ pub async fn cancel_flow_run(
     let detail = OrchestrationRuntimeService::new(
         state.store.clone(),
         ApiProviderRuntime::new(state.provider_runtime.clone()),
+        state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     )
     .cancel_flow_run(CancelFlowRunCommand {
@@ -797,6 +802,7 @@ pub async fn resume_flow_run(
     let detail = OrchestrationRuntimeService::new(
         state.store.clone(),
         ApiProviderRuntime::new(state.provider_runtime.clone()),
+        state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     )
     .resume_flow_run(ResumeFlowRunCommand {
@@ -841,6 +847,7 @@ pub async fn complete_callback_task(
     let detail = OrchestrationRuntimeService::new(
         state.store.clone(),
         ApiProviderRuntime::new(state.provider_runtime.clone()),
+        state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     )
     .complete_callback_task(CompleteCallbackTaskCommand {
@@ -884,6 +891,7 @@ pub async fn start_node_debug_preview(
     let outcome = OrchestrationRuntimeService::new(
         state.store.clone(),
         ApiProviderRuntime::new(state.provider_runtime.clone()),
+        state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     )
     .start_node_debug_preview(StartNodeDebugPreviewCommand {

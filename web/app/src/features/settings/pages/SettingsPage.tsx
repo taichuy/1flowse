@@ -31,6 +31,7 @@ export function SettingsPage({
       'state_model.manage.all',
       'state_model.manage.own'
     ]);
+  const canManageDataModels = canManageModelProviders;
   const canManageHostInfrastructure =
     isRoot || permissionSet.has('plugin_config.configure.all');
   const { activeSection, redirectSection, visibleSections } =
@@ -56,6 +57,7 @@ export function SettingsPage({
           permissions={permissions}
           canManageMembers={canManageMembers}
           canManageRoles={canManageRoles}
+          canManageDataModels={canManageDataModels}
           canManageModelProviders={canManageModelProviders}
           canManageHostInfrastructure={canManageHostInfrastructure}
         />

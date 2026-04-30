@@ -7,12 +7,21 @@ use control_plane::{
         ResolveCapabilityOptionsInput, ResolveCapabilityOutputSchemaInput,
         ValidateCapabilityConfigInput,
     },
+    data_source::{collect_secret_strings, redact_value},
     errors::ControlPlaneError,
-    ports::{DataSourceRuntimePort, ProviderRuntimeInvocationOutput, ProviderRuntimePort},
+    plugin_lifecycle::reconcile_installation_snapshot,
+    ports::{
+        DataSourceCrudRuntimePort, DataSourceRepository, DataSourceRuntimePort, PluginRepository,
+        ProviderRuntimeInvocationOutput, ProviderRuntimePort,
+    },
 };
 use plugin_framework::{
     data_source_contract::{
-        DataSourceConfigInput, DataSourcePreviewReadInput, DataSourcePreviewReadOutput,
+        DataSourceConfigInput, DataSourceCreateRecordInput, DataSourceCreateRecordOutput,
+        DataSourceDeleteRecordInput, DataSourceDeleteRecordOutput, DataSourceDescribeResourceInput,
+        DataSourceGetRecordInput, DataSourceGetRecordOutput, DataSourceListRecordsInput,
+        DataSourceListRecordsOutput, DataSourcePreviewReadInput, DataSourcePreviewReadOutput,
+        DataSourceResourceDescriptor, DataSourceUpdateRecordInput, DataSourceUpdateRecordOutput,
     },
     error::PluginFrameworkError,
     provider_contract::{ProviderInvocationInput, ProviderModelDescriptor},
@@ -20,8 +29,13 @@ use plugin_framework::{
 use plugin_runner::{
     capability_host::CapabilityHost, data_source_host::DataSourceHost, provider_host::ProviderHost,
 };
+use runtime_core::runtime_engine::DataSourceRuntimeRecordBackend;
+use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
+use std::collections::HashSet;
+use storage_durable::MainDurableStore;
 use tokio::sync::RwLock;
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct ApiRuntimeServices {
@@ -53,6 +67,78 @@ impl ApiProviderRuntime {
     pub fn new(services: Arc<ApiRuntimeServices>) -> Self {
         Self { services }
     }
+}
+
+#[derive(Clone)]
+pub struct ApiDataSourceRuntimeRecordBackend {
+    repository: MainDurableStore,
+    runtime: ApiProviderRuntime,
+}
+
+impl ApiDataSourceRuntimeRecordBackend {
+    pub fn new(repository: MainDurableStore, runtime: ApiProviderRuntime) -> Self {
+        Self {
+            repository,
+            runtime,
+        }
+    }
+
+    async fn load_target(
+        &self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+    ) -> anyhow::Result<DataSourceRuntimeTarget> {
+        let instance = DataSourceRepository::get_instance(
+            &self.repository,
+            workspace_id,
+            data_source_instance_id,
+        )
+        .await?
+        .ok_or(ControlPlaneError::NotFound("data_source_instance"))?;
+        if instance.status != domain::DataSourceInstanceStatus::Ready {
+            return Err(ControlPlaneError::Conflict("data_source_instance_not_ready").into());
+        }
+
+        let installation =
+            reconcile_installation_snapshot(&self.repository, instance.installation_id).await?;
+        let assigned = PluginRepository::list_assignments(&self.repository, workspace_id)
+            .await?
+            .into_iter()
+            .any(|assignment| assignment.installation_id == installation.id);
+        if !assigned {
+            return Err(ControlPlaneError::Conflict("plugin_assignment_required").into());
+        }
+        if installation.desired_state == domain::PluginDesiredState::Disabled
+            || installation.availability_status != domain::PluginAvailabilityStatus::Available
+        {
+            return Err(ControlPlaneError::Conflict("plugin_installation_unavailable").into());
+        }
+        if installation.contract_version != "1flowbase.data_source/v1" {
+            return Err(ControlPlaneError::InvalidInput("plugin_installation").into());
+        }
+        if installation.provider_code != instance.source_code {
+            return Err(ControlPlaneError::InvalidInput("source_code").into());
+        }
+        let secret_json = DataSourceRepository::get_secret_json(&self.repository, instance.id)
+            .await?
+            .unwrap_or_else(|| serde_json::json!({}));
+        let secret_values = collect_secret_strings(&secret_json);
+
+        Ok(DataSourceRuntimeTarget {
+            installation,
+            connection: DataSourceConfigInput {
+                config_json: instance.config_json,
+                secret_json,
+            },
+            secret_values,
+        })
+    }
+}
+
+struct DataSourceRuntimeTarget {
+    installation: domain::PluginInstallationRecord,
+    connection: DataSourceConfigInput,
+    secret_values: HashSet<String>,
 }
 
 #[async_trait]
@@ -212,6 +298,23 @@ impl DataSourceRuntimePort for ApiProviderRuntime {
         Ok(serde_json::to_value(output.entries)?)
     }
 
+    async fn describe_resource(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceDescribeResourceInput,
+    ) -> anyhow::Result<DataSourceResourceDescriptor> {
+        self.ensure_data_source_loaded(installation).await?;
+        let host = self.services.data_source_host.read().await;
+        host.describe_resource(
+            &installation.plugin_id,
+            input.connection,
+            input.resource_key,
+        )
+        .await
+        .map(|output| output.descriptor)
+        .map_err(|error| map_framework_error(error, "data_source_runtime"))
+    }
+
     async fn preview_read(
         &self,
         installation: &domain::PluginInstallationRecord,
@@ -222,6 +325,155 @@ impl DataSourceRuntimePort for ApiProviderRuntime {
         host.preview_read(&installation.plugin_id, input)
             .await
             .map_err(|error| map_framework_error(error, "data_source_runtime"))
+    }
+}
+
+#[async_trait]
+impl DataSourceCrudRuntimePort for ApiProviderRuntime {
+    async fn list_records(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceListRecordsInput,
+    ) -> anyhow::Result<DataSourceListRecordsOutput> {
+        self.ensure_data_source_loaded(installation).await?;
+        let host = self.services.data_source_host.read().await;
+        host.list_records(&installation.plugin_id, input)
+            .await
+            .map_err(|error| map_framework_error(error, "data_source_runtime"))
+    }
+
+    async fn get_record(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceGetRecordInput,
+    ) -> anyhow::Result<DataSourceGetRecordOutput> {
+        self.ensure_data_source_loaded(installation).await?;
+        let host = self.services.data_source_host.read().await;
+        host.get_record(&installation.plugin_id, input)
+            .await
+            .map_err(|error| map_framework_error(error, "data_source_runtime"))
+    }
+
+    async fn create_record(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceCreateRecordInput,
+    ) -> anyhow::Result<DataSourceCreateRecordOutput> {
+        self.ensure_data_source_loaded(installation).await?;
+        let host = self.services.data_source_host.read().await;
+        host.create_record(&installation.plugin_id, input)
+            .await
+            .map_err(|error| map_framework_error(error, "data_source_runtime"))
+    }
+
+    async fn update_record(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceUpdateRecordInput,
+    ) -> anyhow::Result<DataSourceUpdateRecordOutput> {
+        self.ensure_data_source_loaded(installation).await?;
+        let host = self.services.data_source_host.read().await;
+        host.update_record(&installation.plugin_id, input)
+            .await
+            .map_err(|error| map_framework_error(error, "data_source_runtime"))
+    }
+
+    async fn delete_record(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceDeleteRecordInput,
+    ) -> anyhow::Result<DataSourceDeleteRecordOutput> {
+        self.ensure_data_source_loaded(installation).await?;
+        let host = self.services.data_source_host.read().await;
+        host.delete_record(&installation.plugin_id, input)
+            .await
+            .map_err(|error| map_framework_error(error, "data_source_runtime"))
+    }
+}
+
+#[async_trait]
+impl DataSourceRuntimeRecordBackend for ApiDataSourceRuntimeRecordBackend {
+    async fn list_records(
+        &self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+        mut input: DataSourceListRecordsInput,
+    ) -> anyhow::Result<DataSourceListRecordsOutput> {
+        let target = self
+            .load_target(workspace_id, data_source_instance_id)
+            .await?;
+        input.connection = target.connection;
+        let output =
+            DataSourceCrudRuntimePort::list_records(&self.runtime, &target.installation, input)
+                .await?;
+        redact_data_source_output(output, &target.secret_values)
+    }
+
+    async fn get_record(
+        &self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+        mut input: DataSourceGetRecordInput,
+    ) -> anyhow::Result<DataSourceGetRecordOutput> {
+        let target = self
+            .load_target(workspace_id, data_source_instance_id)
+            .await?;
+        input.connection = target.connection;
+        let output =
+            DataSourceCrudRuntimePort::get_record(&self.runtime, &target.installation, input)
+                .await?;
+        redact_data_source_output(output, &target.secret_values)
+    }
+
+    async fn create_record(
+        &self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+        mut input: DataSourceCreateRecordInput,
+    ) -> anyhow::Result<DataSourceCreateRecordOutput> {
+        let target = self
+            .load_target(workspace_id, data_source_instance_id)
+            .await?;
+        input.connection = target.connection;
+        input.transaction_id = None;
+        let output =
+            DataSourceCrudRuntimePort::create_record(&self.runtime, &target.installation, input)
+                .await?;
+        redact_data_source_output(output, &target.secret_values)
+    }
+
+    async fn update_record(
+        &self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+        mut input: DataSourceUpdateRecordInput,
+    ) -> anyhow::Result<DataSourceUpdateRecordOutput> {
+        let target = self
+            .load_target(workspace_id, data_source_instance_id)
+            .await?;
+        input.connection = target.connection;
+        input.transaction_id = None;
+        let output =
+            DataSourceCrudRuntimePort::update_record(&self.runtime, &target.installation, input)
+                .await?;
+        redact_data_source_output(output, &target.secret_values)
+    }
+
+    async fn delete_record(
+        &self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+        mut input: DataSourceDeleteRecordInput,
+    ) -> anyhow::Result<DataSourceDeleteRecordOutput> {
+        let target = self
+            .load_target(workspace_id, data_source_instance_id)
+            .await?;
+        input.connection = target.connection;
+        input.transaction_id = None;
+        let output =
+            DataSourceCrudRuntimePort::delete_record(&self.runtime, &target.installation, input)
+                .await?;
+        redact_data_source_output(output, &target.secret_values)
     }
 }
 
@@ -290,6 +542,14 @@ impl CapabilityPluginRuntimePort for ApiProviderRuntime {
         })
         .map_err(|error| map_framework_error(error, "capability_runtime"))
     }
+}
+
+fn redact_data_source_output<T>(output: T, secrets: &HashSet<String>) -> anyhow::Result<T>
+where
+    T: Serialize + DeserializeOwned,
+{
+    let value = serde_json::to_value(output)?;
+    Ok(serde_json::from_value(redact_value(&value, secrets))?)
 }
 
 impl ApiProviderRuntime {

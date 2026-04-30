@@ -5,6 +5,7 @@ export type SettingsSectionKey =
   | 'system-runtime'
   | 'host-infrastructure'
   | 'files'
+  | 'data-models'
   | 'model-providers'
   | 'members'
   | 'roles';
@@ -44,6 +45,17 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
       'file_table.view.all',
       'file_table.view.own',
       'file_table.create.all'
+    ]
+  },
+  {
+    key: 'data-models',
+    label: '数据源',
+    to: '/settings/data-models',
+    requiredPermissions: [
+      'state_model.view.all',
+      'state_model.view.own',
+      'state_model.manage.all',
+      'state_model.manage.own'
     ]
   },
   {

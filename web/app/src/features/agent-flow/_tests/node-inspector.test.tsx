@@ -10,6 +10,7 @@ import {
 } from '../../../test/model-provider-contract-fixtures';
 
 import { createNodeDocument } from '../lib/document/node-factory';
+import * as dataModelOptionsApi from '../api/data-model-options';
 import * as modelProviderOptionsApi from '../api/model-provider-options';
 import { NodeDetailPanel } from '../components/detail/NodeDetailPanel';
 import { NodeConfigTab } from '../components/detail/tabs/NodeConfigTab';
@@ -26,6 +27,10 @@ const primaryProviderFirstModel = primaryProviderFirstGroup.models[0];
 const fetchModelProviderOptionsSpy = vi.spyOn(
   modelProviderOptionsApi,
   'fetchModelProviderOptions'
+);
+const fetchDataModelOptionsSpy = vi.spyOn(
+  dataModelOptionsApi,
+  'fetchDataModelOptions'
 );
 const resolveAgentFlowNodeSchemaSpy = vi.spyOn(
   nodeSchemaRegistry,
@@ -72,6 +77,26 @@ function createInitialStateWithLoopNode() {
   const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
   document.graph.nodes.push(createNodeDocument('loop', 'node-loop', 720, 240));
+
+  return {
+    flow_id: 'flow-1',
+    draft: {
+      id: 'draft-1',
+      flow_id: 'flow-1',
+      updated_at: '2026-04-16T10:00:00Z',
+      document
+    },
+    autosave_interval_seconds: 30,
+    versions: []
+  };
+}
+
+function createInitialStateWithDataModelNode() {
+  const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+  document.graph.nodes.push(
+    createNodeDocument('data_model' as never, 'node-data-model', 720, 240)
+  );
 
   return {
     flow_id: 'flow-1',
@@ -145,6 +170,39 @@ function getLlmNodeConfig(document: ReturnType<typeof createDefaultAgentFlowDocu
   return llmNode.config;
 }
 
+function getDataModelNode(
+  document: ReturnType<typeof createDefaultAgentFlowDocument>
+) {
+  const dataModelNode = document.graph.nodes.find(
+    (node) => node.id === 'node-data-model'
+  );
+
+  if (!dataModelNode) {
+    throw new Error('expected data model node');
+  }
+
+  return dataModelNode;
+}
+
+async function openSelect(label: string) {
+  const combobox = await screen.findByRole('combobox', { name: label });
+
+  fireEvent.mouseDown(combobox);
+  fireEvent.keyDown(combobox, { key: 'ArrowDown' });
+
+  return combobox;
+}
+
+async function selectOption(label: string) {
+  fireEvent.click(await screen.findByTitle(label));
+}
+
+async function selectDataModelOption(value: string) {
+  const option = await screen.findByTestId(`data-model-option-${value}`);
+
+  fireEvent.click(option);
+}
+
 describe('NodeInspector', () => {
   beforeEach(() => {
     fetchModelProviderOptionsSpy.mockReset();
@@ -158,6 +216,52 @@ describe('NodeInspector', () => {
       i18n_catalog: {},
       providers: []
     });
+    fetchDataModelOptionsSpy.mockReset();
+    fetchDataModelOptionsSpy.mockResolvedValue([
+      {
+        value: 'orders',
+        label: 'Orders',
+        state: 'enabled',
+        disabled: false,
+        disabledReason: null,
+        modelId: 'model-orders',
+        modelCode: 'orders',
+        fields: [
+          { code: 'name', title: 'Name', valueType: 'string', required: true },
+          { code: 'amount', title: 'Amount', valueType: 'number', required: false }
+        ]
+      },
+      {
+        value: 'draft_orders',
+        label: 'Draft Orders',
+        state: 'unpublished',
+        disabled: true,
+        disabledReason: 'Data Model is not published',
+        modelId: 'model-draft-orders',
+        modelCode: 'draft_orders',
+        fields: []
+      },
+      {
+        value: 'disabled_orders',
+        label: 'Disabled Orders',
+        state: 'disabled',
+        disabled: true,
+        disabledReason: 'Data Model is disabled',
+        modelId: 'model-disabled-orders',
+        modelCode: 'disabled_orders',
+        fields: []
+      },
+      {
+        value: 'broken_orders',
+        label: 'Broken Orders',
+        state: 'broken',
+        disabled: true,
+        disabledReason: 'Data Model is broken',
+        modelId: 'model-broken-orders',
+        modelCode: 'broken_orders',
+        fields: []
+      }
+    ]);
     resolveAgentFlowNodeSchemaSpy.mockClear();
     createAgentFlowNodeSchemaAdapterSpy.mockClear();
   });
@@ -333,5 +437,130 @@ describe('NodeInspector', () => {
     expect(
       screen.getByTestId('inspector-field-bindings.entry_condition')
     ).not.toHaveClass('agent-flow-editor__inspector-field--inline');
+  });
+
+  test('loads Data Model options from the feature API and disables unavailable models', async () => {
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={createInitialStateWithDataModelNode()}>
+        <SelectionSeed nodeId="node-data-model" />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    await openSelect('Data Model');
+
+    expect(fetchDataModelOptionsSpy).toHaveBeenCalledTimes(1);
+    expect(await screen.findByTestId('data-model-option-orders')).not.toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    expect(screen.getByTestId('data-model-option-draft_orders')).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    expect(screen.getByTestId('data-model-option-disabled_orders')).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    expect(screen.getByTestId('data-model-option-broken_orders')).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+  });
+
+  test('updates selected Data Model metadata when the selected model changes', async () => {
+    let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={createInitialStateWithDataModelNode()}>
+        <SelectionSeed nodeId="node-data-model" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    await openSelect('Data Model');
+    await selectDataModelOption('orders');
+
+    await waitFor(() => {
+      expect(getDataModelNode(latestDocument).config).toMatchObject({
+        data_model_code: 'orders',
+        data_model_id: 'model-orders',
+        data_model_label: 'Orders',
+        data_model_fields: [
+          { code: 'name', title: 'Name', valueType: 'string', required: true },
+          { code: 'amount', title: 'Amount', valueType: 'number', required: false }
+        ]
+      });
+    });
+  });
+
+  test('toggles Data Model record and payload editors by action and keeps outputs aligned', async () => {
+    let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={createInitialStateWithDataModelNode()}>
+        <SelectionSeed nodeId="node-data-model" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(
+      screen.queryByTestId('inspector-field-bindings.record_id')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('inspector-field-bindings.payload')
+    ).not.toBeInTheDocument();
+
+    await openSelect('Action');
+    await selectOption('Create');
+
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId('inspector-field-bindings.record_id')
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByTestId('inspector-field-bindings.payload')
+      ).toBeInTheDocument();
+      expect(getDataModelNode(latestDocument).outputs).toEqual([
+        { key: 'record', title: '记录', valueType: 'json' }
+      ]);
+    });
+
+    await openSelect('Action');
+    await selectOption('Update');
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('inspector-field-bindings.record_id')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('inspector-field-bindings.payload')
+      ).toBeInTheDocument();
+    });
+
+    await openSelect('Action');
+    await selectOption('Delete');
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('inspector-field-bindings.record_id')
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByTestId('inspector-field-bindings.payload')
+      ).not.toBeInTheDocument();
+      expect(getDataModelNode(latestDocument).outputs).toEqual([
+        { key: 'deleted_id', title: '删除记录 ID', valueType: 'string' }
+      ]);
+    });
   });
 });

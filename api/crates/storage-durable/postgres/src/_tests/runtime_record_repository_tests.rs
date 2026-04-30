@@ -1,7 +1,8 @@
 use control_plane::ports::{
     AddModelFieldInput, CreateModelDefinitionInput, ModelDefinitionRepository,
 };
-use domain::{DataModelScopeKind, ModelFieldKind};
+use domain::{DataModelScopeKind, ModelFieldKind, DEFAULT_SCOPE_ID};
+use runtime_core::runtime_engine::RuntimeModelError;
 use runtime_core::runtime_record_repository::{
     RuntimeFilterInput, RuntimeListQuery, RuntimeRecordRepository, RuntimeSortInput,
 };
@@ -57,6 +58,379 @@ async fn insert_user(store: &PgControlPlaneStore, user_id: Uuid, account: &str) 
     .unwrap();
 }
 
+async fn insert_workspace(store: &PgControlPlaneStore, workspace_id: Uuid) {
+    let tenant_id = root_tenant_id(store).await;
+    let workspace_name = format!("Core Workspace {}", workspace_id.simple());
+    sqlx::query(
+        "insert into workspaces (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
+    )
+    .bind(workspace_id)
+    .bind(tenant_id)
+    .bind(&workspace_name)
+    .execute(store.pool())
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn runtime_record_repository_scopes_dynamic_rows_without_workspace_row() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let default_scope_id = domain::DEFAULT_SCOPE_ID;
+    let alternate_scope_id = Uuid::now_v7();
+    assert_ne!(default_scope_id, domain::SYSTEM_SCOPE_ID);
+
+    let workspace_count: i64 = sqlx::query_scalar("select count(*) from workspaces")
+        .fetch_one(store.pool())
+        .await
+        .unwrap();
+    assert_eq!(workspace_count, 0);
+
+    let model = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::System,
+            scope_id: domain::SYSTEM_SCOPE_ID,
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
+            status: domain::DataModelStatus::Published,
+            api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            protection: domain::DataModelProtection::default(),
+            code: "default_scope_orders".into(),
+            title: "Default Scope Orders".into(),
+        },
+    )
+    .await
+    .unwrap();
+    ModelDefinitionRepository::add_model_field(
+        &store,
+        &AddModelFieldInput {
+            actor_user_id: Uuid::nil(),
+            model_id: model.id,
+            external_field_key: None,
+            code: "title".into(),
+            title: "Title".into(),
+            field_kind: ModelFieldKind::String,
+            is_required: true,
+            is_unique: false,
+            default_value: None,
+            display_interface: Some("input".into()),
+            display_options: json!({}),
+            relation_target_model_id: None,
+            relation_options: json!({}),
+        },
+    )
+    .await
+    .unwrap();
+
+    let metadata = store
+        .list_runtime_model_metadata()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|model| model.model_code == "default_scope_orders")
+        .unwrap();
+    assert_eq!(metadata.scope_kind, DataModelScopeKind::System);
+    assert_eq!(metadata.scope_id, domain::SYSTEM_SCOPE_ID);
+    assert_eq!(metadata.scope_column_name, "scope_id");
+
+    let default_record = RuntimeRecordRepository::create_record(
+        &store,
+        &metadata,
+        Uuid::nil(),
+        default_scope_id,
+        json!({ "title": "default-scope" }),
+    )
+    .await
+    .unwrap();
+    let alternate_record = RuntimeRecordRepository::create_record(
+        &store,
+        &metadata,
+        Uuid::nil(),
+        alternate_scope_id,
+        json!({ "title": "alternate-scope" }),
+    )
+    .await
+    .unwrap();
+    let default_record_id = default_record["id"].as_str().unwrap().to_string();
+    let alternate_record_id = alternate_record["id"].as_str().unwrap().to_string();
+
+    let default_list = RuntimeRecordRepository::list_records(
+        &store,
+        &metadata,
+        RuntimeListQuery {
+            scope_id: Some(default_scope_id),
+            owner_user_id: None,
+            filters: vec![],
+            sorts: vec![],
+            expand_relations: vec![],
+            page: 1,
+            page_size: 20,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(default_list.total, 1);
+    assert_eq!(default_list.items[0]["title"], json!("default-scope"));
+
+    let alternate_list = RuntimeRecordRepository::list_records(
+        &store,
+        &metadata,
+        RuntimeListQuery {
+            scope_id: Some(alternate_scope_id),
+            owner_user_id: None,
+            filters: vec![],
+            sorts: vec![],
+            expand_relations: vec![],
+            page: 1,
+            page_size: 20,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(alternate_list.total, 1);
+    assert_eq!(alternate_list.items[0]["title"], json!("alternate-scope"));
+
+    let cross_scope_get = RuntimeRecordRepository::get_record(
+        &store,
+        &metadata,
+        Some(alternate_scope_id),
+        None,
+        &default_record_id,
+    )
+    .await
+    .unwrap();
+    assert!(cross_scope_get.is_none());
+
+    let cross_scope_update = RuntimeRecordRepository::update_record(
+        &store,
+        &metadata,
+        Uuid::nil(),
+        Some(alternate_scope_id),
+        None,
+        &default_record_id,
+        json!({ "title": "blocked" }),
+    )
+    .await;
+    assert!(cross_scope_update.is_err());
+
+    let cross_scope_delete = RuntimeRecordRepository::delete_record(
+        &store,
+        &metadata,
+        Some(alternate_scope_id),
+        None,
+        &default_record_id,
+    )
+    .await
+    .unwrap();
+    assert!(!cross_scope_delete);
+
+    let updated = RuntimeRecordRepository::update_record(
+        &store,
+        &metadata,
+        Uuid::nil(),
+        Some(default_scope_id),
+        None,
+        &default_record_id,
+        json!({ "title": "default-scope-updated" }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated["title"], json!("default-scope-updated"));
+
+    let alternate_deleted = RuntimeRecordRepository::delete_record(
+        &store,
+        &metadata,
+        Some(alternate_scope_id),
+        None,
+        &alternate_record_id,
+    )
+    .await
+    .unwrap();
+    assert!(alternate_deleted);
+}
+
+#[tokio::test]
+async fn runtime_record_repository_uses_default_scope_id_without_workspace_row() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let future_scope_id = Uuid::now_v7();
+
+    let missing_workspace_count: i64 =
+        sqlx::query_scalar("select count(*)::bigint from workspaces where id = any($1)")
+            .bind(vec![DEFAULT_SCOPE_ID, future_scope_id])
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert_eq!(missing_workspace_count, 0);
+
+    let model = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: DEFAULT_SCOPE_ID,
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
+            status: domain::DataModelStatus::Published,
+            api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            protection: domain::DataModelProtection::default(),
+            code: "default_scope_orders".into(),
+            title: "Default Scope Orders".into(),
+        },
+    )
+    .await
+    .unwrap();
+    ModelDefinitionRepository::add_model_field(
+        &store,
+        &AddModelFieldInput {
+            actor_user_id: Uuid::nil(),
+            model_id: model.id,
+            external_field_key: None,
+            code: "title".into(),
+            title: "Title".into(),
+            field_kind: ModelFieldKind::String,
+            is_required: true,
+            is_unique: false,
+            default_value: None,
+            display_interface: Some("input".into()),
+            display_options: json!({}),
+            relation_target_model_id: None,
+            relation_options: json!({}),
+        },
+    )
+    .await
+    .unwrap();
+
+    let metadata = store
+        .list_runtime_model_metadata()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|model| {
+            model.model_code == "default_scope_orders" && model.scope_id == DEFAULT_SCOPE_ID
+        })
+        .unwrap();
+    assert_eq!(metadata.scope_column_name, "scope_id");
+
+    let columns: Vec<String> = sqlx::query_scalar(
+        r#"
+        select column_name
+        from information_schema.columns
+        where table_schema = current_schema()
+          and table_name = $1
+        order by ordinal_position
+        "#,
+    )
+    .bind(&metadata.physical_table_name)
+    .fetch_all(store.pool())
+    .await
+    .unwrap();
+    assert!(columns.contains(&"scope_id".to_string()));
+    assert!(!columns.contains(&"workspace_id".to_string()));
+
+    let default_record = RuntimeRecordRepository::create_record(
+        &store,
+        &metadata,
+        Uuid::nil(),
+        DEFAULT_SCOPE_ID,
+        json!({ "title": "default-scope" }),
+    )
+    .await
+    .unwrap();
+    let default_record_id = default_record["id"].as_str().unwrap().to_string();
+    RuntimeRecordRepository::create_record(
+        &store,
+        &metadata,
+        Uuid::nil(),
+        future_scope_id,
+        json!({ "title": "future-provider-scope" }),
+    )
+    .await
+    .unwrap();
+
+    let default_list = RuntimeRecordRepository::list_records(
+        &store,
+        &metadata,
+        RuntimeListQuery {
+            scope_id: Some(DEFAULT_SCOPE_ID),
+            owner_user_id: None,
+            filters: vec![],
+            sorts: vec![],
+            expand_relations: vec![],
+            page: 1,
+            page_size: 20,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(default_list.total, 1);
+    assert_eq!(default_list.items[0]["title"], json!("default-scope"));
+
+    let future_scope_list = RuntimeRecordRepository::list_records(
+        &store,
+        &metadata,
+        RuntimeListQuery {
+            scope_id: Some(future_scope_id),
+            owner_user_id: None,
+            filters: vec![],
+            sorts: vec![],
+            expand_relations: vec![],
+            page: 1,
+            page_size: 20,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(future_scope_list.total, 1);
+    assert_eq!(
+        future_scope_list.items[0]["title"],
+        json!("future-provider-scope")
+    );
+
+    let blocked_cross_scope_get = RuntimeRecordRepository::get_record(
+        &store,
+        &metadata,
+        Some(future_scope_id),
+        None,
+        &default_record_id,
+    )
+    .await
+    .unwrap();
+    assert!(blocked_cross_scope_get.is_none());
+
+    let updated = RuntimeRecordRepository::update_record(
+        &store,
+        &metadata,
+        Uuid::nil(),
+        Some(DEFAULT_SCOPE_ID),
+        None,
+        &default_record_id,
+        json!({ "title": "default-scope-updated" }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated["title"], json!("default-scope-updated"));
+
+    let deleted = RuntimeRecordRepository::delete_record(
+        &store,
+        &metadata,
+        Some(DEFAULT_SCOPE_ID),
+        None,
+        &default_record_id,
+    )
+    .await
+    .unwrap();
+    assert!(deleted);
+}
+
 #[tokio::test]
 async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expansion() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
@@ -81,6 +455,13 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
+            status: domain::DataModelStatus::Published,
+            api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            protection: domain::DataModelProtection::default(),
             code: "customers".into(),
             title: "Customers".into(),
         },
@@ -93,6 +474,13 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
+            status: domain::DataModelStatus::Published,
+            api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            protection: domain::DataModelProtection::default(),
             code: "orders".into(),
             title: "Orders".into(),
         },
@@ -105,6 +493,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: customer_model.id,
+            external_field_key: None,
             code: "name".into(),
             title: "Name".into(),
             field_kind: ModelFieldKind::String,
@@ -124,6 +513,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: order_model.id,
+            external_field_key: None,
             code: "title".into(),
             title: "Title".into(),
             field_kind: ModelFieldKind::String,
@@ -143,6 +533,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: order_model.id,
+            external_field_key: None,
             code: "status".into(),
             title: "Status".into(),
             field_kind: ModelFieldKind::Enum,
@@ -162,6 +553,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: order_model.id,
+            external_field_key: None,
             code: "customer".into(),
             title: "Customer".into(),
             field_kind: ModelFieldKind::ManyToOne,
@@ -181,6 +573,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: customer_model.id,
+            external_field_key: None,
             code: "orders".into(),
             title: "Orders".into(),
             field_kind: ModelFieldKind::OneToMany,
@@ -259,7 +652,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         &store,
         &order_metadata,
         RuntimeListQuery {
-            scope_id: workspace_id,
+            scope_id: Some(workspace_id),
             owner_user_id: None,
             filters: vec![RuntimeFilterInput {
                 field_code: "status".into(),
@@ -281,18 +674,23 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
     assert_eq!(listed.items[0]["title"], json!("A-002"));
     assert_eq!(listed.items[0]["customer"]["name"], json!("Bob"));
 
-    let fetched =
-        RuntimeRecordRepository::get_record(&store, &order_metadata, workspace_id, None, &first_id)
-            .await
-            .unwrap()
-            .unwrap();
+    let fetched = RuntimeRecordRepository::get_record(
+        &store,
+        &order_metadata,
+        Some(workspace_id),
+        None,
+        &first_id,
+    )
+    .await
+    .unwrap()
+    .unwrap();
     assert_eq!(fetched["title"], json!("A-001"));
 
     let updated = RuntimeRecordRepository::update_record(
         &store,
         &order_metadata,
         Uuid::nil(),
-        workspace_id,
+        Some(workspace_id),
         None,
         &order_id,
         json!({ "title": "A-002X", "status": "paid", "customer": bob_id }),
@@ -305,7 +703,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         &store,
         &customer_metadata,
         RuntimeListQuery {
-            scope_id: workspace_id,
+            scope_id: Some(workspace_id),
             owner_user_id: None,
             filters: vec![],
             sorts: vec![],
@@ -326,13 +724,176 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
     let deleted = RuntimeRecordRepository::delete_record(
         &store,
         &order_metadata,
-        workspace_id,
+        Some(workspace_id),
         None,
         &order_id,
     )
     .await
     .unwrap();
     assert!(deleted);
+}
+
+#[tokio::test]
+async fn runtime_record_repository_blocks_expanding_draft_relation_targets() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let workspace_id = Uuid::now_v7();
+    insert_workspace(&store, workspace_id).await;
+
+    let customer_model = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
+            status: domain::DataModelStatus::Draft,
+            api_exposure_status: domain::ApiExposureStatus::Draft,
+            protection: domain::DataModelProtection::default(),
+            code: "draft_relation_customers".into(),
+            title: "Draft Relation Customers".into(),
+        },
+    )
+    .await
+    .unwrap();
+    let order_model = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
+            status: domain::DataModelStatus::Published,
+            api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            protection: domain::DataModelProtection::default(),
+            code: "draft_relation_orders".into(),
+            title: "Draft Relation Orders".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    ModelDefinitionRepository::add_model_field(
+        &store,
+        &AddModelFieldInput {
+            actor_user_id: Uuid::nil(),
+            model_id: customer_model.id,
+            external_field_key: None,
+            code: "name".into(),
+            title: "Name".into(),
+            field_kind: ModelFieldKind::String,
+            is_required: true,
+            is_unique: false,
+            default_value: None,
+            display_interface: Some("input".into()),
+            display_options: json!({}),
+            relation_target_model_id: None,
+            relation_options: json!({}),
+        },
+    )
+    .await
+    .unwrap();
+    ModelDefinitionRepository::add_model_field(
+        &store,
+        &AddModelFieldInput {
+            actor_user_id: Uuid::nil(),
+            model_id: order_model.id,
+            external_field_key: None,
+            code: "title".into(),
+            title: "Title".into(),
+            field_kind: ModelFieldKind::String,
+            is_required: true,
+            is_unique: false,
+            default_value: None,
+            display_interface: Some("input".into()),
+            display_options: json!({}),
+            relation_target_model_id: None,
+            relation_options: json!({}),
+        },
+    )
+    .await
+    .unwrap();
+    ModelDefinitionRepository::add_model_field(
+        &store,
+        &AddModelFieldInput {
+            actor_user_id: Uuid::nil(),
+            model_id: order_model.id,
+            external_field_key: None,
+            code: "customer".into(),
+            title: "Customer".into(),
+            field_kind: ModelFieldKind::ManyToOne,
+            is_required: true,
+            is_unique: false,
+            default_value: None,
+            display_interface: Some("select".into()),
+            display_options: json!({}),
+            relation_target_model_id: Some(customer_model.id),
+            relation_options: json!({}),
+        },
+    )
+    .await
+    .unwrap();
+
+    let metadata = store.list_runtime_model_metadata().await.unwrap();
+    let customer_metadata = metadata
+        .iter()
+        .find(|model| model.model_code == "draft_relation_customers")
+        .unwrap()
+        .clone();
+    let order_metadata = metadata
+        .iter()
+        .find(|model| model.model_code == "draft_relation_orders")
+        .unwrap()
+        .clone();
+
+    let customer = RuntimeRecordRepository::create_record(
+        &store,
+        &customer_metadata,
+        Uuid::nil(),
+        workspace_id,
+        json!({ "name": "Draft Customer" }),
+    )
+    .await
+    .unwrap();
+    let customer_id = customer["id"].as_str().unwrap().to_string();
+    RuntimeRecordRepository::create_record(
+        &store,
+        &order_metadata,
+        Uuid::nil(),
+        workspace_id,
+        json!({ "title": "Published Order", "customer": customer_id }),
+    )
+    .await
+    .unwrap();
+
+    let error = RuntimeRecordRepository::list_records(
+        &store,
+        &order_metadata,
+        RuntimeListQuery {
+            scope_id: Some(workspace_id),
+            owner_user_id: None,
+            filters: vec![],
+            sorts: vec![],
+            expand_relations: vec!["customer".into()],
+            page: 1,
+            page_size: 20,
+        },
+    )
+    .await
+    .unwrap_err();
+
+    let model_error = error.downcast_ref::<RuntimeModelError>().unwrap();
+    assert_eq!(
+        model_error,
+        &RuntimeModelError::not_published("draft_relation_customers")
+    );
 }
 
 #[tokio::test]
@@ -364,6 +925,13 @@ async fn runtime_record_repository_enforces_owner_scope() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
+            status: domain::DataModelStatus::Published,
+            api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            protection: domain::DataModelProtection::default(),
             code: "orders_acl".into(),
             title: "Orders ACL".into(),
         },
@@ -375,6 +943,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: order_model.id,
+            external_field_key: None,
             code: "title".into(),
             title: "Title".into(),
             field_kind: ModelFieldKind::String,
@@ -424,7 +993,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         &store,
         &metadata,
         RuntimeListQuery {
-            scope_id: workspace_id,
+            scope_id: Some(workspace_id),
             owner_user_id: Some(owner_user_id),
             filters: vec![],
             sorts: vec![],
@@ -441,7 +1010,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
     let own_get = RuntimeRecordRepository::get_record(
         &store,
         &metadata,
-        workspace_id,
+        Some(workspace_id),
         Some(owner_user_id),
         &owner_record_id,
     )
@@ -451,7 +1020,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
     let blocked_get = RuntimeRecordRepository::get_record(
         &store,
         &metadata,
-        workspace_id,
+        Some(workspace_id),
         Some(owner_user_id),
         &other_record_id,
     )
@@ -463,7 +1032,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         &store,
         &metadata,
         owner_user_id,
-        workspace_id,
+        Some(workspace_id),
         Some(owner_user_id),
         &owner_record_id,
         json!({ "title": "owner-record-updated" }),
@@ -476,7 +1045,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         &store,
         &metadata,
         owner_user_id,
-        workspace_id,
+        Some(workspace_id),
         Some(owner_user_id),
         &other_record_id,
         json!({ "title": "blocked-update" }),
@@ -487,7 +1056,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
     let blocked_delete = RuntimeRecordRepository::delete_record(
         &store,
         &metadata,
-        workspace_id,
+        Some(workspace_id),
         Some(owner_user_id),
         &other_record_id,
     )
@@ -499,7 +1068,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         &store,
         &metadata,
         RuntimeListQuery {
-            scope_id: workspace_id,
+            scope_id: Some(workspace_id),
             owner_user_id: None,
             filters: vec![],
             sorts: vec![],
@@ -515,7 +1084,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
     let all_get = RuntimeRecordRepository::get_record(
         &store,
         &metadata,
-        workspace_id,
+        Some(workspace_id),
         None,
         &other_record_id,
     )
@@ -527,7 +1096,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         &store,
         &metadata,
         owner_user_id,
-        workspace_id,
+        Some(workspace_id),
         None,
         &other_record_id,
         json!({ "title": "other-record-updated" }),
@@ -539,7 +1108,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
     let all_deleted = RuntimeRecordRepository::delete_record(
         &store,
         &metadata,
-        workspace_id,
+        Some(workspace_id),
         None,
         &other_record_id,
     )

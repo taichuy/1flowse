@@ -1,6 +1,7 @@
 use super::*;
 use plugin_framework::data_source_contract::{
-    DataSourcePreviewReadInput, DataSourcePreviewReadOutput,
+    DataSourceDescribeResourceInput, DataSourcePreviewReadInput, DataSourcePreviewReadOutput,
+    DataSourceResourceDescriptor,
 };
 
 #[async_trait]
@@ -546,6 +547,11 @@ pub trait DataSourceRuntimePort: Send + Sync {
         config_json: serde_json::Value,
         secret_json: serde_json::Value,
     ) -> anyhow::Result<serde_json::Value>;
+    async fn describe_resource(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceDescribeResourceInput,
+    ) -> anyhow::Result<DataSourceResourceDescriptor>;
     async fn preview_read(
         &self,
         installation: &domain::PluginInstallationRecord,

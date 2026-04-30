@@ -1,10 +1,12 @@
 use control_plane::ports::{
     CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput, DataSourceRepository,
-    UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput, UpsertPluginInstallationInput,
+    RotateDataSourceSecretInput, UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
+    UpsertPluginInstallationInput,
 };
 use domain::{
-    DataSourceCatalogRefreshStatus, DataSourceInstanceStatus, PluginArtifactStatus,
-    PluginAvailabilityStatus, PluginDesiredState, PluginRuntimeStatus, PluginVerificationStatus,
+    ApiExposureStatus, DataModelStatus, DataSourceCatalogRefreshStatus, DataSourceDefaults,
+    DataSourceInstanceStatus, PluginArtifactStatus, PluginAvailabilityStatus, PluginDesiredState,
+    PluginRuntimeStatus, PluginVerificationStatus,
 };
 use serde_json::json;
 use sqlx::PgPool;
@@ -122,6 +124,7 @@ async fn creates_instance_secret_and_catalog_cache_rows() {
             status: domain::DataSourceInstanceStatus::Draft,
             config_json: json!({ "client_id": "abc" }),
             metadata_json: json!({}),
+            defaults: DataSourceDefaults::default(),
             created_by: actor.id,
         },
     )
@@ -129,11 +132,20 @@ async fn creates_instance_secret_and_catalog_cache_rows() {
     .unwrap();
 
     assert_eq!(created.source_code, "acme_hubspot_source");
+    assert_eq!(
+        created.defaults.data_model_status,
+        DataModelStatus::Published
+    );
+    assert_eq!(
+        created.defaults.api_exposure_status,
+        ApiExposureStatus::PublishedNotExposed
+    );
 
     let secret = <PgControlPlaneStore as DataSourceRepository>::upsert_secret(
         &store,
         &UpsertDataSourceSecretInput {
             data_source_instance_id: created.id,
+            secret_ref: domain::data_source_secret_ref(created.id),
             secret_json: json!({ "client_secret": "secret" }),
             secret_version: 1,
         },
@@ -141,6 +153,10 @@ async fn creates_instance_secret_and_catalog_cache_rows() {
     .await
     .unwrap();
     assert_eq!(secret.data_source_instance_id, created.id);
+    assert_eq!(
+        secret.secret_ref,
+        domain::data_source_secret_ref(created.id)
+    );
 
     let cache = <PgControlPlaneStore as DataSourceRepository>::upsert_catalog_cache(
         &store,
@@ -172,6 +188,247 @@ async fn creates_instance_secret_and_catalog_cache_rows() {
 }
 
 #[tokio::test]
+async fn instance_record_returns_secret_reference_and_version_without_secret_value() {
+    let (store, workspace, actor, installation_id) = seed_store().await;
+    let plaintext = "plain-config-token";
+    let instance_id = Uuid::now_v7();
+    let created = <PgControlPlaneStore as DataSourceRepository>::create_instance(
+        &store,
+        &CreateDataSourceInstanceInput {
+            instance_id,
+            workspace_id: workspace.id,
+            installation_id,
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            status: DataSourceInstanceStatus::Draft,
+            config_json: json!({
+                "base_url": "https://api.example.test",
+                "access_token": {
+                    "secret_ref": domain::data_source_secret_ref(instance_id),
+                    "secret_version": 2
+                }
+            }),
+            metadata_json: json!({}),
+            defaults: DataSourceDefaults::default(),
+            created_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as DataSourceRepository>::upsert_secret(
+        &store,
+        &UpsertDataSourceSecretInput {
+            data_source_instance_id: created.id,
+            secret_ref: domain::data_source_secret_ref(created.id),
+            secret_json: json!({ "access_token": plaintext }),
+            secret_version: 2,
+        },
+    )
+    .await
+    .unwrap();
+
+    let loaded = <PgControlPlaneStore as DataSourceRepository>::get_instance(
+        &store,
+        workspace.id,
+        created.id,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(
+        loaded.secret_ref,
+        Some(domain::data_source_secret_ref(created.id))
+    );
+    assert_eq!(loaded.secret_version, Some(2));
+    assert!(!loaded.config_json.to_string().contains(plaintext));
+}
+
+#[tokio::test]
+async fn rotate_secret_increments_version_inside_repository_update() {
+    let (store, workspace, actor, installation_id) = seed_store().await;
+    let instance_id = Uuid::now_v7();
+    let created = <PgControlPlaneStore as DataSourceRepository>::create_instance(
+        &store,
+        &CreateDataSourceInstanceInput {
+            instance_id,
+            workspace_id: workspace.id,
+            installation_id,
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            status: DataSourceInstanceStatus::Draft,
+            config_json: json!({
+                "access_token": {
+                    "secret_ref": domain::data_source_secret_ref(instance_id),
+                    "secret_version": 1
+                }
+            }),
+            metadata_json: json!({}),
+            defaults: DataSourceDefaults::default(),
+            created_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as DataSourceRepository>::upsert_secret(
+        &store,
+        &UpsertDataSourceSecretInput {
+            data_source_instance_id: created.id,
+            secret_ref: domain::data_source_secret_ref(created.id),
+            secret_json: json!({ "client_secret": "initial" }),
+            secret_version: 1,
+        },
+    )
+    .await
+    .unwrap();
+
+    let rotated_once = <PgControlPlaneStore as DataSourceRepository>::rotate_secret(
+        &store,
+        &RotateDataSourceSecretInput {
+            workspace_id: workspace.id,
+            data_source_instance_id: created.id,
+            secret_ref: domain::data_source_secret_ref(created.id),
+            secret_json: json!({ "client_secret": "rotated-once" }),
+            updated_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+    let rotated_twice = <PgControlPlaneStore as DataSourceRepository>::rotate_secret(
+        &store,
+        &RotateDataSourceSecretInput {
+            workspace_id: workspace.id,
+            data_source_instance_id: created.id,
+            secret_ref: domain::data_source_secret_ref(created.id),
+            secret_json: json!({ "client_secret": "rotated-twice" }),
+            updated_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(rotated_once.secret.secret_version, 2);
+    assert_eq!(rotated_once.instance.secret_version, Some(2));
+    assert_eq!(
+        rotated_once.instance.config_json["access_token"]["secret_version"],
+        json!(2)
+    );
+    assert_eq!(rotated_twice.secret.secret_version, 3);
+    assert_eq!(rotated_twice.instance.secret_version, Some(3));
+    assert_eq!(
+        rotated_twice.instance.config_json["access_token"]["secret_version"],
+        json!(3)
+    );
+    assert_eq!(
+        <PgControlPlaneStore as DataSourceRepository>::get_secret_json(&store, created.id)
+            .await
+            .unwrap()
+            .unwrap()["client_secret"],
+        "rotated-twice"
+    );
+}
+
+#[tokio::test]
+async fn rotate_secret_preserves_existing_config_marker_values_when_payload_is_partial() {
+    let (store, workspace, actor, installation_id) = seed_store().await;
+    let instance_id = Uuid::now_v7();
+    let secret_ref = domain::data_source_secret_ref(instance_id);
+    let created = <PgControlPlaneStore as DataSourceRepository>::create_instance(
+        &store,
+        &CreateDataSourceInstanceInput {
+            instance_id,
+            workspace_id: workspace.id,
+            installation_id,
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            status: DataSourceInstanceStatus::Draft,
+            config_json: json!({
+                "access_token": {
+                    "secret_ref": secret_ref,
+                    "secret_version": 1
+                },
+                "headers": [
+                    {
+                        "name": "Authorization",
+                        "value": {
+                            "secret_ref": secret_ref,
+                            "secret_version": 1
+                        }
+                    },
+                    { "name": "X-Trace", "value": "not-secret" }
+                ]
+            }),
+            metadata_json: json!({}),
+            defaults: DataSourceDefaults::default(),
+            created_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as DataSourceRepository>::upsert_secret(
+        &store,
+        &UpsertDataSourceSecretInput {
+            data_source_instance_id: created.id,
+            secret_ref: domain::data_source_secret_ref(created.id),
+            secret_json: json!({
+                "client_secret": "initial-client-secret",
+                "__config_secret_values": {
+                    "/access_token": "config-token-secret",
+                    "/headers/0/value": "authorization-secret"
+                }
+            }),
+            secret_version: 1,
+        },
+    )
+    .await
+    .unwrap();
+
+    let rotated = <PgControlPlaneStore as DataSourceRepository>::rotate_secret(
+        &store,
+        &RotateDataSourceSecretInput {
+            workspace_id: workspace.id,
+            data_source_instance_id: created.id,
+            secret_ref: domain::data_source_secret_ref(created.id),
+            secret_json: json!({ "client_secret": "rotated-client-secret" }),
+            updated_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    let stored_secret =
+        <PgControlPlaneStore as DataSourceRepository>::get_secret_json(&store, created.id)
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(stored_secret["client_secret"], "rotated-client-secret");
+    assert_eq!(
+        stored_secret["__config_secret_values"]["/access_token"],
+        "config-token-secret"
+    );
+    assert_eq!(
+        stored_secret["__config_secret_values"]["/headers/0/value"],
+        "authorization-secret"
+    );
+    assert_eq!(rotated.secret.secret_version, 2);
+    assert_eq!(
+        rotated.instance.config_json["access_token"]["secret_version"],
+        json!(2)
+    );
+    assert_eq!(
+        rotated.instance.config_json["headers"][0]["value"]["secret_version"],
+        json!(2)
+    );
+    assert_eq!(
+        rotated.instance.config_json["headers"][1]["value"],
+        json!("not-secret")
+    );
+}
+
+#[tokio::test]
 async fn creates_preview_session_rows() {
     let (store, workspace, actor, installation_id) = seed_store().await;
     let instance_id = Uuid::now_v7();
@@ -186,6 +443,10 @@ async fn creates_preview_session_rows() {
             status: DataSourceInstanceStatus::Draft,
             config_json: json!({ "client_id": "abc" }),
             metadata_json: json!({}),
+            defaults: DataSourceDefaults {
+                data_model_status: DataModelStatus::Draft,
+                api_exposure_status: ApiExposureStatus::Draft,
+            },
             created_by: actor.id,
         },
     )
@@ -211,4 +472,47 @@ async fn creates_preview_session_rows() {
     .unwrap();
 
     assert_eq!(preview_session.data_source_instance_id, Some(created.id));
+}
+
+#[tokio::test]
+async fn updates_data_source_default_status_and_exposure() {
+    let (store, workspace, actor, installation_id) = seed_store().await;
+    let created = <PgControlPlaneStore as DataSourceRepository>::create_instance(
+        &store,
+        &CreateDataSourceInstanceInput {
+            instance_id: Uuid::now_v7(),
+            workspace_id: workspace.id,
+            installation_id,
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            status: DataSourceInstanceStatus::Draft,
+            config_json: json!({ "client_id": "abc" }),
+            metadata_json: json!({}),
+            defaults: DataSourceDefaults::default(),
+            created_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    let updated = <PgControlPlaneStore as DataSourceRepository>::update_instance_defaults(
+        &store,
+        &control_plane::ports::UpdateDataSourceDefaultsInput {
+            workspace_id: workspace.id,
+            instance_id: created.id,
+            defaults: DataSourceDefaults {
+                data_model_status: DataModelStatus::Draft,
+                api_exposure_status: ApiExposureStatus::Draft,
+            },
+            updated_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(updated.defaults.data_model_status, DataModelStatus::Draft);
+    assert_eq!(
+        updated.defaults.api_exposure_status,
+        ApiExposureStatus::Draft
+    );
 }

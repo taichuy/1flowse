@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -23,6 +24,323 @@ impl DataModelScopeKind {
             _ => Self::Workspace,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DataModelStatus {
+    Draft,
+    Published,
+    Disabled,
+    Broken,
+}
+
+impl DataModelStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Draft => "draft",
+            Self::Published => "published",
+            Self::Disabled => "disabled",
+            Self::Broken => "broken",
+        }
+    }
+
+    pub fn from_db(value: &str) -> Self {
+        match value {
+            "draft" => Self::Draft,
+            "disabled" => Self::Disabled,
+            "broken" => Self::Broken,
+            _ => Self::Published,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DataModelSourceKind {
+    MainSource,
+    ExternalSource,
+}
+
+impl DataModelSourceKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::MainSource => "main_source",
+            Self::ExternalSource => "external_source",
+        }
+    }
+
+    pub fn from_db(value: &str) -> Self {
+        match value {
+            "external_source" => Self::ExternalSource,
+            _ => Self::MainSource,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiExposureStatus {
+    Draft,
+    PublishedNotExposed,
+    ApiExposedNoPermission,
+    ApiExposedReady,
+    UnsafeExternalSource,
+}
+
+impl ApiExposureStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Draft => "draft",
+            Self::PublishedNotExposed => "published_not_exposed",
+            Self::ApiExposedNoPermission => "api_exposed_no_permission",
+            Self::ApiExposedReady => "api_exposed_ready",
+            Self::UnsafeExternalSource => "unsafe_external_source",
+        }
+    }
+
+    pub fn from_db(value: &str) -> Self {
+        match value {
+            "draft" => Self::Draft,
+            "api_exposed_no_permission" => Self::ApiExposedNoPermission,
+            "api_exposed_ready" => Self::ApiExposedReady,
+            "unsafe_external_source" => Self::UnsafeExternalSource,
+            _ => Self::PublishedNotExposed,
+        }
+    }
+
+    pub fn default_for_status(status: DataModelStatus) -> Self {
+        match status {
+            DataModelStatus::Draft => Self::Draft,
+            DataModelStatus::Published | DataModelStatus::Disabled | DataModelStatus::Broken => {
+                Self::PublishedNotExposed
+            }
+        }
+    }
+
+    pub fn validate_for_status(
+        status: DataModelStatus,
+        exposure: Self,
+        readiness: ApiExposureReadiness,
+    ) -> ExposureCompatibility {
+        match status {
+            DataModelStatus::Draft => {
+                if exposure == Self::Draft {
+                    ExposureCompatibility::Compatible {
+                        runtime: RuntimeAvailability::Unavailable,
+                    }
+                } else {
+                    ExposureCompatibility::Rejected
+                }
+            }
+            DataModelStatus::Published => match exposure {
+                Self::Draft => ExposureCompatibility::Rejected,
+                Self::PublishedNotExposed | Self::ApiExposedNoPermission => {
+                    ExposureCompatibility::Compatible {
+                        runtime: RuntimeAvailability::Unavailable,
+                    }
+                }
+                Self::ApiExposedReady => {
+                    if readiness.has_api_permission
+                        && readiness.has_runtime_binding
+                        && !matches!(
+                            readiness.external_source_validation,
+                            ExternalSourceValidation::UnsafeExternalSource
+                        )
+                    {
+                        ExposureCompatibility::Compatible {
+                            runtime: RuntimeAvailability::Available,
+                        }
+                    } else {
+                        ExposureCompatibility::Rejected
+                    }
+                }
+                Self::UnsafeExternalSource => {
+                    if matches!(
+                        readiness.external_source_validation,
+                        ExternalSourceValidation::UnsafeExternalSource
+                    ) {
+                        ExposureCompatibility::Compatible {
+                            runtime: RuntimeAvailability::Unavailable,
+                        }
+                    } else {
+                        ExposureCompatibility::Rejected
+                    }
+                }
+            },
+            DataModelStatus::Disabled | DataModelStatus::Broken => {
+                ExposureCompatibility::Compatible {
+                    runtime: RuntimeAvailability::Unavailable,
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ExternalSourceValidation {
+    NotExternal,
+    UnsafeExternalSource,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ApiExposureReadiness {
+    pub has_api_permission: bool,
+    pub has_runtime_binding: bool,
+    pub external_source_validation: ExternalSourceValidation,
+}
+
+impl Default for ApiExposureReadiness {
+    fn default() -> Self {
+        Self {
+            has_api_permission: false,
+            has_runtime_binding: false,
+            external_source_validation: ExternalSourceValidation::NotExternal,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeAvailability {
+    Available,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ExposureCompatibility {
+    Compatible { runtime: RuntimeAvailability },
+    Rejected,
+}
+
+impl ExposureCompatibility {
+    pub fn is_rejected(self) -> bool {
+        matches!(self, Self::Rejected)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DataModelOwnerKind {
+    Core,
+    HostExtension,
+    RuntimeExtension,
+}
+
+impl DataModelOwnerKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Core => "core",
+            Self::HostExtension => "host_extension",
+            Self::RuntimeExtension => "runtime_extension",
+        }
+    }
+
+    pub fn from_db(value: &str) -> Self {
+        match value {
+            "host_extension" => Self::HostExtension,
+            "runtime_extension" => Self::RuntimeExtension,
+            _ => Self::Core,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DataModelProtection {
+    pub owner_kind: DataModelOwnerKind,
+    pub owner_id: Option<String>,
+    pub is_protected: bool,
+}
+
+impl Default for DataModelProtection {
+    fn default() -> Self {
+        Self {
+            owner_kind: DataModelOwnerKind::Core,
+            owner_id: None,
+            is_protected: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DataModelAdvisorSeverity {
+    Blocking,
+    High,
+    Medium,
+    Info,
+}
+
+impl DataModelAdvisorSeverity {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Blocking => "blocking",
+            Self::High => "high",
+            Self::Medium => "medium",
+            Self::Info => "info",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DataModelAdvisorFinding {
+    pub id: String,
+    pub data_model_id: Uuid,
+    pub severity: DataModelAdvisorSeverity,
+    pub code: String,
+    pub message: String,
+    pub recommended_action: String,
+    pub can_acknowledge: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ScopeDataModelPermissionProfile {
+    Owner,
+    ScopeAll,
+    SystemAll,
+}
+
+impl ScopeDataModelPermissionProfile {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Owner => "owner",
+            Self::ScopeAll => "scope_all",
+            Self::SystemAll => "system_all",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "owner" => Some(Self::Owner),
+            "scope_all" => Some(Self::ScopeAll),
+            "system_all" => Some(Self::SystemAll),
+            _ => None,
+        }
+    }
+
+    pub fn from_db(value: &str) -> Self {
+        match value {
+            "scope_all" => Self::ScopeAll,
+            "system_all" => Self::SystemAll,
+            _ => Self::Owner,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ScopeDataModelGrantRecord {
+    pub id: Uuid,
+    pub scope_kind: DataModelScopeKind,
+    pub scope_id: Uuid,
+    pub data_model_id: Uuid,
+    pub enabled: bool,
+    pub permission_profile: ScopeDataModelPermissionProfile,
+    pub created_by: Option<Uuid>,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -109,6 +427,7 @@ pub struct ModelFieldRecord {
     pub code: String,
     pub title: String,
     pub physical_column_name: String,
+    pub external_field_key: Option<String>,
     pub field_kind: ModelFieldKind,
     pub is_required: bool,
     pub is_unique: bool,
@@ -126,6 +445,10 @@ pub struct ModelDefinitionRecord {
     pub id: Uuid,
     pub scope_kind: DataModelScopeKind,
     pub scope_id: Uuid,
+    pub data_source_instance_id: Option<Uuid>,
+    pub source_kind: DataModelSourceKind,
+    pub external_resource_key: Option<String>,
+    pub external_capability_snapshot: Option<Value>,
     pub code: String,
     pub title: String,
     pub physical_table_name: String,
@@ -133,4 +456,7 @@ pub struct ModelDefinitionRecord {
     pub audit_namespace: String,
     pub fields: Vec<ModelFieldRecord>,
     pub availability_status: MetadataAvailabilityStatus,
+    pub status: DataModelStatus,
+    pub api_exposure_status: ApiExposureStatus,
+    pub protection: DataModelProtection,
 }

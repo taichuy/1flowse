@@ -1,4 +1,10 @@
 use super::*;
+use plugin_framework::data_source_contract::{
+    DataSourceCreateRecordInput, DataSourceCreateRecordOutput, DataSourceDeleteRecordInput,
+    DataSourceDeleteRecordOutput, DataSourceGetRecordInput, DataSourceGetRecordOutput,
+    DataSourceListRecordsInput, DataSourceListRecordsOutput, DataSourceUpdateRecordInput,
+    DataSourceUpdateRecordOutput,
+};
 
 #[derive(Debug, Clone)]
 pub struct CreateDataSourceInstanceInput {
@@ -10,6 +16,7 @@ pub struct CreateDataSourceInstanceInput {
     pub status: domain::DataSourceInstanceStatus,
     pub config_json: serde_json::Value,
     pub metadata_json: serde_json::Value,
+    pub defaults: domain::DataSourceDefaults,
     pub created_by: Uuid,
 }
 
@@ -23,10 +30,42 @@ pub struct UpdateDataSourceInstanceStatusInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpdateDataSourceDefaultsInput {
+    pub workspace_id: Uuid,
+    pub instance_id: Uuid,
+    pub defaults: domain::DataSourceDefaults,
+    pub updated_by: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateDataSourceInstanceConfigInput {
+    pub workspace_id: Uuid,
+    pub instance_id: Uuid,
+    pub config_json: serde_json::Value,
+    pub updated_by: Uuid,
+}
+
+#[derive(Debug, Clone)]
 pub struct UpsertDataSourceSecretInput {
     pub data_source_instance_id: Uuid,
+    pub secret_ref: String,
     pub secret_json: serde_json::Value,
     pub secret_version: i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct RotateDataSourceSecretInput {
+    pub workspace_id: Uuid,
+    pub data_source_instance_id: Uuid,
+    pub secret_ref: String,
+    pub secret_json: serde_json::Value,
+    pub updated_by: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct RotateDataSourceSecretOutput {
+    pub secret: domain::DataSourceSecretRecord,
+    pub instance: domain::DataSourceInstanceRecord,
 }
 
 #[derive(Debug, Clone)]
@@ -51,6 +90,12 @@ pub struct CreateDataSourcePreviewSessionInput {
 
 #[async_trait]
 pub trait DataSourceRepository: Send + Sync {
+    async fn list_instances(
+        &self,
+        _workspace_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::DataSourceInstanceRecord>> {
+        anyhow::bail!("list_data_source_instances is not implemented")
+    }
     async fn create_instance(
         &self,
         input: &CreateDataSourceInstanceInput,
@@ -58,6 +103,14 @@ pub trait DataSourceRepository: Send + Sync {
     async fn update_instance_status(
         &self,
         input: &UpdateDataSourceInstanceStatusInput,
+    ) -> anyhow::Result<domain::DataSourceInstanceRecord>;
+    async fn update_instance_defaults(
+        &self,
+        input: &UpdateDataSourceDefaultsInput,
+    ) -> anyhow::Result<domain::DataSourceInstanceRecord>;
+    async fn update_instance_config(
+        &self,
+        input: &UpdateDataSourceInstanceConfigInput,
     ) -> anyhow::Result<domain::DataSourceInstanceRecord>;
     async fn get_instance(
         &self,
@@ -68,6 +121,14 @@ pub trait DataSourceRepository: Send + Sync {
         &self,
         input: &UpsertDataSourceSecretInput,
     ) -> anyhow::Result<domain::DataSourceSecretRecord>;
+    async fn rotate_secret(
+        &self,
+        input: &RotateDataSourceSecretInput,
+    ) -> anyhow::Result<RotateDataSourceSecretOutput>;
+    async fn get_secret_record(
+        &self,
+        instance_id: Uuid,
+    ) -> anyhow::Result<Option<domain::DataSourceSecretRecord>>;
     async fn get_secret_json(&self, instance_id: Uuid)
         -> anyhow::Result<Option<serde_json::Value>>;
     async fn upsert_catalog_cache(
@@ -78,4 +139,37 @@ pub trait DataSourceRepository: Send + Sync {
         &self,
         input: &CreateDataSourcePreviewSessionInput,
     ) -> anyhow::Result<domain::DataSourcePreviewSessionRecord>;
+}
+
+#[async_trait]
+pub trait DataSourceCrudRuntimePort: Send + Sync {
+    async fn list_records(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceListRecordsInput,
+    ) -> anyhow::Result<DataSourceListRecordsOutput>;
+
+    async fn get_record(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceGetRecordInput,
+    ) -> anyhow::Result<DataSourceGetRecordOutput>;
+
+    async fn create_record(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceCreateRecordInput,
+    ) -> anyhow::Result<DataSourceCreateRecordOutput>;
+
+    async fn update_record(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceUpdateRecordInput,
+    ) -> anyhow::Result<DataSourceUpdateRecordOutput>;
+
+    async fn delete_record(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceDeleteRecordInput,
+    ) -> anyhow::Result<DataSourceDeleteRecordOutput>;
 }

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import {
   ApiOutlined,
   BlockOutlined,
+  DatabaseOutlined,
   EditOutlined,
   FileTextOutlined,
   MessageOutlined,
@@ -27,6 +28,7 @@ const NODE_TYPE_ICONS: Record<string, ReactNode> = {
   if_else: <SwapOutlined />,
   http_request: <ApiOutlined />,
   tool: <ToolOutlined />,
+  data_model: <DatabaseOutlined />,
   variable_assigner: <EditOutlined />,
   iteration: <SyncOutlined />,
   loop: <ReloadOutlined />,

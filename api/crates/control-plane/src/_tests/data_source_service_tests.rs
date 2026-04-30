@@ -3,9 +3,14 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::Result;
 use async_trait::async_trait;
 use plugin_framework::data_source_contract::{
-    DataSourceCatalogEntry, DataSourceConfigInput, DataSourcePreviewReadInput,
-    DataSourcePreviewReadOutput,
+    DataSourceCatalogEntry, DataSourceConfigInput, DataSourceCreateRecordInput,
+    DataSourceCreateRecordOutput, DataSourceDeleteRecordInput, DataSourceDeleteRecordOutput,
+    DataSourceDescribeResourceInput, DataSourceGetRecordInput, DataSourceGetRecordOutput,
+    DataSourceListRecordsInput, DataSourceListRecordsOutput, DataSourcePreviewReadInput,
+    DataSourcePreviewReadOutput, DataSourceRecordScopeContext, DataSourceResourceDescriptor,
+    DataSourceUpdateRecordInput, DataSourceUpdateRecordOutput,
 };
+use plugin_framework::provider_contract::PluginFormFieldSchema;
 use serde_json::{json, Value};
 use time::OffsetDateTime;
 use tokio::sync::RwLock;
@@ -13,26 +18,33 @@ use uuid::Uuid;
 
 use crate::{
     data_source::{
-        CreateDataSourceInstanceCommand, DataSourceService, PreviewDataSourceReadCommand,
-        ValidateDataSourceInstanceCommand,
+        CreateDataSourceInstanceCommand, DataSourceService, MapDataSourceResourceToModelCommand,
+        PreviewDataSourceReadCommand, RotateDataSourceSecretCommand,
+        UpdateDataSourceDefaultsCommand, ValidateDataSourceInstanceCommand,
     },
     ports::{
-        AuthRepository, CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput,
-        CreatePluginAssignmentInput, CreatePluginTaskInput, DataSourceRepository,
-        DataSourceRuntimePort, UpdateDataSourceInstanceStatusInput,
-        UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
-        UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
+        AddModelFieldInput, AuthRepository, CreateDataSourceInstanceInput,
+        CreateDataSourcePreviewSessionInput, CreateModelDefinitionInput,
+        CreatePluginAssignmentInput, CreatePluginTaskInput, CreateScopeDataModelGrantInput,
+        DataSourceCrudRuntimePort, DataSourceRepository, DataSourceRuntimePort,
+        ModelDefinitionRepository, RotateDataSourceSecretInput, RotateDataSourceSecretOutput,
+        UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceConfigInput,
+        UpdateDataSourceInstanceStatusInput, UpdateModelDefinitionInput,
+        UpdateModelDefinitionStatusInput, UpdateModelFieldInput, UpdatePluginArtifactSnapshotInput,
+        UpdatePluginDesiredStateInput, UpdatePluginRuntimeSnapshotInput,
+        UpdatePluginTaskStatusInput, UpdateProfileInput, UpdateScopeDataModelGrantInput,
         UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
         UpsertPluginInstallationInput,
     },
 };
 use domain::{
-    ActorContext, AuditLogRecord, AuthenticatorRecord, DataSourceCatalogCacheRecord,
-    DataSourceCatalogRefreshStatus, DataSourceInstanceRecord, DataSourceInstanceStatus,
-    DataSourcePreviewSessionRecord, DataSourceSecretRecord, PermissionDefinition,
+    ActorContext, AuditLogRecord, AuthenticatorRecord, DataModelScopeKind,
+    DataSourceCatalogCacheRecord, DataSourceCatalogRefreshStatus, DataSourceDefaults,
+    DataSourceInstanceRecord, DataSourceInstanceStatus, DataSourcePreviewSessionRecord,
+    DataSourceSecretRecord, ModelDefinitionRecord, ModelFieldRecord, PermissionDefinition,
     PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
     PluginInstallationRecord, PluginRuntimeStatus, PluginTaskRecord, PluginVerificationStatus,
-    ScopeContext, UserRecord,
+    ScopeContext, ScopeDataModelGrantRecord, UserRecord,
 };
 
 fn tenant_id() -> Uuid {
@@ -93,8 +105,12 @@ struct InMemoryDataSourceRepository {
     assignments: Arc<RwLock<Vec<PluginAssignmentRecord>>>,
     instances: Arc<RwLock<HashMap<Uuid, DataSourceInstanceRecord>>>,
     secrets: Arc<RwLock<HashMap<Uuid, Value>>>,
+    secret_records: Arc<RwLock<HashMap<Uuid, DataSourceSecretRecord>>>,
     caches: Arc<RwLock<HashMap<Uuid, DataSourceCatalogCacheRecord>>>,
     preview_sessions: Arc<RwLock<HashMap<Uuid, DataSourcePreviewSessionRecord>>>,
+    models: Arc<RwLock<HashMap<Uuid, ModelDefinitionRecord>>>,
+    grants: Arc<RwLock<Vec<ScopeDataModelGrantRecord>>>,
+    audit_logs: Arc<RwLock<Vec<AuditLogRecord>>>,
 }
 
 impl Default for InMemoryDataSourceRepository {
@@ -118,13 +134,23 @@ impl Default for InMemoryDataSourceRepository {
             assignments: Arc::new(RwLock::new(vec![assignment])),
             instances: Arc::new(RwLock::new(HashMap::new())),
             secrets: Arc::new(RwLock::new(HashMap::new())),
+            secret_records: Arc::new(RwLock::new(HashMap::new())),
             caches: Arc::new(RwLock::new(HashMap::new())),
             preview_sessions: Arc::new(RwLock::new(HashMap::new())),
+            models: Arc::new(RwLock::new(HashMap::new())),
+            grants: Arc::new(RwLock::new(Vec::new())),
+            audit_logs: Arc::new(RwLock::new(Vec::new())),
         }
     }
 }
 
 impl InMemoryDataSourceRepository {
+    fn with_actor(actor: ActorContext) -> Self {
+        let mut repository = Self::default();
+        repository.actor = actor;
+        repository
+    }
+
     async fn preview_session_count(&self) -> usize {
         self.preview_sessions.read().await.len()
     }
@@ -136,6 +162,14 @@ impl InMemoryDataSourceRepository {
             .get(&instance_id)
             .cloned()
             .unwrap_or_else(|| json!({}))
+    }
+
+    async fn audit_events(&self) -> Vec<AuditLogRecord> {
+        self.audit_logs.read().await.clone()
+    }
+
+    async fn mapped_models(&self) -> Vec<ModelDefinitionRecord> {
+        self.models.read().await.values().cloned().collect()
     }
 }
 
@@ -205,7 +239,8 @@ impl AuthRepository for InMemoryDataSourceRepository {
         Ok(Vec::new())
     }
 
-    async fn append_audit_log(&self, _event: &AuditLogRecord) -> Result<()> {
+    async fn append_audit_log(&self, event: &AuditLogRecord) -> Result<()> {
+        self.audit_logs.write().await.push(event.clone());
         Ok(())
     }
 }
@@ -317,6 +352,9 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
             status: input.status,
             config_json: input.config_json.clone(),
             metadata_json: input.metadata_json.clone(),
+            secret_ref: None,
+            secret_version: None,
+            defaults: input.defaults,
             created_by: input.created_by,
             created_at: OffsetDateTime::now_utc(),
             updated_at: OffsetDateTime::now_utc(),
@@ -342,6 +380,32 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
         Ok(instance.clone())
     }
 
+    async fn update_instance_defaults(
+        &self,
+        input: &UpdateDataSourceDefaultsInput,
+    ) -> Result<DataSourceInstanceRecord> {
+        let mut instances = self.instances.write().await;
+        let instance = instances
+            .get_mut(&input.instance_id)
+            .expect("instance should exist for test");
+        instance.defaults = input.defaults;
+        instance.updated_at = OffsetDateTime::now_utc();
+        Ok(instance.clone())
+    }
+
+    async fn update_instance_config(
+        &self,
+        input: &UpdateDataSourceInstanceConfigInput,
+    ) -> Result<DataSourceInstanceRecord> {
+        let mut instances = self.instances.write().await;
+        let instance = instances
+            .get_mut(&input.instance_id)
+            .expect("instance should exist for test");
+        instance.config_json = input.config_json.clone();
+        instance.updated_at = OffsetDateTime::now_utc();
+        Ok(instance.clone())
+    }
+
     async fn get_instance(
         &self,
         workspace_id: Uuid,
@@ -360,16 +424,82 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
         &self,
         input: &UpsertDataSourceSecretInput,
     ) -> Result<DataSourceSecretRecord> {
+        let record = DataSourceSecretRecord {
+            data_source_instance_id: input.data_source_instance_id,
+            secret_ref: input.secret_ref.clone(),
+            encrypted_secret_json: input.secret_json.clone(),
+            secret_version: input.secret_version,
+            updated_at: OffsetDateTime::now_utc(),
+        };
         self.secrets
             .write()
             .await
             .insert(input.data_source_instance_id, input.secret_json.clone());
-        Ok(DataSourceSecretRecord {
+        self.secret_records
+            .write()
+            .await
+            .insert(input.data_source_instance_id, record.clone());
+        if let Some(instance) = self
+            .instances
+            .write()
+            .await
+            .get_mut(&input.data_source_instance_id)
+        {
+            instance.secret_ref = Some(record.secret_ref.clone());
+            instance.secret_version = Some(record.secret_version);
+        }
+        Ok(record)
+    }
+
+    async fn rotate_secret(
+        &self,
+        input: &RotateDataSourceSecretInput,
+    ) -> Result<RotateDataSourceSecretOutput> {
+        let mut secret_records = self.secret_records.write().await;
+        let secret_version = secret_records
+            .get(&input.data_source_instance_id)
+            .map(|record| record.secret_version + 1)
+            .unwrap_or(1);
+        let existing_secret_json = self
+            .secrets
+            .read()
+            .await
+            .get(&input.data_source_instance_id)
+            .cloned();
+        let secret_json =
+            merge_config_marker_secret_values(existing_secret_json.as_ref(), &input.secret_json);
+        let record = DataSourceSecretRecord {
             data_source_instance_id: input.data_source_instance_id,
-            encrypted_secret_json: input.secret_json.clone(),
-            secret_version: input.secret_version,
+            secret_ref: input.secret_ref.clone(),
+            encrypted_secret_json: secret_json.clone(),
+            secret_version,
             updated_at: OffsetDateTime::now_utc(),
+        };
+        self.secrets
+            .write()
+            .await
+            .insert(input.data_source_instance_id, secret_json);
+        secret_records.insert(input.data_source_instance_id, record.clone());
+        let mut instances = self.instances.write().await;
+        let instance = instances
+            .get_mut(&input.data_source_instance_id)
+            .expect("instance should exist for test");
+        instance.secret_ref = Some(record.secret_ref.clone());
+        instance.secret_version = Some(record.secret_version);
+        instance.config_json = refresh_test_secret_reference_versions(
+            &instance.config_json,
+            &record.secret_ref,
+            record.secret_version,
+        );
+        instance.updated_at = OffsetDateTime::now_utc();
+        Ok(RotateDataSourceSecretOutput {
+            secret: record,
+            instance: instance.clone(),
         })
+    }
+
+    async fn get_secret_record(&self, instance_id: Uuid) -> Result<Option<DataSourceSecretRecord>> {
+        Ok(self.secret_records.read().await.get(&instance_id).cloned())
     }
 
     async fn get_secret_json(&self, instance_id: Uuid) -> Result<Option<Value>> {
@@ -417,20 +547,317 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
     }
 }
 
+#[async_trait]
+impl ModelDefinitionRepository for InMemoryDataSourceRepository {
+    async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
+        AuthRepository::load_actor_context_for_user(self, actor_user_id).await
+    }
+
+    async fn list_model_definitions(
+        &self,
+        _workspace_id: Uuid,
+    ) -> Result<Vec<ModelDefinitionRecord>> {
+        Ok(self.models.read().await.values().cloned().collect())
+    }
+
+    async fn get_model_definition(
+        &self,
+        workspace_id: Uuid,
+        model_id: Uuid,
+    ) -> Result<Option<ModelDefinitionRecord>> {
+        Ok(self
+            .models
+            .read()
+            .await
+            .get(&model_id)
+            .filter(|model| {
+                workspace_id.is_nil()
+                    || !matches!(model.scope_kind, DataModelScopeKind::Workspace)
+                    || model.scope_id == workspace_id
+            })
+            .cloned())
+    }
+
+    async fn get_data_source_defaults(
+        &self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+    ) -> Result<DataSourceDefaults> {
+        self.instances
+            .read()
+            .await
+            .get(&data_source_instance_id)
+            .filter(|instance| instance.workspace_id == workspace_id)
+            .map(|instance| instance.defaults)
+            .ok_or_else(|| {
+                control_plane::errors::ControlPlaneError::NotFound("data_source_instance").into()
+            })
+    }
+
+    async fn create_model_definition(
+        &self,
+        input: &CreateModelDefinitionInput,
+    ) -> Result<ModelDefinitionRecord> {
+        let model = ModelDefinitionRecord {
+            id: Uuid::now_v7(),
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            data_source_instance_id: input.data_source_instance_id,
+            source_kind: input.source_kind,
+            external_resource_key: input.external_resource_key.clone(),
+            external_capability_snapshot: input.external_capability_snapshot.clone(),
+            code: input.code.clone(),
+            title: input.title.clone(),
+            physical_table_name: format!("rtm_workspace_{}", input.code),
+            acl_namespace: format!("state_model.{}", input.code),
+            audit_namespace: format!("audit.state_model.{}", input.code),
+            fields: vec![],
+            availability_status: domain::MetadataAvailabilityStatus::Available,
+            status: input.status,
+            api_exposure_status: input.api_exposure_status,
+            protection: input.protection.clone(),
+        };
+        self.models.write().await.insert(model.id, model.clone());
+        Ok(model)
+    }
+
+    async fn update_model_definition(
+        &self,
+        _input: &UpdateModelDefinitionInput,
+    ) -> Result<ModelDefinitionRecord> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn update_model_definition_status(
+        &self,
+        _input: &UpdateModelDefinitionStatusInput,
+    ) -> Result<ModelDefinitionRecord> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn add_model_field(&self, input: &AddModelFieldInput) -> Result<ModelFieldRecord> {
+        let mut models = self.models.write().await;
+        let model = models
+            .get_mut(&input.model_id)
+            .expect("model should exist for test");
+        let field = ModelFieldRecord {
+            id: Uuid::now_v7(),
+            data_model_id: input.model_id,
+            code: input.code.clone(),
+            title: input.title.clone(),
+            physical_column_name: format!("col_{}", input.code),
+            external_field_key: input.external_field_key.clone(),
+            field_kind: input.field_kind,
+            is_required: input.is_required,
+            is_unique: input.is_unique,
+            default_value: input.default_value.clone(),
+            display_interface: input.display_interface.clone(),
+            display_options: input.display_options.clone(),
+            relation_target_model_id: input.relation_target_model_id,
+            relation_options: input.relation_options.clone(),
+            sort_order: model.fields.len() as i32,
+            availability_status: domain::MetadataAvailabilityStatus::Available,
+        };
+        model.fields.push(field.clone());
+        Ok(field)
+    }
+
+    async fn update_model_field(&self, _input: &UpdateModelFieldInput) -> Result<ModelFieldRecord> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn delete_model_definition(&self, _actor_user_id: Uuid, _model_id: Uuid) -> Result<()> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn delete_model_field(
+        &self,
+        _actor_user_id: Uuid,
+        _model_id: Uuid,
+        _field_id: Uuid,
+    ) -> Result<()> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn publish_model_definition(
+        &self,
+        _actor_user_id: Uuid,
+        _model_id: Uuid,
+    ) -> Result<ModelDefinitionRecord> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn create_scope_data_model_grant(
+        &self,
+        input: &CreateScopeDataModelGrantInput,
+    ) -> Result<ScopeDataModelGrantRecord> {
+        let now = OffsetDateTime::now_utc();
+        let grant = ScopeDataModelGrantRecord {
+            id: input.grant_id,
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            data_model_id: input.data_model_id,
+            enabled: input.enabled,
+            permission_profile: input.permission_profile,
+            created_by: input.created_by,
+            created_at: now,
+            updated_at: now,
+        };
+        self.grants.write().await.push(grant.clone());
+        Ok(grant)
+    }
+
+    async fn update_scope_data_model_grant(
+        &self,
+        _input: &UpdateScopeDataModelGrantInput,
+    ) -> Result<ScopeDataModelGrantRecord> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn get_scope_data_model_grant(
+        &self,
+        _data_model_id: Uuid,
+        _grant_id: Uuid,
+    ) -> Result<Option<ScopeDataModelGrantRecord>> {
+        Ok(None)
+    }
+
+    async fn delete_scope_data_model_grant(
+        &self,
+        _data_model_id: Uuid,
+        _grant_id: Uuid,
+    ) -> Result<ScopeDataModelGrantRecord> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn list_scope_data_model_grants(
+        &self,
+        scope_kind: DataModelScopeKind,
+        scope_id: Uuid,
+    ) -> Result<Vec<ScopeDataModelGrantRecord>> {
+        Ok(self
+            .grants
+            .read()
+            .await
+            .iter()
+            .filter(|grant| grant.scope_kind == scope_kind && grant.scope_id == scope_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn append_audit_log(&self, event: &AuditLogRecord) -> Result<()> {
+        self.audit_logs.write().await.push(event.clone());
+        Ok(())
+    }
+}
+
+fn refresh_test_secret_reference_versions(
+    value: &Value,
+    secret_ref: &str,
+    secret_version: i32,
+) -> Value {
+    match value {
+        Value::Object(object) if is_test_secret_reference_marker(value) => {
+            let mut updated = object.clone();
+            if updated
+                .get("secret_ref")
+                .and_then(Value::as_str)
+                .map(|value| value == secret_ref)
+                .unwrap_or(false)
+            {
+                updated.insert("secret_version".to_string(), json!(secret_version));
+            }
+            Value::Object(updated)
+        }
+        Value::Object(object) => Value::Object(
+            object
+                .iter()
+                .map(|(key, child)| {
+                    (
+                        key.clone(),
+                        refresh_test_secret_reference_versions(child, secret_ref, secret_version),
+                    )
+                })
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| {
+                    refresh_test_secret_reference_versions(item, secret_ref, secret_version)
+                })
+                .collect(),
+        ),
+        _ => value.clone(),
+    }
+}
+
+fn is_test_secret_reference_marker(value: &Value) -> bool {
+    value
+        .as_object()
+        .map(|object| object.contains_key("secret_ref") && object.contains_key("secret_version"))
+        .unwrap_or(false)
+}
+
+fn merge_config_marker_secret_values(existing: Option<&Value>, incoming: &Value) -> Value {
+    let mut merged = incoming.clone();
+    let Some(merged_object) = merged.as_object_mut() else {
+        return merged;
+    };
+
+    let mut marker_values = existing
+        .and_then(|value| value.get("__config_secret_values"))
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    if let Some(incoming_marker_values) = merged_object
+        .get("__config_secret_values")
+        .and_then(Value::as_object)
+    {
+        for (key, value) in incoming_marker_values {
+            marker_values.insert(key.clone(), value.clone());
+        }
+    }
+    if !marker_values.is_empty() {
+        merged_object.insert(
+            "__config_secret_values".to_string(),
+            Value::Object(marker_values),
+        );
+    }
+
+    merged
+}
+
 #[derive(Clone)]
 struct StubDataSourceRuntime {
     preview_inputs: Arc<RwLock<Vec<DataSourcePreviewReadInput>>>,
+    describe_inputs: Arc<RwLock<Vec<DataSourceDescribeResourceInput>>>,
+    echo_secret_output: bool,
 }
 
 impl StubDataSourceRuntime {
     fn ready() -> Self {
         Self {
             preview_inputs: Arc::new(RwLock::new(Vec::new())),
+            describe_inputs: Arc::new(RwLock::new(Vec::new())),
+            echo_secret_output: false,
+        }
+    }
+
+    fn echoing_secret() -> Self {
+        Self {
+            preview_inputs: Arc::new(RwLock::new(Vec::new())),
+            describe_inputs: Arc::new(RwLock::new(Vec::new())),
+            echo_secret_output: true,
         }
     }
 
     async fn last_preview_input(&self) -> Option<DataSourcePreviewReadInput> {
         self.preview_inputs.read().await.last().cloned()
+    }
+
+    async fn last_describe_input(&self) -> Option<DataSourceDescribeResourceInput> {
+        self.describe_inputs.read().await.last().cloned()
     }
 }
 
@@ -444,8 +871,20 @@ impl DataSourceRuntimePort for StubDataSourceRuntime {
         &self,
         _installation: &PluginInstallationRecord,
         _config_json: Value,
-        _secret_json: Value,
+        secret_json: Value,
     ) -> Result<Value> {
+        if self.echo_secret_output {
+            let secret = secret_json["client_secret"].as_str().unwrap_or_default();
+            return Ok(json!({
+                "ok": true,
+                "echoed": secret_json["client_secret"].clone(),
+                "authorization": format!("Bearer {secret}"),
+                "nested": {
+                    "token": secret_json["client_secret"].clone(),
+                    "authorization": format!("Token {secret}"),
+                }
+            }));
+        }
         Ok(json!({ "ok": true }))
     }
 
@@ -462,14 +901,172 @@ impl DataSourceRuntimePort for StubDataSourceRuntime {
         &self,
         _installation: &PluginInstallationRecord,
         _config_json: Value,
-        _secret_json: Value,
+        secret_json: Value,
     ) -> Result<Value> {
+        if self.echo_secret_output {
+            let secret = secret_json["client_secret"].as_str().unwrap_or_default();
+            return Ok(serde_json::to_value(vec![DataSourceCatalogEntry {
+                resource_key: "contacts".to_string(),
+                display_name: "Contacts".to_string(),
+                resource_kind: "object".to_string(),
+                capabilities: Default::default(),
+                metadata: json!({
+                    "authorization": format!("Bearer {secret}"),
+                    "nested": {
+                        "token": secret_json["client_secret"].clone(),
+                    },
+                }),
+            }])?);
+        }
         Ok(serde_json::to_value(vec![DataSourceCatalogEntry {
             resource_key: "contacts".to_string(),
             display_name: "Contacts".to_string(),
             resource_kind: "object".to_string(),
+            capabilities: Default::default(),
             metadata: json!({}),
         }])?)
+    }
+
+    async fn describe_resource(
+        &self,
+        _installation: &PluginInstallationRecord,
+        input: DataSourceDescribeResourceInput,
+    ) -> Result<DataSourceResourceDescriptor> {
+        let echoed_secret = input.connection.secret_json["client_secret"].clone();
+        self.describe_inputs.write().await.push(input.clone());
+        if self.echo_secret_output {
+            let secret = echoed_secret.as_str().unwrap_or_default();
+            return Ok(DataSourceResourceDescriptor {
+                resource_key: format!("{}-{secret}", input.resource_key),
+                primary_key: Some("id".to_string()),
+                fields: vec![
+                    PluginFormFieldSchema {
+                        key: "id".to_string(),
+                        label: format!("Record {secret} ID"),
+                        field_type: "string".to_string(),
+                        control: None,
+                        group: None,
+                        order: Some(0),
+                        advanced: None,
+                        required: Some(true),
+                        send_mode: None,
+                        enabled_by_default: None,
+                        description: Some(format!("Primary key {secret}")),
+                        placeholder: None,
+                        default_value: None,
+                        min: None,
+                        max: None,
+                        step: None,
+                        precision: None,
+                        unit: None,
+                        options: vec![],
+                        visible_when: vec![],
+                        disabled_when: vec![],
+                    },
+                    PluginFormFieldSchema {
+                        key: format!("properties.email.{secret}"),
+                        label: format!("Email {secret}"),
+                        field_type: "email".to_string(),
+                        control: None,
+                        group: None,
+                        order: Some(1),
+                        advanced: None,
+                        required: Some(false),
+                        send_mode: None,
+                        enabled_by_default: None,
+                        description: None,
+                        placeholder: None,
+                        default_value: Some(json!({ "echoed": secret })),
+                        min: None,
+                        max: None,
+                        step: None,
+                        precision: None,
+                        unit: None,
+                        options: vec![],
+                        visible_when: vec![],
+                        disabled_when: vec![],
+                    },
+                ],
+                supports_preview_read: true,
+                supports_import_snapshot: false,
+                capabilities: plugin_framework::data_source_contract::DataSourceCrudCapabilities {
+                    supports_list: true,
+                    supports_get: true,
+                    supports_filter: true,
+                    supports_scope_filter: true,
+                    ..Default::default()
+                },
+                metadata: json!({
+                    "display_name": format!("Contacts {secret}"),
+                    "authorization": format!("Bearer {secret}"),
+                    "nested": {
+                        "token": echoed_secret,
+                    },
+                }),
+            });
+        }
+        Ok(DataSourceResourceDescriptor {
+            resource_key: input.resource_key,
+            primary_key: Some("id".to_string()),
+            fields: vec![
+                PluginFormFieldSchema {
+                    key: "id".to_string(),
+                    label: "Record ID".to_string(),
+                    field_type: "string".to_string(),
+                    control: None,
+                    group: None,
+                    order: Some(0),
+                    advanced: None,
+                    required: Some(true),
+                    send_mode: None,
+                    enabled_by_default: None,
+                    description: None,
+                    placeholder: None,
+                    default_value: None,
+                    min: None,
+                    max: None,
+                    step: None,
+                    precision: None,
+                    unit: None,
+                    options: vec![],
+                    visible_when: vec![],
+                    disabled_when: vec![],
+                },
+                PluginFormFieldSchema {
+                    key: "properties.email".to_string(),
+                    label: "Email".to_string(),
+                    field_type: "email".to_string(),
+                    control: None,
+                    group: None,
+                    order: Some(1),
+                    advanced: None,
+                    required: Some(false),
+                    send_mode: None,
+                    enabled_by_default: None,
+                    description: None,
+                    placeholder: None,
+                    default_value: None,
+                    min: None,
+                    max: None,
+                    step: None,
+                    precision: None,
+                    unit: None,
+                    options: vec![],
+                    visible_when: vec![],
+                    disabled_when: vec![],
+                },
+            ],
+            supports_preview_read: true,
+            supports_import_snapshot: false,
+            capabilities: plugin_framework::data_source_contract::DataSourceCrudCapabilities {
+                supports_list: true,
+                supports_get: true,
+                supports_filter: true,
+                supports_scope_filter: true,
+                ..Default::default()
+            },
+            metadata: json!({ "display_name": "Contacts" }),
+        })
     }
 
     async fn preview_read(
@@ -477,7 +1074,21 @@ impl DataSourceRuntimePort for StubDataSourceRuntime {
         _installation: &PluginInstallationRecord,
         input: DataSourcePreviewReadInput,
     ) -> Result<DataSourcePreviewReadOutput> {
+        let echoed_secret = input.connection.secret_json["client_secret"].clone();
         self.preview_inputs.write().await.push(input);
+        if self.echo_secret_output {
+            let secret = echoed_secret.as_str().unwrap_or_default();
+            return Ok(DataSourcePreviewReadOutput {
+                rows: vec![json!({
+                    "id": "1",
+                    "token": echoed_secret,
+                    "authorization": format!("Bearer {secret}"),
+                    "nested": { "secret": echoed_secret },
+                    "items": [echoed_secret]
+                })],
+                next_cursor: None,
+            });
+        }
         Ok(DataSourcePreviewReadOutput {
             rows: vec![json!({ "id": "1", "email": "person@example.com" })],
             next_cursor: None,
@@ -525,6 +1136,547 @@ async fn validate_instance_updates_status_and_catalog_cache() {
 }
 
 #[tokio::test]
+async fn create_instance_requires_external_data_source_configure_permission_not_state_model_manage()
+{
+    let state_model_actor = ActorContext::scoped_in_scope(
+        user_id(),
+        tenant_id(),
+        workspace_id(),
+        "member",
+        ["state_model.manage.all".to_string()],
+    );
+    let denied_repository = InMemoryDataSourceRepository::with_actor(state_model_actor);
+    let denied_service = DataSourceService::new(denied_repository, StubDataSourceRuntime::ready());
+
+    let denied = denied_service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({}),
+        })
+        .await
+        .unwrap_err();
+    assert!(denied.to_string().contains("permission_denied"));
+
+    let data_source_actor = ActorContext::scoped_in_scope(
+        user_id(),
+        tenant_id(),
+        workspace_id(),
+        "member",
+        ["external_data_source.configure.all".to_string()],
+    );
+    let allowed_repository = InMemoryDataSourceRepository::with_actor(data_source_actor);
+    let allowed_service =
+        DataSourceService::new(allowed_repository, StubDataSourceRuntime::ready());
+
+    let created = allowed_service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({}),
+        })
+        .await
+        .unwrap();
+    assert_eq!(created.instance.display_name, "HubSpot");
+}
+
+#[tokio::test]
+async fn create_instance_extracts_secret_like_config_values_to_reference_boundary() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::ready();
+    let service = DataSourceService::new(repository.clone(), runtime);
+    let plaintext_token = "plain-token-from-config";
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({
+                "base_url": "https://api.example.test",
+                "access_token": plaintext_token,
+            }),
+            secret_json: json!({ "client_secret": "plain-secret-body" }),
+        })
+        .await
+        .unwrap();
+
+    let stored_config_text = created.instance.config_json.to_string();
+    assert!(!stored_config_text.contains(plaintext_token));
+    assert_eq!(
+        created.instance.config_json["access_token"],
+        json!({
+            "secret_ref": created.instance.secret_ref.as_ref().unwrap(),
+            "secret_version": created.instance.secret_version.unwrap(),
+        })
+    );
+    assert!(created
+        .instance
+        .secret_ref
+        .as_ref()
+        .unwrap()
+        .starts_with("secret://workspace/"));
+    assert_eq!(created.instance.secret_version, Some(1));
+
+    let stored_secret = repository.stored_secret_json(created.instance.id).await;
+    assert_eq!(stored_secret["access_token"], plaintext_token);
+    assert_eq!(stored_secret["client_secret"], "plain-secret-body");
+
+    let audit_text = serde_json::to_string(&repository.audit_events().await).unwrap();
+    assert!(!audit_text.contains(plaintext_token));
+    assert!(!audit_text.contains("plain-secret-body"));
+}
+
+#[tokio::test]
+async fn create_instance_extracts_generic_secret_bearing_value_shapes() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::ready();
+    let service = DataSourceService::new(repository.clone(), runtime);
+    let header_plaintext = "bearer-from-header-value";
+    let credential_plaintext = "credential-value-secret";
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({
+                "headers": [
+                    { "name": "Authorization", "value": header_plaintext },
+                    { "name": "X-Trace", "value": "not-secret" }
+                ],
+                "credentials": { "type": "api_key", "value": credential_plaintext }
+            }),
+            secret_json: json!({}),
+        })
+        .await
+        .unwrap();
+
+    let config_text = created.instance.config_json.to_string();
+    assert!(!config_text.contains(header_plaintext));
+    assert!(!config_text.contains(credential_plaintext));
+    assert!(config_text.contains("not-secret"));
+    assert_eq!(
+        created.instance.config_json["headers"][0]["value"],
+        json!({
+            "secret_ref": created.instance.secret_ref.as_ref().unwrap(),
+            "secret_version": created.instance.secret_version.unwrap(),
+        })
+    );
+    assert_eq!(
+        created.instance.config_json["headers"][1]["value"],
+        json!("not-secret")
+    );
+    assert_eq!(
+        created.instance.config_json["credentials"]["value"],
+        json!({
+            "secret_ref": created.instance.secret_ref.as_ref().unwrap(),
+            "secret_version": created.instance.secret_version.unwrap(),
+        })
+    );
+
+    let stored_secret = repository.stored_secret_json(created.instance.id).await;
+    assert_eq!(
+        stored_secret["__config_secret_values"]["/headers/0/value"],
+        header_plaintext
+    );
+    assert_eq!(
+        stored_secret["__config_secret_values"].get("/headers/1/value"),
+        None
+    );
+    assert_eq!(
+        stored_secret["__config_secret_values"]["/credentials/value"],
+        credential_plaintext
+    );
+}
+
+#[tokio::test]
+async fn rotate_secret_preserves_config_marker_values_when_payload_is_partial() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::ready();
+    let service = DataSourceService::new(repository.clone(), runtime);
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({
+                "access_token": "config-token-secret",
+                "headers": [
+                    { "name": "Authorization", "value": "authorization-secret" },
+                    { "name": "X-Trace", "value": "not-secret" }
+                ]
+            }),
+            secret_json: json!({
+                "client_secret": "initial-client-secret",
+                "__config_secret_values": {
+                    "/manual/marker": "explicit-marker"
+                }
+            }),
+        })
+        .await
+        .unwrap();
+
+    let rotated = service
+        .rotate_secret(RotateDataSourceSecretCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            secret_json: json!({ "client_secret": "rotated-client-secret" }),
+        })
+        .await
+        .unwrap();
+
+    let stored_secret = repository.stored_secret_json(created.instance.id).await;
+    assert_eq!(stored_secret["client_secret"], "rotated-client-secret");
+    assert_eq!(
+        stored_secret["__config_secret_values"]["/access_token"],
+        "config-token-secret"
+    );
+    assert_eq!(
+        stored_secret["__config_secret_values"]["/headers/0/value"],
+        "authorization-secret"
+    );
+    assert_eq!(
+        stored_secret["__config_secret_values"]["/manual/marker"],
+        "explicit-marker"
+    );
+    assert_eq!(
+        stored_secret["__config_secret_values"].get("/headers/1/value"),
+        None
+    );
+    assert_eq!(
+        rotated.instance.config_json["access_token"]["secret_version"],
+        json!(2)
+    );
+    assert_eq!(
+        rotated.instance.config_json["headers"][0]["value"]["secret_version"],
+        json!(2)
+    );
+    assert_eq!(
+        rotated.instance.config_json["headers"][1]["value"],
+        json!("not-secret")
+    );
+}
+
+#[tokio::test]
+async fn rotate_secret_updates_version_and_audit_without_cleartext() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::ready();
+    let service = DataSourceService::new(repository.clone(), runtime);
+    let rotated_plaintext = "rotated-secret-value";
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "base_url": "https://api.example.test" }),
+            secret_json: json!({ "client_secret": "initial-secret-value" }),
+        })
+        .await
+        .unwrap();
+
+    let rotated = service
+        .rotate_secret(RotateDataSourceSecretCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            secret_json: json!({ "client_secret": rotated_plaintext }),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(rotated.instance.secret_ref, created.instance.secret_ref);
+    assert_eq!(rotated.instance.secret_version, Some(2));
+    assert_eq!(
+        repository.stored_secret_json(created.instance.id).await["client_secret"],
+        rotated_plaintext
+    );
+
+    let audit_events = repository.audit_events().await;
+    assert!(audit_events
+        .iter()
+        .any(|event| event.event_code == "data_source.secret_rotated"
+            && event.payload["secret_ref"] == rotated.instance.secret_ref.clone().unwrap()
+            && event.payload["secret_version"] == json!(2)));
+    let audit_text = serde_json::to_string(&audit_events).unwrap();
+    assert!(!audit_text.contains(rotated_plaintext));
+    assert!(!audit_text.contains("initial-secret-value"));
+}
+
+#[tokio::test]
+async fn sequential_secret_rotation_increments_versions_without_read_write_race_entrypoint() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::ready();
+    let service = DataSourceService::new(repository.clone(), runtime);
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "access_token": "initial-config-secret" }),
+            secret_json: json!({ "client_secret": "initial-secret-value" }),
+        })
+        .await
+        .unwrap();
+
+    let rotated_once = service
+        .rotate_secret(RotateDataSourceSecretCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            secret_json: json!({ "client_secret": "rotated-once" }),
+        })
+        .await
+        .unwrap();
+    let rotated_twice = service
+        .rotate_secret(RotateDataSourceSecretCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            secret_json: json!({ "client_secret": "rotated-twice" }),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(rotated_once.instance.secret_version, Some(2));
+    assert_eq!(rotated_twice.instance.secret_version, Some(3));
+    let secret_record = repository
+        .get_secret_record(created.instance.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(secret_record.secret_version, 3);
+    assert_eq!(
+        rotated_twice.instance.config_json["access_token"]["secret_version"],
+        json!(secret_record.secret_version)
+    );
+}
+
+#[tokio::test]
+async fn validate_and_preview_redact_runtime_echoed_secret_values() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::echoing_secret();
+    let service = DataSourceService::new(repository.clone(), runtime);
+    let plaintext = "secret-runtime-echo";
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": plaintext }),
+        })
+        .await
+        .unwrap();
+
+    let validated = service
+        .validate_instance(ValidateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+        })
+        .await
+        .unwrap();
+    let preview = service
+        .preview_read(PreviewDataSourceReadCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            resource_key: "contacts".into(),
+            limit: Some(20),
+            cursor: None,
+            options_json: json!({}),
+        })
+        .await
+        .unwrap();
+
+    let validate_text = validated.output.to_string();
+    let preview_text = serde_json::to_string(&preview.output.rows).unwrap();
+    let preview_session = repository
+        .preview_sessions
+        .read()
+        .await
+        .values()
+        .next()
+        .unwrap()
+        .clone();
+    assert!(!validate_text.contains(plaintext));
+    assert!(!preview_text.contains(plaintext));
+    assert!(!preview_session.config_fingerprint.contains(plaintext));
+    assert!(validate_text.contains("***"));
+    assert!(preview_text.contains("***"));
+    assert!(!serde_json::to_string(&preview_session.preview_json)
+        .unwrap()
+        .contains(plaintext));
+}
+
+#[tokio::test]
+async fn validate_preview_and_catalog_redact_embedded_secret_substrings() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::echoing_secret();
+    let service = DataSourceService::new(repository.clone(), runtime);
+    let plaintext = "embedded-secret-value";
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": plaintext }),
+        })
+        .await
+        .unwrap();
+
+    let validated = service
+        .validate_instance(ValidateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+        })
+        .await
+        .unwrap();
+    let preview = service
+        .preview_read(PreviewDataSourceReadCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            resource_key: "contacts".into(),
+            limit: Some(20),
+            cursor: None,
+            options_json: json!({}),
+        })
+        .await
+        .unwrap();
+
+    let validate_text = validated.output.to_string();
+    let catalog_text = serde_json::to_string(&validated.catalog.catalog_json).unwrap();
+    let stored_catalog = repository
+        .caches
+        .read()
+        .await
+        .get(&created.instance.id)
+        .expect("catalog cache should be persisted")
+        .catalog_json
+        .clone();
+    let stored_catalog_text = serde_json::to_string(&stored_catalog).unwrap();
+    let preview_text = serde_json::to_string(&preview.output.rows).unwrap();
+
+    assert!(!validate_text.contains(plaintext));
+    assert!(!catalog_text.contains(plaintext));
+    assert!(!stored_catalog_text.contains(plaintext));
+    assert!(!preview_text.contains(plaintext));
+    assert!(validate_text.contains("Bearer ***"));
+    assert!(catalog_text.contains("Bearer ***"));
+    assert!(stored_catalog_text.contains("Bearer ***"));
+    assert!(preview_text.contains("Bearer ***"));
+}
+
+#[tokio::test]
+async fn update_defaults_persists_valid_data_model_defaults() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::ready();
+    let service = DataSourceService::new(repository, runtime);
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": "secret" }),
+        })
+        .await
+        .unwrap();
+
+    let updated = service
+        .update_defaults(UpdateDataSourceDefaultsCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            defaults: DataSourceDefaults {
+                data_model_status: domain::DataModelStatus::Draft,
+                api_exposure_status: domain::ApiExposureStatus::Draft,
+            },
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        updated.defaults.data_model_status,
+        domain::DataModelStatus::Draft
+    );
+    assert_eq!(
+        updated.defaults.api_exposure_status,
+        domain::ApiExposureStatus::Draft
+    );
+}
+
+#[tokio::test]
+async fn update_defaults_rejects_invalid_status_exposure_combinations() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::ready();
+    let service = DataSourceService::new(repository, runtime);
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": "secret" }),
+        })
+        .await
+        .unwrap();
+
+    let error = service
+        .update_defaults(UpdateDataSourceDefaultsCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            defaults: DataSourceDefaults {
+                data_model_status: domain::DataModelStatus::Draft,
+                api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            },
+        })
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("default_api_exposure_status"));
+}
+
+#[tokio::test]
 async fn preview_read_uses_stored_secret_and_creates_preview_session() {
     let repository = InMemoryDataSourceRepository::default();
     let runtime = StubDataSourceRuntime::ready();
@@ -568,4 +1720,300 @@ async fn preview_read_uses_stored_secret_and_creates_preview_session() {
         }
     );
     assert_eq!(runtime_input.resource_key, "contacts");
+}
+
+#[tokio::test]
+async fn map_resource_to_model_uses_descriptor_fields_capabilities_and_stored_secret() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::ready();
+    let service = DataSourceService::new(repository.clone(), runtime.clone());
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": "secret-for-describe" }),
+        })
+        .await
+        .unwrap();
+
+    let mapped = service
+        .map_resource_to_model(MapDataSourceResourceToModelCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            resource_key: "contacts".into(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        mapped.model.data_source_instance_id,
+        Some(created.instance.id)
+    );
+    assert_eq!(
+        mapped.model.source_kind,
+        domain::DataModelSourceKind::ExternalSource
+    );
+    assert_eq!(
+        mapped.model.external_resource_key.as_deref(),
+        Some("contacts")
+    );
+    assert_eq!(
+        mapped.model.external_capability_snapshot,
+        Some(json!({
+            "supports_list": true,
+            "supports_get": true,
+            "supports_create": false,
+            "supports_update": false,
+            "supports_delete": false,
+            "supports_filter": true,
+            "supports_sort": false,
+            "supports_pagination": false,
+            "supports_owner_filter": false,
+            "supports_scope_filter": true,
+            "supports_write": false,
+            "supports_transactions": false
+        }))
+    );
+    assert_eq!(mapped.fields.len(), 2);
+    assert_eq!(mapped.fields[0].external_field_key.as_deref(), Some("id"));
+    assert_eq!(
+        mapped.fields[1].external_field_key.as_deref(),
+        Some("properties.email")
+    );
+    assert_eq!(mapped.fields[1].code, "properties_email");
+
+    let runtime_input = runtime.last_describe_input().await.unwrap();
+    assert_eq!(
+        runtime_input.connection,
+        DataSourceConfigInput {
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": "secret-for-describe" }),
+        }
+    );
+    assert_eq!(runtime_input.resource_key, "contacts");
+
+    let models = repository.mapped_models().await;
+    assert_eq!(models.len(), 1);
+    let audit_events = repository.audit_events().await;
+    assert!(audit_events.iter().any(|event| event.event_code
+        == "data_source.resource_mapped_to_model"
+        && event.target_id == Some(mapped.model.id)
+        && event.payload["data_source_instance_id"] == json!(created.instance.id)
+        && event.payload["resource_key"] == json!("contacts")));
+    let audit_text = serde_json::to_string(&audit_events).unwrap();
+    assert!(!audit_text.contains("secret-for-describe"));
+}
+
+#[tokio::test]
+async fn map_resource_to_model_redacts_descriptor_secret_echoes_before_mapping() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::echoing_secret();
+    let service = DataSourceService::new(repository.clone(), runtime.clone());
+    let plaintext = "descriptor-secret-substring";
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": plaintext }),
+        })
+        .await
+        .unwrap();
+
+    let mapped = service
+        .map_resource_to_model(MapDataSourceResourceToModelCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            resource_key: "contacts".into(),
+        })
+        .await
+        .unwrap();
+
+    let runtime_input = runtime.last_describe_input().await.unwrap();
+    assert_eq!(
+        runtime_input.connection,
+        DataSourceConfigInput {
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": plaintext }),
+        }
+    );
+
+    assert!(!mapped.model.title.contains(plaintext));
+    assert!(!mapped
+        .model
+        .external_resource_key
+        .as_deref()
+        .unwrap()
+        .contains(plaintext));
+    assert!(mapped.fields.iter().all(|field| {
+        !field.title.contains(plaintext)
+            && !field
+                .external_field_key
+                .as_deref()
+                .unwrap()
+                .contains(plaintext)
+    }));
+
+    let mapped_text = serde_json::to_string(&json!({
+        "model_title": mapped.model.title,
+        "external_resource_key": mapped.model.external_resource_key,
+        "fields": mapped.fields,
+    }))
+    .unwrap();
+    let model_store_text = serde_json::to_string(&repository.mapped_models().await).unwrap();
+    let audit_text = serde_json::to_string(&repository.audit_events().await).unwrap();
+    assert!(!mapped_text.contains(plaintext));
+    assert!(!model_store_text.contains(plaintext));
+    assert!(!audit_text.contains(plaintext));
+    assert!(mapped_text.contains("***"));
+}
+
+#[tokio::test]
+async fn map_resource_to_model_rejects_foreign_instance_workspace() {
+    let repository = InMemoryDataSourceRepository::default();
+    let service = DataSourceService::new(repository.clone(), StubDataSourceRuntime::ready());
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({}),
+        })
+        .await
+        .unwrap();
+
+    let error = service
+        .map_resource_to_model(MapDataSourceResourceToModelCommand {
+            actor_user_id: user_id(),
+            workspace_id: Uuid::from_u128(0x999),
+            instance_id: created.instance.id,
+            resource_key: "contacts".into(),
+        })
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("workspace_id"));
+    assert!(repository.mapped_models().await.is_empty());
+}
+
+#[async_trait]
+impl DataSourceCrudRuntimePort for StubDataSourceRuntime {
+    async fn list_records(
+        &self,
+        _installation: &PluginInstallationRecord,
+        input: DataSourceListRecordsInput,
+    ) -> Result<DataSourceListRecordsOutput> {
+        assert_eq!(input.resource_key, "contacts");
+        assert_eq!(input.context.owner_id.as_deref(), Some("user-1"));
+        assert_eq!(input.context.scope_id.as_deref(), Some("workspace-1"));
+        Ok(DataSourceListRecordsOutput {
+            rows: vec![json!({ "id": "contact-1" })],
+            next_cursor: Some("next".to_string()),
+            total_count: Some(1),
+            metadata: json!({}),
+        })
+    }
+
+    async fn get_record(
+        &self,
+        _installation: &PluginInstallationRecord,
+        input: DataSourceGetRecordInput,
+    ) -> Result<DataSourceGetRecordOutput> {
+        Ok(DataSourceGetRecordOutput {
+            record: Some(json!({ "id": input.record_id })),
+            metadata: json!({}),
+        })
+    }
+
+    async fn create_record(
+        &self,
+        _installation: &PluginInstallationRecord,
+        input: DataSourceCreateRecordInput,
+    ) -> Result<DataSourceCreateRecordOutput> {
+        Ok(DataSourceCreateRecordOutput {
+            record: input.record,
+            metadata: json!({}),
+        })
+    }
+
+    async fn update_record(
+        &self,
+        _installation: &PluginInstallationRecord,
+        input: DataSourceUpdateRecordInput,
+    ) -> Result<DataSourceUpdateRecordOutput> {
+        Ok(DataSourceUpdateRecordOutput {
+            record: input.patch,
+            metadata: json!({}),
+        })
+    }
+
+    async fn delete_record(
+        &self,
+        _installation: &PluginInstallationRecord,
+        input: DataSourceDeleteRecordInput,
+    ) -> Result<DataSourceDeleteRecordOutput> {
+        assert_eq!(input.record_id, "contact-1");
+        assert_eq!(input.transaction_id.as_deref(), Some("tx-1"));
+        Ok(DataSourceDeleteRecordOutput {
+            deleted: true,
+            metadata: json!({}),
+        })
+    }
+}
+
+#[tokio::test]
+async fn data_source_crud_runtime_port_exposes_owner_scope_aware_crud_contract() {
+    let port = StubDataSourceRuntime::ready();
+    let installation = seeded_installation();
+    let context = DataSourceRecordScopeContext {
+        owner_id: Some("user-1".to_string()),
+        scope_id: Some("workspace-1".to_string()),
+    };
+
+    let list = port
+        .list_records(
+            &installation,
+            DataSourceListRecordsInput {
+                connection: Default::default(),
+                resource_key: "contacts".to_string(),
+                context: context.clone(),
+                filters: Vec::new(),
+                sort: Vec::new(),
+                page: None,
+                options_json: json!({}),
+            },
+        )
+        .await
+        .unwrap();
+    let delete = port
+        .delete_record(
+            &installation,
+            DataSourceDeleteRecordInput {
+                connection: Default::default(),
+                resource_key: "contacts".to_string(),
+                record_id: "contact-1".to_string(),
+                context,
+                transaction_id: Some("tx-1".to_string()),
+                options_json: json!({}),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(list.total_count, Some(1));
+    assert!(delete.deleted);
 }

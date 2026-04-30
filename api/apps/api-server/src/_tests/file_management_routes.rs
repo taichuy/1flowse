@@ -1,5 +1,6 @@
 use crate::_tests::support::{
     create_member, login_and_capture_cookie, replace_member_roles, test_app,
+    test_app_with_database_url,
 };
 use axum::{
     body::{to_bytes, Body},
@@ -36,6 +37,49 @@ fn build_file_upload_body(
 
 async fn response_json(response: axum::response::Response) -> Value {
     serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap()
+}
+
+async fn current_workspace_id(app: &axum::Router, cookie: &str) -> String {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/session")
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    response_json(response).await["data"]["session"]["current_workspace_id"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+async fn model_id_for_file_table(database_url: &str, file_table_id: &str) -> String {
+    let pool = sqlx::PgPool::connect(database_url).await.unwrap();
+    let model_id: Uuid =
+        sqlx::query_scalar("select model_definition_id from file_tables where id = $1")
+            .bind(Uuid::parse_str(file_table_id).unwrap())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    model_id.to_string()
+}
+
+async fn revoke_model_grant(database_url: &str, model_id: &str, workspace_id: &str) {
+    let pool = sqlx::PgPool::connect(database_url).await.unwrap();
+    sqlx::query(
+        "delete from scope_data_model_grants where scope_kind = 'workspace' and scope_id = $1 and data_model_id = $2",
+    )
+    .bind(Uuid::parse_str(workspace_id).unwrap())
+    .bind(Uuid::parse_str(model_id).unwrap())
+    .execute(&pool)
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
@@ -257,6 +301,134 @@ async fn file_management_routes_create_workspace_table_upload_and_read_by_storag
     );
 
     let _ = std::fs::remove_dir_all(backup_root);
+}
+
+#[tokio::test]
+async fn file_routes_reject_upload_and_read_without_persisted_scope_grant() {
+    let (app, database_url) = test_app_with_database_url().await;
+    let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let workspace_id = current_workspace_id(&app, &root_cookie).await;
+
+    let storages_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/file-storages")
+                .header("cookie", &root_cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(storages_response.status(), StatusCode::OK);
+
+    let create_table_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/file-tables")
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "code": "blocked_assets",
+                        "title": "Blocked Assets"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_table_response.status(), StatusCode::CREATED);
+    let table_payload = response_json(create_table_response).await;
+    let file_table_id = table_payload["data"]["id"].as_str().unwrap().to_string();
+    let file_model_id = model_id_for_file_table(&database_url, &file_table_id).await;
+
+    let allowed_boundary = "----1flowbase-file-upload-allowed";
+    let allowed_upload = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/files/upload")
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .header(
+                    "content-type",
+                    format!("multipart/form-data; boundary={allowed_boundary}"),
+                )
+                .body(Body::from(build_file_upload_body(
+                    allowed_boundary,
+                    &file_table_id,
+                    "allowed.txt",
+                    "text/plain",
+                    b"allowed",
+                )))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(allowed_upload.status(), StatusCode::CREATED);
+    let upload_payload = response_json(allowed_upload).await;
+    let record_id = upload_payload["data"]["record"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    revoke_model_grant(&database_url, &file_model_id, &workspace_id).await;
+    let blocked_upload_boundary = "----1flowbase-file-upload-blocked";
+    let blocked_upload = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/files/upload")
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .header(
+                    "content-type",
+                    format!("multipart/form-data; boundary={blocked_upload_boundary}"),
+                )
+                .body(Body::from(build_file_upload_body(
+                    blocked_upload_boundary,
+                    &file_table_id,
+                    "blocked.txt",
+                    "text/plain",
+                    b"blocked",
+                )))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(blocked_upload.status(), StatusCode::FORBIDDEN);
+    assert_eq!(
+        response_json(blocked_upload).await["code"],
+        json!("data_model_scope_not_granted")
+    );
+
+    let blocked_read = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/console/files/{file_table_id}/records/{record_id}/content"
+                ))
+                .header("cookie", &root_cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(blocked_read.status(), StatusCode::FORBIDDEN);
+    assert_eq!(
+        response_json(blocked_read).await["code"],
+        json!("data_model_scope_not_granted")
+    );
 }
 
 #[tokio::test]

@@ -1,5 +1,11 @@
-use control_plane::ports::{CreateModelDefinitionInput, ModelDefinitionRepository};
-use domain::{DataModelScopeKind, SYSTEM_SCOPE_ID};
+use control_plane::ports::{
+    AddModelFieldInput, CreateModelDefinitionInput, CreateScopeDataModelGrantInput,
+    ModelDefinitionRepository, UpdateModelDefinitionStatusInput, UpdateScopeDataModelGrantInput,
+};
+use domain::{
+    ApiExposureStatus, DataModelProtection, DataModelScopeKind, DataModelSourceKind,
+    DataModelStatus, ModelFieldKind, ScopeDataModelPermissionProfile, SYSTEM_SCOPE_ID,
+};
 use sqlx::PgPool;
 use storage_postgres::{connect, run_migrations, PgControlPlaneStore};
 use uuid::Uuid;
@@ -27,6 +33,109 @@ async fn root_tenant_id(store: &PgControlPlaneStore) -> Uuid {
         .unwrap()
 }
 
+async fn seed_data_source_workspace(
+    store: &PgControlPlaneStore,
+    workspace_name: &str,
+    provider_code: &str,
+) -> (Uuid, Uuid, Uuid) {
+    let tenant = store.upsert_root_tenant().await.unwrap();
+    let workspace = store
+        .upsert_workspace(tenant.id, workspace_name)
+        .await
+        .unwrap();
+    store
+        .upsert_permission_catalog(&access_control::permission_catalog())
+        .await
+        .unwrap();
+    store.upsert_builtin_roles(workspace.id).await.unwrap();
+    store
+        .upsert_authenticator(&domain::AuthenticatorRecord {
+            name: "password-local".into(),
+            auth_type: "password-local".into(),
+            title: "Password".into(),
+            enabled: true,
+            is_builtin: true,
+            options: serde_json::json!({}),
+        })
+        .await
+        .unwrap();
+    let actor = store
+        .upsert_root_user(
+            workspace.id,
+            "root",
+            "root@example.com",
+            "$argon2id$v=19$m=19456,t=2,p=1$test$test",
+            "Root",
+            "Root",
+        )
+        .await
+        .unwrap();
+    let installation_id = Uuid::now_v7();
+    control_plane::ports::PluginRepository::upsert_installation(
+        store,
+        &control_plane::ports::UpsertPluginInstallationInput {
+            installation_id,
+            provider_code: provider_code.into(),
+            plugin_id: format!("{provider_code}@builtin"),
+            plugin_version: "0.1.0".into(),
+            contract_version: "1flowbase.data_source/v1".into(),
+            protocol: "builtin".into(),
+            display_name: "Main Source".into(),
+            source_kind: "uploaded".into(),
+            trust_level: "checksum_only".into(),
+            verification_status: domain::PluginVerificationStatus::Valid,
+            desired_state: domain::PluginDesiredState::ActiveRequested,
+            artifact_status: domain::PluginArtifactStatus::Ready,
+            runtime_status: domain::PluginRuntimeStatus::Active,
+            availability_status: domain::PluginAvailabilityStatus::Available,
+            package_path: None,
+            installed_path: format!("/tmp/{provider_code}"),
+            checksum: None,
+            manifest_fingerprint: None,
+            signature_status: None,
+            signature_algorithm: None,
+            signing_key_id: None,
+            last_load_error: None,
+            metadata_json: serde_json::json!({}),
+            actor_user_id: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    (workspace.id, actor.id, installation_id)
+}
+
+async fn seed_data_source_instance(
+    store: &PgControlPlaneStore,
+    workspace_id: Uuid,
+    actor_user_id: Uuid,
+    installation_id: Uuid,
+    source_code: &str,
+    display_name: &str,
+) -> Uuid {
+    let data_source_instance_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        insert into data_source_instances (
+            id, workspace_id, installation_id, source_code, display_name, status,
+            config_json, metadata_json, created_by
+        ) values ($1, $2, $3, $4, $5, 'ready', '{}', '{}', $6)
+        "#,
+    )
+    .bind(data_source_instance_id)
+    .bind(workspace_id)
+    .bind(installation_id)
+    .bind(source_code)
+    .bind(display_name)
+    .bind(actor_user_id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    data_source_instance_id
+}
+
 #[tokio::test]
 async fn model_definition_repository_creates_scope_bound_metadata_without_publish_state() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
@@ -52,8 +161,15 @@ async fn model_definition_repository_creates_scope_bound_metadata_without_publis
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
             code: code.clone(),
             title: "Orders".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
         },
     )
     .await
@@ -72,8 +188,15 @@ async fn model_definition_repository_creates_scope_bound_metadata_without_publis
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::System,
             scope_id: SYSTEM_SCOPE_ID,
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
             code: format!("system_{}", Uuid::now_v7().simple()),
             title: "System Orders".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
         },
     )
     .await
@@ -84,4 +207,660 @@ async fn model_definition_repository_creates_scope_bound_metadata_without_publis
     assert!(system_created
         .physical_table_name
         .starts_with("rtm_system_"));
+}
+
+#[tokio::test]
+async fn model_definition_repository_persists_status_exposure_owner_and_scope_grants() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let workspace_id = Uuid::now_v7();
+    let tenant_id = root_tenant_id(&store).await;
+    sqlx::query(
+        "insert into workspaces (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
+    )
+    .bind(workspace_id)
+    .bind(tenant_id)
+    .bind(format!("Core Workspace {}", workspace_id.simple()))
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    let created = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
+            code: format!("customers_{}", Uuid::now_v7().simple()),
+            title: "Customers".into(),
+            status: DataModelStatus::Draft,
+            api_exposure_status: ApiExposureStatus::Draft,
+            protection: DataModelProtection {
+                is_protected: true,
+                ..Default::default()
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(created.status, DataModelStatus::Draft);
+    assert_eq!(created.api_exposure_status, ApiExposureStatus::Draft);
+    assert!(created.protection.is_protected);
+
+    let published = ModelDefinitionRepository::update_model_definition_status(
+        &store,
+        &UpdateModelDefinitionStatusInput {
+            actor_user_id: Uuid::nil(),
+            workspace_id,
+            model_id: created.id,
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(published.status, DataModelStatus::Published);
+    assert_eq!(
+        published.api_exposure_status,
+        ApiExposureStatus::PublishedNotExposed
+    );
+
+    let system_model = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::System,
+            scope_id: SYSTEM_SCOPE_ID,
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
+            code: format!("system_customers_{}", Uuid::now_v7().simple()),
+            title: "System Customers".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let grant_id = Uuid::now_v7();
+    let grant = ModelDefinitionRepository::create_scope_data_model_grant(
+        &store,
+        &CreateScopeDataModelGrantInput {
+            grant_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_model_id: system_model.id,
+            enabled: true,
+            permission_profile: ScopeDataModelPermissionProfile::ScopeAll,
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(grant.id, grant_id);
+    assert_eq!(
+        grant.permission_profile,
+        ScopeDataModelPermissionProfile::ScopeAll
+    );
+
+    let grants = ModelDefinitionRepository::list_scope_data_model_grants(
+        &store,
+        DataModelScopeKind::Workspace,
+        workspace_id,
+    )
+    .await
+    .unwrap();
+    assert_eq!(grants.len(), 1);
+    assert_eq!(grants[0].data_model_id, system_model.id);
+}
+
+#[tokio::test]
+async fn model_definition_repository_rejects_scope_grant_for_workspace_model() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let workspace_id = Uuid::now_v7();
+    let tenant_id = root_tenant_id(&store).await;
+    sqlx::query(
+        "insert into workspaces (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
+    )
+    .bind(workspace_id)
+    .bind(tenant_id)
+    .bind(format!("Grant Workspace {}", workspace_id.simple()))
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    let workspace_model = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
+            code: format!("workspace_grant_{}", Uuid::now_v7().simple()),
+            title: "Workspace Grant Model".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let created = ModelDefinitionRepository::create_scope_data_model_grant(
+        &store,
+        &CreateScopeDataModelGrantInput {
+            grant_id: Uuid::now_v7(),
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_model_id: workspace_model.id,
+            enabled: true,
+            permission_profile: ScopeDataModelPermissionProfile::ScopeAll,
+            created_by: None,
+        },
+    )
+    .await;
+    let error = created.unwrap_err();
+    assert!(error.to_string().contains("model_definition"));
+}
+
+#[tokio::test]
+async fn model_definition_repository_rejects_scope_grant_update_for_workspace_model() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let workspace_id = Uuid::now_v7();
+    let tenant_id = root_tenant_id(&store).await;
+    sqlx::query(
+        "insert into workspaces (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
+    )
+    .bind(workspace_id)
+    .bind(tenant_id)
+    .bind(format!("Grant Update Workspace {}", workspace_id.simple()))
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    let workspace_model = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
+            code: format!("workspace_grant_update_{}", Uuid::now_v7().simple()),
+            title: "Workspace Grant Update Model".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let updated = ModelDefinitionRepository::update_scope_data_model_grant(
+        &store,
+        &UpdateScopeDataModelGrantInput {
+            data_model_id: workspace_model.id,
+            grant_id: Uuid::now_v7(),
+            enabled: false,
+            permission_profile: ScopeDataModelPermissionProfile::ScopeAll,
+        },
+    )
+    .await;
+    let error = updated.unwrap_err();
+    assert!(error.to_string().contains("model_definition"));
+}
+
+#[tokio::test]
+async fn model_definition_repository_blocks_duplicate_code_inside_same_data_source() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let (workspace_id, actor_user_id, installation_id) =
+        seed_data_source_workspace(&store, "duplicate-code-workspace", "main_source").await;
+    let data_source_instance_id = seed_data_source_instance(
+        &store,
+        workspace_id,
+        actor_user_id,
+        installation_id,
+        "main_source",
+        "Main Source",
+    )
+    .await;
+
+    let code = format!("orders_{}", Uuid::now_v7().simple());
+    let input = CreateModelDefinitionInput {
+        actor_user_id,
+        scope_kind: DataModelScopeKind::Workspace,
+        scope_id: workspace_id,
+        data_source_instance_id: Some(data_source_instance_id),
+        source_kind: DataModelSourceKind::ExternalSource,
+        external_resource_key: Some("orders".into()),
+        external_capability_snapshot: None,
+        code,
+        title: "Orders".into(),
+        status: DataModelStatus::Published,
+        api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+        protection: DataModelProtection::default(),
+    };
+    ModelDefinitionRepository::create_model_definition(&store, &input)
+        .await
+        .unwrap();
+
+    let duplicate = ModelDefinitionRepository::create_model_definition(&store, &input).await;
+    assert!(duplicate.is_err());
+}
+
+#[tokio::test]
+async fn model_definition_repository_blocks_duplicate_code_inside_main_source() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let workspace_id = Uuid::now_v7();
+    let tenant_id = root_tenant_id(&store).await;
+    sqlx::query(
+        "insert into workspaces (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
+    )
+    .bind(workspace_id)
+    .bind(tenant_id)
+    .bind(format!("Main Source Workspace {}", workspace_id.simple()))
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    let code = format!("orders_{}", Uuid::now_v7().simple());
+    let input = CreateModelDefinitionInput {
+        actor_user_id: Uuid::nil(),
+        scope_kind: DataModelScopeKind::Workspace,
+        scope_id: workspace_id,
+        data_source_instance_id: None,
+        source_kind: domain::DataModelSourceKind::MainSource,
+        external_resource_key: None,
+        external_capability_snapshot: None,
+        code,
+        title: "Orders".into(),
+        status: DataModelStatus::Published,
+        api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+        protection: DataModelProtection::default(),
+    };
+    ModelDefinitionRepository::create_model_definition(&store, &input)
+        .await
+        .unwrap();
+
+    let duplicate = ModelDefinitionRepository::create_model_definition(&store, &input).await;
+    assert!(duplicate.is_err());
+}
+
+#[tokio::test]
+async fn model_definition_repository_allows_duplicate_code_across_data_sources_in_same_workspace() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let (workspace_id, actor_user_id, installation_id) =
+        seed_data_source_workspace(&store, "duplicate-code-across-sources", "main_source").await;
+    let first_data_source_id = seed_data_source_instance(
+        &store,
+        workspace_id,
+        actor_user_id,
+        installation_id,
+        "main_source",
+        "Main Source",
+    )
+    .await;
+    let second_data_source_id = seed_data_source_instance(
+        &store,
+        workspace_id,
+        actor_user_id,
+        installation_id,
+        "main_source",
+        "Secondary Source",
+    )
+    .await;
+
+    let code = format!("orders_{}", Uuid::now_v7().simple());
+    let first = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: Some(first_data_source_id),
+            source_kind: DataModelSourceKind::ExternalSource,
+            external_resource_key: Some("orders".into()),
+            external_capability_snapshot: None,
+            code: code.clone(),
+            title: "Orders".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let second = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: Some(second_data_source_id),
+            source_kind: DataModelSourceKind::ExternalSource,
+            external_resource_key: Some("orders".into()),
+            external_capability_snapshot: None,
+            code: code.clone(),
+            title: "Orders Copy".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(first.code, code);
+    assert_eq!(second.code, code);
+    assert_ne!(
+        first.data_source_instance_id,
+        second.data_source_instance_id
+    );
+}
+
+#[tokio::test]
+async fn model_definition_repository_rejects_workspace_model_with_foreign_data_source() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let (workspace_id, actor_user_id, _installation_id) =
+        seed_data_source_workspace(&store, "model-source-current-workspace", "current_source")
+            .await;
+    let (foreign_workspace_id, foreign_actor_user_id, foreign_installation_id) =
+        seed_data_source_workspace(&store, "model-source-foreign-workspace", "foreign_source")
+            .await;
+    let foreign_data_source_id = seed_data_source_instance(
+        &store,
+        foreign_workspace_id,
+        foreign_actor_user_id,
+        foreign_installation_id,
+        "foreign_source",
+        "Foreign Source",
+    )
+    .await;
+
+    let created = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: Some(foreign_data_source_id),
+            source_kind: DataModelSourceKind::ExternalSource,
+            external_resource_key: Some("orders".into()),
+            external_capability_snapshot: None,
+            code: format!("orders_{}", Uuid::now_v7().simple()),
+            title: "Orders".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
+        },
+    )
+    .await;
+
+    assert!(created.is_err());
+}
+
+#[tokio::test]
+async fn model_definition_repository_reads_data_source_defaults_only_inside_workspace() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let (workspace_id, _actor_user_id, _installation_id) =
+        seed_data_source_workspace(&store, "defaults-current-workspace", "current_source").await;
+    let (foreign_workspace_id, foreign_actor_user_id, foreign_installation_id) =
+        seed_data_source_workspace(&store, "defaults-foreign-workspace", "foreign_source").await;
+    let foreign_data_source_id = seed_data_source_instance(
+        &store,
+        foreign_workspace_id,
+        foreign_actor_user_id,
+        foreign_installation_id,
+        "foreign_source",
+        "Foreign Source",
+    )
+    .await;
+
+    let visible = ModelDefinitionRepository::get_data_source_defaults(
+        &store,
+        foreign_workspace_id,
+        foreign_data_source_id,
+    )
+    .await
+    .unwrap();
+    assert_eq!(visible.data_model_status, DataModelStatus::Published);
+
+    let foreign = ModelDefinitionRepository::get_data_source_defaults(
+        &store,
+        workspace_id,
+        foreign_data_source_id,
+    )
+    .await;
+    assert!(foreign.is_err());
+}
+
+#[tokio::test]
+async fn model_definition_repository_deletes_external_source_field_without_local_ddl() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let (workspace_id, actor_user_id, installation_id) =
+        seed_data_source_workspace(&store, "external-mapping-workspace", "external_crm").await;
+    let data_source_instance_id = seed_data_source_instance(
+        &store,
+        workspace_id,
+        actor_user_id,
+        installation_id,
+        "external_crm",
+        "External CRM",
+    )
+    .await;
+
+    let created = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: Some(data_source_instance_id),
+            source_kind: DataModelSourceKind::ExternalSource,
+            external_resource_key: Some("crm.contacts".into()),
+            external_capability_snapshot: Some(serde_json::json!({
+                "supports_owner_filter": true,
+                "supports_scope_filter": true,
+                "supports_write": false
+            })),
+            code: format!("external_contacts_{}", Uuid::now_v7().simple()),
+            title: "External Contacts".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let created_table_count: i64 =
+        sqlx::query_scalar("select count(*) from information_schema.tables where table_name = $1")
+            .bind(&created.physical_table_name)
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert_eq!(created.source_kind, DataModelSourceKind::ExternalSource);
+    assert_eq!(
+        created.external_resource_key.as_deref(),
+        Some("crm.contacts")
+    );
+    assert_eq!(created_table_count, 0);
+
+    let field = ModelDefinitionRepository::add_model_field(
+        &store,
+        &AddModelFieldInput {
+            actor_user_id,
+            model_id: created.id,
+            external_field_key: Some("properties.email".into()),
+            code: "email".into(),
+            title: "Email".into(),
+            field_kind: ModelFieldKind::String,
+            is_required: true,
+            is_unique: true,
+            default_value: None,
+            display_interface: Some("input".into()),
+            display_options: serde_json::json!({}),
+            relation_target_model_id: None,
+            relation_options: serde_json::json!({}),
+        },
+    )
+    .await
+    .unwrap();
+
+    let column_count: i64 = sqlx::query_scalar(
+        "select count(*) from information_schema.columns where table_name = $1 and column_name = $2",
+    )
+    .bind(&created.physical_table_name)
+    .bind(&field.physical_column_name)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        field.external_field_key.as_deref(),
+        Some("properties.email")
+    );
+    assert_eq!(column_count, 0);
+
+    let reloaded =
+        ModelDefinitionRepository::get_model_definition(&store, workspace_id, created.id)
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(reloaded.source_kind, DataModelSourceKind::ExternalSource);
+    assert_eq!(
+        reloaded.external_resource_key.as_deref(),
+        Some("crm.contacts")
+    );
+    assert_eq!(
+        reloaded.external_capability_snapshot,
+        Some(serde_json::json!({
+            "supports_owner_filter": true,
+            "supports_scope_filter": true,
+            "supports_write": false
+        }))
+    );
+    assert_eq!(reloaded.fields.len(), 1);
+    assert_eq!(
+        reloaded.fields[0].external_field_key.as_deref(),
+        Some("properties.email")
+    );
+
+    ModelDefinitionRepository::delete_model_field(&store, actor_user_id, created.id, field.id)
+        .await
+        .unwrap();
+
+    let reloaded_after_delete =
+        ModelDefinitionRepository::get_model_definition(&store, workspace_id, created.id)
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(reloaded_after_delete.fields.len(), 0);
+}
+
+#[tokio::test]
+async fn model_definition_repository_status_update_requires_visible_workspace() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let workspace_id = Uuid::now_v7();
+    let foreign_workspace_id = Uuid::now_v7();
+    let tenant_id = root_tenant_id(&store).await;
+    sqlx::query(
+        "insert into workspaces (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
+    )
+    .bind(workspace_id)
+    .bind(tenant_id)
+    .bind(format!("Current Workspace {}", workspace_id.simple()))
+    .execute(store.pool())
+    .await
+    .unwrap();
+    sqlx::query(
+        "insert into workspaces (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
+    )
+    .bind(foreign_workspace_id)
+    .bind(tenant_id)
+    .bind(format!("Foreign Workspace {}", foreign_workspace_id.simple()))
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    let foreign_model = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: foreign_workspace_id,
+            data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
+            external_capability_snapshot: None,
+            code: format!("foreign_orders_{}", Uuid::now_v7().simple()),
+            title: "Foreign Orders".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let update = ModelDefinitionRepository::update_model_definition_status(
+        &store,
+        &UpdateModelDefinitionStatusInput {
+            actor_user_id: Uuid::nil(),
+            workspace_id,
+            model_id: foreign_model.id,
+            status: DataModelStatus::Draft,
+            api_exposure_status: ApiExposureStatus::Draft,
+        },
+    )
+    .await;
+    assert!(update.is_err());
+
+    let stored = ModelDefinitionRepository::get_model_definition(
+        &store,
+        foreign_workspace_id,
+        foreign_model.id,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(stored.status, DataModelStatus::Published);
+    assert_eq!(
+        stored.api_exposure_status,
+        ApiExposureStatus::PublishedNotExposed
+    );
 }

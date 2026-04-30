@@ -6,6 +6,13 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use plugin_framework::data_source_contract::{
+    DataSourceConfigInput, DataSourceCreateRecordInput, DataSourceCreateRecordOutput,
+    DataSourceDeleteRecordInput, DataSourceDeleteRecordOutput, DataSourceGetRecordInput,
+    DataSourceGetRecordOutput, DataSourceListRecordsInput, DataSourceListRecordsOutput,
+    DataSourceRecordFilter, DataSourceRecordPage, DataSourceRecordScopeContext,
+    DataSourceRecordSort, DataSourceUpdateRecordInput, DataSourceUpdateRecordOutput,
+};
 use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
@@ -13,8 +20,10 @@ use uuid::Uuid;
 use crate::{
     capability_slots::{DefaultValueResolver, RecordValidator},
     model_metadata::ModelMetadata,
-    runtime_acl::{resolve_access_scope, RuntimeDataAction},
-    runtime_model_registry::RuntimeModelRegistry,
+    runtime_acl::{resolve_access_scope, RuntimeDataAction, RuntimeScopeGrant},
+    runtime_model_registry::{
+        RegisteredRuntimeModel, RuntimeDataModelAvailability, RuntimeModelRegistry,
+    },
     runtime_record_repository::RuntimeRecordRepository,
 };
 
@@ -26,6 +35,7 @@ pub use crate::runtime_record_repository::{
 pub struct RuntimeListInput {
     pub actor: domain::ActorContext,
     pub model_code: String,
+    pub scope_grant: Option<RuntimeScopeGrant>,
     pub filters: Vec<RuntimeFilterInput>,
     pub sorts: Vec<RuntimeSortInput>,
     pub expand_relations: Vec<String>,
@@ -38,6 +48,7 @@ pub struct RuntimeGetInput {
     pub actor: domain::ActorContext,
     pub model_code: String,
     pub record_id: String,
+    pub scope_grant: Option<RuntimeScopeGrant>,
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +56,7 @@ pub struct RuntimeCreateInput {
     pub actor: domain::ActorContext,
     pub model_code: String,
     pub payload: Value,
+    pub scope_grant: Option<RuntimeScopeGrant>,
 }
 
 #[derive(Debug, Clone)]
@@ -53,6 +65,7 @@ pub struct RuntimeUpdateInput {
     pub model_code: String,
     pub record_id: String,
     pub payload: Value,
+    pub scope_grant: Option<RuntimeScopeGrant>,
 }
 
 #[derive(Debug, Clone)]
@@ -60,17 +73,90 @@ pub struct RuntimeDeleteInput {
     pub actor: domain::ActorContext,
     pub model_code: String,
     pub record_id: String,
+    pub scope_grant: Option<RuntimeScopeGrant>,
 }
 
-#[derive(Debug, Error)]
+#[async_trait]
+pub trait DataSourceRuntimeRecordBackend: Send + Sync {
+    async fn list_records(
+        &self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+        input: DataSourceListRecordsInput,
+    ) -> Result<DataSourceListRecordsOutput>;
+
+    async fn get_record(
+        &self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+        input: DataSourceGetRecordInput,
+    ) -> Result<DataSourceGetRecordOutput>;
+
+    async fn create_record(
+        &self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+        input: DataSourceCreateRecordInput,
+    ) -> Result<DataSourceCreateRecordOutput>;
+
+    async fn update_record(
+        &self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+        input: DataSourceUpdateRecordInput,
+    ) -> Result<DataSourceUpdateRecordOutput>;
+
+    async fn delete_record(
+        &self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+        input: DataSourceDeleteRecordInput,
+    ) -> Result<DataSourceDeleteRecordOutput>;
+}
+
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum RuntimeModelError {
     #[error("runtime model unavailable: {0}")]
     Unavailable(String),
+    #[error("runtime model not published: {0}")]
+    NotPublished(String),
+    #[error("runtime model disabled: {0}")]
+    Disabled(String),
+    #[error("runtime model broken: {0}")]
+    Broken(String),
 }
 
 impl RuntimeModelError {
     pub fn unavailable(model_code: impl Into<String>) -> Self {
         Self::Unavailable(model_code.into())
+    }
+
+    pub fn not_published(model_code: impl Into<String>) -> Self {
+        Self::NotPublished(model_code.into())
+    }
+
+    pub fn disabled(model_code: impl Into<String>) -> Self {
+        Self::Disabled(model_code.into())
+    }
+
+    pub fn broken(model_code: impl Into<String>) -> Self {
+        Self::Broken(model_code.into())
+    }
+}
+
+pub fn ensure_runtime_model_available(
+    model_code: &str,
+    availability: RuntimeDataModelAvailability,
+) -> Result<()> {
+    match availability {
+        RuntimeDataModelAvailability::Available => Ok(()),
+        RuntimeDataModelAvailability::NotPublished => {
+            Err(RuntimeModelError::not_published(model_code).into())
+        }
+        RuntimeDataModelAvailability::Disabled => {
+            Err(RuntimeModelError::disabled(model_code).into())
+        }
+        RuntimeDataModelAvailability::Broken => Err(RuntimeModelError::broken(model_code).into()),
     }
 }
 
@@ -80,6 +166,7 @@ pub struct RuntimeEngine {
     validator: Arc<dyn RecordValidator>,
     registry: RuntimeModelRegistry,
     records: Arc<dyn RuntimeRecordRepository>,
+    data_source_records: Option<Arc<dyn DataSourceRuntimeRecordBackend>>,
 }
 
 impl RuntimeEngine {
@@ -89,16 +176,49 @@ impl RuntimeEngine {
             validator: Arc::new(NoopRecordValidator),
             registry,
             records,
+            data_source_records: None,
+        }
+    }
+
+    pub fn new_with_data_source_backend(
+        registry: RuntimeModelRegistry,
+        records: Arc<dyn RuntimeRecordRepository>,
+        data_source_records: Arc<dyn DataSourceRuntimeRecordBackend>,
+    ) -> Self {
+        Self {
+            default_value_resolver: Arc::new(PassthroughValueResolver),
+            validator: Arc::new(NoopRecordValidator),
+            registry,
+            records,
+            data_source_records: Some(data_source_records),
         }
     }
 
     pub fn for_tests() -> Self {
+        Self::for_tests_with_models(vec![test_model_metadata()])
+    }
+
+    pub fn for_tests_with_models(models: Vec<ModelMetadata>) -> Self {
         let registry = RuntimeModelRegistry::default();
-        registry.rebuild(vec![test_model_metadata()]);
+        registry.rebuild(models);
 
         Self::new(
             registry,
             Arc::new(InMemoryRuntimeRecordRepository::default()),
+        )
+    }
+
+    pub fn for_tests_with_models_and_data_source_backend(
+        models: Vec<ModelMetadata>,
+        data_source_records: Arc<dyn DataSourceRuntimeRecordBackend>,
+    ) -> Self {
+        let registry = RuntimeModelRegistry::default();
+        registry.rebuild(models);
+
+        Self::new_with_data_source_backend(
+            registry,
+            Arc::new(InMemoryRuntimeRecordRepository::default()),
+            data_source_records,
         )
     }
 
@@ -107,45 +227,81 @@ impl RuntimeEngine {
     }
 
     pub async fn list_records(&self, input: RuntimeListInput) -> Result<RuntimeListResult> {
-        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
-        let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::View)?;
+        let metadata =
+            self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
+        let access_scope = resolve_access_scope(
+            &input.actor,
+            RuntimeDataAction::View,
+            metadata.model_id,
+            input.scope_grant.as_ref(),
+        )?;
 
-        self.records
-            .list_records(
-                &metadata,
-                RuntimeListQuery {
-                    scope_id,
-                    owner_user_id: access_scope.owner_user_id,
-                    filters: input.filters,
-                    sorts: input.sorts,
-                    expand_relations: input.expand_relations,
-                    page: input.page,
-                    page_size: input.page_size,
-                },
-            )
-            .await
+        let query = RuntimeListQuery {
+            scope_id: access_scope.scope_id,
+            owner_user_id: access_scope.owner_user_id,
+            filters: input.filters,
+            sorts: input.sorts,
+            expand_relations: input.expand_relations,
+            page: input.page,
+            page_size: input.page_size,
+        };
+
+        match metadata.source_kind {
+            domain::DataModelSourceKind::MainSource => {
+                self.records.list_records(&metadata, query).await
+            }
+            domain::DataModelSourceKind::ExternalSource => {
+                self.list_external_records(input.actor.current_workspace_id, &metadata, query)
+                    .await
+            }
+        }
     }
 
     pub async fn get_record(&self, input: RuntimeGetInput) -> Result<Option<Value>> {
-        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
-        let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::View)?;
+        let metadata =
+            self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
+        let access_scope = resolve_access_scope(
+            &input.actor,
+            RuntimeDataAction::View,
+            metadata.model_id,
+            input.scope_grant.as_ref(),
+        )?;
 
-        self.records
-            .get_record(
-                &metadata,
-                scope_id,
-                access_scope.owner_user_id,
-                &input.record_id,
-            )
-            .await
+        match metadata.source_kind {
+            domain::DataModelSourceKind::MainSource => {
+                self.records
+                    .get_record(
+                        &metadata,
+                        access_scope.scope_id,
+                        access_scope.owner_user_id,
+                        &input.record_id,
+                    )
+                    .await
+            }
+            domain::DataModelSourceKind::ExternalSource => {
+                self.get_external_record(
+                    input.actor.current_workspace_id,
+                    &metadata,
+                    access_scope,
+                    input.record_id,
+                )
+                .await
+            }
+        }
     }
 
     pub async fn create_record(&self, input: RuntimeCreateInput) -> Result<Value> {
-        resolve_access_scope(&input.actor, RuntimeDataAction::Create)?;
-        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
+        let metadata =
+            self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
+        let access_scope = resolve_access_scope(
+            &input.actor,
+            RuntimeDataAction::Create,
+            metadata.model_id,
+            input.scope_grant.as_ref(),
+        )?;
+        let scope_id = access_scope
+            .scope_id
+            .unwrap_or(input.actor.current_workspace_id);
         let payload = self
             .default_value_resolver
             .apply(input.actor.user_id, &input.model_code, input.payload)
@@ -154,44 +310,94 @@ impl RuntimeEngine {
             .validate(input.actor.user_id, &input.model_code, &payload)
             .await?;
 
-        self.records
-            .create_record(&metadata, input.actor.user_id, scope_id, payload)
-            .await
+        match metadata.source_kind {
+            domain::DataModelSourceKind::MainSource => {
+                self.records
+                    .create_record(&metadata, input.actor.user_id, scope_id, payload)
+                    .await
+            }
+            domain::DataModelSourceKind::ExternalSource => {
+                self.create_external_record(
+                    input.actor.current_workspace_id,
+                    &metadata,
+                    access_scope.scope_id,
+                    Some(input.actor.user_id),
+                    payload,
+                )
+                .await
+            }
+        }
     }
 
     pub async fn update_record(&self, input: RuntimeUpdateInput) -> Result<Value> {
-        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
-        let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::Edit)?;
+        let metadata =
+            self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
+        let access_scope = resolve_access_scope(
+            &input.actor,
+            RuntimeDataAction::Edit,
+            metadata.model_id,
+            input.scope_grant.as_ref(),
+        )?;
         self.validator
             .validate(input.actor.user_id, &input.model_code, &input.payload)
             .await?;
 
-        self.records
-            .update_record(
-                &metadata,
-                input.actor.user_id,
-                scope_id,
-                access_scope.owner_user_id,
-                &input.record_id,
-                input.payload,
-            )
-            .await
+        match metadata.source_kind {
+            domain::DataModelSourceKind::MainSource => {
+                self.records
+                    .update_record(
+                        &metadata,
+                        input.actor.user_id,
+                        access_scope.scope_id,
+                        access_scope.owner_user_id,
+                        &input.record_id,
+                        input.payload,
+                    )
+                    .await
+            }
+            domain::DataModelSourceKind::ExternalSource => {
+                self.update_external_record(
+                    input.actor.current_workspace_id,
+                    &metadata,
+                    access_scope,
+                    input.record_id,
+                    input.payload,
+                )
+                .await
+            }
+        }
     }
 
     pub async fn delete_record(&self, input: RuntimeDeleteInput) -> Result<Value> {
-        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
-        let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::Delete)?;
-        let deleted = self
-            .records
-            .delete_record(
-                &metadata,
-                scope_id,
-                access_scope.owner_user_id,
-                &input.record_id,
-            )
-            .await?;
+        let metadata =
+            self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
+        let access_scope = resolve_access_scope(
+            &input.actor,
+            RuntimeDataAction::Delete,
+            metadata.model_id,
+            input.scope_grant.as_ref(),
+        )?;
+        let deleted = match metadata.source_kind {
+            domain::DataModelSourceKind::MainSource => {
+                self.records
+                    .delete_record(
+                        &metadata,
+                        access_scope.scope_id,
+                        access_scope.owner_user_id,
+                        &input.record_id,
+                    )
+                    .await?
+            }
+            domain::DataModelSourceKind::ExternalSource => {
+                self.delete_external_record(
+                    input.actor.current_workspace_id,
+                    &metadata,
+                    access_scope,
+                    input.record_id,
+                )
+                .await?
+            }
+        };
 
         if !deleted {
             return Err(anyhow!("runtime record not found"));
@@ -200,15 +406,29 @@ impl RuntimeEngine {
         Ok(serde_json::json!({ "deleted": true }))
     }
 
-    fn load_metadata(&self, model_code: &str, workspace_id: Uuid) -> Result<ModelMetadata> {
+    fn load_available_metadata(
+        &self,
+        model_code: &str,
+        workspace_id: Uuid,
+    ) -> Result<ModelMetadata> {
+        let runtime_model = self.load_runtime_model(model_code, workspace_id)?;
+        self.ensure_available(&runtime_model)?;
+        Ok(runtime_model.metadata)
+    }
+
+    fn load_runtime_model(
+        &self,
+        model_code: &str,
+        workspace_id: Uuid,
+    ) -> Result<RegisteredRuntimeModel> {
         self.registry
-            .get(
+            .get_runtime_model(
                 domain::DataModelScopeKind::Workspace,
                 workspace_id,
                 model_code,
             )
             .or_else(|| {
-                self.registry.get(
+                self.registry.get_runtime_model(
                     domain::DataModelScopeKind::System,
                     domain::SYSTEM_SCOPE_ID,
                     model_code,
@@ -217,11 +437,290 @@ impl RuntimeEngine {
             .ok_or_else(|| RuntimeModelError::unavailable(model_code).into())
     }
 
-    fn scope_id_for(&self, metadata: &ModelMetadata, workspace_id: Uuid) -> Uuid {
-        match metadata.scope_kind {
-            domain::DataModelScopeKind::Workspace => workspace_id,
-            domain::DataModelScopeKind::System => domain::SYSTEM_SCOPE_ID,
+    fn ensure_available(&self, runtime_model: &RegisteredRuntimeModel) -> Result<()> {
+        ensure_runtime_model_available(
+            &runtime_model.metadata.model_code,
+            runtime_model.availability,
+        )
+    }
+
+    async fn list_external_records(
+        &self,
+        workspace_id: Uuid,
+        metadata: &ModelMetadata,
+        query: RuntimeListQuery,
+    ) -> Result<RuntimeListResult> {
+        let output = self
+            .external_backend()?
+            .list_records(
+                workspace_id,
+                external_data_source_instance_id(metadata)?,
+                DataSourceListRecordsInput {
+                    connection: DataSourceConfigInput::default(),
+                    resource_key: external_resource_key(metadata)?,
+                    context: data_source_context(query.scope_id, query.owner_user_id),
+                    filters: external_filters(metadata, query.filters)?,
+                    sort: external_sorts(metadata, query.sorts)?,
+                    page: Some(data_source_page(query.page, query.page_size)),
+                    options_json: serde_json::json!({
+                        "expand_relations": query.expand_relations
+                    }),
+                },
+            )
+            .await?;
+
+        Ok(RuntimeListResult {
+            total: output.total_count.unwrap_or(output.rows.len() as u64) as i64,
+            items: output
+                .rows
+                .into_iter()
+                .map(|record| external_record_to_runtime(metadata, record))
+                .collect(),
+        })
+    }
+
+    async fn get_external_record(
+        &self,
+        workspace_id: Uuid,
+        metadata: &ModelMetadata,
+        access_scope: crate::runtime_acl::RuntimeAccessScope,
+        record_id: String,
+    ) -> Result<Option<Value>> {
+        self.external_backend()?
+            .get_record(
+                workspace_id,
+                external_data_source_instance_id(metadata)?,
+                DataSourceGetRecordInput {
+                    connection: DataSourceConfigInput::default(),
+                    resource_key: external_resource_key(metadata)?,
+                    record_id,
+                    context: data_source_context(access_scope.scope_id, access_scope.owner_user_id),
+                    options_json: Value::Object(Default::default()),
+                },
+            )
+            .await
+            .map(|output| {
+                output
+                    .record
+                    .map(|record| external_record_to_runtime(metadata, record))
+            })
+    }
+
+    async fn create_external_record(
+        &self,
+        workspace_id: Uuid,
+        metadata: &ModelMetadata,
+        scope_id: Option<Uuid>,
+        owner_user_id: Option<Uuid>,
+        payload: Value,
+    ) -> Result<Value> {
+        let record = runtime_payload_to_external(metadata, payload)?;
+        self.external_backend()?
+            .create_record(
+                workspace_id,
+                external_data_source_instance_id(metadata)?,
+                DataSourceCreateRecordInput {
+                    connection: DataSourceConfigInput::default(),
+                    resource_key: external_resource_key(metadata)?,
+                    record,
+                    context: data_source_context(scope_id, owner_user_id),
+                    transaction_id: None,
+                    options_json: Value::Object(Default::default()),
+                },
+            )
+            .await
+            .map(|output| external_record_to_runtime(metadata, output.record))
+    }
+
+    async fn update_external_record(
+        &self,
+        workspace_id: Uuid,
+        metadata: &ModelMetadata,
+        access_scope: crate::runtime_acl::RuntimeAccessScope,
+        record_id: String,
+        payload: Value,
+    ) -> Result<Value> {
+        let patch = runtime_payload_to_external(metadata, payload)?;
+        self.external_backend()?
+            .update_record(
+                workspace_id,
+                external_data_source_instance_id(metadata)?,
+                DataSourceUpdateRecordInput {
+                    connection: DataSourceConfigInput::default(),
+                    resource_key: external_resource_key(metadata)?,
+                    record_id,
+                    patch,
+                    context: data_source_context(access_scope.scope_id, access_scope.owner_user_id),
+                    transaction_id: None,
+                    options_json: Value::Object(Default::default()),
+                },
+            )
+            .await
+            .map(|output| external_record_to_runtime(metadata, output.record))
+    }
+
+    async fn delete_external_record(
+        &self,
+        workspace_id: Uuid,
+        metadata: &ModelMetadata,
+        access_scope: crate::runtime_acl::RuntimeAccessScope,
+        record_id: String,
+    ) -> Result<bool> {
+        self.external_backend()?
+            .delete_record(
+                workspace_id,
+                external_data_source_instance_id(metadata)?,
+                DataSourceDeleteRecordInput {
+                    connection: DataSourceConfigInput::default(),
+                    resource_key: external_resource_key(metadata)?,
+                    record_id,
+                    context: data_source_context(access_scope.scope_id, access_scope.owner_user_id),
+                    transaction_id: None,
+                    options_json: Value::Object(Default::default()),
+                },
+            )
+            .await
+            .map(|output| output.deleted)
+    }
+
+    fn external_backend(&self) -> Result<&Arc<dyn DataSourceRuntimeRecordBackend>> {
+        self.data_source_records
+            .as_ref()
+            .ok_or_else(|| anyhow!("external data source runtime backend is not configured"))
+    }
+}
+
+fn external_data_source_instance_id(metadata: &ModelMetadata) -> Result<Uuid> {
+    metadata
+        .data_source_instance_id
+        .ok_or_else(|| anyhow!("external data source instance is not configured"))
+}
+
+fn external_resource_key(metadata: &ModelMetadata) -> Result<String> {
+    metadata
+        .external_resource_key
+        .clone()
+        .ok_or_else(|| anyhow!("external resource key is not configured"))
+}
+
+fn external_filters(
+    metadata: &ModelMetadata,
+    filters: Vec<RuntimeFilterInput>,
+) -> Result<Vec<DataSourceRecordFilter>> {
+    filters
+        .into_iter()
+        .map(|filter| {
+            Ok(DataSourceRecordFilter {
+                field_key: external_field_key(metadata, &filter.field_code)?,
+                operator: filter.operator,
+                value: filter.value,
+            })
+        })
+        .collect()
+}
+
+fn external_sorts(
+    metadata: &ModelMetadata,
+    sorts: Vec<RuntimeSortInput>,
+) -> Result<Vec<DataSourceRecordSort>> {
+    sorts
+        .into_iter()
+        .map(|sort| {
+            let direction = sort.direction.to_ascii_lowercase();
+            let descending = match direction.as_str() {
+                "asc" => false,
+                "desc" => true,
+                _ => return Err(anyhow!("unsupported sort direction")),
+            };
+
+            Ok(DataSourceRecordSort {
+                field_key: external_field_key(metadata, &sort.field_code)?,
+                descending,
+            })
+        })
+        .collect()
+}
+
+fn runtime_payload_to_external(metadata: &ModelMetadata, payload: Value) -> Result<Value> {
+    let Value::Object(object) = payload else {
+        return Err(anyhow!("runtime payload must be object"));
+    };
+    let mut mapped = serde_json::Map::new();
+
+    for (field_code, value) in object {
+        let field_key = external_field_key(metadata, &field_code)?;
+        mapped.insert(field_key, value);
+    }
+
+    Ok(Value::Object(mapped))
+}
+
+fn external_record_to_runtime(metadata: &ModelMetadata, record: Value) -> Value {
+    let Value::Object(object) = record else {
+        return record;
+    };
+    let mut mapped = serde_json::Map::new();
+
+    for (field_key, value) in object {
+        if let Some(field_code) = runtime_field_code(metadata, &field_key) {
+            mapped.insert(field_code, value);
         }
+    }
+
+    Value::Object(mapped)
+}
+
+fn external_field_key(metadata: &ModelMetadata, field_code: &str) -> Result<String> {
+    if let Some(field) = metadata.field_by_code(field_code) {
+        return Ok(field
+            .external_field_key
+            .clone()
+            .unwrap_or_else(|| field.code.clone()));
+    }
+
+    if is_platform_runtime_field(field_code) {
+        Ok(field_code.to_string())
+    } else {
+        Err(anyhow!("unknown runtime field: {field_code}"))
+    }
+}
+
+fn runtime_field_code(metadata: &ModelMetadata, field_key: &str) -> Option<String> {
+    if let Some(field) = metadata
+        .fields
+        .iter()
+        .find(|field| field.external_field_key.as_deref().unwrap_or(&field.code) == field_key)
+    {
+        return Some(field.code.clone());
+    }
+
+    is_platform_runtime_field(field_key).then(|| field_key.to_string())
+}
+
+fn is_platform_runtime_field(field_code: &str) -> bool {
+    matches!(
+        field_code,
+        "id" | "created_by" | "created_at" | "updated_by" | "updated_at" | "deleted_at"
+    )
+}
+
+fn data_source_context(
+    scope_id: Option<Uuid>,
+    owner_user_id: Option<Uuid>,
+) -> DataSourceRecordScopeContext {
+    DataSourceRecordScopeContext {
+        owner_id: owner_user_id.map(|id| id.to_string()),
+        scope_id: scope_id.map(|id| id.to_string()),
+    }
+}
+
+fn data_source_page(page: i64, page_size: i64) -> DataSourceRecordPage {
+    let page = page.max(1) as u64;
+    let page_size = page_size.max(1) as u64;
+    DataSourceRecordPage {
+        limit: Some(page_size.min(u32::MAX as u64) as u32),
+        cursor: None,
+        offset: Some((page - 1) * page_size),
     }
 }
 
@@ -242,8 +741,13 @@ impl RuntimeRecordRepository for InMemoryRuntimeRecordRepository {
         let records = self.records.lock().expect("runtime record lock poisoned");
         let mut items = records
             .get(&metadata.model_code)
-            .and_then(|scopes| scopes.get(&query.scope_id))
-            .cloned()
+            .map(|scopes| match query.scope_id {
+                Some(scope_id) => scopes.get(&scope_id).cloned().unwrap_or_default(),
+                None => scopes
+                    .values()
+                    .flat_map(|items| items.iter().cloned())
+                    .collect(),
+            })
             .unwrap_or_default();
         items.retain(|item| owner_matches(item, query.owner_user_id));
         items.retain(|item| filter_matches(item, &query.filters));
@@ -262,22 +766,27 @@ impl RuntimeRecordRepository for InMemoryRuntimeRecordRepository {
     async fn get_record(
         &self,
         metadata: &ModelMetadata,
-        scope_id: Uuid,
+        scope_id: Option<Uuid>,
         owner_user_id: Option<Uuid>,
         record_id: &str,
     ) -> Result<Option<Value>> {
         let records = self.records.lock().expect("runtime record lock poisoned");
-        Ok(records
-            .get(&metadata.model_code)
-            .and_then(|scopes| scopes.get(&scope_id))
-            .and_then(|items| {
-                items
-                    .iter()
-                    .find(|item| {
-                        item["id"].as_str() == Some(record_id) && owner_matches(item, owner_user_id)
-                    })
-                    .cloned()
-            }))
+        let Some(scopes) = records.get(&metadata.model_code) else {
+            return Ok(None);
+        };
+        let find_record = |items: &Vec<Value>| {
+            items
+                .iter()
+                .find(|item| {
+                    item["id"].as_str() == Some(record_id) && owner_matches(item, owner_user_id)
+                })
+                .cloned()
+        };
+
+        Ok(match scope_id {
+            Some(scope_id) => scopes.get(&scope_id).and_then(find_record),
+            None => scopes.values().find_map(find_record),
+        })
     }
 
     async fn create_record(
@@ -314,18 +823,25 @@ impl RuntimeRecordRepository for InMemoryRuntimeRecordRepository {
         &self,
         metadata: &ModelMetadata,
         _actor_user_id: Uuid,
-        scope_id: Uuid,
+        scope_id: Option<Uuid>,
         owner_user_id: Option<Uuid>,
         record_id: &str,
         payload: Value,
     ) -> Result<Value> {
         let patch = object_payload(payload);
         let mut records = self.records.lock().expect("runtime record lock poisoned");
-        let scoped_records = records
-            .entry(metadata.model_code.clone())
-            .or_default()
-            .entry(scope_id)
-            .or_default();
+        let scopes = records.entry(metadata.model_code.clone()).or_default();
+        let scoped_records = match scope_id {
+            Some(scope_id) => scopes.entry(scope_id).or_default(),
+            None => scopes
+                .values_mut()
+                .find(|items| {
+                    items.iter().any(|item| {
+                        item["id"].as_str() == Some(record_id) && owner_matches(item, owner_user_id)
+                    })
+                })
+                .ok_or_else(|| anyhow!("runtime record not found"))?,
+        };
         let record = scoped_records
             .iter_mut()
             .find(|item| {
@@ -346,18 +862,13 @@ impl RuntimeRecordRepository for InMemoryRuntimeRecordRepository {
     async fn delete_record(
         &self,
         metadata: &ModelMetadata,
-        scope_id: Uuid,
+        scope_id: Option<Uuid>,
         owner_user_id: Option<Uuid>,
         record_id: &str,
     ) -> Result<bool> {
         let mut records = self.records.lock().expect("runtime record lock poisoned");
-        let scoped_records = records
-            .entry(metadata.model_code.clone())
-            .or_default()
-            .entry(scope_id)
-            .or_default();
         let mut deleted = false;
-        scoped_records.retain(|item| {
+        let mut retain_record = |item: &Value| {
             let matches =
                 item["id"].as_str() == Some(record_id) && owner_matches(item, owner_user_id);
             if matches {
@@ -366,7 +877,21 @@ impl RuntimeRecordRepository for InMemoryRuntimeRecordRepository {
             } else {
                 true
             }
-        });
+        };
+        let scopes = records.entry(metadata.model_code.clone()).or_default();
+        match scope_id {
+            Some(scope_id) => {
+                scopes
+                    .entry(scope_id)
+                    .or_default()
+                    .retain(&mut retain_record);
+            }
+            None => {
+                for records in scopes.values_mut() {
+                    records.retain(&mut retain_record);
+                }
+            }
+        }
 
         Ok(deleted)
     }
@@ -470,8 +995,12 @@ fn test_model_metadata() -> ModelMetadata {
     ModelMetadata {
         model_id: Uuid::nil(),
         model_code: "orders".into(),
+        status: domain::DataModelStatus::Published,
         scope_kind: domain::DataModelScopeKind::Workspace,
         scope_id: Uuid::nil(),
+        data_source_instance_id: None,
+        source_kind: domain::DataModelSourceKind::MainSource,
+        external_resource_key: None,
         physical_table_name: "rtm_workspace_demo_orders".into(),
         scope_column_name: "scope_id".into(),
         fields: vec![
@@ -481,6 +1010,7 @@ fn test_model_metadata() -> ModelMetadata {
                 code: "title".into(),
                 title: "Title".into(),
                 physical_column_name: "title".into(),
+                external_field_key: None,
                 field_kind: domain::ModelFieldKind::String,
                 is_required: true,
                 is_unique: false,
@@ -498,6 +1028,7 @@ fn test_model_metadata() -> ModelMetadata {
                 code: "status".into(),
                 title: "Status".into(),
                 physical_column_name: "status".into(),
+                external_field_key: None,
                 field_kind: domain::ModelFieldKind::Enum,
                 is_required: true,
                 is_unique: false,

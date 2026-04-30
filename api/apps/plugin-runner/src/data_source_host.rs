@@ -2,10 +2,13 @@ use std::collections::HashMap;
 
 use plugin_framework::{
     data_source_contract::{
-        DataSourceCatalogEntry, DataSourceConfigInput, DataSourceDescribeResourceInput,
-        DataSourceImportSnapshotInput, DataSourceImportSnapshotOutput, DataSourcePreviewReadInput,
-        DataSourcePreviewReadOutput, DataSourceResourceDescriptor, DataSourceStdioMethod,
-        DataSourceStdioRequest,
+        DataSourceCatalogEntry, DataSourceConfigInput, DataSourceCreateRecordInput,
+        DataSourceCreateRecordOutput, DataSourceDeleteRecordInput, DataSourceDeleteRecordOutput,
+        DataSourceDescribeResourceInput, DataSourceGetRecordInput, DataSourceGetRecordOutput,
+        DataSourceImportSnapshotInput, DataSourceImportSnapshotOutput, DataSourceListRecordsInput,
+        DataSourceListRecordsOutput, DataSourcePreviewReadInput, DataSourcePreviewReadOutput,
+        DataSourceResourceDescriptor, DataSourceStdioMethod, DataSourceStdioRequest,
+        DataSourceUpdateRecordInput, DataSourceUpdateRecordOutput,
     },
     error::{FrameworkResult, PluginFrameworkError},
 };
@@ -183,6 +186,86 @@ impl DataSourceHost {
         normalize_import_snapshot(output)
     }
 
+    pub async fn list_records(
+        &self,
+        plugin_id: &str,
+        input: DataSourceListRecordsInput,
+    ) -> FrameworkResult<DataSourceListRecordsOutput> {
+        let loaded = self.loaded_package(plugin_id)?;
+        let output = self
+            .call_runtime(
+                loaded,
+                DataSourceStdioMethod::ListRecords,
+                serde_json::to_value(input).unwrap(),
+            )
+            .await?;
+        normalize_list_records(output)
+    }
+
+    pub async fn get_record(
+        &self,
+        plugin_id: &str,
+        input: DataSourceGetRecordInput,
+    ) -> FrameworkResult<DataSourceGetRecordOutput> {
+        let loaded = self.loaded_package(plugin_id)?;
+        let output = self
+            .call_runtime(
+                loaded,
+                DataSourceStdioMethod::GetRecord,
+                serde_json::to_value(input).unwrap(),
+            )
+            .await?;
+        normalize_get_record(output)
+    }
+
+    pub async fn create_record(
+        &self,
+        plugin_id: &str,
+        input: DataSourceCreateRecordInput,
+    ) -> FrameworkResult<DataSourceCreateRecordOutput> {
+        let loaded = self.loaded_package(plugin_id)?;
+        let output = self
+            .call_runtime(
+                loaded,
+                DataSourceStdioMethod::CreateRecord,
+                serde_json::to_value(input).unwrap(),
+            )
+            .await?;
+        normalize_create_record(output)
+    }
+
+    pub async fn update_record(
+        &self,
+        plugin_id: &str,
+        input: DataSourceUpdateRecordInput,
+    ) -> FrameworkResult<DataSourceUpdateRecordOutput> {
+        let loaded = self.loaded_package(plugin_id)?;
+        let output = self
+            .call_runtime(
+                loaded,
+                DataSourceStdioMethod::UpdateRecord,
+                serde_json::to_value(input).unwrap(),
+            )
+            .await?;
+        normalize_update_record(output)
+    }
+
+    pub async fn delete_record(
+        &self,
+        plugin_id: &str,
+        input: DataSourceDeleteRecordInput,
+    ) -> FrameworkResult<DataSourceDeleteRecordOutput> {
+        let loaded = self.loaded_package(plugin_id)?;
+        let output = self
+            .call_runtime(
+                loaded,
+                DataSourceStdioMethod::DeleteRecord,
+                serde_json::to_value(input).unwrap(),
+            )
+            .await?;
+        normalize_delete_record(output)
+    }
+
     fn loaded_package(&self, plugin_id: &str) -> FrameworkResult<&LoadedDataSourcePackage> {
         self.loaded_packages.get(plugin_id).ok_or_else(|| {
             PluginFrameworkError::invalid_provider_package(format!(
@@ -223,6 +306,31 @@ fn normalize_preview_read(raw: Value) -> FrameworkResult<DataSourcePreviewReadOu
 }
 
 fn normalize_import_snapshot(raw: Value) -> FrameworkResult<DataSourceImportSnapshotOutput> {
+    serde_json::from_value(raw)
+        .map_err(|error| PluginFrameworkError::invalid_provider_contract(error.to_string()))
+}
+
+fn normalize_list_records(raw: Value) -> FrameworkResult<DataSourceListRecordsOutput> {
+    serde_json::from_value(raw)
+        .map_err(|error| PluginFrameworkError::invalid_provider_contract(error.to_string()))
+}
+
+fn normalize_get_record(raw: Value) -> FrameworkResult<DataSourceGetRecordOutput> {
+    serde_json::from_value(raw)
+        .map_err(|error| PluginFrameworkError::invalid_provider_contract(error.to_string()))
+}
+
+fn normalize_create_record(raw: Value) -> FrameworkResult<DataSourceCreateRecordOutput> {
+    serde_json::from_value(raw)
+        .map_err(|error| PluginFrameworkError::invalid_provider_contract(error.to_string()))
+}
+
+fn normalize_update_record(raw: Value) -> FrameworkResult<DataSourceUpdateRecordOutput> {
+    serde_json::from_value(raw)
+        .map_err(|error| PluginFrameworkError::invalid_provider_contract(error.to_string()))
+}
+
+fn normalize_delete_record(raw: Value) -> FrameworkResult<DataSourceDeleteRecordOutput> {
     serde_json::from_value(raw)
         .map_err(|error| PluginFrameworkError::invalid_provider_contract(error.to_string()))
 }

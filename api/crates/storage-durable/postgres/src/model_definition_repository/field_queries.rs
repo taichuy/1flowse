@@ -23,6 +23,7 @@ pub(super) async fn insert_model_field(
             code,
             title,
             physical_column_name,
+            external_field_key,
             field_kind,
             is_required,
             is_unique,
@@ -36,7 +37,7 @@ pub(super) async fn insert_model_field(
             created_by,
             updated_by
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17)
         "#,
     )
     .bind(field.id)
@@ -44,6 +45,7 @@ pub(super) async fn insert_model_field(
     .bind(&field.code)
     .bind(&field.title)
     .bind(&field.physical_column_name)
+    .bind(&field.external_field_key)
     .bind(field.field_kind.as_str())
     .bind(field.is_required)
     .bind(field.is_unique)
@@ -71,6 +73,7 @@ pub(super) async fn load_fields_by_model_id(
             code,
             title,
             physical_column_name,
+            external_field_key,
             field_kind,
             is_required,
             is_unique,
@@ -103,6 +106,7 @@ pub(super) async fn load_fields_for_model(
             code,
             title,
             physical_column_name,
+            external_field_key,
             field_kind,
             is_required,
             is_unique,
@@ -138,6 +142,7 @@ pub(super) async fn load_model_field_for_update(
             code,
             title,
             physical_column_name,
+            external_field_key,
             field_kind,
             is_required,
             is_unique,
@@ -211,6 +216,7 @@ pub(super) async fn insert_model_field_after_failure(
             code,
             title,
             physical_column_name,
+            external_field_key,
             field_kind,
             is_required,
             is_unique,
@@ -224,7 +230,7 @@ pub(super) async fn insert_model_field_after_failure(
             created_by,
             updated_by
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17)
         on conflict (id) do update
         set availability_status = excluded.availability_status,
             updated_by = excluded.updated_by,
@@ -236,6 +242,7 @@ pub(super) async fn insert_model_field_after_failure(
     .bind(&field.code)
     .bind(&field.title)
     .bind(&field.physical_column_name)
+    .bind(&field.external_field_key)
     .bind(field.field_kind.as_str())
     .bind(field.is_required)
     .bind(field.is_unique)
@@ -273,6 +280,7 @@ fn to_model_field_record(row: sqlx::postgres::PgRow) -> domain::ModelFieldRecord
         code: row.get("code"),
         title: row.get("title"),
         physical_column_name: row.get("physical_column_name"),
+        external_field_key: row.get("external_field_key"),
         field_kind: row.get("field_kind"),
         is_required: row.get("is_required"),
         is_unique: row.get("is_unique"),

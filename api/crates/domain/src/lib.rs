@@ -24,13 +24,15 @@ pub use application::{
 };
 pub use audit::AuditLogRecord;
 pub use auth::{
-    ActorContext, AuthenticatorRecord, BoundRole, PermissionDefinition, RoleScopeKind,
-    RoleTemplate, SessionRecord, UserAuthIdentity, UserRecord, UserStatus,
+    ActorContext, ApiKeyDataModelAction, ApiKeyDataModelPermissionRecord, ApiKeyRecord,
+    AuthenticatorRecord, BoundRole, PermissionDefinition, RoleScopeKind, RoleTemplate,
+    SessionRecord, UserAuthIdentity, UserRecord, UserStatus,
 };
 pub use base::BaseFields;
 pub use data_source::{
-    DataSourceCatalogCacheRecord, DataSourceCatalogRefreshStatus, DataSourceInstanceRecord,
-    DataSourceInstanceStatus, DataSourcePreviewSessionRecord, DataSourceSecretRecord,
+    data_source_secret_ref, DataSourceCatalogCacheRecord, DataSourceCatalogRefreshStatus,
+    DataSourceDefaults, DataSourceInstanceRecord, DataSourceInstanceStatus,
+    DataSourcePreviewSessionRecord, DataSourceSecretRecord,
 };
 pub use file_management::{
     FileStorageHealthStatus, FileStorageRecord, FileTableRecord, FileTableScopeKind,
@@ -56,8 +58,11 @@ pub use model_provider::{
     PluginTaskStatus, PluginVerificationStatus,
 };
 pub use modeling::{
-    DataModelScopeKind, MetadataAvailabilityStatus, ModelDefinitionRecord, ModelFieldKind,
-    ModelFieldRecord,
+    ApiExposureReadiness, ApiExposureStatus, DataModelAdvisorFinding, DataModelAdvisorSeverity,
+    DataModelOwnerKind, DataModelProtection, DataModelScopeKind, DataModelSourceKind,
+    DataModelStatus, ExposureCompatibility, ExternalSourceValidation, MetadataAvailabilityStatus,
+    ModelDefinitionRecord, ModelFieldKind, ModelFieldRecord, RuntimeAvailability,
+    ScopeDataModelGrantRecord, ScopeDataModelPermissionProfile,
 };
 pub use node_contribution::{NodeContributionDependencyStatus, NodeContributionRegistryEntry};
 pub use orchestration::{
@@ -75,7 +80,7 @@ pub use runtime_observability::{
     RuntimeItemRecord, RuntimeItemStatus, RuntimeSpanKind, RuntimeSpanRecord, RuntimeSpanStatus,
     RuntimeTrustLevel, UsageLedgerRecord, UsageLedgerStatus,
 };
-pub use scope::{ScopeContext, TenantRecord, WorkspaceRecord, SYSTEM_SCOPE_ID};
+pub use scope::{ScopeContext, TenantRecord, WorkspaceRecord, DEFAULT_SCOPE_ID, SYSTEM_SCOPE_ID};
 
 pub fn crate_name() -> &'static str {
     "domain"

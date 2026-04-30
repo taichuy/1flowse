@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use plugin_framework::{
@@ -17,14 +19,15 @@ use crate::{
     model_provider::failover_queue::{freeze_queue_items, FailoverQueueSnapshotItem},
     plugin_lifecycle::reconcile_installation_snapshot,
     ports::{
-        ApplicationRepository, CompleteCallbackTaskInput, FlowRepository, ModelProviderRepository,
-        NodeContributionRepository, OrchestrationRuntimeRepository, PluginRepository,
-        ProviderRuntimePort,
+        ApplicationRepository, CompleteCallbackTaskInput, FlowRepository,
+        ModelDefinitionRepository, ModelProviderRepository, NodeContributionRepository,
+        OrchestrationRuntimeRepository, PluginRepository, ProviderRuntimePort,
     },
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
 
 mod compile_context;
+mod data_model_runtime;
 mod inputs;
 mod live_debug_run;
 mod persistence;
@@ -108,6 +111,7 @@ struct RuntimeProviderInvoker<R, H> {
 pub struct OrchestrationRuntimeService<R, H> {
     repository: R,
     runtime: H,
+    runtime_engine: Arc<runtime_core::runtime_engine::RuntimeEngine>,
     provider_secret_master_key: String,
 }
 
@@ -116,6 +120,7 @@ where
     R: ApplicationRepository
         + FlowRepository
         + OrchestrationRuntimeRepository
+        + ModelDefinitionRepository
         + ModelProviderRepository
         + NodeContributionRepository
         + PluginRepository
@@ -125,10 +130,16 @@ where
         + 'static,
     H: ProviderRuntimePort + CapabilityPluginRuntimePort + Clone,
 {
-    pub fn new(repository: R, runtime: H, provider_secret_master_key: impl Into<String>) -> Self {
+    pub fn new(
+        repository: R,
+        runtime: H,
+        runtime_engine: Arc<runtime_core::runtime_engine::RuntimeEngine>,
+        provider_secret_master_key: impl Into<String>,
+    ) -> Self {
         Self {
             repository,
             runtime,
+            runtime_engine,
             provider_secret_master_key: provider_secret_master_key.into(),
         }
     }
@@ -174,10 +185,11 @@ where
         &self,
         command: StartNodeDebugPreviewCommand,
     ) -> Result<domain::NodeDebugPreviewResult> {
-        let actor = self
-            .repository
-            .load_actor_context_for_user(command.actor_user_id)
-            .await?;
+        let actor = ApplicationRepository::load_actor_context_for_user(
+            &self.repository,
+            command.actor_user_id,
+        )
+        .await?;
         let editor_state = FlowService::new(self.repository.clone())
             .get_or_create_editor_state(command.actor_user_id, command.application_id)
             .await?;
@@ -323,10 +335,11 @@ where
         &self,
         command: ResumeFlowRunCommand,
     ) -> Result<domain::ApplicationRunDetail> {
-        let actor = self
-            .repository
-            .load_actor_context_for_user(command.actor_user_id)
-            .await?;
+        let actor = ApplicationRepository::load_actor_context_for_user(
+            &self.repository,
+            command.actor_user_id,
+        )
+        .await?;
         let flow_run = self
             .repository
             .get_flow_run(command.application_id, command.flow_run_id)
@@ -403,10 +416,11 @@ where
         &self,
         command: CompleteCallbackTaskCommand,
     ) -> Result<domain::ApplicationRunDetail> {
-        let actor = self
-            .repository
-            .load_actor_context_for_user(command.actor_user_id)
-            .await?;
+        let actor = ApplicationRepository::load_actor_context_for_user(
+            &self.repository,
+            command.actor_user_id,
+        )
+        .await?;
         let callback_task = self
             .repository
             .complete_callback_task(&CompleteCallbackTaskInput {

@@ -89,6 +89,49 @@ pub trait AuthRepository: Send + Sync {
     async fn append_audit_log(&self, event: &AuditLogRecord) -> anyhow::Result<()>;
 }
 
+#[derive(Debug, Clone)]
+pub struct CreateApiKeyInput {
+    pub id: Uuid,
+    pub name: String,
+    pub token_hash: String,
+    pub token_prefix: String,
+    pub creator_user_id: Uuid,
+    pub tenant_id: Uuid,
+    pub scope_kind: DataModelScopeKind,
+    pub scope_id: Uuid,
+    pub enabled: bool,
+    pub expires_at: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpsertApiKeyDataModelPermissionInput {
+    pub api_key_id: Uuid,
+    pub data_model_id: Uuid,
+    pub allow_list: bool,
+    pub allow_get: bool,
+    pub allow_create: bool,
+    pub allow_update: bool,
+    pub allow_delete: bool,
+}
+
+#[async_trait]
+pub trait ApiKeyRepository: Send + Sync {
+    async fn create_api_key(&self, input: &CreateApiKeyInput) -> anyhow::Result<ApiKeyRecord>;
+    async fn replace_api_key_data_model_permissions(
+        &self,
+        api_key_id: Uuid,
+        permissions: &[UpsertApiKeyDataModelPermissionInput],
+    ) -> anyhow::Result<Vec<ApiKeyDataModelPermissionRecord>>;
+    async fn find_api_key_by_token_hash(
+        &self,
+        token_hash: &str,
+    ) -> anyhow::Result<Option<ApiKeyRecord>>;
+    async fn list_api_key_data_model_permissions(
+        &self,
+        api_key_id: Uuid,
+    ) -> anyhow::Result<Vec<ApiKeyDataModelPermissionRecord>>;
+}
+
 #[async_trait]
 pub trait WorkspaceRepository: Send + Sync {
     async fn get_workspace(&self, workspace_id: Uuid) -> anyhow::Result<Option<WorkspaceRecord>>;
