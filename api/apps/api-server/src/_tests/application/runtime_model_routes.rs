@@ -6,6 +6,65 @@ use axum::{
 use serde_json::json;
 use tower::ServiceExt;
 
+async fn current_workspace_id(app: &axum::Router, cookie: &str) -> String {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/session")
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    payload["data"]["session"]["current_workspace_id"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+async fn grant_model_to_scope(
+    database_url: &str,
+    model_id: &str,
+    scope_kind: &str,
+    scope_id: &str,
+    permission_profile: &str,
+) {
+    let pool = sqlx::PgPool::connect(database_url).await.unwrap();
+    sqlx::query(
+        r#"
+        insert into scope_data_model_grants (
+            id,
+            scope_kind,
+            scope_id,
+            data_model_id,
+            enabled,
+            permission_profile,
+            created_by
+        )
+        values ($1, $2, $3, $4, true, $5, null)
+        on conflict (scope_kind, scope_id, data_model_id)
+        do update set enabled = excluded.enabled,
+                      permission_profile = excluded.permission_profile,
+                      updated_at = now()
+        "#,
+    )
+    .bind(uuid::Uuid::now_v7())
+    .bind(scope_kind)
+    .bind(uuid::Uuid::parse_str(scope_id).unwrap())
+    .bind(uuid::Uuid::parse_str(model_id).unwrap())
+    .bind(permission_profile)
+    .execute(&pool)
+    .await
+    .unwrap();
+}
+
 async fn create_member(
     app: &axum::Router,
     cookie: &str,
@@ -83,7 +142,16 @@ async fn replace_member_roles(
 async fn runtime_model_routes_create_fetch_update_delete_and_filter_records() {
     let (app, database_url) = test_app_with_database_url().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let workspace_id = current_workspace_id(&app, &cookie).await;
     let model_id = create_orders_model(&app, &cookie, &csrf).await;
+    grant_model_to_scope(
+        &database_url,
+        &model_id,
+        "workspace",
+        &workspace_id,
+        "scope_all",
+    )
+    .await;
     create_text_field(&app, &cookie, &csrf, &model_id, "title").await;
     create_enum_field(&app, &cookie, &csrf, &model_id, "status").await;
 
@@ -204,10 +272,19 @@ async fn runtime_model_routes_create_fetch_update_delete_and_filter_records() {
 }
 
 #[tokio::test]
-async fn runtime_model_routes_enforce_state_data_acl() {
-    let app = test_app().await;
+async fn runtime_model_routes_apply_persisted_scope_all_grant_for_session_actors() {
+    let (app, database_url) = test_app_with_database_url().await;
     let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let workspace_id = current_workspace_id(&app, &root_cookie).await;
     let model_id = create_orders_model(&app, &root_cookie, &root_csrf).await;
+    grant_model_to_scope(
+        &database_url,
+        &model_id,
+        "workspace",
+        &workspace_id,
+        "scope_all",
+    )
+    .await;
     create_text_field(&app, &root_cookie, &root_csrf, &model_id, "title").await;
     create_enum_field(&app, &root_cookie, &root_csrf, &model_id, "status").await;
 
@@ -303,11 +380,7 @@ async fn runtime_model_routes_enforce_state_data_acl() {
         .unwrap();
     let manager_list_payload: serde_json::Value =
         serde_json::from_slice(&manager_list_body).unwrap();
-    assert_eq!(manager_list_payload["data"]["total"], json!(1));
-    assert_eq!(
-        manager_list_payload["data"]["items"][0]["title"],
-        json!("manager-order")
-    );
+    assert_eq!(manager_list_payload["data"]["total"], json!(3));
 
     let admin_list = app
         .clone()
@@ -343,7 +416,7 @@ async fn runtime_model_routes_enforce_state_data_acl() {
     let root_list_payload: serde_json::Value = serde_json::from_slice(&root_list_body).unwrap();
     assert_eq!(root_list_payload["data"]["total"], json!(3));
 
-    let blocked_get = app
+    let manager_get = app
         .clone()
         .oneshot(
             Request::builder()
@@ -357,7 +430,7 @@ async fn runtime_model_routes_enforce_state_data_acl() {
         )
         .await
         .unwrap();
-    assert_eq!(blocked_get.status(), StatusCode::NOT_FOUND);
+    assert_eq!(manager_get.status(), StatusCode::OK);
 
     let admin_get = app
         .clone()
@@ -393,10 +466,19 @@ async fn runtime_model_routes_enforce_state_data_acl() {
 
 #[tokio::test]
 async fn runtime_model_routes_gate_crud_by_model_status_changes() {
-    let app = test_app().await;
+    let (app, database_url) = test_app_with_database_url().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let workspace_id = current_workspace_id(&app, &cookie).await;
     let model_code = "status_route_orders";
     let model_id = create_model_with_status(&app, &cookie, &csrf, model_code, Some("draft")).await;
+    grant_model_to_scope(
+        &database_url,
+        &model_id,
+        "workspace",
+        &workspace_id,
+        "scope_all",
+    )
+    .await;
     create_text_field(&app, &cookie, &csrf, &model_id, "title").await;
 
     assert_runtime_crud_blocked(
@@ -470,6 +552,14 @@ async fn runtime_model_routes_use_default_scope_id_for_system_model_crud() {
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let model_code = "system_route_orders";
     let model_id = create_system_model(&app, &cookie, &csrf, model_code).await;
+    grant_model_to_scope(
+        &database_url,
+        &model_id,
+        "system",
+        &domain::SYSTEM_SCOPE_ID.to_string(),
+        "scope_all",
+    )
+    .await;
     create_text_field(&app, &cookie, &csrf, &model_id, "title").await;
 
     create_runtime_record(&app, &cookie, &csrf, model_code, "system scoped").await;
@@ -492,6 +582,26 @@ async fn runtime_model_routes_use_default_scope_id_for_system_model_crud() {
     .unwrap();
 
     assert_eq!(scope_id, domain::SYSTEM_SCOPE_ID);
+}
+
+#[tokio::test]
+async fn runtime_model_routes_return_403_when_scope_grant_is_missing() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let model_code = "ungranted_route_orders";
+    let model_id =
+        create_model_with_status(&app, &cookie, &csrf, model_code, Some("published")).await;
+    create_text_field(&app, &cookie, &csrf, &model_id, "title").await;
+
+    assert_runtime_crud_blocked(
+        &app,
+        &cookie,
+        &csrf,
+        model_code,
+        StatusCode::FORBIDDEN,
+        "data_model_scope_not_granted",
+    )
+    .await;
 }
 
 async fn create_orders_model(app: &axum::Router, cookie: &str, csrf: &str) -> String {

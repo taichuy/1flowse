@@ -19,16 +19,17 @@ use uuid::Uuid;
 use crate::ports::{
     AddModelFieldInput, AuthRepository, BootstrapRepository, CreateFileStorageInput,
     CreateFileTableRegistrationInput, CreateMemberInput, CreateModelDefinitionInput,
-    CreateWorkspaceRoleInput, FileManagementRepository, MemberRepository,
-    ModelDefinitionRepository, RoleRepository, SessionStore, UpdateFileStorageBindingInput,
-    UpdateModelDefinitionInput, UpdateModelFieldInput, UpdateProfileInput,
-    UpdateWorkspaceRoleInput, WorkspaceRepository,
+    CreateScopeDataModelGrantInput, CreateWorkspaceRoleInput, FileManagementRepository,
+    MemberRepository, ModelDefinitionRepository, RoleRepository, SessionStore,
+    UpdateFileStorageBindingInput, UpdateModelDefinitionInput, UpdateModelFieldInput,
+    UpdateProfileInput, UpdateWorkspaceRoleInput, WorkspaceRepository,
 };
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, BoundRole, FileStorageHealthStatus,
     FileStorageRecord, FileTableRecord, FileTableScopeKind, MetadataAvailabilityStatus,
     ModelDefinitionRecord, ModelFieldRecord, PermissionDefinition, RoleScopeKind, RoleTemplate,
-    ScopeContext, SessionRecord, TenantRecord, UserRecord, UserStatus, WorkspaceRecord,
+    ScopeContext, ScopeDataModelGrantRecord, SessionRecord, TenantRecord, UserRecord, UserStatus,
+    WorkspaceRecord,
 };
 
 #[derive(Default, Clone)]
@@ -862,6 +863,7 @@ pub struct MemoryFileManagementRepository {
     file_storages: Arc<RwLock<HashMap<Uuid, FileStorageRecord>>>,
     file_tables: Arc<RwLock<HashMap<Uuid, FileTableRecord>>>,
     models: Arc<Mutex<HashMap<Uuid, ModelDefinitionRecord>>>,
+    grants: Arc<Mutex<Vec<ScopeDataModelGrantRecord>>>,
 }
 
 impl MemoryFileManagementRepository {
@@ -871,6 +873,7 @@ impl MemoryFileManagementRepository {
             file_storages: Arc::new(RwLock::new(HashMap::new())),
             file_tables: Arc::new(RwLock::new(HashMap::new())),
             models: Arc::new(Mutex::new(HashMap::new())),
+            grants: Arc::default(),
         }
     }
 
@@ -887,6 +890,10 @@ impl MemoryFileManagementRepository {
             .lock()
             .expect("model lock poisoned")
             .insert(model.id, model);
+    }
+
+    pub fn insert_scope_grant(&self, grant: ScopeDataModelGrantRecord) {
+        self.grants.lock().expect("grant lock poisoned").push(grant);
     }
 }
 
@@ -1188,6 +1195,41 @@ impl ModelDefinitionRepository for MemoryFileManagementRepository {
             .get(&model_id)
             .expect("model should exist for publish")
             .clone())
+    }
+
+    async fn create_scope_data_model_grant(
+        &self,
+        input: &CreateScopeDataModelGrantInput,
+    ) -> Result<ScopeDataModelGrantRecord> {
+        let now = OffsetDateTime::now_utc();
+        let grant = ScopeDataModelGrantRecord {
+            id: input.grant_id,
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            data_model_id: input.data_model_id,
+            enabled: input.enabled,
+            permission_profile: input.permission_profile,
+            created_by: input.created_by,
+            created_at: now,
+            updated_at: now,
+        };
+        self.insert_scope_grant(grant.clone());
+        Ok(grant)
+    }
+
+    async fn list_scope_data_model_grants(
+        &self,
+        scope_kind: domain::DataModelScopeKind,
+        scope_id: Uuid,
+    ) -> Result<Vec<ScopeDataModelGrantRecord>> {
+        Ok(self
+            .grants
+            .lock()
+            .expect("grant lock poisoned")
+            .iter()
+            .filter(|grant| grant.scope_kind == scope_kind && grant.scope_id == scope_id)
+            .cloned()
+            .collect())
     }
 
     async fn append_audit_log(&self, _event: &AuditLogRecord) -> Result<()> {

@@ -105,6 +105,18 @@ pub struct ModelDefinitionService<R> {
     repository: R,
 }
 
+pub fn runtime_scope_grant_from_record(
+    grant: &domain::ScopeDataModelGrantRecord,
+) -> runtime_core::runtime_acl::RuntimeScopeGrant {
+    runtime_core::runtime_acl::RuntimeScopeGrant {
+        data_model_id: grant.data_model_id,
+        scope_kind: grant.scope_kind,
+        scope_id: grant.scope_id,
+        enabled: grant.enabled,
+        permission_profile: grant.permission_profile,
+    }
+}
+
 fn ensure_state_model_permission(
     actor: &domain::ActorContext,
     action: &str,
@@ -125,6 +137,36 @@ where
 {
     pub fn new(repository: R) -> Self {
         Self { repository }
+    }
+
+    pub async fn load_runtime_scope_grant(
+        &self,
+        actor: &domain::ActorContext,
+        data_model_id: Uuid,
+    ) -> Result<Option<runtime_core::runtime_acl::RuntimeScopeGrant>> {
+        let workspace_grants = self
+            .repository
+            .list_scope_data_model_grants(DataModelScopeKind::Workspace, actor.current_workspace_id)
+            .await?;
+        if let Some(grant) = workspace_grants
+            .iter()
+            .find(|grant| grant.data_model_id == data_model_id)
+        {
+            return Ok(Some(runtime_scope_grant_from_record(grant)));
+        }
+
+        if !actor.is_root {
+            return Ok(None);
+        }
+
+        let system_grants = self
+            .repository
+            .list_scope_data_model_grants(DataModelScopeKind::System, domain::SYSTEM_SCOPE_ID)
+            .await?;
+        Ok(system_grants
+            .iter()
+            .find(|grant| grant.data_model_id == data_model_id)
+            .map(runtime_scope_grant_from_record))
     }
 
     pub async fn list_models(

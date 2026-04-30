@@ -145,6 +145,38 @@ fn parse_expand(expand: Option<&str>) -> Vec<String> {
         .unwrap_or_default()
 }
 
+async fn load_runtime_scope_grant(
+    state: &ApiState,
+    actor: &domain::ActorContext,
+    model_code: &str,
+) -> Result<Option<runtime_core::runtime_acl::RuntimeScopeGrant>, ApiError> {
+    let model = state
+        .runtime_engine
+        .registry()
+        .get(
+            domain::DataModelScopeKind::Workspace,
+            actor.current_workspace_id,
+            model_code,
+        )
+        .or_else(|| {
+            state.runtime_engine.registry().get(
+                domain::DataModelScopeKind::System,
+                domain::SYSTEM_SCOPE_ID,
+                model_code,
+            )
+        });
+
+    let Some(model) = model else {
+        return Ok(None);
+    };
+
+    Ok(
+        control_plane::model_definition::ModelDefinitionService::new(state.store.clone())
+            .load_runtime_scope_grant(actor, model.model_id)
+            .await?,
+    )
+}
+
 #[utoipa::path(
     get,
     path = "/api/runtime/models/{model_code}/records",
@@ -158,12 +190,13 @@ pub async fn list_records(
     Query(query): Query<RuntimeListQueryParams>,
 ) -> Result<Json<ApiSuccess<RuntimeListResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
+    let scope_grant = load_runtime_scope_grant(&state, &context.actor, &model_code).await?;
     let result = state
         .runtime_engine
         .list_records(runtime_core::runtime_engine::RuntimeListInput {
             actor: context.actor.clone(),
             model_code,
-            scope_grant: None,
+            scope_grant,
             filters: parse_filters(query.filter.as_deref())?,
             sorts: parse_sorts(query.sort.as_deref())?,
             expand_relations: parse_expand(query.expand.as_deref()),
@@ -194,13 +227,14 @@ pub async fn get_record(
     Path((model_code, record_id)): Path<(String, String)>,
 ) -> Result<Json<ApiSuccess<Value>>, ApiError> {
     let context = require_session(&state, &headers).await?;
+    let scope_grant = load_runtime_scope_grant(&state, &context.actor, &model_code).await?;
     let record = state
         .runtime_engine
         .get_record(runtime_core::runtime_engine::RuntimeGetInput {
             actor: context.actor.clone(),
             model_code,
             record_id,
-            scope_grant: None,
+            scope_grant,
         })
         .await
         .map_err(map_runtime_error)?
@@ -226,6 +260,7 @@ pub async fn create_record(
 ) -> Result<(StatusCode, Json<ApiSuccess<Value>>), ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
+    let scope_grant = load_runtime_scope_grant(&state, &context.actor, &model_code).await?;
 
     let record = state
         .runtime_engine
@@ -233,7 +268,7 @@ pub async fn create_record(
             actor: context.actor.clone(),
             model_code,
             payload,
-            scope_grant: None,
+            scope_grant,
         })
         .await
         .map_err(map_runtime_error)?;
@@ -259,6 +294,7 @@ pub async fn update_record(
 ) -> Result<Json<ApiSuccess<Value>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
+    let scope_grant = load_runtime_scope_grant(&state, &context.actor, &model_code).await?;
 
     let record = state
         .runtime_engine
@@ -267,7 +303,7 @@ pub async fn update_record(
             model_code,
             record_id,
             payload,
-            scope_grant: None,
+            scope_grant,
         })
         .await
         .map_err(map_runtime_error)?;
@@ -291,6 +327,7 @@ pub async fn delete_record(
 ) -> Result<Json<ApiSuccess<Value>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
+    let scope_grant = load_runtime_scope_grant(&state, &context.actor, &model_code).await?;
 
     let result = state
         .runtime_engine
@@ -298,7 +335,7 @@ pub async fn delete_record(
             actor: context.actor.clone(),
             model_code,
             record_id,
-            scope_grant: None,
+            scope_grant,
         })
         .await
         .map_err(map_runtime_error)?;

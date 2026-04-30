@@ -137,6 +137,21 @@ impl ModelDefinitionRepository for AclTestRepository {
         Ok(grant)
     }
 
+    async fn list_scope_data_model_grants(
+        &self,
+        scope_kind: DataModelScopeKind,
+        scope_id: Uuid,
+    ) -> Result<Vec<ScopeDataModelGrantRecord>> {
+        Ok(self
+            .grants
+            .lock()
+            .expect("grant lock poisoned")
+            .iter()
+            .filter(|grant| grant.scope_kind == scope_kind && grant.scope_id == scope_id)
+            .cloned()
+            .collect())
+    }
+
     async fn append_audit_log(&self, _event: &AuditLogRecord) -> Result<()> {
         Ok(())
     }
@@ -268,4 +283,82 @@ async fn scope_grant_rejects_unknown_permission_profile_at_service_boundary() {
     assert!(error
         .to_string()
         .contains("invalid input: permission_profile"));
+}
+
+#[tokio::test]
+async fn runtime_scope_grant_loader_converts_current_workspace_persisted_grant() {
+    let actor_user_id = Uuid::now_v7();
+    let workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let repository = AclTestRepository::new(
+        ActorContext::scoped(
+            actor_user_id,
+            workspace_id,
+            "admin",
+            ["state_model.manage.all".to_string()],
+        ),
+        sample_system_model(model_id),
+    );
+    let service = ModelDefinitionService::new(repository);
+    service
+        .create_scope_grant(CreateScopeDataModelGrantCommand {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_model_id: model_id,
+            enabled: true,
+            permission_profile: "scope_all".into(),
+        })
+        .await
+        .unwrap();
+
+    let grant = service
+        .load_runtime_scope_grant(
+            &ActorContext::scoped(Uuid::now_v7(), workspace_id, "member", Vec::<String>::new()),
+            model_id,
+        )
+        .await
+        .unwrap()
+        .expect("persisted workspace grant should be selected");
+
+    assert_eq!(grant.data_model_id, model_id);
+    assert_eq!(grant.scope_kind, DataModelScopeKind::Workspace);
+    assert_eq!(grant.scope_id, workspace_id);
+    assert_eq!(
+        grant.permission_profile,
+        ScopeDataModelPermissionProfile::ScopeAll
+    );
+}
+
+#[tokio::test]
+async fn runtime_scope_grant_loader_does_not_select_system_default_for_non_system_actor() {
+    let actor_user_id = Uuid::now_v7();
+    let workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let repository = AclTestRepository::new(
+        ActorContext::root(actor_user_id, SYSTEM_SCOPE_ID, "root"),
+        sample_system_model(model_id),
+    );
+    let service = ModelDefinitionService::new(repository);
+    service
+        .create_scope_grant(CreateScopeDataModelGrantCommand {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::System,
+            scope_id: SYSTEM_SCOPE_ID,
+            data_model_id: model_id,
+            enabled: true,
+            permission_profile: "system_all".into(),
+        })
+        .await
+        .unwrap();
+
+    let grant = service
+        .load_runtime_scope_grant(
+            &ActorContext::scoped(Uuid::now_v7(), workspace_id, "member", Vec::<String>::new()),
+            model_id,
+        )
+        .await
+        .unwrap();
+
+    assert!(grant.is_none());
 }

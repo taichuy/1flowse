@@ -7,7 +7,8 @@ use control_plane::file_management::{FileUploadService, UploadFileCommand};
 use control_plane::ports::{FileManagementRepository, UpdateFileStorageBindingInput};
 use domain::{
     ActorContext, DataModelScopeKind, FileStorageHealthStatus, FileTableScopeKind,
-    MetadataAvailabilityStatus, ModelDefinitionRecord,
+    MetadataAvailabilityStatus, ModelDefinitionRecord, ScopeDataModelGrantRecord,
+    ScopeDataModelPermissionProfile,
 };
 use runtime_core::{
     model_metadata::ModelMetadata,
@@ -166,6 +167,20 @@ fn actor_in_workspace(workspace_id: Uuid) -> ActorContext {
     )
 }
 
+fn scope_grant(model_id: Uuid, scope_id: Uuid) -> ScopeDataModelGrantRecord {
+    ScopeDataModelGrantRecord {
+        id: Uuid::now_v7(),
+        scope_kind: DataModelScopeKind::Workspace,
+        scope_id,
+        data_model_id: model_id,
+        enabled: true,
+        permission_profile: ScopeDataModelPermissionProfile::ScopeAll,
+        created_by: None,
+        created_at: OffsetDateTime::now_utc(),
+        updated_at: OffsetDateTime::now_utc(),
+    }
+}
+
 #[tokio::test]
 async fn upload_service_writes_object_and_runtime_record_with_storage_snapshot() {
     let workspace_id = Uuid::now_v7();
@@ -204,6 +219,7 @@ async fn upload_service_writes_object_and_runtime_record_with_storage_snapshot()
         })
         .await;
     repository.insert_model_definition(model.clone());
+    repository.insert_scope_grant(scope_grant(model.id, workspace_id));
     repository
         .insert_file_table(domain::FileTableRecord {
             id: file_table_id,
@@ -313,6 +329,7 @@ async fn upload_service_uses_current_table_binding_for_each_new_upload() {
             .await;
     }
     repository.insert_model_definition(model.clone());
+    repository.insert_scope_grant(scope_grant(model.id, workspace_id));
     repository
         .insert_file_table(domain::FileTableRecord {
             id: file_table_id,
@@ -375,4 +392,85 @@ async fn upload_service_uses_current_table_binding_for_each_new_upload() {
 
     let _ = std::fs::remove_dir_all(first_root);
     let _ = std::fs::remove_dir_all(second_root);
+}
+
+#[tokio::test]
+async fn upload_service_requires_persisted_scope_grant_before_writing_runtime_record() {
+    let workspace_id = Uuid::now_v7();
+    let actor = actor_in_workspace(workspace_id);
+    let repository = MemoryFileManagementRepository::new(actor.clone());
+    let storage_id = Uuid::now_v7();
+    let file_table_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let model = model_definition(
+        model_id,
+        DataModelScopeKind::Workspace,
+        workspace_id,
+        "assets",
+    );
+    let root = temp_root("file-upload-no-grant");
+
+    repository
+        .insert_file_storage(domain::FileStorageRecord {
+            id: storage_id,
+            code: "local_default".into(),
+            title: "Local".into(),
+            driver_type: "local".into(),
+            enabled: true,
+            is_default: true,
+            config_json: serde_json::json!({
+                "root_path": root.display().to_string(),
+                "public_base_url": null,
+            }),
+            rule_json: serde_json::json!({}),
+            health_status: FileStorageHealthStatus::Ready,
+            last_health_error: None,
+            created_by: actor.user_id,
+            updated_by: actor.user_id,
+            created_at: OffsetDateTime::now_utc(),
+            updated_at: OffsetDateTime::now_utc(),
+        })
+        .await;
+    repository.insert_model_definition(model.clone());
+    repository
+        .insert_file_table(domain::FileTableRecord {
+            id: file_table_id,
+            code: "assets".into(),
+            title: "Assets".into(),
+            scope_kind: FileTableScopeKind::Workspace,
+            scope_id: workspace_id,
+            model_definition_id: model.id,
+            bound_storage_id: storage_id,
+            is_builtin: false,
+            is_default: false,
+            status: "active".into(),
+            created_by: actor.user_id,
+            updated_by: actor.user_id,
+            created_at: OffsetDateTime::now_utc(),
+            updated_at: OffsetDateTime::now_utc(),
+        })
+        .await;
+
+    let service = FileUploadService::new(
+        repository,
+        Arc::new(storage_object::builtin_driver_registry()),
+        runtime_engine_for_model(&model),
+    );
+
+    let result = service
+        .upload(UploadFileCommand {
+            actor,
+            file_table_id,
+            original_filename: "blocked.txt".into(),
+            content_type: Some("text/plain".into()),
+            bytes: b"blocked".to_vec(),
+        })
+        .await;
+    let error = match result {
+        Ok(_) => panic!("upload without persisted grant should fail"),
+        Err(error) => error,
+    };
+
+    assert!(error.to_string().contains("data_model_scope_not_granted"));
+    assert!(!root.exists());
 }
