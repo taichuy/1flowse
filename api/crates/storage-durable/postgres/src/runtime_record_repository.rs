@@ -523,6 +523,7 @@ fn to_runtime_model_metadata(model: domain::ModelDefinitionRecord) -> ModelMetad
     ModelMetadata {
         model_id: model.id,
         model_code: model.code.clone(),
+        status: model.status,
         scope_kind: model.scope_kind,
         scope_id: model.scope_id,
         physical_table_name: model.physical_table_name,

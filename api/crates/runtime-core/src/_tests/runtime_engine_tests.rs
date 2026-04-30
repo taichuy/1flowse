@@ -95,6 +95,7 @@ async fn runtime_engine_uses_fixed_system_scope_id_for_system_models() {
     engine.registry().rebuild(vec![ModelMetadata {
         model_id: Uuid::now_v7(),
         model_code: model_code.into(),
+        status: domain::DataModelStatus::Published,
         scope_kind: domain::DataModelScopeKind::System,
         scope_id: domain::SYSTEM_SCOPE_ID,
         physical_table_name: "rtm_system_demo_orders".into(),
@@ -135,6 +136,7 @@ async fn runtime_engine_prefers_workspace_metadata_before_system_fallback() {
     let workspace_metadata = ModelMetadata {
         model_id: Uuid::now_v7(),
         model_code: model_code.into(),
+        status: domain::DataModelStatus::Published,
         scope_kind: domain::DataModelScopeKind::Workspace,
         scope_id: workspace_id,
         physical_table_name: "rtm_workspace_demo_orders".into(),
@@ -148,6 +150,7 @@ async fn runtime_engine_prefers_workspace_metadata_before_system_fallback() {
     let system_metadata = ModelMetadata {
         model_id: Uuid::now_v7(),
         model_code: model_code.into(),
+        status: domain::DataModelStatus::Published,
         scope_kind: domain::DataModelScopeKind::System,
         scope_id: domain::SYSTEM_SCOPE_ID,
         physical_table_name: "rtm_system_demo_orders".into(),
@@ -266,6 +269,7 @@ fn status_model_metadata(model_code: &str) -> ModelMetadata {
     ModelMetadata {
         model_id: Uuid::now_v7(),
         model_code: model_code.into(),
+        status: domain::DataModelStatus::Published,
         scope_kind: domain::DataModelScopeKind::Workspace,
         scope_id: Uuid::nil(),
         physical_table_name: format!("rtm_workspace_demo_{model_code}"),

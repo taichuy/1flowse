@@ -219,7 +219,8 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
         )
         .await?;
     let runtime_registry = runtime_core::runtime_model_registry::RuntimeModelRegistry::default();
-    runtime_registry.rebuild(store.list_runtime_model_metadata().await?);
+    let runtime_metadata = store.list_runtime_model_metadata().await?;
+    runtime_registry.rebuild(runtime_metadata);
     let runtime_engine = Arc::new(runtime_core::runtime_engine::RuntimeEngine::new(
         runtime_registry,
         Arc::new(store.clone()),

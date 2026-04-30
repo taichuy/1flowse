@@ -7,6 +7,7 @@ use crate::resource_descriptor::ResourceDescriptor;
 pub struct ModelMetadata {
     pub model_id: Uuid,
     pub model_code: String,
+    pub status: domain::DataModelStatus,
     pub scope_kind: domain::DataModelScopeKind,
     pub scope_id: Uuid,
     pub physical_table_name: String,

@@ -40,8 +40,8 @@ impl RuntimeModelRegistry {
         let models = models
             .into_iter()
             .map(|metadata| RegisteredRuntimeModel {
+                availability: RuntimeDataModelAvailability::from_status(metadata.status),
                 metadata,
-                availability: RuntimeDataModelAvailability::Available,
             })
             .collect();
         self.rebuild_registered(models);
@@ -50,9 +50,12 @@ impl RuntimeModelRegistry {
     pub fn rebuild_with_status(&self, models: Vec<(ModelMetadata, domain::DataModelStatus)>) {
         let models = models
             .into_iter()
-            .map(|(metadata, status)| RegisteredRuntimeModel {
-                metadata,
-                availability: RuntimeDataModelAvailability::from_status(status),
+            .map(|(mut metadata, status)| {
+                metadata.status = status;
+                RegisteredRuntimeModel {
+                    metadata,
+                    availability: RuntimeDataModelAvailability::from_status(status),
+                }
             })
             .collect();
         self.rebuild_registered(models);
@@ -71,13 +74,15 @@ impl RuntimeModelRegistry {
     }
 
     pub fn upsert(&self, model: ModelMetadata) {
+        let availability = RuntimeDataModelAvailability::from_status(model.status);
         self.upsert_registered(RegisteredRuntimeModel {
             metadata: model,
-            availability: RuntimeDataModelAvailability::Available,
+            availability,
         });
     }
 
-    pub fn upsert_with_status(&self, model: ModelMetadata, status: domain::DataModelStatus) {
+    pub fn upsert_with_status(&self, mut model: ModelMetadata, status: domain::DataModelStatus) {
+        model.status = status;
         self.upsert_registered(RegisteredRuntimeModel {
             metadata: model,
             availability: RuntimeDataModelAvailability::from_status(status),

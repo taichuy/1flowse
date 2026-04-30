@@ -1,4 +1,6 @@
-use control_plane::ports::{CreateModelDefinitionInput, ModelDefinitionRepository};
+use control_plane::ports::{
+    CreateModelDefinitionInput, ModelDefinitionRepository, UpdateModelDefinitionStatusInput,
+};
 use domain::DataModelScopeKind;
 use sqlx::PgPool;
 use storage_postgres::{connect, run_migrations, PgControlPlaneStore};
@@ -74,4 +76,68 @@ async fn list_runtime_model_metadata_marks_model_unavailable_when_table_is_missi
     let metadata = store.list_runtime_model_metadata().await.unwrap();
 
     assert!(!metadata.iter().any(|model| model.model_id == created.id));
+}
+
+#[tokio::test]
+async fn list_runtime_model_metadata_preserves_data_model_status() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let tenant_id: Uuid = sqlx::query_scalar("select id from tenants where code = 'root-tenant'")
+        .fetch_one(store.pool())
+        .await
+        .unwrap();
+    let workspace_id = Uuid::now_v7();
+    let workspace_name = format!("Runtime Status {}", workspace_id.simple());
+    let model_suffix = Uuid::now_v7().simple().to_string();
+    let model_code = format!("draft_{}", &model_suffix[..8]);
+
+    sqlx::query(
+        "insert into workspaces (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
+    )
+    .bind(workspace_id)
+    .bind(tenant_id)
+    .bind(&workspace_name)
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    let created = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: None,
+            status: domain::DataModelStatus::Published,
+            api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            protection: domain::DataModelProtection::default(),
+            code: model_code.clone(),
+            title: "Draft Orders".into(),
+        },
+    )
+    .await
+    .unwrap();
+    ModelDefinitionRepository::update_model_definition_status(
+        &store,
+        &UpdateModelDefinitionStatusInput {
+            actor_user_id: Uuid::nil(),
+            workspace_id,
+            model_id: created.id,
+            status: domain::DataModelStatus::Draft,
+            api_exposure_status: domain::ApiExposureStatus::Draft,
+        },
+    )
+    .await
+    .unwrap();
+
+    let metadata = store
+        .list_runtime_model_metadata()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|model| model.model_id == created.id)
+        .unwrap();
+
+    assert_eq!(metadata.status, domain::DataModelStatus::Draft);
 }

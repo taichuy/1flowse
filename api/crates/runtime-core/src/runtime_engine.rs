@@ -525,6 +525,7 @@ fn test_model_metadata() -> ModelMetadata {
     ModelMetadata {
         model_id: Uuid::nil(),
         model_code: "orders".into(),
+        status: domain::DataModelStatus::Published,
         scope_kind: domain::DataModelScopeKind::Workspace,
         scope_id: Uuid::nil(),
         physical_table_name: "rtm_workspace_demo_orders".into(),

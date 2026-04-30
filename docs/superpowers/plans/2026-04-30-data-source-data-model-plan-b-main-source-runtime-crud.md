@@ -72,6 +72,16 @@ cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_engine_tests
 
 Both passed after the red test run failed on the missing status-aware registry API and runtime error variants.
 
+Plan B Task 1 production sync gap fix:
+
+```bash
+cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_model_registry_tests
+cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_engine_tests
+cargo test --manifest-path api/Cargo.toml -p storage-postgres runtime_registry_health_tests
+```
+
+The first red run failed because `ModelMetadata` had no `status` field. The fix makes `ModelMetadata` carry `DataModelStatus`, has `storage-postgres` preserve it in `list_runtime_model_metadata()`, and makes the production `RuntimeModelRegistry::rebuild(Vec<ModelMetadata>)` / `upsert(ModelMetadata)` derive runtime availability from `metadata.status` instead of defaulting every model to `Available`.
+
 ### Task 2: main_source Physical Schema Rules
 
 **Files:**
