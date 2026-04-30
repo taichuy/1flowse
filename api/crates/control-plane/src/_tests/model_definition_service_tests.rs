@@ -611,41 +611,53 @@ async fn api_key_readiness_treats_system_all_as_not_ready_for_non_root_runtime_a
 }
 
 #[tokio::test]
-async fn external_model_without_scope_filter_capability_is_unsafe_even_with_ready_api_key_path() {
-    let data_source_instance_id = Uuid::now_v7();
-    let repository = InMemoryModelDefinitionRepository::with_data_source_defaults(
-        data_source_instance_id,
-        DataSourceDefaults::default(),
-    );
+async fn external_model_missing_scope_filter_capability_is_unsafe_without_or_with_api_key_path() {
+    let model_id = Uuid::now_v7();
+    let mut model = model_in_workspace(model_id, Uuid::nil());
+    model.data_source_instance_id = Some(Uuid::now_v7());
+    model.source_kind = domain::DataModelSourceKind::ExternalSource;
+    model.external_resource_key = Some("contacts".into());
+    model.external_capability_snapshot = Some(json!({
+        "supports_owner_filter": false,
+        "supports_write": false
+    }));
+    let repository =
+        ScopedModelDefinitionRepository::new(ActorContext::root(Uuid::nil(), Uuid::nil(), "root"))
+            .with_model(model)
+            .with_grant(scope_grant(
+                Uuid::now_v7(),
+                model_id,
+                DataModelScopeKind::Workspace,
+                Uuid::nil(),
+            ));
     let service = ModelDefinitionService::new(repository.clone());
-    let created = service
-        .create_model(CreateModelDefinitionCommand {
-            actor_user_id: Uuid::nil(),
+
+    let unsafe_without_key = service.get_model(Uuid::nil(), model_id).await.unwrap();
+
+    assert_eq!(
+        unsafe_without_key.api_exposure_status,
+        ApiExposureStatus::UnsafeExternalSource
+    );
+
+    repository
+        .api_key_readiness
+        .lock()
+        .expect("api key readiness lock poisoned")
+        .push(ApiKeyDataModelReadinessRecord {
+            api_key_id: Uuid::now_v7(),
+            data_model_id: model_id,
             scope_kind: DataModelScopeKind::Workspace,
-            data_source_instance_id: Some(data_source_instance_id),
-            external_resource_key: Some("contacts".into()),
-            code: "unsafe_external_contacts".into(),
-            title: "Unsafe External Contacts".into(),
-            status: None,
-        })
-        .await
-        .unwrap();
+            scope_id: Uuid::nil(),
+            key_enabled: true,
+            expires_at: None,
+            allow_list: true,
+            allow_get: true,
+            allow_create: false,
+            allow_update: false,
+            allow_delete: false,
+        });
 
-    repository.add_api_key_readiness(ApiKeyDataModelReadinessRecord {
-        api_key_id: Uuid::now_v7(),
-        data_model_id: created.id,
-        scope_kind: DataModelScopeKind::Workspace,
-        scope_id: Uuid::nil(),
-        key_enabled: true,
-        expires_at: None,
-        allow_list: true,
-        allow_get: true,
-        allow_create: false,
-        allow_update: false,
-        allow_delete: false,
-    });
-
-    let effective = service.get_model(Uuid::nil(), created.id).await.unwrap();
+    let effective = service.get_model(Uuid::nil(), model_id).await.unwrap();
 
     assert_eq!(
         effective.api_exposure_status,

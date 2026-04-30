@@ -820,12 +820,12 @@ where
             domain::DataModelStatus::Published => {}
         }
 
+        if external_source_is_unsafe(model) {
+            return Ok(domain::ApiExposureStatus::UnsafeExternalSource);
+        }
         let readiness = self.api_exposure_readiness(model).await?;
         if !readiness.has_active_api_key {
             return Ok(domain::ApiExposureStatus::PublishedNotExposed);
-        }
-        if external_source_is_unsafe(model) {
-            return Ok(domain::ApiExposureStatus::UnsafeExternalSource);
         }
         if readiness.has_ready_path {
             return Ok(domain::ApiExposureStatus::ApiExposedReady);
