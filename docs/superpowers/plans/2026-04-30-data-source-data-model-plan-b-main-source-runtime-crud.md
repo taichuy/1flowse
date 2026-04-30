@@ -213,6 +213,25 @@ cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes
 
 The route DTO now accepts optional create status and PATCH status while routing status changes through `update_model_status`. Console responses expose `status`, `api_exposure_status`, and status-derived `runtime_availability`. Runtime model status errors map to `model_not_published`, `model_disabled`, and `model_broken`; no Plan C grant path was implemented.
 
+Plan B Task 3 code quality feedback fix:
+
+```bash
+cargo test --manifest-path api/Cargo.toml -p control-plane create_model_persists_explicit_draft_status_in_initial_create_path
+cargo test --manifest-path api/Cargo.toml -p api-server create_model_route_persists_draft_status_atomically_without_manage_permission
+cargo test --manifest-path api/Cargo.toml -p api-server create_model_route_rejects_invalid_status_without_creating_model
+```
+
+The red service run failed because `CreateModelDefinitionCommand` had no create-time status field. The route-level regression covered a user with `state_model.create.all` and `state_model.view.all` but no manage permission creating `status: draft`; the previous two-phase route would fail the second status update and leave a published model available to runtime. The fix adds optional create status to the create command, persists the final status in the initial `create_model_definition` call, normalizes `api_exposure_status` from that final status plus data source defaults, and keeps raw route `api_exposure_status: api_exposed_ready` ignored by the create DTO. Invalid create status returns `400 status` before create and list verification confirms no matching model was inserted.
+
+Green verification for the feedback fix:
+
+```bash
+cargo fmt --manifest-path api/Cargo.toml --all
+cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests
+cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes
+cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes
+```
+
 ### Task 4: Plan B Verification And Commit
 
 - [ ] **Step 1: Format**

@@ -49,6 +49,7 @@ async fn create_model_rebuilds_runtime_registry_once() {
             data_source_instance_id: None,
             code: "orders".into(),
             title: "Orders".into(),
+            status: None,
         })
         .await
         .unwrap();

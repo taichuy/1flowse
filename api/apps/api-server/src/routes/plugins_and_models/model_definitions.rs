@@ -275,25 +275,16 @@ pub async fn create_model(
     let requested_status = body.status.as_deref().map(parse_model_status).transpose()?;
 
     let mutation_service = mutation_service(&state);
-    let mut model = mutation_service
+    let model = mutation_service
         .create_model(CreateModelDefinitionCommand {
             actor_user_id: context.user.id,
             scope_kind,
             data_source_instance_id: None,
             code: body.code,
             title: body.title,
+            status: requested_status,
         })
         .await?;
-    if let Some(status) = requested_status {
-        model = mutation_service
-            .update_model_status(UpdateModelDefinitionStatusCommand {
-                actor_user_id: context.user.id,
-                model_id: model.id,
-                status,
-                api_exposure_status: domain::ApiExposureStatus::default_for_status(status),
-            })
-            .await?;
-    }
 
     Ok((
         StatusCode::CREATED,

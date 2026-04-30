@@ -25,6 +25,7 @@ pub struct CreateModelDefinitionCommand {
     pub data_source_instance_id: Option<Uuid>,
     pub code: String,
     pub title: String,
+    pub status: Option<domain::DataModelStatus>,
 }
 
 pub struct PublishModelCommand {
@@ -153,10 +154,9 @@ where
             }
             None => domain::DataSourceDefaults::default(),
         };
-        let api_exposure_status = normalize_api_exposure_for_status(
-            defaults.data_model_status,
-            defaults.api_exposure_status,
-        )?;
+        let status = command.status.unwrap_or(defaults.data_model_status);
+        let api_exposure_status =
+            normalize_api_exposure_for_status(status, defaults.api_exposure_status)?;
 
         let model = self
             .repository
@@ -167,7 +167,7 @@ where
                 data_source_instance_id: command.data_source_instance_id,
                 code: command.code,
                 title: command.title,
-                status: defaults.data_model_status,
+                status,
                 api_exposure_status,
                 protection: domain::DataModelProtection::default(),
             })

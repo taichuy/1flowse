@@ -242,6 +242,7 @@ async fn add_field_returns_immediately_usable_metadata_without_publish_step() {
             data_source_instance_id: None,
             code: "orders".into(),
             title: "Orders".into(),
+            status: None,
         })
         .await
         .unwrap();
@@ -280,6 +281,7 @@ async fn delete_model_requires_explicit_confirmation() {
             data_source_instance_id: None,
             code: "orders".into(),
             title: "Orders".into(),
+            status: None,
         })
         .await
         .unwrap();
@@ -307,6 +309,7 @@ async fn create_system_model_uses_fixed_system_scope_id() {
             data_source_instance_id: None,
             code: "system_orders".into(),
             title: "System Orders".into(),
+            status: None,
         })
         .await
         .unwrap();
@@ -326,6 +329,7 @@ async fn create_workspace_model_uses_current_workspace_id() {
             data_source_instance_id: None,
             code: "workspace_orders".into(),
             title: "Workspace Orders".into(),
+            status: None,
         })
         .await
         .unwrap();
@@ -345,6 +349,7 @@ async fn create_model_defaults_to_main_source_published_not_exposed() {
             data_source_instance_id: None,
             code: "main_source_orders".into(),
             title: "Main Source Orders".into(),
+            status: None,
         })
         .await
         .unwrap();
@@ -355,6 +360,26 @@ async fn create_model_defaults_to_main_source_published_not_exposed() {
         ApiExposureStatus::PublishedNotExposed
     );
     assert_eq!(created.data_source_instance_id, None);
+}
+
+#[tokio::test]
+async fn create_model_persists_explicit_draft_status_in_initial_create_path() {
+    let service = ModelDefinitionService::for_tests();
+
+    let created = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
+            code: "explicit_draft_orders".into(),
+            title: "Explicit Draft Orders".into(),
+            status: Some(DataModelStatus::Draft),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(created.status, DataModelStatus::Draft);
+    assert_eq!(created.api_exposure_status, ApiExposureStatus::Draft);
 }
 
 #[tokio::test]
@@ -376,6 +401,7 @@ async fn create_model_inherits_data_source_defaults_when_instance_is_selected() 
             data_source_instance_id: Some(data_source_instance_id),
             code: "external_contacts".into(),
             title: "External Contacts".into(),
+            status: None,
         })
         .await
         .unwrap();
@@ -413,6 +439,7 @@ async fn create_model_rejects_data_source_defaults_outside_actor_workspace() {
             data_source_instance_id: Some(data_source_instance_id),
             code: "external_contacts".into(),
             title: "External Contacts".into(),
+            status: None,
         })
         .await
         .unwrap_err();
@@ -430,6 +457,7 @@ async fn update_model_status_forces_draft_exposure_and_blocks_direct_ready() {
             data_source_instance_id: None,
             code: "status_orders".into(),
             title: "Status Orders".into(),
+            status: None,
         })
         .await
         .unwrap();
