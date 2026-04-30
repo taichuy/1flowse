@@ -144,6 +144,11 @@ Task 2 validation record, 2026-04-30:
   - `git diff --check`
 - Scope note: Task 2 implements API Key lifecycle storage, hashed token persistence, console creation route, Bearer runtime auth, action permissions, persisted scope grant enforcement, owner filtering, and system/workspace scope grant lookup. Exposure readiness proof and full audit calculation remain for Task 3.
 
+Task 2 spec review concern fix, 2026-04-30:
+
+- OpenAPI concern fixed: `/api/console/api-keys` create route is now registered in `api-server` OpenAPI paths, with API Key create request/response and permission DTO schemas registered in components.
+- Regression coverage: `openapi_alignment` now asserts the API Key path and DTO schemas are present.
+
 ### Task 3: Exposure Readiness Calculation
 
 **Files:**

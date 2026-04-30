@@ -73,6 +73,7 @@ async fn openapi_contains_runtime_and_model_detail_routes() {
         "/api/console/model-providers/catalog",
         "/api/console/model-providers/options",
         "/api/console/system/runtime-profile",
+        "/api/console/api-keys",
         "/api/runtime/models/{model_code}/records",
         "/api/runtime/models/{model_code}/records/{id}",
         "/api/console/session/actions/revoke-all",
@@ -83,6 +84,37 @@ async fn openapi_contains_runtime_and_model_detail_routes() {
             "expected openapi to contain path {route}, got: {:?}",
             paths.keys().collect::<Vec<_>>()
         );
+    }
+}
+
+#[tokio::test]
+async fn openapi_contains_api_key_create_schemas() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/openapi.json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    let components = payload["components"]["schemas"]
+        .as_object()
+        .cloned()
+        .unwrap_or_default();
+
+    for schema in [
+        "CreateApiKeyRequest",
+        "CreateApiKeyResponse",
+        "ApiKeyDataModelPermissionRequest",
+        "ApiKeyDataModelPermissionResponse",
+    ] {
+        assert!(components.contains_key(schema), "missing schema {schema}");
     }
 }
 
