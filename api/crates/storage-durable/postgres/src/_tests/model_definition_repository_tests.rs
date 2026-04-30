@@ -248,6 +248,7 @@ async fn model_definition_repository_persists_status_exposure_owner_and_scope_gr
         &store,
         &UpdateModelDefinitionStatusInput {
             actor_user_id: Uuid::nil(),
+            workspace_id,
             model_id: created.id,
             status: DataModelStatus::Published,
             api_exposure_status: ApiExposureStatus::PublishedNotExposed,
@@ -435,5 +436,114 @@ async fn model_definition_repository_allows_duplicate_code_across_data_sources_i
     assert_ne!(
         first.data_source_instance_id,
         second.data_source_instance_id
+    );
+}
+
+#[tokio::test]
+async fn model_definition_repository_reads_data_source_defaults_only_inside_workspace() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let (workspace_id, _actor_user_id, _installation_id) =
+        seed_data_source_workspace(&store, "defaults-current-workspace", "current_source").await;
+    let (foreign_workspace_id, foreign_actor_user_id, foreign_installation_id) =
+        seed_data_source_workspace(&store, "defaults-foreign-workspace", "foreign_source").await;
+    let foreign_data_source_id = seed_data_source_instance(
+        &store,
+        foreign_workspace_id,
+        foreign_actor_user_id,
+        foreign_installation_id,
+        "foreign_source",
+        "Foreign Source",
+    )
+    .await;
+
+    let visible = ModelDefinitionRepository::get_data_source_defaults(
+        &store,
+        foreign_workspace_id,
+        foreign_data_source_id,
+    )
+    .await
+    .unwrap();
+    assert_eq!(visible.data_model_status, DataModelStatus::Published);
+
+    let foreign = ModelDefinitionRepository::get_data_source_defaults(
+        &store,
+        workspace_id,
+        foreign_data_source_id,
+    )
+    .await;
+    assert!(foreign.is_err());
+}
+
+#[tokio::test]
+async fn model_definition_repository_status_update_requires_visible_workspace() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let workspace_id = Uuid::now_v7();
+    let foreign_workspace_id = Uuid::now_v7();
+    let tenant_id = root_tenant_id(&store).await;
+    sqlx::query(
+        "insert into workspaces (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
+    )
+    .bind(workspace_id)
+    .bind(tenant_id)
+    .bind(format!("Current Workspace {}", workspace_id.simple()))
+    .execute(store.pool())
+    .await
+    .unwrap();
+    sqlx::query(
+        "insert into workspaces (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
+    )
+    .bind(foreign_workspace_id)
+    .bind(tenant_id)
+    .bind(format!("Foreign Workspace {}", foreign_workspace_id.simple()))
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    let foreign_model = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: foreign_workspace_id,
+            data_source_instance_id: None,
+            code: format!("foreign_orders_{}", Uuid::now_v7().simple()),
+            title: "Foreign Orders".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let update = ModelDefinitionRepository::update_model_definition_status(
+        &store,
+        &UpdateModelDefinitionStatusInput {
+            actor_user_id: Uuid::nil(),
+            workspace_id,
+            model_id: foreign_model.id,
+            status: DataModelStatus::Draft,
+            api_exposure_status: ApiExposureStatus::Draft,
+        },
+    )
+    .await;
+    assert!(update.is_err());
+
+    let stored = ModelDefinitionRepository::get_model_definition(
+        &store,
+        foreign_workspace_id,
+        foreign_model.id,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(stored.status, DataModelStatus::Published);
+    assert_eq!(
+        stored.api_exposure_status,
+        ApiExposureStatus::PublishedNotExposed
     );
 }

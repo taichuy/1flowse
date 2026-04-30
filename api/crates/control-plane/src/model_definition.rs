@@ -148,7 +148,7 @@ where
         let defaults = match command.data_source_instance_id {
             Some(data_source_instance_id) => {
                 self.repository
-                    .get_data_source_defaults(data_source_instance_id)
+                    .get_data_source_defaults(actor.current_workspace_id, data_source_instance_id)
                     .await?
             }
             None => domain::DataSourceDefaults::default(),
@@ -195,6 +195,10 @@ where
             .load_actor_context_for_user(command.actor_user_id)
             .await?;
         ensure_state_model_permission(&actor, "manage")?;
+        self.repository
+            .get_model_definition(actor.current_workspace_id, command.model_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
 
         let api_exposure_status =
             normalize_api_exposure_for_status(command.status, command.api_exposure_status)?;
@@ -202,6 +206,7 @@ where
             .repository
             .update_model_definition_status(&UpdateModelDefinitionStatusInput {
                 actor_user_id: command.actor_user_id,
+                workspace_id: actor.current_workspace_id,
                 model_id: command.model_id,
                 status: command.status,
                 api_exposure_status,
@@ -445,7 +450,7 @@ where
 #[derive(Default, Clone)]
 pub struct InMemoryModelDefinitionRepository {
     models: Arc<Mutex<HashMap<Uuid, domain::ModelDefinitionRecord>>>,
-    data_source_defaults: Arc<Mutex<HashMap<Uuid, domain::DataSourceDefaults>>>,
+    data_source_defaults: Arc<Mutex<HashMap<(Uuid, Uuid), domain::DataSourceDefaults>>>,
 }
 
 impl InMemoryModelDefinitionRepository {
@@ -456,7 +461,7 @@ impl InMemoryModelDefinitionRepository {
         Self {
             models: Arc::default(),
             data_source_defaults: Arc::new(Mutex::new(HashMap::from([(
-                data_source_instance_id,
+                (Uuid::nil(), data_source_instance_id),
                 defaults,
             )]))),
         }
@@ -513,21 +518,29 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
 
     async fn get_model_definition(
         &self,
-        _workspace_id: Uuid,
+        workspace_id: Uuid,
         model_id: Uuid,
     ) -> Result<Option<domain::ModelDefinitionRecord>> {
         let models = self.models.lock().expect("in-memory model lock poisoned");
-        Ok(models.get(&model_id).cloned())
+        Ok(models
+            .get(&model_id)
+            .filter(|model| {
+                workspace_id.is_nil()
+                    || !matches!(model.scope_kind, DataModelScopeKind::Workspace)
+                    || model.scope_id == workspace_id
+            })
+            .cloned())
     }
 
     async fn get_data_source_defaults(
         &self,
+        workspace_id: Uuid,
         data_source_instance_id: Uuid,
     ) -> Result<domain::DataSourceDefaults> {
         self.data_source_defaults
             .lock()
             .expect("in-memory data source defaults lock poisoned")
-            .get(&data_source_instance_id)
+            .get(&(workspace_id, data_source_instance_id))
             .copied()
             .ok_or_else(|| ControlPlaneError::NotFound("data_source_instance").into())
     }
@@ -578,6 +591,11 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
         let mut models = self.models.lock().expect("in-memory model lock poisoned");
         let model = models
             .get_mut(&input.model_id)
+            .filter(|model| {
+                input.workspace_id.is_nil()
+                    || !matches!(model.scope_kind, DataModelScopeKind::Workspace)
+                    || model.scope_id == input.workspace_id
+            })
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
         model.status = input.status;
         model.api_exposure_status = input.api_exposure_status;

@@ -86,7 +86,7 @@ fn owner_kind_values_are_stable_db_strings() {
         DataModelOwnerKind::RuntimeExtension
     );
     assert_eq!(
-        DataModelOwnerKind::from_db("data_source"),
+        DataModelOwnerKind::from_db("unknown_owner"),
         DataModelOwnerKind::Core
     );
 }

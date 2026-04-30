@@ -2,12 +2,235 @@ use control_plane::model_definition::{
     AddModelFieldCommand, CreateModelDefinitionCommand, DeleteModelDefinitionCommand,
     InMemoryModelDefinitionRepository, ModelDefinitionService, UpdateModelDefinitionStatusCommand,
 };
+use control_plane::ports::{
+    AddModelFieldInput, CreateModelDefinitionInput, ModelDefinitionRepository,
+    UpdateModelDefinitionInput, UpdateModelDefinitionStatusInput, UpdateModelFieldInput,
+};
 use domain::{
-    ApiExposureStatus, DataModelScopeKind, DataModelStatus, DataSourceDefaults, ModelFieldKind,
+    ActorContext, ApiExposureStatus, AuditLogRecord, DataModelProtection, DataModelScopeKind,
+    DataModelStatus, DataSourceDefaults, ModelDefinitionRecord, ModelFieldKind, ModelFieldRecord,
     SYSTEM_SCOPE_ID,
 };
 use serde_json::json;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 use uuid::Uuid;
+
+#[derive(Clone)]
+struct ScopedModelDefinitionRepository {
+    actor: ActorContext,
+    models: Arc<Mutex<HashMap<Uuid, ModelDefinitionRecord>>>,
+    data_source_defaults: Arc<Mutex<HashMap<(Uuid, Uuid), DataSourceDefaults>>>,
+}
+
+impl ScopedModelDefinitionRepository {
+    fn new(actor: ActorContext) -> Self {
+        Self {
+            actor,
+            models: Arc::default(),
+            data_source_defaults: Arc::default(),
+        }
+    }
+
+    fn with_model(self, model: ModelDefinitionRecord) -> Self {
+        self.models
+            .lock()
+            .expect("model lock poisoned")
+            .insert(model.id, model);
+        self
+    }
+
+    fn with_data_source_defaults(
+        self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+        defaults: DataSourceDefaults,
+    ) -> Self {
+        self.data_source_defaults
+            .lock()
+            .expect("data source defaults lock poisoned")
+            .insert((workspace_id, data_source_instance_id), defaults);
+        self
+    }
+}
+
+#[async_trait::async_trait]
+impl ModelDefinitionRepository for ScopedModelDefinitionRepository {
+    async fn load_actor_context_for_user(
+        &self,
+        _actor_user_id: Uuid,
+    ) -> anyhow::Result<ActorContext> {
+        Ok(self.actor.clone())
+    }
+
+    async fn list_model_definitions(
+        &self,
+        _workspace_id: Uuid,
+    ) -> anyhow::Result<Vec<ModelDefinitionRecord>> {
+        Ok(self
+            .models
+            .lock()
+            .expect("model lock poisoned")
+            .values()
+            .cloned()
+            .collect())
+    }
+
+    async fn get_model_definition(
+        &self,
+        workspace_id: Uuid,
+        model_id: Uuid,
+    ) -> anyhow::Result<Option<ModelDefinitionRecord>> {
+        Ok(self
+            .models
+            .lock()
+            .expect("model lock poisoned")
+            .get(&model_id)
+            .filter(|model| {
+                workspace_id.is_nil()
+                    || !matches!(model.scope_kind, DataModelScopeKind::Workspace)
+                    || model.scope_id == workspace_id
+            })
+            .cloned())
+    }
+
+    async fn get_data_source_defaults(
+        &self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+    ) -> anyhow::Result<DataSourceDefaults> {
+        self.data_source_defaults
+            .lock()
+            .expect("data source defaults lock poisoned")
+            .get(&(workspace_id, data_source_instance_id))
+            .copied()
+            .ok_or_else(|| {
+                control_plane::errors::ControlPlaneError::NotFound("data_source_instance").into()
+            })
+    }
+
+    async fn create_model_definition(
+        &self,
+        input: &CreateModelDefinitionInput,
+    ) -> anyhow::Result<ModelDefinitionRecord> {
+        let model = ModelDefinitionRecord {
+            id: Uuid::now_v7(),
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            data_source_instance_id: input.data_source_instance_id,
+            code: input.code.clone(),
+            title: input.title.clone(),
+            physical_table_name: format!("rtm_workspace_{}", input.code),
+            acl_namespace: format!("state_model.{}", input.code),
+            audit_namespace: format!("audit.state_model.{}", input.code),
+            fields: vec![],
+            availability_status: domain::MetadataAvailabilityStatus::Available,
+            status: input.status,
+            api_exposure_status: input.api_exposure_status,
+            protection: input.protection.clone(),
+        };
+        self.models
+            .lock()
+            .expect("model lock poisoned")
+            .insert(model.id, model.clone());
+        Ok(model)
+    }
+
+    async fn update_model_definition(
+        &self,
+        _input: &UpdateModelDefinitionInput,
+    ) -> anyhow::Result<ModelDefinitionRecord> {
+        unimplemented!("not needed for scoped service tests")
+    }
+
+    async fn update_model_definition_status(
+        &self,
+        input: &UpdateModelDefinitionStatusInput,
+    ) -> anyhow::Result<ModelDefinitionRecord> {
+        let mut models = self.models.lock().expect("model lock poisoned");
+        let model = models
+            .get_mut(&input.model_id)
+            .filter(|model| {
+                input.workspace_id.is_nil()
+                    || !matches!(model.scope_kind, DataModelScopeKind::Workspace)
+                    || model.scope_id == input.workspace_id
+            })
+            .ok_or(control_plane::errors::ControlPlaneError::NotFound(
+                "model_definition",
+            ))?;
+        model.status = input.status;
+        model.api_exposure_status = input.api_exposure_status;
+        Ok(model.clone())
+    }
+
+    async fn add_model_field(
+        &self,
+        _input: &AddModelFieldInput,
+    ) -> anyhow::Result<ModelFieldRecord> {
+        unimplemented!("not needed for scoped service tests")
+    }
+
+    async fn update_model_field(
+        &self,
+        _input: &UpdateModelFieldInput,
+    ) -> anyhow::Result<ModelFieldRecord> {
+        unimplemented!("not needed for scoped service tests")
+    }
+
+    async fn delete_model_definition(
+        &self,
+        _actor_user_id: Uuid,
+        _model_id: Uuid,
+    ) -> anyhow::Result<()> {
+        unimplemented!("not needed for scoped service tests")
+    }
+
+    async fn delete_model_field(
+        &self,
+        _actor_user_id: Uuid,
+        _model_id: Uuid,
+        _field_id: Uuid,
+    ) -> anyhow::Result<()> {
+        unimplemented!("not needed for scoped service tests")
+    }
+
+    async fn publish_model_definition(
+        &self,
+        _actor_user_id: Uuid,
+        _model_id: Uuid,
+    ) -> anyhow::Result<ModelDefinitionRecord> {
+        unimplemented!("not needed for scoped service tests")
+    }
+
+    async fn append_audit_log(&self, _event: &AuditLogRecord) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+fn actor_in_workspace(actor_user_id: Uuid, workspace_id: Uuid) -> ActorContext {
+    ActorContext::root(actor_user_id, workspace_id, "root")
+}
+
+fn model_in_workspace(model_id: Uuid, workspace_id: Uuid) -> ModelDefinitionRecord {
+    ModelDefinitionRecord {
+        id: model_id,
+        scope_kind: DataModelScopeKind::Workspace,
+        scope_id: workspace_id,
+        code: "foreign_orders".into(),
+        title: "Foreign Orders".into(),
+        physical_table_name: "rtm_workspace_foreign_orders".into(),
+        acl_namespace: "state_model.foreign_orders".into(),
+        audit_namespace: "audit.state_model.foreign_orders".into(),
+        fields: vec![],
+        availability_status: domain::MetadataAvailabilityStatus::Available,
+        data_source_instance_id: None,
+        status: DataModelStatus::Published,
+        api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+        protection: DataModelProtection::default(),
+    }
+}
 
 #[tokio::test]
 async fn add_field_returns_immediately_usable_metadata_without_publish_step() {
@@ -166,6 +389,38 @@ async fn create_model_inherits_data_source_defaults_when_instance_is_selected() 
 }
 
 #[tokio::test]
+async fn create_model_rejects_data_source_defaults_outside_actor_workspace() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let foreign_workspace_id = Uuid::now_v7();
+    let data_source_instance_id = Uuid::now_v7();
+    let repository =
+        ScopedModelDefinitionRepository::new(actor_in_workspace(actor_user_id, actor_workspace_id))
+            .with_data_source_defaults(
+                foreign_workspace_id,
+                data_source_instance_id,
+                DataSourceDefaults {
+                    data_model_status: DataModelStatus::Draft,
+                    api_exposure_status: ApiExposureStatus::Draft,
+                },
+            );
+    let service = ModelDefinitionService::new(repository);
+
+    let error = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: Some(data_source_instance_id),
+            code: "external_contacts".into(),
+            title: "External Contacts".into(),
+        })
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("data_source_instance"));
+}
+
+#[tokio::test]
 async fn update_model_status_forces_draft_exposure_and_blocks_direct_ready() {
     let service = ModelDefinitionService::for_tests();
     let created = service
@@ -202,4 +457,40 @@ async fn update_model_status_forces_draft_exposure_and_blocks_direct_ready() {
         .unwrap_err();
 
     assert!(direct_ready.to_string().contains("api_exposure_status"));
+}
+
+#[tokio::test]
+async fn update_model_status_rejects_model_outside_actor_workspace() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let foreign_workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let repository =
+        ScopedModelDefinitionRepository::new(actor_in_workspace(actor_user_id, actor_workspace_id))
+            .with_model(model_in_workspace(model_id, foreign_workspace_id));
+    let service = ModelDefinitionService::new(repository.clone());
+
+    let error = service
+        .update_model_status(UpdateModelDefinitionStatusCommand {
+            actor_user_id,
+            model_id,
+            status: DataModelStatus::Draft,
+            api_exposure_status: ApiExposureStatus::Draft,
+        })
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("model_definition"));
+    let stored = repository
+        .models
+        .lock()
+        .expect("model lock poisoned")
+        .get(&model_id)
+        .cloned()
+        .unwrap();
+    assert_eq!(stored.status, DataModelStatus::Published);
+    assert_eq!(
+        stored.api_exposure_status,
+        ApiExposureStatus::PublishedNotExposed
+    );
 }

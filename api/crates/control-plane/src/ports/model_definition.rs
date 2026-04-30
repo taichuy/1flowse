@@ -23,6 +23,7 @@ pub struct UpdateModelDefinitionInput {
 #[derive(Debug, Clone)]
 pub struct UpdateModelDefinitionStatusInput {
     pub actor_user_id: Uuid,
+    pub workspace_id: Uuid,
     pub model_id: Uuid,
     pub status: domain::DataModelStatus,
     pub api_exposure_status: domain::ApiExposureStatus,
@@ -95,6 +96,7 @@ pub trait ModelDefinitionRepository: Send + Sync {
     ) -> anyhow::Result<Option<ModelDefinitionRecord>>;
     async fn get_data_source_defaults(
         &self,
+        _workspace_id: Uuid,
         _data_source_instance_id: Uuid,
     ) -> anyhow::Result<domain::DataSourceDefaults> {
         anyhow::bail!("get_data_source_defaults is not implemented")

@@ -128,6 +128,7 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
 
     async fn get_data_source_defaults(
         &self,
+        workspace_id: Uuid,
         data_source_instance_id: Uuid,
     ) -> Result<domain::DataSourceDefaults> {
         let row = sqlx::query(
@@ -135,9 +136,11 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
             select default_data_model_status, default_api_exposure_status
             from data_source_instances
             where id = $1
+              and workspace_id = $2
             "#,
         )
         .bind(data_source_instance_id)
+        .bind(workspace_id)
         .fetch_optional(self.pool())
         .await?
         .ok_or(ControlPlaneError::NotFound("data_source_instance"))?;
@@ -312,6 +315,11 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                 updated_by = $4,
                 updated_at = now()
             where id = $1
+              and (
+                  $5 = '00000000-0000-0000-0000-000000000000'::uuid
+                  or scope_kind <> 'workspace'
+                  or scope_id = $5
+              )
             returning
                 id,
                 scope_kind,
@@ -334,6 +342,7 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
         .bind(input.status.as_str())
         .bind(input.api_exposure_status.as_str())
         .bind(nullable_actor_user_id(input.actor_user_id))
+        .bind(input.workspace_id)
         .fetch_optional(self.pool())
         .await?
         .ok_or(ControlPlaneError::NotFound("model_definition"))?;
