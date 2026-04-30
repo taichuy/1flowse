@@ -13,14 +13,16 @@ use crate::{
     audit::audit_log,
     errors::ControlPlaneError,
     ports::{
-        AddModelFieldInput, CreateModelDefinitionInput, ModelDefinitionRepository,
-        UpdateModelDefinitionInput, UpdateModelFieldInput,
+        AddModelFieldInput, CreateModelDefinitionInput, CreateScopeDataModelGrantInput,
+        ModelDefinitionRepository, UpdateModelDefinitionInput, UpdateModelDefinitionStatusInput,
+        UpdateModelFieldInput, UpdateScopeDataModelGrantInput,
     },
 };
 
 pub struct CreateModelDefinitionCommand {
     pub actor_user_id: Uuid,
     pub scope_kind: DataModelScopeKind,
+    pub data_source_instance_id: Option<Uuid>,
     pub code: String,
     pub title: String,
 }
@@ -34,6 +36,13 @@ pub struct UpdateModelDefinitionCommand {
     pub actor_user_id: Uuid,
     pub model_id: Uuid,
     pub title: String,
+}
+
+pub struct UpdateModelDefinitionStatusCommand {
+    pub actor_user_id: Uuid,
+    pub model_id: Uuid,
+    pub status: domain::DataModelStatus,
+    pub api_exposure_status: domain::ApiExposureStatus,
 }
 
 pub struct AddModelFieldCommand {
@@ -136,6 +145,18 @@ where
             DataModelScopeKind::Workspace => actor.current_workspace_id,
             DataModelScopeKind::System => domain::SYSTEM_SCOPE_ID,
         };
+        let defaults = match command.data_source_instance_id {
+            Some(data_source_instance_id) => {
+                self.repository
+                    .get_data_source_defaults(data_source_instance_id)
+                    .await?
+            }
+            None => domain::DataSourceDefaults::default(),
+        };
+        let api_exposure_status = normalize_api_exposure_for_status(
+            defaults.data_model_status,
+            defaults.api_exposure_status,
+        )?;
 
         let model = self
             .repository
@@ -143,8 +164,12 @@ where
                 actor_user_id: command.actor_user_id,
                 scope_kind: command.scope_kind,
                 scope_id,
+                data_source_instance_id: command.data_source_instance_id,
                 code: command.code,
                 title: command.title,
+                status: defaults.data_model_status,
+                api_exposure_status,
+                protection: domain::DataModelProtection::default(),
             })
             .await?;
         self.repository
@@ -155,6 +180,44 @@ where
                 Some(model.id),
                 "state_model.created",
                 serde_json::json!({ "code": model.code }),
+            ))
+            .await?;
+
+        Ok(model)
+    }
+
+    pub async fn update_model_status(
+        &self,
+        command: UpdateModelDefinitionStatusCommand,
+    ) -> Result<domain::ModelDefinitionRecord> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
+        ensure_state_model_permission(&actor, "manage")?;
+
+        let api_exposure_status =
+            normalize_api_exposure_for_status(command.status, command.api_exposure_status)?;
+        let model = self
+            .repository
+            .update_model_definition_status(&UpdateModelDefinitionStatusInput {
+                actor_user_id: command.actor_user_id,
+                model_id: command.model_id,
+                status: command.status,
+                api_exposure_status,
+            })
+            .await?;
+        self.repository
+            .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
+                Some(command.actor_user_id),
+                "state_model",
+                Some(command.model_id),
+                "state_model.status_updated",
+                serde_json::json!({
+                    "status": model.status.as_str(),
+                    "api_exposure_status": model.api_exposure_status.as_str(),
+                }),
             ))
             .await?;
 
@@ -382,9 +445,23 @@ where
 #[derive(Default, Clone)]
 pub struct InMemoryModelDefinitionRepository {
     models: Arc<Mutex<HashMap<Uuid, domain::ModelDefinitionRecord>>>,
+    data_source_defaults: Arc<Mutex<HashMap<Uuid, domain::DataSourceDefaults>>>,
 }
 
 impl InMemoryModelDefinitionRepository {
+    pub fn with_data_source_defaults(
+        data_source_instance_id: Uuid,
+        defaults: domain::DataSourceDefaults,
+    ) -> Self {
+        Self {
+            models: Arc::default(),
+            data_source_defaults: Arc::new(Mutex::new(HashMap::from([(
+                data_source_instance_id,
+                defaults,
+            )]))),
+        }
+    }
+
     fn upsert_placeholder(&self, model_id: Uuid) -> domain::ModelDefinitionRecord {
         let mut models = self.models.lock().expect("in-memory model lock poisoned");
         let entry = models
@@ -404,6 +481,10 @@ impl InMemoryModelDefinitionRepository {
                 audit_namespace: "audit.state_model.runtime_model".to_string(),
                 fields: vec![],
                 availability_status: domain::MetadataAvailabilityStatus::Available,
+                data_source_instance_id: None,
+                status: domain::DataModelStatus::Published,
+                api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+                protection: domain::DataModelProtection::default(),
             });
         entry.clone()
     }
@@ -439,6 +520,18 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
         Ok(models.get(&model_id).cloned())
     }
 
+    async fn get_data_source_defaults(
+        &self,
+        data_source_instance_id: Uuid,
+    ) -> Result<domain::DataSourceDefaults> {
+        self.data_source_defaults
+            .lock()
+            .expect("in-memory data source defaults lock poisoned")
+            .get(&data_source_instance_id)
+            .copied()
+            .ok_or_else(|| ControlPlaneError::NotFound("data_source_instance").into())
+    }
+
     async fn create_model_definition(
         &self,
         input: &CreateModelDefinitionInput,
@@ -447,6 +540,7 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
             id: Uuid::now_v7(),
             scope_kind: input.scope_kind,
             scope_id: input.scope_id,
+            data_source_instance_id: input.data_source_instance_id,
             code: input.code.clone(),
             title: input.title.clone(),
             physical_table_name: build_physical_table_name(input.scope_kind, &input.code),
@@ -454,6 +548,9 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
             audit_namespace: format!("audit.state_model.{}", input.code),
             fields: vec![],
             availability_status: domain::MetadataAvailabilityStatus::Available,
+            status: input.status,
+            api_exposure_status: input.api_exposure_status,
+            protection: input.protection.clone(),
         };
         self.models
             .lock()
@@ -471,6 +568,19 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
             .get_mut(&input.model_id)
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
         model.title = input.title.clone();
+        Ok(model.clone())
+    }
+
+    async fn update_model_definition_status(
+        &self,
+        input: &UpdateModelDefinitionStatusInput,
+    ) -> Result<domain::ModelDefinitionRecord> {
+        let mut models = self.models.lock().expect("in-memory model lock poisoned");
+        let model = models
+            .get_mut(&input.model_id)
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        model.status = input.status;
+        model.api_exposure_status = input.api_exposure_status;
         Ok(model.clone())
     }
 
@@ -567,6 +677,48 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
         Ok(self.upsert_placeholder(model_id))
     }
 
+    async fn create_scope_data_model_grant(
+        &self,
+        input: &CreateScopeDataModelGrantInput,
+    ) -> Result<domain::ScopeDataModelGrantRecord> {
+        Ok(domain::ScopeDataModelGrantRecord {
+            id: input.grant_id,
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            data_model_id: input.data_model_id,
+            enabled: input.enabled,
+            permission_profile: input.permission_profile,
+            created_by: input.created_by,
+            created_at: time::OffsetDateTime::now_utc(),
+            updated_at: time::OffsetDateTime::now_utc(),
+        })
+    }
+
+    async fn update_scope_data_model_grant(
+        &self,
+        input: &UpdateScopeDataModelGrantInput,
+    ) -> Result<domain::ScopeDataModelGrantRecord> {
+        Ok(domain::ScopeDataModelGrantRecord {
+            id: Uuid::now_v7(),
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            data_model_id: input.data_model_id,
+            enabled: input.enabled,
+            permission_profile: input.permission_profile,
+            created_by: None,
+            created_at: time::OffsetDateTime::now_utc(),
+            updated_at: time::OffsetDateTime::now_utc(),
+        })
+    }
+
+    async fn list_scope_data_model_grants(
+        &self,
+        _scope_kind: DataModelScopeKind,
+        _scope_id: Uuid,
+    ) -> Result<Vec<domain::ScopeDataModelGrantRecord>> {
+        Ok(Vec::new())
+    }
+
     async fn append_audit_log(&self, _event: &domain::AuditLogRecord) -> Result<()> {
         Ok(())
     }
@@ -575,6 +727,28 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
 impl ModelDefinitionService<InMemoryModelDefinitionRepository> {
     pub fn for_tests() -> Self {
         Self::new(InMemoryModelDefinitionRepository::default())
+    }
+}
+
+fn normalize_api_exposure_for_status(
+    status: domain::DataModelStatus,
+    exposure: domain::ApiExposureStatus,
+) -> Result<domain::ApiExposureStatus> {
+    let effective_exposure = if status == domain::DataModelStatus::Draft {
+        domain::ApiExposureStatus::Draft
+    } else {
+        exposure
+    };
+    if domain::ApiExposureStatus::validate_for_status(
+        status,
+        effective_exposure,
+        domain::ApiExposureReadiness::default(),
+    )
+    .is_rejected()
+    {
+        Err(ControlPlaneError::InvalidInput("api_exposure_status").into())
+    } else {
+        Ok(effective_exposure)
     }
 }
 

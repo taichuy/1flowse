@@ -40,7 +40,7 @@ Partial content:
 - Modify: `api/crates/domain/src/modeling.rs`
 - Modify: `api/crates/domain/src/data_source.rs`
 
-- [ ] **Step 1: Add failing domain tests**
+- [x] **Step 1: Add failing domain tests**
 
 Add tests that assert:
 
@@ -60,7 +60,7 @@ cargo test --manifest-path api/Cargo.toml -p domain modeling
 
 Expected: fail because the new enums and helpers do not exist.
 
-- [ ] **Step 2: Implement domain types**
+- [x] **Step 2: Implement domain types**
 
 Add:
 
@@ -75,7 +75,7 @@ DataSourceDefaults
 
 Keep DB conversion helpers in domain as string mappings so PostgreSQL mappers do not hard-code product rules.
 
-- [ ] **Step 3: Add compatibility validator**
+- [x] **Step 3: Add compatibility validator**
 
 Implement one domain helper with this behavior:
 
@@ -88,7 +88,7 @@ published + unsafe_external_source => ok only for external source validation out
 disabled/broken => runtime unavailable regardless of stored exposure
 ```
 
-- [ ] **Step 4: Verify domain tests pass**
+- [x] **Step 4: Verify domain tests pass**
 
 Run:
 
@@ -108,7 +108,7 @@ Expected: pass.
 - Modify: `api/crates/storage-durable/postgres/src/_tests/model_definition_repository_tests.rs`
 - Modify: `api/crates/storage-durable/postgres/src/_tests/data_source_repository_tests.rs`
 
-- [ ] **Step 1: Write failing repository tests**
+- [x] **Step 1: Write failing repository tests**
 
 Cover:
 
@@ -120,7 +120,7 @@ new main_source model defaults to published + published_not_exposed
 duplicate code remains blocked inside the same data source
 ```
 
-- [ ] **Step 2: Add migration**
+- [x] **Step 2: Add migration**
 
 Migration must:
 
@@ -149,11 +149,11 @@ create table if not exists scope_data_model_grants (
 
 Use explicit check constraints for enum strings and indexes for `(scope_kind, scope_id, data_model_id)`.
 
-- [ ] **Step 3: Update mappers and queries**
+- [x] **Step 3: Update mappers and queries**
 
 Map all new columns in create/list/get/update paths. Preserve existing physical table naming behavior.
 
-- [ ] **Step 4: Run storage tests**
+- [x] **Step 4: Run storage tests**
 
 Run:
 
@@ -173,7 +173,7 @@ Expected: pass.
 - Modify: `api/crates/control-plane/src/_tests/model_definition_service_tests.rs`
 - Modify: `api/crates/control-plane/src/_tests/data_source_service_tests.rs`
 
-- [ ] **Step 1: Write failing service tests**
+- [x] **Step 1: Write failing service tests**
 
 Cover:
 
@@ -183,3 +183,75 @@ main_source defaults are published + published_not_exposed
 user can update Data Model status via command
 draft status forces API exposure draft
 published model cannot become api_exposed_ready
+data source defaults can be updated through a dedicated command
+invalid default/status/exposure combinations are rejected
+```
+
+- [x] **Step 2: Extend repository ports and commands**
+
+Add explicit commands for:
+
+```text
+create/update Data Model status
+compute exposure from status/default/readiness inputs
+create/update/list scope Data Model grants
+update data source default Data Model status and API exposure status
+```
+
+Keep status changes behind control-plane service commands; do not let route or storage code rewrite status rules directly.
+
+- [x] **Step 3: Implement service behavior**
+
+Implement:
+
+```text
+Data Model create inherits data source defaults
+main_source default settings are published + published_not_exposed
+draft status forces draft exposure
+api_exposed_ready cannot be set directly without readiness proof
+disabled/broken remain persisted states but runtime will be blocked by Plan B
+```
+
+- [x] **Step 4: Run control-plane tests**
+
+Run:
+
+```bash
+cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests data_source_service_tests
+```
+
+Expected: pass.
+
+### Task 4: Plan A Verification And Commit
+
+- [x] **Step 1: Format**
+
+```bash
+cargo fmt --manifest-path api/Cargo.toml
+```
+
+- [x] **Step 2: Targeted regression**
+
+```bash
+cargo test --manifest-path api/Cargo.toml -p domain modeling
+cargo test --manifest-path api/Cargo.toml -p storage-postgres model_definition_repository_tests data_source_repository_tests
+cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests data_source_service_tests
+```
+
+- [x] **Step 3: Update plan status**
+
+Mark completed Plan A checkboxes in this document after implementation and verification evidence is available.
+
+- [x] **Step 4: Commit**
+
+```bash
+git add docs/superpowers/plans/2026-04-30-data-source-data-model-plan-a-domain-storage-defaults.md api/crates/domain api/crates/control-plane api/crates/storage-durable/postgres
+git commit -m "feat: add data model status defaults"
+```
+
+## Verification Notes
+
+- `cargo fmt --manifest-path api/Cargo.toml` could not run as written because `api/Cargo.toml` is a virtual workspace manifest; `cargo fmt --manifest-path api/Cargo.toml --all` passed.
+- `cargo test --manifest-path api/Cargo.toml -p storage-postgres model_definition_repository_tests data_source_repository_tests` could not run as written because Cargo accepts one test filter; split runs for `model_definition_repository_tests` and `data_source_repository_tests` passed.
+- `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests data_source_service_tests` could not run as written because Cargo accepts one test filter; split runs for `model_definition_service_tests` and `data_source_service_tests` passed.
+- `cargo test --manifest-path api/Cargo.toml -p domain modeling` passed.

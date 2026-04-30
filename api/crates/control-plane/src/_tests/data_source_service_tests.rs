@@ -14,12 +14,12 @@ use uuid::Uuid;
 use crate::{
     data_source::{
         CreateDataSourceInstanceCommand, DataSourceService, PreviewDataSourceReadCommand,
-        ValidateDataSourceInstanceCommand,
+        UpdateDataSourceDefaultsCommand, ValidateDataSourceInstanceCommand,
     },
     ports::{
         AuthRepository, CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput,
         CreatePluginAssignmentInput, CreatePluginTaskInput, DataSourceRepository,
-        DataSourceRuntimePort, UpdateDataSourceInstanceStatusInput,
+        DataSourceRuntimePort, UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceStatusInput,
         UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
         UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
         UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
@@ -28,11 +28,11 @@ use crate::{
 };
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, DataSourceCatalogCacheRecord,
-    DataSourceCatalogRefreshStatus, DataSourceInstanceRecord, DataSourceInstanceStatus,
-    DataSourcePreviewSessionRecord, DataSourceSecretRecord, PermissionDefinition,
-    PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
-    PluginInstallationRecord, PluginRuntimeStatus, PluginTaskRecord, PluginVerificationStatus,
-    ScopeContext, UserRecord,
+    DataSourceCatalogRefreshStatus, DataSourceDefaults, DataSourceInstanceRecord,
+    DataSourceInstanceStatus, DataSourcePreviewSessionRecord, DataSourceSecretRecord,
+    PermissionDefinition, PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus,
+    PluginDesiredState, PluginInstallationRecord, PluginRuntimeStatus, PluginTaskRecord,
+    PluginVerificationStatus, ScopeContext, UserRecord,
 };
 
 fn tenant_id() -> Uuid {
@@ -317,6 +317,7 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
             status: input.status,
             config_json: input.config_json.clone(),
             metadata_json: input.metadata_json.clone(),
+            defaults: input.defaults,
             created_by: input.created_by,
             created_at: OffsetDateTime::now_utc(),
             updated_at: OffsetDateTime::now_utc(),
@@ -338,6 +339,19 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
             .expect("instance should exist for test");
         instance.status = input.status;
         instance.metadata_json = input.metadata_json.clone();
+        instance.updated_at = OffsetDateTime::now_utc();
+        Ok(instance.clone())
+    }
+
+    async fn update_instance_defaults(
+        &self,
+        input: &UpdateDataSourceDefaultsInput,
+    ) -> Result<DataSourceInstanceRecord> {
+        let mut instances = self.instances.write().await;
+        let instance = instances
+            .get_mut(&input.instance_id)
+            .expect("instance should exist for test");
+        instance.defaults = input.defaults;
         instance.updated_at = OffsetDateTime::now_utc();
         Ok(instance.clone())
     }
@@ -522,6 +536,83 @@ async fn validate_instance_updates_status_and_catalog_cache() {
         repository.stored_secret_json(created.instance.id).await,
         json!({ "client_secret": "secret" })
     );
+}
+
+#[tokio::test]
+async fn update_defaults_persists_valid_data_model_defaults() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::ready();
+    let service = DataSourceService::new(repository, runtime);
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": "secret" }),
+        })
+        .await
+        .unwrap();
+
+    let updated = service
+        .update_defaults(UpdateDataSourceDefaultsCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            defaults: DataSourceDefaults {
+                data_model_status: domain::DataModelStatus::Draft,
+                api_exposure_status: domain::ApiExposureStatus::Draft,
+            },
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        updated.defaults.data_model_status,
+        domain::DataModelStatus::Draft
+    );
+    assert_eq!(
+        updated.defaults.api_exposure_status,
+        domain::ApiExposureStatus::Draft
+    );
+}
+
+#[tokio::test]
+async fn update_defaults_rejects_invalid_status_exposure_combinations() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::ready();
+    let service = DataSourceService::new(repository, runtime);
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": "secret" }),
+        })
+        .await
+        .unwrap();
+
+    let error = service
+        .update_defaults(UpdateDataSourceDefaultsCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            defaults: DataSourceDefaults {
+                data_model_status: domain::DataModelStatus::Draft,
+                api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            },
+        })
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("default_api_exposure_status"));
 }
 
 #[tokio::test]

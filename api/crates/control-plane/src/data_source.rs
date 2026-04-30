@@ -15,8 +15,8 @@ use crate::{
     ports::{
         AuthRepository, CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput,
         DataSourceRepository, DataSourceRuntimePort, PluginRepository,
-        UpdateDataSourceInstanceStatusInput, UpsertDataSourceCatalogCacheInput,
-        UpsertDataSourceSecretInput,
+        UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceStatusInput,
+        UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
     },
 };
 
@@ -36,6 +36,14 @@ pub struct ValidateDataSourceInstanceCommand {
     pub actor_user_id: Uuid,
     pub workspace_id: Uuid,
     pub instance_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateDataSourceDefaultsCommand {
+    pub actor_user_id: Uuid,
+    pub workspace_id: Uuid,
+    pub instance_id: Uuid,
+    pub defaults: domain::DataSourceDefaults,
 }
 
 #[derive(Debug, Clone)]
@@ -164,6 +172,7 @@ where
                 status: domain::DataSourceInstanceStatus::Draft,
                 config_json: ensure_json_object(&command.config_json, "config_json")?,
                 metadata_json: json!({}),
+                defaults: domain::DataSourceDefaults::default(),
                 created_by: actor.user_id,
             })
             .await?;
@@ -290,6 +299,42 @@ where
             catalog,
             output,
         })
+    }
+
+    pub async fn update_defaults(
+        &self,
+        command: UpdateDataSourceDefaultsCommand,
+    ) -> Result<domain::DataSourceInstanceRecord> {
+        let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
+        ensure_workspace_matches(&actor, command.workspace_id)?;
+        ensure_state_model_permission(&actor, "manage")?;
+        ensure_data_source_defaults_compatible(command.defaults)?;
+
+        let instance = self
+            .repository
+            .update_instance_defaults(&UpdateDataSourceDefaultsInput {
+                workspace_id: command.workspace_id,
+                instance_id: command.instance_id,
+                defaults: command.defaults,
+                updated_by: actor.user_id,
+            })
+            .await?;
+
+        self.repository
+            .append_audit_log(&audit_log(
+                Some(command.workspace_id),
+                Some(actor.user_id),
+                "data_source_instance",
+                Some(instance.id),
+                "data_source.defaults_updated",
+                json!({
+                    "default_data_model_status": instance.defaults.data_model_status.as_str(),
+                    "default_api_exposure_status": instance.defaults.api_exposure_status.as_str(),
+                }),
+            ))
+            .await?;
+
+        Ok(instance)
     }
 
     pub async fn preview_read(
@@ -452,6 +497,20 @@ fn ensure_json_object(value: &Value, field: &'static str) -> Result<Value> {
         Ok(value.clone())
     } else {
         Err(ControlPlaneError::InvalidInput(field).into())
+    }
+}
+
+fn ensure_data_source_defaults_compatible(defaults: domain::DataSourceDefaults) -> Result<()> {
+    if domain::ApiExposureStatus::validate_for_status(
+        defaults.data_model_status,
+        defaults.api_exposure_status,
+        domain::ApiExposureReadiness::default(),
+    )
+    .is_rejected()
+    {
+        Err(ControlPlaneError::InvalidInput("default_api_exposure_status").into())
+    } else {
+        Ok(())
     }
 }
 

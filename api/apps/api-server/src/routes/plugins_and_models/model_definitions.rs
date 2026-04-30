@@ -246,6 +246,7 @@ pub async fn create_model(
         .create_model(CreateModelDefinitionCommand {
             actor_user_id: context.user.id,
             scope_kind,
+            data_source_instance_id: None,
             code: body.code,
             title: body.title,
         })

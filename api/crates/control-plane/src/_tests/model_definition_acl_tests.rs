@@ -129,6 +129,10 @@ fn sample_model(model_id: Uuid) -> ModelDefinitionRecord {
         audit_namespace: "audit.state_model.orders".to_string(),
         fields: vec![],
         availability_status: domain::MetadataAvailabilityStatus::Available,
+        data_source_instance_id: None,
+        status: domain::DataModelStatus::Published,
+        api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+        protection: domain::DataModelProtection::default(),
     }
 }
 

@@ -8,8 +8,9 @@ use async_trait::async_trait;
 use control_plane::{
     errors::ControlPlaneError,
     ports::{
-        AddModelFieldInput, AuthRepository, CreateModelDefinitionInput, ModelDefinitionRepository,
-        UpdateModelDefinitionInput, UpdateModelFieldInput,
+        AddModelFieldInput, AuthRepository, CreateModelDefinitionInput,
+        CreateScopeDataModelGrantInput, ModelDefinitionRepository, UpdateModelDefinitionInput,
+        UpdateModelDefinitionStatusInput, UpdateModelFieldInput, UpdateScopeDataModelGrantInput,
     },
 };
 use sqlx::Row;
@@ -60,12 +61,18 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                 id,
                 scope_kind,
                 scope_id,
+                data_source_instance_id,
                 code,
                 title,
                 physical_table_name,
                 acl_namespace,
                 audit_namespace,
-                availability_status
+                availability_status,
+                status,
+                api_exposure_status,
+                owner_kind,
+                owner_id,
+                is_protected
             from model_definitions
             where $1 = '00000000-0000-0000-0000-000000000000'::uuid
                or scope_kind <> 'workspace'
@@ -85,12 +92,18 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                     id: model_id,
                     scope_kind: row.get("scope_kind"),
                     scope_id: row.get("scope_id"),
+                    data_source_instance_id: row.get("data_source_instance_id"),
                     code: row.get("code"),
                     title: row.get("title"),
                     physical_table_name: row.get("physical_table_name"),
                     acl_namespace: row.get("acl_namespace"),
                     audit_namespace: row.get("audit_namespace"),
                     availability_status: row.get("availability_status"),
+                    status: row.get("status"),
+                    api_exposure_status: row.get("api_exposure_status"),
+                    owner_kind: row.get("owner_kind"),
+                    owner_id: row.get("owner_id"),
+                    is_protected: row.get("is_protected"),
                     fields: fields_by_model_id
                         .get(&model_id)
                         .cloned()
@@ -113,6 +126,32 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
         }))
     }
 
+    async fn get_data_source_defaults(
+        &self,
+        data_source_instance_id: Uuid,
+    ) -> Result<domain::DataSourceDefaults> {
+        let row = sqlx::query(
+            r#"
+            select default_data_model_status, default_api_exposure_status
+            from data_source_instances
+            where id = $1
+            "#,
+        )
+        .bind(data_source_instance_id)
+        .fetch_optional(self.pool())
+        .await?
+        .ok_or(ControlPlaneError::NotFound("data_source_instance"))?;
+
+        Ok(domain::DataSourceDefaults {
+            data_model_status: domain::DataModelStatus::from_db(
+                row.get::<String, _>("default_data_model_status").as_str(),
+            ),
+            api_exposure_status: domain::ApiExposureStatus::from_db(
+                row.get::<String, _>("default_api_exposure_status").as_str(),
+            ),
+        })
+    }
+
     async fn create_model_definition(
         &self,
         input: &CreateModelDefinitionInput,
@@ -121,6 +160,7 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
             id: Uuid::now_v7(),
             scope_kind: input.scope_kind,
             scope_id: input.scope_id,
+            data_source_instance_id: input.data_source_instance_id,
             code: input.code.clone(),
             title: input.title.clone(),
             physical_table_name: build_physical_table_name(input.scope_kind, &input.code),
@@ -128,6 +168,9 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
             audit_namespace: format!("audit.state_model.{}", input.code),
             fields: vec![],
             availability_status: domain::MetadataAvailabilityStatus::Available,
+            status: input.status,
+            api_exposure_status: input.api_exposure_status,
+            protection: input.protection.clone(),
         };
         let before_snapshot = serde_json::json!({});
         let after_snapshot = serde_json::to_value(&model)?;
@@ -210,12 +253,18 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                 id,
                 scope_kind,
                 scope_id,
+                data_source_instance_id,
                 code,
                 title,
                 physical_table_name,
                 acl_namespace,
                 audit_namespace,
-                availability_status
+                availability_status,
+                status,
+                api_exposure_status,
+                owner_kind,
+                owner_id,
+                is_protected
             "#,
         )
         .bind(input.model_id)
@@ -231,12 +280,82 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                 id: row.get("id"),
                 scope_kind: row.get("scope_kind"),
                 scope_id: row.get("scope_id"),
+                data_source_instance_id: row.get("data_source_instance_id"),
                 code: row.get("code"),
                 title: row.get("title"),
                 physical_table_name: row.get("physical_table_name"),
                 acl_namespace: row.get("acl_namespace"),
                 audit_namespace: row.get("audit_namespace"),
                 availability_status: row.get("availability_status"),
+                status: row.get("status"),
+                api_exposure_status: row.get("api_exposure_status"),
+                owner_kind: row.get("owner_kind"),
+                owner_id: row.get("owner_id"),
+                is_protected: row.get("is_protected"),
+                fields: fields_by_model_id
+                    .get(&input.model_id)
+                    .cloned()
+                    .unwrap_or_default(),
+            },
+        ))
+    }
+
+    async fn update_model_definition_status(
+        &self,
+        input: &UpdateModelDefinitionStatusInput,
+    ) -> Result<domain::ModelDefinitionRecord> {
+        let row = sqlx::query(
+            r#"
+            update model_definitions
+            set status = $2,
+                api_exposure_status = $3,
+                updated_by = $4,
+                updated_at = now()
+            where id = $1
+            returning
+                id,
+                scope_kind,
+                scope_id,
+                data_source_instance_id,
+                code,
+                title,
+                physical_table_name,
+                acl_namespace,
+                audit_namespace,
+                availability_status,
+                status,
+                api_exposure_status,
+                owner_kind,
+                owner_id,
+                is_protected
+            "#,
+        )
+        .bind(input.model_id)
+        .bind(input.status.as_str())
+        .bind(input.api_exposure_status.as_str())
+        .bind(nullable_actor_user_id(input.actor_user_id))
+        .fetch_optional(self.pool())
+        .await?
+        .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        let fields_by_model_id = load_fields_by_model_id(self.pool()).await?;
+
+        Ok(PgModelDefinitionMapper::to_model_definition_record(
+            StoredModelDefinitionRow {
+                id: row.get("id"),
+                scope_kind: row.get("scope_kind"),
+                scope_id: row.get("scope_id"),
+                data_source_instance_id: row.get("data_source_instance_id"),
+                code: row.get("code"),
+                title: row.get("title"),
+                physical_table_name: row.get("physical_table_name"),
+                acl_namespace: row.get("acl_namespace"),
+                audit_namespace: row.get("audit_namespace"),
+                availability_status: row.get("availability_status"),
+                status: row.get("status"),
+                api_exposure_status: row.get("api_exposure_status"),
+                owner_kind: row.get("owner_kind"),
+                owner_id: row.get("owner_id"),
+                is_protected: row.get("is_protected"),
                 fields: fields_by_model_id
                     .get(&input.model_id)
                     .cloned()
@@ -628,7 +747,135 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
             .ok_or(ControlPlaneError::NotFound("model_definition").into())
     }
 
+    async fn create_scope_data_model_grant(
+        &self,
+        input: &CreateScopeDataModelGrantInput,
+    ) -> Result<domain::ScopeDataModelGrantRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into scope_data_model_grants (
+                id,
+                scope_kind,
+                scope_id,
+                data_model_id,
+                enabled,
+                permission_profile,
+                created_by
+            ) values ($1, $2, $3, $4, $5, $6, $7)
+            returning
+                id,
+                scope_kind,
+                scope_id,
+                data_model_id,
+                enabled,
+                permission_profile,
+                created_by,
+                created_at,
+                updated_at
+            "#,
+        )
+        .bind(input.grant_id)
+        .bind(input.scope_kind.as_str())
+        .bind(input.scope_id)
+        .bind(input.data_model_id)
+        .bind(input.enabled)
+        .bind(input.permission_profile.as_str())
+        .bind(input.created_by)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_scope_data_model_grant(row)
+    }
+
+    async fn update_scope_data_model_grant(
+        &self,
+        input: &UpdateScopeDataModelGrantInput,
+    ) -> Result<domain::ScopeDataModelGrantRecord> {
+        let row = sqlx::query(
+            r#"
+            update scope_data_model_grants
+            set enabled = $4,
+                permission_profile = $5,
+                updated_at = now()
+            where scope_kind = $1
+              and scope_id = $2
+              and data_model_id = $3
+            returning
+                id,
+                scope_kind,
+                scope_id,
+                data_model_id,
+                enabled,
+                permission_profile,
+                created_by,
+                created_at,
+                updated_at
+            "#,
+        )
+        .bind(input.scope_kind.as_str())
+        .bind(input.scope_id)
+        .bind(input.data_model_id)
+        .bind(input.enabled)
+        .bind(input.permission_profile.as_str())
+        .fetch_optional(self.pool())
+        .await?
+        .ok_or(ControlPlaneError::NotFound("scope_data_model_grant"))?;
+
+        map_scope_data_model_grant(row)
+    }
+
+    async fn list_scope_data_model_grants(
+        &self,
+        scope_kind: domain::DataModelScopeKind,
+        scope_id: Uuid,
+    ) -> Result<Vec<domain::ScopeDataModelGrantRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                scope_kind,
+                scope_id,
+                data_model_id,
+                enabled,
+                permission_profile,
+                created_by,
+                created_at,
+                updated_at
+            from scope_data_model_grants
+            where scope_kind = $1
+              and scope_id = $2
+            order by created_at asc
+            "#,
+        )
+        .bind(scope_kind.as_str())
+        .bind(scope_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_scope_data_model_grant).collect()
+    }
+
     async fn append_audit_log(&self, event: &domain::AuditLogRecord) -> Result<()> {
         AuthRepository::append_audit_log(self, event).await
     }
+}
+
+fn map_scope_data_model_grant(
+    row: sqlx::postgres::PgRow,
+) -> Result<domain::ScopeDataModelGrantRecord> {
+    Ok(domain::ScopeDataModelGrantRecord {
+        id: row.get("id"),
+        scope_kind: domain::DataModelScopeKind::from_db(
+            row.get::<String, _>("scope_kind").as_str(),
+        ),
+        scope_id: row.get("scope_id"),
+        data_model_id: row.get("data_model_id"),
+        enabled: row.get("enabled"),
+        permission_profile: domain::ScopeDataModelPermissionProfile::from_db(
+            row.get::<String, _>("permission_profile").as_str(),
+        ),
+        created_by: row.get("created_by"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+    })
 }

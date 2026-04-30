@@ -46,6 +46,7 @@ async fn create_model_rebuilds_runtime_registry_once() {
         .create_model(CreateModelDefinitionCommand {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
             code: "orders".into(),
             title: "Orders".into(),
         })
@@ -64,6 +65,10 @@ async fn add_field_rebuilds_runtime_registry_once() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: Uuid::nil(),
+            data_source_instance_id: None,
+            status: domain::DataModelStatus::Published,
+            api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            protection: domain::DataModelProtection::default(),
             code: "orders".into(),
             title: "Orders".into(),
         })
@@ -102,6 +107,10 @@ async fn delete_model_rebuilds_runtime_registry_once() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: Uuid::nil(),
+            data_source_instance_id: None,
+            status: domain::DataModelStatus::Published,
+            api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            protection: domain::DataModelProtection::default(),
             code: "orders".into(),
             title: "Orders".into(),
         })

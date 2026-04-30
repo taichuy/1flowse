@@ -3,8 +3,9 @@ use control_plane::ports::{
     UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput, UpsertPluginInstallationInput,
 };
 use domain::{
-    DataSourceCatalogRefreshStatus, DataSourceInstanceStatus, PluginArtifactStatus,
-    PluginAvailabilityStatus, PluginDesiredState, PluginRuntimeStatus, PluginVerificationStatus,
+    ApiExposureStatus, DataModelStatus, DataSourceCatalogRefreshStatus, DataSourceDefaults,
+    DataSourceInstanceStatus, PluginArtifactStatus, PluginAvailabilityStatus, PluginDesiredState,
+    PluginRuntimeStatus, PluginVerificationStatus,
 };
 use serde_json::json;
 use sqlx::PgPool;
@@ -122,6 +123,7 @@ async fn creates_instance_secret_and_catalog_cache_rows() {
             status: domain::DataSourceInstanceStatus::Draft,
             config_json: json!({ "client_id": "abc" }),
             metadata_json: json!({}),
+            defaults: DataSourceDefaults::default(),
             created_by: actor.id,
         },
     )
@@ -129,6 +131,14 @@ async fn creates_instance_secret_and_catalog_cache_rows() {
     .unwrap();
 
     assert_eq!(created.source_code, "acme_hubspot_source");
+    assert_eq!(
+        created.defaults.data_model_status,
+        DataModelStatus::Published
+    );
+    assert_eq!(
+        created.defaults.api_exposure_status,
+        ApiExposureStatus::PublishedNotExposed
+    );
 
     let secret = <PgControlPlaneStore as DataSourceRepository>::upsert_secret(
         &store,
@@ -186,6 +196,10 @@ async fn creates_preview_session_rows() {
             status: DataSourceInstanceStatus::Draft,
             config_json: json!({ "client_id": "abc" }),
             metadata_json: json!({}),
+            defaults: DataSourceDefaults {
+                data_model_status: DataModelStatus::Draft,
+                api_exposure_status: ApiExposureStatus::Draft,
+            },
             created_by: actor.id,
         },
     )
@@ -211,4 +225,47 @@ async fn creates_preview_session_rows() {
     .unwrap();
 
     assert_eq!(preview_session.data_source_instance_id, Some(created.id));
+}
+
+#[tokio::test]
+async fn updates_data_source_default_status_and_exposure() {
+    let (store, workspace, actor, installation_id) = seed_store().await;
+    let created = <PgControlPlaneStore as DataSourceRepository>::create_instance(
+        &store,
+        &CreateDataSourceInstanceInput {
+            instance_id: Uuid::now_v7(),
+            workspace_id: workspace.id,
+            installation_id,
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            status: DataSourceInstanceStatus::Draft,
+            config_json: json!({ "client_id": "abc" }),
+            metadata_json: json!({}),
+            defaults: DataSourceDefaults::default(),
+            created_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    let updated = <PgControlPlaneStore as DataSourceRepository>::update_instance_defaults(
+        &store,
+        &control_plane::ports::UpdateDataSourceDefaultsInput {
+            workspace_id: workspace.id,
+            instance_id: created.id,
+            defaults: DataSourceDefaults {
+                data_model_status: DataModelStatus::Draft,
+                api_exposure_status: ApiExposureStatus::Draft,
+            },
+            updated_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(updated.defaults.data_model_status, DataModelStatus::Draft);
+    assert_eq!(
+        updated.defaults.api_exposure_status,
+        ApiExposureStatus::Draft
+    );
 }

@@ -5,8 +5,12 @@ pub struct CreateModelDefinitionInput {
     pub actor_user_id: Uuid,
     pub scope_kind: DataModelScopeKind,
     pub scope_id: Uuid,
+    pub data_source_instance_id: Option<Uuid>,
     pub code: String,
     pub title: String,
+    pub status: domain::DataModelStatus,
+    pub api_exposure_status: domain::ApiExposureStatus,
+    pub protection: domain::DataModelProtection,
 }
 
 #[derive(Debug, Clone)]
@@ -14,6 +18,34 @@ pub struct UpdateModelDefinitionInput {
     pub actor_user_id: Uuid,
     pub model_id: Uuid,
     pub title: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateModelDefinitionStatusInput {
+    pub actor_user_id: Uuid,
+    pub model_id: Uuid,
+    pub status: domain::DataModelStatus,
+    pub api_exposure_status: domain::ApiExposureStatus,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateScopeDataModelGrantInput {
+    pub grant_id: Uuid,
+    pub scope_kind: DataModelScopeKind,
+    pub scope_id: Uuid,
+    pub data_model_id: Uuid,
+    pub enabled: bool,
+    pub permission_profile: domain::ScopeDataModelPermissionProfile,
+    pub created_by: Option<Uuid>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateScopeDataModelGrantInput {
+    pub scope_kind: DataModelScopeKind,
+    pub scope_id: Uuid,
+    pub data_model_id: Uuid,
+    pub enabled: bool,
+    pub permission_profile: domain::ScopeDataModelPermissionProfile,
 }
 
 #[derive(Debug, Clone)]
@@ -61,6 +93,12 @@ pub trait ModelDefinitionRepository: Send + Sync {
         workspace_id: Uuid,
         model_id: Uuid,
     ) -> anyhow::Result<Option<ModelDefinitionRecord>>;
+    async fn get_data_source_defaults(
+        &self,
+        _data_source_instance_id: Uuid,
+    ) -> anyhow::Result<domain::DataSourceDefaults> {
+        anyhow::bail!("get_data_source_defaults is not implemented")
+    }
     async fn create_model_definition(
         &self,
         input: &CreateModelDefinitionInput,
@@ -69,6 +107,12 @@ pub trait ModelDefinitionRepository: Send + Sync {
         &self,
         input: &UpdateModelDefinitionInput,
     ) -> anyhow::Result<ModelDefinitionRecord>;
+    async fn update_model_definition_status(
+        &self,
+        _input: &UpdateModelDefinitionStatusInput,
+    ) -> anyhow::Result<ModelDefinitionRecord> {
+        anyhow::bail!("update_model_definition_status is not implemented")
+    }
     async fn add_model_field(&self, input: &AddModelFieldInput)
         -> anyhow::Result<ModelFieldRecord>;
     async fn update_model_field(
@@ -91,5 +135,24 @@ pub trait ModelDefinitionRepository: Send + Sync {
         actor_user_id: Uuid,
         model_id: Uuid,
     ) -> anyhow::Result<ModelDefinitionRecord>;
+    async fn create_scope_data_model_grant(
+        &self,
+        _input: &CreateScopeDataModelGrantInput,
+    ) -> anyhow::Result<domain::ScopeDataModelGrantRecord> {
+        anyhow::bail!("create_scope_data_model_grant is not implemented")
+    }
+    async fn update_scope_data_model_grant(
+        &self,
+        _input: &UpdateScopeDataModelGrantInput,
+    ) -> anyhow::Result<domain::ScopeDataModelGrantRecord> {
+        anyhow::bail!("update_scope_data_model_grant is not implemented")
+    }
+    async fn list_scope_data_model_grants(
+        &self,
+        _scope_kind: DataModelScopeKind,
+        _scope_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::ScopeDataModelGrantRecord>> {
+        anyhow::bail!("list_scope_data_model_grants is not implemented")
+    }
     async fn append_audit_log(&self, event: &AuditLogRecord) -> anyhow::Result<()>;
 }

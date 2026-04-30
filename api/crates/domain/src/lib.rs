@@ -29,8 +29,9 @@ pub use auth::{
 };
 pub use base::BaseFields;
 pub use data_source::{
-    DataSourceCatalogCacheRecord, DataSourceCatalogRefreshStatus, DataSourceInstanceRecord,
-    DataSourceInstanceStatus, DataSourcePreviewSessionRecord, DataSourceSecretRecord,
+    DataSourceCatalogCacheRecord, DataSourceCatalogRefreshStatus, DataSourceDefaults,
+    DataSourceInstanceRecord, DataSourceInstanceStatus, DataSourcePreviewSessionRecord,
+    DataSourceSecretRecord,
 };
 pub use file_management::{
     FileStorageHealthStatus, FileStorageRecord, FileTableRecord, FileTableScopeKind,
@@ -56,8 +57,10 @@ pub use model_provider::{
     PluginTaskStatus, PluginVerificationStatus,
 };
 pub use modeling::{
-    DataModelScopeKind, MetadataAvailabilityStatus, ModelDefinitionRecord, ModelFieldKind,
-    ModelFieldRecord,
+    ApiExposureReadiness, ApiExposureStatus, DataModelOwnerKind, DataModelProtection,
+    DataModelScopeKind, DataModelStatus, ExposureCompatibility, ExternalSourceValidation,
+    MetadataAvailabilityStatus, ModelDefinitionRecord, ModelFieldKind, ModelFieldRecord,
+    RuntimeAvailability, ScopeDataModelGrantRecord, ScopeDataModelPermissionProfile,
 };
 pub use node_contribution::{NodeContributionDependencyStatus, NodeContributionRegistryEntry};
 pub use orchestration::{

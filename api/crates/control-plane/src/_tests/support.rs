@@ -1085,6 +1085,10 @@ impl ModelDefinitionRepository for MemoryFileManagementRepository {
             audit_namespace: format!("audit.state_model.{}", input.code),
             fields: vec![],
             availability_status: MetadataAvailabilityStatus::Available,
+            data_source_instance_id: input.data_source_instance_id,
+            status: input.status,
+            api_exposure_status: input.api_exposure_status,
+            protection: input.protection.clone(),
         };
         self.models
             .lock()
@@ -1348,6 +1352,10 @@ impl ModelDefinitionRepository for MemoryProvisioningRepository {
             audit_namespace: format!("audit.state_model.{}", input.code),
             fields: vec![],
             availability_status: MetadataAvailabilityStatus::Available,
+            data_source_instance_id: input.data_source_instance_id,
+            status: input.status,
+            api_exposure_status: input.api_exposure_status,
+            protection: input.protection.clone(),
         };
         self.models
             .lock()

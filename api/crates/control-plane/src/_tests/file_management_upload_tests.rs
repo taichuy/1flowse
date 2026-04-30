@@ -127,6 +127,10 @@ fn model_definition(
         audit_namespace: format!("audit.state_model.{code}"),
         fields: vec![],
         availability_status: MetadataAvailabilityStatus::Available,
+        data_source_instance_id: None,
+        status: domain::DataModelStatus::Published,
+        api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+        protection: domain::DataModelProtection::default(),
     }
 }
 

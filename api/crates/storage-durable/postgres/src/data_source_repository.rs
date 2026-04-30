@@ -42,6 +42,14 @@ fn map_instance(row: sqlx::postgres::PgRow) -> Result<domain::DataSourceInstance
         status: parse_instance_status(row.get::<String, _>("status").as_str())?,
         config_json: row.get("config_json"),
         metadata_json: row.get("metadata_json"),
+        defaults: domain::DataSourceDefaults {
+            data_model_status: domain::DataModelStatus::from_db(
+                row.get::<String, _>("default_data_model_status").as_str(),
+            ),
+            api_exposure_status: domain::ApiExposureStatus::from_db(
+                row.get::<String, _>("default_api_exposure_status").as_str(),
+            ),
+        },
         created_by: row.get("created_by"),
         created_at: row.get("created_at"),
         updated_at: row.get("updated_at"),
@@ -100,9 +108,11 @@ impl DataSourceRepository for PgControlPlaneStore {
                 status,
                 config_json,
                 metadata_json,
+                default_data_model_status,
+                default_api_exposure_status,
                 created_by
             ) values (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
             )
             returning
                 id,
@@ -113,6 +123,8 @@ impl DataSourceRepository for PgControlPlaneStore {
                 status,
                 config_json,
                 metadata_json,
+                default_data_model_status,
+                default_api_exposure_status,
                 created_by,
                 created_at,
                 updated_at
@@ -126,6 +138,8 @@ impl DataSourceRepository for PgControlPlaneStore {
         .bind(input.status.as_str())
         .bind(&input.config_json)
         .bind(&input.metadata_json)
+        .bind(input.defaults.data_model_status.as_str())
+        .bind(input.defaults.api_exposure_status.as_str())
         .bind(input.created_by)
         .fetch_one(self.pool())
         .await?;
@@ -155,6 +169,8 @@ impl DataSourceRepository for PgControlPlaneStore {
                 status,
                 config_json,
                 metadata_json,
+                default_data_model_status,
+                default_api_exposure_status,
                 created_by,
                 created_at,
                 updated_at
@@ -164,6 +180,45 @@ impl DataSourceRepository for PgControlPlaneStore {
         .bind(input.instance_id)
         .bind(input.status.as_str())
         .bind(&input.metadata_json)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_instance(row)
+    }
+
+    async fn update_instance_defaults(
+        &self,
+        input: &control_plane::ports::UpdateDataSourceDefaultsInput,
+    ) -> Result<domain::DataSourceInstanceRecord> {
+        let row = sqlx::query(
+            r#"
+            update data_source_instances
+            set
+                default_data_model_status = $3,
+                default_api_exposure_status = $4,
+                updated_at = now()
+            where workspace_id = $1
+              and id = $2
+            returning
+                id,
+                workspace_id,
+                installation_id,
+                source_code,
+                display_name,
+                status,
+                config_json,
+                metadata_json,
+                default_data_model_status,
+                default_api_exposure_status,
+                created_by,
+                created_at,
+                updated_at
+            "#,
+        )
+        .bind(input.workspace_id)
+        .bind(input.instance_id)
+        .bind(input.defaults.data_model_status.as_str())
+        .bind(input.defaults.api_exposure_status.as_str())
         .fetch_one(self.pool())
         .await?;
 
@@ -186,6 +241,8 @@ impl DataSourceRepository for PgControlPlaneStore {
                 status,
                 config_json,
                 metadata_json,
+                default_data_model_status,
+                default_api_exposure_status,
                 created_by,
                 created_at,
                 updated_at

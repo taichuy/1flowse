@@ -10,6 +10,7 @@ pub struct CreateDataSourceInstanceInput {
     pub status: domain::DataSourceInstanceStatus,
     pub config_json: serde_json::Value,
     pub metadata_json: serde_json::Value,
+    pub defaults: domain::DataSourceDefaults,
     pub created_by: Uuid,
 }
 
@@ -19,6 +20,14 @@ pub struct UpdateDataSourceInstanceStatusInput {
     pub instance_id: Uuid,
     pub status: domain::DataSourceInstanceStatus,
     pub metadata_json: serde_json::Value,
+    pub updated_by: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateDataSourceDefaultsInput {
+    pub workspace_id: Uuid,
+    pub instance_id: Uuid,
+    pub defaults: domain::DataSourceDefaults,
     pub updated_by: Uuid,
 }
 
@@ -58,6 +67,10 @@ pub trait DataSourceRepository: Send + Sync {
     async fn update_instance_status(
         &self,
         input: &UpdateDataSourceInstanceStatusInput,
+    ) -> anyhow::Result<domain::DataSourceInstanceRecord>;
+    async fn update_instance_defaults(
+        &self,
+        input: &UpdateDataSourceDefaultsInput,
     ) -> anyhow::Result<domain::DataSourceInstanceRecord>;
     async fn get_instance(
         &self,

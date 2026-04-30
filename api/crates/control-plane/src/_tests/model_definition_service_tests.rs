@@ -1,8 +1,11 @@
 use control_plane::model_definition::{
     AddModelFieldCommand, CreateModelDefinitionCommand, DeleteModelDefinitionCommand,
-    ModelDefinitionService,
+    InMemoryModelDefinitionRepository, ModelDefinitionService, UpdateModelDefinitionStatusCommand,
 };
-use domain::{DataModelScopeKind, ModelFieldKind, SYSTEM_SCOPE_ID};
+use domain::{
+    ApiExposureStatus, DataModelScopeKind, DataModelStatus, DataSourceDefaults, ModelFieldKind,
+    SYSTEM_SCOPE_ID,
+};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -13,6 +16,7 @@ async fn add_field_returns_immediately_usable_metadata_without_publish_step() {
         .create_model(CreateModelDefinitionCommand {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
             code: "orders".into(),
             title: "Orders".into(),
         })
@@ -50,6 +54,7 @@ async fn delete_model_requires_explicit_confirmation() {
         .create_model(CreateModelDefinitionCommand {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
             code: "orders".into(),
             title: "Orders".into(),
         })
@@ -76,6 +81,7 @@ async fn create_system_model_uses_fixed_system_scope_id() {
         .create_model(CreateModelDefinitionCommand {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::System,
+            data_source_instance_id: None,
             code: "system_orders".into(),
             title: "System Orders".into(),
         })
@@ -94,6 +100,7 @@ async fn create_workspace_model_uses_current_workspace_id() {
         .create_model(CreateModelDefinitionCommand {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
             code: "workspace_orders".into(),
             title: "Workspace Orders".into(),
         })
@@ -102,4 +109,97 @@ async fn create_workspace_model_uses_current_workspace_id() {
 
     assert_eq!(created.scope_kind, DataModelScopeKind::Workspace);
     assert_eq!(created.scope_id, Uuid::nil());
+}
+
+#[tokio::test]
+async fn create_model_defaults_to_main_source_published_not_exposed() {
+    let service = ModelDefinitionService::for_tests();
+
+    let created = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
+            code: "main_source_orders".into(),
+            title: "Main Source Orders".into(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(created.status, DataModelStatus::Published);
+    assert_eq!(
+        created.api_exposure_status,
+        ApiExposureStatus::PublishedNotExposed
+    );
+    assert_eq!(created.data_source_instance_id, None);
+}
+
+#[tokio::test]
+async fn create_model_inherits_data_source_defaults_when_instance_is_selected() {
+    let data_source_instance_id = Uuid::now_v7();
+    let repository = InMemoryModelDefinitionRepository::with_data_source_defaults(
+        data_source_instance_id,
+        DataSourceDefaults {
+            data_model_status: DataModelStatus::Draft,
+            api_exposure_status: ApiExposureStatus::Draft,
+        },
+    );
+    let service = ModelDefinitionService::new(repository);
+
+    let created = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: Some(data_source_instance_id),
+            code: "external_contacts".into(),
+            title: "External Contacts".into(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        created.data_source_instance_id,
+        Some(data_source_instance_id)
+    );
+    assert_eq!(created.status, DataModelStatus::Draft);
+    assert_eq!(created.api_exposure_status, ApiExposureStatus::Draft);
+}
+
+#[tokio::test]
+async fn update_model_status_forces_draft_exposure_and_blocks_direct_ready() {
+    let service = ModelDefinitionService::for_tests();
+    let created = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
+            code: "status_orders".into(),
+            title: "Status Orders".into(),
+        })
+        .await
+        .unwrap();
+
+    let draft = service
+        .update_model_status(UpdateModelDefinitionStatusCommand {
+            actor_user_id: Uuid::nil(),
+            model_id: created.id,
+            status: DataModelStatus::Draft,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+        })
+        .await
+        .unwrap();
+    assert_eq!(draft.status, DataModelStatus::Draft);
+    assert_eq!(draft.api_exposure_status, ApiExposureStatus::Draft);
+
+    let direct_ready = service
+        .update_model_status(UpdateModelDefinitionStatusCommand {
+            actor_user_id: Uuid::nil(),
+            model_id: created.id,
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::ApiExposedReady,
+        })
+        .await
+        .unwrap_err();
+
+    assert!(direct_ready.to_string().contains("api_exposure_status"));
 }

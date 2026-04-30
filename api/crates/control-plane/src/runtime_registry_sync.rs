@@ -4,7 +4,7 @@ use crate::{
     model_definition::{
         AddModelFieldCommand, CreateModelDefinitionCommand, DeleteModelDefinitionCommand,
         DeleteModelFieldCommand, ModelDefinitionService, UpdateModelDefinitionCommand,
-        UpdateModelFieldCommand,
+        UpdateModelDefinitionStatusCommand, UpdateModelFieldCommand,
     },
     ports::{ModelDefinitionRepository, RuntimeRegistrySync},
 };
@@ -40,6 +40,15 @@ where
         command: UpdateModelDefinitionCommand,
     ) -> Result<domain::ModelDefinitionRecord> {
         let model = self.model_definitions.update_model(command).await?;
+        self.sync.rebuild().await?;
+        Ok(model)
+    }
+
+    pub async fn update_model_status(
+        &self,
+        command: UpdateModelDefinitionStatusCommand,
+    ) -> Result<domain::ModelDefinitionRecord> {
+        let model = self.model_definitions.update_model_status(command).await?;
         self.sync.rebuild().await?;
         Ok(model)
     }

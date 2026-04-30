@@ -51,6 +51,10 @@ where
             actor_user_id: input.actor_user_id,
             scope_kind: input.model_scope_kind,
             scope_id: input.model_scope_id,
+            data_source_instance_id: None,
+            status: domain::DataModelStatus::Published,
+            api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            protection: domain::DataModelProtection::default(),
             code: input.code,
             title: input.title,
         })
