@@ -158,7 +158,15 @@ async fn external_source_runtime_crud_dispatches_to_data_source_backend_after_ac
         })
         .await
         .unwrap();
-    assert_eq!(listed.items, vec![json!({ "id": "external-1" })]);
+    assert_eq!(
+        listed.items,
+        vec![json!({
+            "id": "external-1",
+            "email": "ada@example.test",
+            "name": "Ada",
+            "created_by": actor_user_id.to_string(),
+        })]
+    );
     assert_eq!(listed.total, 41);
 
     let fetched = engine
@@ -170,18 +178,29 @@ async fn external_source_runtime_crud_dispatches_to_data_source_backend_after_ac
         })
         .await
         .unwrap();
-    assert_eq!(fetched, Some(json!({ "id": "external-1", "name": "Ada" })));
+    assert_eq!(
+        fetched,
+        Some(json!({
+            "id": "external-1",
+            "email": "ada@example.test",
+            "name": "Ada",
+            "created_by": actor_user_id.to_string(),
+        }))
+    );
 
     let created = engine
         .create_record(RuntimeCreateInput {
             actor: actor.clone(),
             model_code: "external_contacts".into(),
-            payload: json!({ "name": "Ada" }),
+            payload: json!({ "email": "ada@example.test", "name": "Ada" }),
             scope_grant: Some(grant.clone()),
         })
         .await
         .unwrap();
     assert_eq!(created["id"], json!("created-external"));
+    assert_eq!(created["email"], json!("ada@example.test"));
+    assert_eq!(created["name"], json!("Ada"));
+    assert!(created.get("external_only").is_none());
 
     let updated = engine
         .update_record(RuntimeUpdateInput {
@@ -227,7 +246,7 @@ async fn external_source_runtime_crud_dispatches_to_data_source_backend_after_ac
     );
     assert_eq!(
         calls[0].payload["sort"][0]["field_key"],
-        json!("created_at")
+        json!("created_at_utc")
     );
     assert_eq!(calls[0].payload["sort"][0]["descending"], json!(true));
     assert_eq!(calls[0].payload["page"]["limit"], json!(25));
@@ -237,7 +256,10 @@ async fn external_source_runtime_crud_dispatches_to_data_source_backend_after_ac
         json!(["company"])
     );
     assert_eq!(calls[1].payload["record_id"], json!("external-1"));
-    assert_eq!(calls[2].payload["record"], json!({ "name": "Ada" }));
+    assert_eq!(
+        calls[2].payload["record"],
+        json!({ "contact_email": "ada@example.test", "display_name": "Ada" })
+    );
     assert_eq!(
         calls[2].payload["context"]["owner_id"],
         json!(actor_user_id.to_string())
@@ -247,10 +269,102 @@ async fn external_source_runtime_crud_dispatches_to_data_source_backend_after_ac
         json!(workspace_id.to_string())
     );
     assert_eq!(calls[2].payload["transaction_id"], json!(null));
-    assert_eq!(calls[3].payload["patch"], json!({ "name": "Ada Lovelace" }));
+    assert_eq!(
+        calls[3].payload["patch"],
+        json!({ "display_name": "Ada Lovelace" })
+    );
     assert_eq!(calls[3].payload["transaction_id"], json!(null));
     assert_eq!(calls[4].payload["record_id"], json!("external-1"));
     assert_eq!(calls[4].payload["transaction_id"], json!(null));
+}
+
+#[tokio::test]
+async fn external_source_runtime_rejects_unknown_fields_and_invalid_sort_direction() {
+    let backend = Arc::new(CapturingDataSourceBackend::default());
+    let model_id = Uuid::now_v7();
+    let workspace_id = Uuid::now_v7();
+    let engine = RuntimeEngine::for_tests_with_models_and_data_source_backend(
+        vec![external_model_metadata(
+            model_id,
+            workspace_id,
+            Uuid::now_v7(),
+        )],
+        backend.clone(),
+    );
+    let actor = ActorContext::scoped(Uuid::now_v7(), workspace_id, "member", Vec::<String>::new());
+    let grant = RuntimeScopeGrant {
+        data_model_id: model_id,
+        scope_kind: domain::DataModelScopeKind::Workspace,
+        scope_id: workspace_id,
+        enabled: true,
+        permission_profile: domain::ScopeDataModelPermissionProfile::Owner,
+    };
+
+    assert!(engine
+        .create_record(RuntimeCreateInput {
+            actor: actor.clone(),
+            model_code: "external_contacts".into(),
+            payload: json!({ "unknown": "value" }),
+            scope_grant: Some(grant.clone()),
+        })
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("unknown runtime field"));
+
+    assert!(engine
+        .update_record(RuntimeUpdateInput {
+            actor: actor.clone(),
+            model_code: "external_contacts".into(),
+            record_id: "external-1".into(),
+            payload: json!({ "contact_email": "external-key-should-not-enter" }),
+            scope_grant: Some(grant.clone()),
+        })
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("unknown runtime field"));
+
+    assert!(engine
+        .list_records(RuntimeListInput {
+            actor: actor.clone(),
+            model_code: "external_contacts".into(),
+            filters: vec![RuntimeFilterInput {
+                field_code: "unknown".into(),
+                operator: "eq".into(),
+                value: json!("value"),
+            }],
+            sorts: vec![],
+            expand_relations: vec![],
+            page: 1,
+            page_size: 20,
+            scope_grant: Some(grant.clone()),
+        })
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("unknown runtime field"));
+
+    assert!(engine
+        .list_records(RuntimeListInput {
+            actor,
+            model_code: "external_contacts".into(),
+            filters: vec![],
+            sorts: vec![RuntimeSortInput {
+                field_code: "email".into(),
+                direction: "sideways".into(),
+            }],
+            expand_relations: vec![],
+            page: 1,
+            page_size: 20,
+            scope_grant: Some(grant),
+        })
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("unsupported sort direction"));
+
+    assert!(backend.calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -508,7 +622,7 @@ fn external_model_metadata(
                 code: "created_at".into(),
                 title: "Created At".into(),
                 physical_column_name: "created_at".into(),
-                external_field_key: None,
+                external_field_key: Some("created_at_utc".into()),
                 field_kind: domain::ModelFieldKind::String,
                 is_required: false,
                 is_unique: false,
@@ -518,6 +632,24 @@ fn external_model_metadata(
                 relation_target_model_id: None,
                 relation_options: json!({}),
                 sort_order: 1,
+                availability_status: domain::MetadataAvailabilityStatus::Available,
+            },
+            domain::ModelFieldRecord {
+                id: Uuid::now_v7(),
+                data_model_id: model_id,
+                code: "name".into(),
+                title: "Name".into(),
+                physical_column_name: "name".into(),
+                external_field_key: Some("display_name".into()),
+                field_kind: domain::ModelFieldKind::String,
+                is_required: false,
+                is_unique: false,
+                default_value: None,
+                display_interface: None,
+                display_options: json!({}),
+                relation_target_model_id: None,
+                relation_options: json!({}),
+                sort_order: 2,
                 availability_status: domain::MetadataAvailabilityStatus::Available,
             },
         ],
@@ -559,7 +691,13 @@ impl DataSourceRuntimeRecordBackend for CapturingDataSourceBackend {
     ) -> anyhow::Result<DataSourceListRecordsOutput> {
         self.capture("list", data_source_instance_id, &input);
         Ok(DataSourceListRecordsOutput {
-            rows: vec![json!({ "id": "external-1" })],
+            rows: vec![json!({
+                "id": "external-1",
+                "contact_email": "ada@example.test",
+                "display_name": "Ada",
+                "created_by": input.context.owner_id,
+                "external_only": "hidden",
+            })],
             next_cursor: None,
             total_count: Some(41),
             metadata: json!({}),
@@ -573,7 +711,13 @@ impl DataSourceRuntimeRecordBackend for CapturingDataSourceBackend {
     ) -> anyhow::Result<DataSourceGetRecordOutput> {
         self.capture("get", data_source_instance_id, &input);
         Ok(DataSourceGetRecordOutput {
-            record: Some(json!({ "id": "external-1", "name": "Ada" })),
+            record: Some(json!({
+                "id": "external-1",
+                "contact_email": "ada@example.test",
+                "display_name": "Ada",
+                "created_by": input.context.owner_id,
+                "external_only": "hidden",
+            })),
             metadata: json!({}),
         })
     }
@@ -585,7 +729,12 @@ impl DataSourceRuntimeRecordBackend for CapturingDataSourceBackend {
     ) -> anyhow::Result<DataSourceCreateRecordOutput> {
         self.capture("create", data_source_instance_id, &input);
         Ok(DataSourceCreateRecordOutput {
-            record: json!({ "id": "created-external" }),
+            record: json!({
+                "id": "created-external",
+                "contact_email": input.record["contact_email"],
+                "display_name": input.record["display_name"],
+                "external_only": "hidden",
+            }),
             metadata: json!({}),
         })
     }
@@ -597,7 +746,11 @@ impl DataSourceRuntimeRecordBackend for CapturingDataSourceBackend {
     ) -> anyhow::Result<DataSourceUpdateRecordOutput> {
         self.capture("update", data_source_instance_id, &input);
         Ok(DataSourceUpdateRecordOutput {
-            record: json!({ "id": "external-1", "name": "Ada Lovelace" }),
+            record: json!({
+                "id": "external-1",
+                "display_name": input.patch["display_name"],
+                "external_only": "hidden",
+            }),
             metadata: json!({}),
         })
     }

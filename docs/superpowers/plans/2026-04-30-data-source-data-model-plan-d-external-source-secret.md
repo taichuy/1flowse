@@ -311,6 +311,14 @@ Task 3b runtime-core dispatch slice validation record, 2026-04-30:
   - `cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_acl_tests`
 - Scope note: This narrowed Task 3b slice adds the runtime-core source-kind dispatch abstraction and fake-backend coverage for external-source list/get/create/update/delete after runtime ACL scope resolution. It maps runtime filters, sorts, pagination, expand options, payload, record id, owner context, and scope context into the data-source CRUD DTOs, and keeps main-source CRUD on the existing `RuntimeRecordRepository`. Api-server/plugin-runner host wiring remains the next Task 3b slice. REST connector fixture behavior remains Task 4.
 
+Task 3b runtime-core field mapping quality fix validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_engine_tests` failed after adding field mapping assertions because external-source list returned `contact_email/display_name/external_only` instead of Data Model field codes, and unknown create payload still reached the fake backend.
+- Green evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_engine_tests`
+- Scope note: This quality fix keeps the Task 3b scope narrowed to runtime-core. External-source filters, sorts, create payloads, and update patches now accept declared Data Model field codes plus platform runtime fields only, then map declared fields to `external_field_key` before calling the data-source backend. External list/get/create/update responses map external keys back to Data Model field codes, preserve platform runtime fields such as `id` and `created_by`, and drop external-only unknown keys. Host wiring and REST fixture behavior remain outside this fix.
+
 ### Task 4: REST API Connector Rules
 
 **Files:**

@@ -434,23 +434,8 @@ impl RuntimeEngine {
                     connection: DataSourceConfigInput::default(),
                     resource_key: external_resource_key(metadata)?,
                     context: data_source_context(query.scope_id, query.owner_user_id),
-                    filters: query
-                        .filters
-                        .into_iter()
-                        .map(|filter| DataSourceRecordFilter {
-                            field_key: external_field_key(metadata, &filter.field_code),
-                            operator: filter.operator,
-                            value: filter.value,
-                        })
-                        .collect(),
-                    sort: query
-                        .sorts
-                        .into_iter()
-                        .map(|sort| DataSourceRecordSort {
-                            field_key: external_field_key(metadata, &sort.field_code),
-                            descending: sort.direction.eq_ignore_ascii_case("desc"),
-                        })
-                        .collect(),
+                    filters: external_filters(metadata, query.filters)?,
+                    sort: external_sorts(metadata, query.sorts)?,
                     page: Some(data_source_page(query.page, query.page_size)),
                     options_json: serde_json::json!({
                         "expand_relations": query.expand_relations
@@ -461,7 +446,11 @@ impl RuntimeEngine {
 
         Ok(RuntimeListResult {
             total: output.total_count.unwrap_or(output.rows.len() as u64) as i64,
-            items: output.rows,
+            items: output
+                .rows
+                .into_iter()
+                .map(|record| external_record_to_runtime(metadata, record))
+                .collect(),
         })
     }
 
@@ -483,7 +472,11 @@ impl RuntimeEngine {
                 },
             )
             .await
-            .map(|output| output.record)
+            .map(|output| {
+                output
+                    .record
+                    .map(|record| external_record_to_runtime(metadata, record))
+            })
     }
 
     async fn create_external_record(
@@ -493,20 +486,21 @@ impl RuntimeEngine {
         owner_user_id: Option<Uuid>,
         payload: Value,
     ) -> Result<Value> {
+        let record = runtime_payload_to_external(metadata, payload)?;
         self.external_backend()?
             .create_record(
                 external_data_source_instance_id(metadata)?,
                 DataSourceCreateRecordInput {
                     connection: DataSourceConfigInput::default(),
                     resource_key: external_resource_key(metadata)?,
-                    record: payload,
+                    record,
                     context: data_source_context(scope_id, owner_user_id),
                     transaction_id: None,
                     options_json: Value::Object(Default::default()),
                 },
             )
             .await
-            .map(|output| output.record)
+            .map(|output| external_record_to_runtime(metadata, output.record))
     }
 
     async fn update_external_record(
@@ -516,6 +510,7 @@ impl RuntimeEngine {
         record_id: String,
         payload: Value,
     ) -> Result<Value> {
+        let patch = runtime_payload_to_external(metadata, payload)?;
         self.external_backend()?
             .update_record(
                 external_data_source_instance_id(metadata)?,
@@ -523,14 +518,14 @@ impl RuntimeEngine {
                     connection: DataSourceConfigInput::default(),
                     resource_key: external_resource_key(metadata)?,
                     record_id,
-                    patch: payload,
+                    patch,
                     context: data_source_context(access_scope.scope_id, access_scope.owner_user_id),
                     transaction_id: None,
                     options_json: Value::Object(Default::default()),
                 },
             )
             .await
-            .map(|output| output.record)
+            .map(|output| external_record_to_runtime(metadata, output.record))
     }
 
     async fn delete_external_record(
@@ -575,11 +570,105 @@ fn external_resource_key(metadata: &ModelMetadata) -> Result<String> {
         .ok_or_else(|| anyhow!("external resource key is not configured"))
 }
 
-fn external_field_key(metadata: &ModelMetadata, field_code: &str) -> String {
-    metadata
-        .field_by_code(field_code)
-        .and_then(|field| field.external_field_key.clone())
-        .unwrap_or_else(|| field_code.to_string())
+fn external_filters(
+    metadata: &ModelMetadata,
+    filters: Vec<RuntimeFilterInput>,
+) -> Result<Vec<DataSourceRecordFilter>> {
+    filters
+        .into_iter()
+        .map(|filter| {
+            Ok(DataSourceRecordFilter {
+                field_key: external_field_key(metadata, &filter.field_code)?,
+                operator: filter.operator,
+                value: filter.value,
+            })
+        })
+        .collect()
+}
+
+fn external_sorts(
+    metadata: &ModelMetadata,
+    sorts: Vec<RuntimeSortInput>,
+) -> Result<Vec<DataSourceRecordSort>> {
+    sorts
+        .into_iter()
+        .map(|sort| {
+            let direction = sort.direction.to_ascii_lowercase();
+            let descending = match direction.as_str() {
+                "asc" => false,
+                "desc" => true,
+                _ => return Err(anyhow!("unsupported sort direction")),
+            };
+
+            Ok(DataSourceRecordSort {
+                field_key: external_field_key(metadata, &sort.field_code)?,
+                descending,
+            })
+        })
+        .collect()
+}
+
+fn runtime_payload_to_external(metadata: &ModelMetadata, payload: Value) -> Result<Value> {
+    let Value::Object(object) = payload else {
+        return Err(anyhow!("runtime payload must be object"));
+    };
+    let mut mapped = serde_json::Map::new();
+
+    for (field_code, value) in object {
+        let field_key = external_field_key(metadata, &field_code)?;
+        mapped.insert(field_key, value);
+    }
+
+    Ok(Value::Object(mapped))
+}
+
+fn external_record_to_runtime(metadata: &ModelMetadata, record: Value) -> Value {
+    let Value::Object(object) = record else {
+        return record;
+    };
+    let mut mapped = serde_json::Map::new();
+
+    for (field_key, value) in object {
+        if let Some(field_code) = runtime_field_code(metadata, &field_key) {
+            mapped.insert(field_code, value);
+        }
+    }
+
+    Value::Object(mapped)
+}
+
+fn external_field_key(metadata: &ModelMetadata, field_code: &str) -> Result<String> {
+    if let Some(field) = metadata.field_by_code(field_code) {
+        return Ok(field
+            .external_field_key
+            .clone()
+            .unwrap_or_else(|| field.code.clone()));
+    }
+
+    if is_platform_runtime_field(field_code) {
+        Ok(field_code.to_string())
+    } else {
+        Err(anyhow!("unknown runtime field: {field_code}"))
+    }
+}
+
+fn runtime_field_code(metadata: &ModelMetadata, field_key: &str) -> Option<String> {
+    if let Some(field) = metadata
+        .fields
+        .iter()
+        .find(|field| field.external_field_key.as_deref().unwrap_or(&field.code) == field_key)
+    {
+        return Some(field.code.clone());
+    }
+
+    is_platform_runtime_field(field_key).then(|| field_key.to_string())
+}
+
+fn is_platform_runtime_field(field_code: &str) -> bool {
+    matches!(
+        field_code,
+        "id" | "created_by" | "created_at" | "updated_by" | "updated_at" | "deleted_at"
+    )
 }
 
 fn data_source_context(
