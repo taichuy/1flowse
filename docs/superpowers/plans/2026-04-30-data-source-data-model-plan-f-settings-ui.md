@@ -27,10 +27,27 @@
 - Settings style-boundary mapping includes the new data-model files.
 
 **F-B remaining**
-- Add user-facing create/update Data Model flows.
-- Add user-facing create/update/delete field flows in the field drawer.
-- Add API exposure request/update UI once the console API surface is confirmed.
-- Run lint/full frontend verification and commit the completed Plan F slice.
+- None. Plan F is complete.
+
+### 2026-05-01 F-B: Settings Data Model Management
+
+**Implemented**
+- Data source Data Model table now has create and edit drawer flows for `code`, `title`, `status`, and source binding.
+- Data Model field drawer is a management drawer for create/update/delete with explicit delete confirmation.
+- Field form supports field type, required, unique, default value JSON, display interface/options JSON, relation target, and relation options JSON.
+- API tab now lets users request API exposure and close an exposure request while keeping `api_exposed_ready` and `unsafe_external_source` display-only derived states.
+- Console API client/settings wrappers expose the API exposure request helper and field/model mutation helpers are covered by tests.
+- The console model PATCH route accepts `api_exposure_status` and routes it through the existing status/exposure normalization path without changing Plan C readiness or permission calculation.
+
+**Verification status**
+- `git diff --check` passed.
+- `pnpm --dir web/packages/api-client test src/_tests/console-data-models.test.ts` passed, 9 tests.
+- `scripts/node/exec-with-real-node.sh scripts/node/run-frontend-vitest.js run src/features/settings/api/_tests/data-models-api.test.ts src/features/settings/_tests/data-models-page.test.tsx` passed, 10 tests.
+- `cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes -- --test-threads=1` passed, 18 tests.
+- `cargo fmt --manifest-path api/Cargo.toml --all` passed.
+- `pnpm --dir web lint` passed with no warnings after the hook dependency cleanup.
+- `node scripts/node/test-frontend.js fast` passed, 66 files and 253 tests.
+- `node scripts/node/check-style-boundary.js page page.settings` passed.
 
 ## File Structure
 
@@ -60,7 +77,7 @@
 - Create: `web/app/src/features/settings/api/data-models.ts`
 - Test: `web/app/src/features/settings/api/_tests/settings-api.test.ts`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Cover wrappers for:
 
@@ -79,11 +96,11 @@ fetch Advisor findings
 fetch record preview
 ```
 
-- [ ] **Step 2: Implement client functions**
+- [x] **Step 2: Implement client functions**
 
 Use existing `transport` helpers and CSRF pattern from settings model provider/file management clients.
 
-- [ ] **Step 3: Run API wrapper tests**
+- [x] **Step 3: Run API wrapper tests**
 
 ```bash
 pnpm --dir web/app test -- settings-api
@@ -101,7 +118,7 @@ Expected: pass or use the nearest existing targeted Settings test command if the
 - Create: `web/app/src/features/settings/components/data-models/data-model-panel.css`
 - Test: `web/app/src/features/settings/_tests/data-models-page.test.tsx`
 
-- [ ] **Step 1: Write failing UI tests**
+- [x] **Step 1: Write failing UI tests**
 
 Assert:
 
@@ -113,11 +130,11 @@ data source detail shows default API exposure status selector
 clicking a data source shows Data Model table
 ```
 
-- [ ] **Step 2: Implement panel**
+- [x] **Step 2: Implement panel**
 
 Use Ant Design `Table`, `Descriptions`, `Form`, `Select`, `Tabs`, `Button`, and `Tag`. Keep page section unframed; use row tables and drawers for repeated records.
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 node scripts/node/test-frontend.js fast
@@ -134,7 +151,7 @@ node scripts/node/test-frontend.js fast
 - Create: `web/app/src/features/settings/components/data-models/DataModelRecordPreview.tsx`
 - Test: `web/app/src/features/settings/_tests/data-models-page.test.tsx`
 
-- [ ] **Step 1: Write failing UI tests**
+- [x] **Step 1: Write failing UI tests**
 
 Cover:
 
@@ -148,7 +165,7 @@ Advisor tab shows blocking/high/info findings
 record preview lists data through runtime route
 ```
 
-- [ ] **Step 2: Implement detail**
+- [x] **Step 2: Implement detail**
 
 Use tabs:
 
@@ -163,7 +180,7 @@ Advisor
 
 Display status controls in the page header or summary area, not hidden inside a form-only drawer.
 
-- [ ] **Step 3: Run targeted tests**
+- [x] **Step 3: Run targeted tests**
 
 ```bash
 node scripts/node/test-frontend.js fast
@@ -175,11 +192,11 @@ node scripts/node/test-frontend.js fast
 - Modify: `web/app/src/style-boundary/scenario-manifest.json`
 - Test: Settings page style boundary.
 
-- [ ] **Step 1: Register Settings scenario updates**
+- [x] **Step 1: Register Settings scenario updates**
 
 Add the new data-model files to the Settings page style boundary scenario.
 
-- [ ] **Step 2: Run style boundary**
+- [x] **Step 2: Run style boundary**
 
 ```bash
 node scripts/node/check-style-boundary.js page page.settings
@@ -187,7 +204,7 @@ node scripts/node/check-style-boundary.js page page.settings
 
 Expected: pass.
 
-- [ ] **Step 3: Run frontend fast gate**
+- [x] **Step 3: Run frontend fast gate**
 
 ```bash
 node scripts/node/test-frontend.js fast
@@ -195,14 +212,14 @@ node scripts/node/test-frontend.js fast
 
 ### Task 5: Plan F Verification And Commit
 
-- [ ] **Step 1: Type and test**
+- [x] **Step 1: Type and test**
 
 ```bash
 pnpm --dir web lint
 node scripts/node/test-frontend.js fast
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add web/packages/api-client web/app/src/features/settings web/app/src/style-boundary

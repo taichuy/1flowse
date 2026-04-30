@@ -1,18 +1,23 @@
 import { useState } from 'react';
 
-import { Descriptions, Table, Tabs, Tag, Typography } from 'antd';
+import { Button, Descriptions, Flex, Table, Tabs, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import type {
+  CreateSettingsDataModelFieldInput,
   SettingsDataModel,
   SettingsDataModelAdvisorFinding,
   SettingsDataModelField,
   SettingsDataModelScopeGrant,
-  SettingsRuntimeRecordPreview
+  SettingsRuntimeRecordPreview,
+  UpdateSettingsDataModelApiExposureInput,
+  UpdateSettingsDataModelFieldInput,
+  UpdateSettingsDataModelInput
 } from '../../api/data-models';
 import { DataModelAdvisorTab } from './DataModelAdvisorTab';
 import { DataModelApiTab } from './DataModelApiTab';
 import { DataModelFieldDrawer } from './DataModelFieldDrawer';
+import { DataModelFormDrawer } from './DataModelFormDrawer';
 import { DataModelPermissionsTab } from './DataModelPermissionsTab';
 import { DataModelRecordPreview } from './DataModelRecordPreview';
 
@@ -22,6 +27,7 @@ const dataModelStatusOptions = ['draft', 'published', 'disabled', 'broken'].map(
 
 export function DataModelDetail({
   model,
+  allModels,
   canManage,
   grants,
   grantsLoading,
@@ -31,10 +37,17 @@ export function DataModelDetail({
   recordPreview,
   recordPreviewLoading,
   modelSaving,
+  fieldSaving,
   onUpdateModelStatus,
+  onUpdateModel,
+  onCreateField,
+  onUpdateField,
+  onDeleteField,
+  onUpdateApiExposure,
   onSaveGrant
 }: {
   model: SettingsDataModel;
+  allModels: SettingsDataModel[];
   canManage: boolean;
   grants: SettingsDataModelScopeGrant[];
   grantsLoading: boolean;
@@ -44,11 +57,26 @@ export function DataModelDetail({
   recordPreview: SettingsRuntimeRecordPreview | undefined;
   recordPreviewLoading: boolean;
   modelSaving: boolean;
+  fieldSaving: boolean;
   onUpdateModelStatus: (status: SettingsDataModel['status']) => void;
+  onUpdateModel: (input: UpdateSettingsDataModelInput) => void;
+  onCreateField: (input: CreateSettingsDataModelFieldInput) => void;
+  onUpdateField: (
+    field: SettingsDataModelField,
+    input: UpdateSettingsDataModelFieldInput
+  ) => void;
+  onDeleteField: (field: SettingsDataModelField) => void;
+  onUpdateApiExposure: (
+    input: UpdateSettingsDataModelApiExposureInput
+  ) => void;
   onSaveGrant: Parameters<typeof DataModelPermissionsTab>[0]['onSave'];
 }) {
-  const [fieldDrawerRecord, setFieldDrawerRecord] =
-    useState<SettingsDataModelField | null>(null);
+  const [modelDrawerOpen, setModelDrawerOpen] = useState(false);
+  const [fieldDrawerState, setFieldDrawerState] = useState<
+    | { open: false; mode: 'create'; field: null }
+    | { open: true; mode: 'create'; field: null }
+    | { open: true; mode: 'edit'; field: SettingsDataModelField }
+  >({ open: false, mode: 'create', field: null });
 
   const fieldColumns: ColumnsType<SettingsDataModelField> = [
     {
@@ -59,7 +87,7 @@ export function DataModelDetail({
         <button
           type="button"
           className="data-model-panel__link-button"
-          onClick={() => setFieldDrawerRecord(field)}
+          onClick={() => setFieldDrawerState({ open: true, mode: 'edit', field })}
         >
           <Typography.Text strong>{field.title}</Typography.Text>
           <Typography.Text type="secondary">{field.code}</Typography.Text>
@@ -83,6 +111,21 @@ export function DataModelDetail({
       dataIndex: 'is_unique',
       key: 'is_unique',
       render: (value: boolean) => (value ? '是' : '否')
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 120,
+      render: (_, field) => (
+        <Button
+          type="link"
+          size="small"
+          disabled={!canManage}
+          onClick={() => setFieldDrawerState({ open: true, mode: 'edit', field })}
+        >
+          编辑
+        </Button>
+      )
     }
   ];
 
@@ -97,26 +140,31 @@ export function DataModelDetail({
           <Typography.Title level={4}>{model.title}</Typography.Title>
           <Typography.Text type="secondary">{model.code}</Typography.Text>
         </div>
-        <div className="data-model-panel__status-control">
-          <label htmlFor="data-model-status-select">Data Model 状态</label>
-          <select
-            id="data-model-status-select"
-            className="data-model-panel__native-select"
-            value={model.status}
-            disabled={!canManage || modelSaving}
-            onChange={(event) =>
-              onUpdateModelStatus(
-                event.target.value as SettingsDataModel['status']
-              )
-            }
-          >
-            {dataModelStatusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <Flex align="flex-end" gap={12} wrap="wrap">
+          <div className="data-model-panel__status-control">
+            <label htmlFor="data-model-status-select">Data Model 状态</label>
+            <select
+              id="data-model-status-select"
+              className="data-model-panel__native-select"
+              value={model.status}
+              disabled={!canManage || modelSaving}
+              onChange={(event) =>
+                onUpdateModelStatus(
+                  event.target.value as SettingsDataModel['status']
+                )
+              }
+            >
+              {dataModelStatusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button disabled={!canManage} onClick={() => setModelDrawerOpen(true)}>
+            编辑 Data Model
+          </Button>
+        </Flex>
       </div>
 
       <Descriptions
@@ -139,7 +187,22 @@ export function DataModelDetail({
             key: 'fields',
             label: '字段',
             children: (
-              <>
+              <Flex vertical gap={12}>
+                <Flex justify="flex-end">
+                  <Button
+                    type="primary"
+                    disabled={!canManage}
+                    onClick={() =>
+                      setFieldDrawerState({
+                        open: true,
+                        mode: 'create',
+                        field: null
+                      })
+                    }
+                  >
+                    新增字段
+                  </Button>
+                </Flex>
                 <Table
                   rowKey="id"
                   size="small"
@@ -148,10 +211,24 @@ export function DataModelDetail({
                   pagination={false}
                 />
                 <DataModelFieldDrawer
-                  field={fieldDrawerRecord}
-                  onClose={() => setFieldDrawerRecord(null)}
+                  open={fieldDrawerState.open}
+                  mode={fieldDrawerState.mode}
+                  field={fieldDrawerState.field}
+                  modelOptions={allModels}
+                  saving={fieldSaving}
+                  canManage={canManage}
+                  onClose={() =>
+                    setFieldDrawerState({
+                      open: false,
+                      mode: 'create',
+                      field: null
+                    })
+                  }
+                  onCreate={onCreateField}
+                  onUpdate={onUpdateField}
+                  onDelete={onDeleteField}
                 />
-              </>
+              </Flex>
             )
           },
           {
@@ -189,7 +266,14 @@ export function DataModelDetail({
           {
             key: 'api',
             label: 'API',
-            children: <DataModelApiTab model={model} />
+            children: (
+              <DataModelApiTab
+                model={model}
+                canManage={canManage}
+                saving={modelSaving}
+                onUpdateApiExposure={onUpdateApiExposure}
+              />
+            )
           },
           {
             key: 'records',
@@ -212,6 +296,19 @@ export function DataModelDetail({
             )
           }
         ]}
+      />
+      <DataModelFormDrawer
+        open={modelDrawerOpen}
+        mode="edit"
+        model={model}
+        source={null}
+        saving={modelSaving}
+        onClose={() => setModelDrawerOpen(false)}
+        onCreate={() => undefined}
+        onUpdate={(_model, input) => {
+          onUpdateModel(input);
+          setModelDrawerOpen(false);
+        }}
       />
     </section>
   );

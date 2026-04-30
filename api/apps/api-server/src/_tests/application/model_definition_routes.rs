@@ -1244,6 +1244,75 @@ async fn model_definition_routes_do_not_trust_raw_ready_on_status_update() {
 }
 
 #[tokio::test]
+async fn model_definition_routes_patch_api_exposure_request_without_status_update() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/models")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "scope_kind": "workspace",
+                        "code": "api_request_only_orders",
+                        "title": "API Request Only Orders"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+    let created: serde_json::Value = serde_json::from_slice(
+        &to_bytes(create_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let model_id = created["data"]["id"].as_str().unwrap().to_string();
+
+    let update_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/api/console/models/{model_id}"))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "api_exposure_status": "api_exposed_no_permission"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(update_response.status(), StatusCode::OK);
+    let updated: serde_json::Value = serde_json::from_slice(
+        &to_bytes(update_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(updated["data"]["status"], json!("published"));
+    assert_eq!(
+        updated["data"]["api_exposure_status"],
+        json!("published_not_exposed")
+    );
+}
+
+#[tokio::test]
 async fn model_definition_routes_show_not_exposed_for_stored_ready_or_no_permission_without_api_key(
 ) {
     let (app, database_url) = test_app_with_database_url().await;

@@ -32,8 +32,8 @@ Related completed design work:
    Extends data-source RuntimeExtension contracts for PostgreSQL and REST CRUD, adds secret references, and blocks unsafe external exposure.
 5. [x] [Plan E: Advisor, Protected Models, And API Docs](./2026-04-30-data-source-data-model-plan-e-advisor-protected-openapi.md)
    Adds protected-model enforcement, Data Model Advisor findings, and dynamic Data Model API documentation.
-6. [ ] [Plan F: Settings Data Source UI](./2026-04-30-data-source-data-model-plan-f-settings-ui.md)
-   F-A adds Settings / 数据源 baseline with data source defaults, Data Model status, permissions, API readiness display, Advisor, and record preview; F-B still covers create/edit/delete management flows and final frontend verification.
+6. [x] [Plan F: Settings Data Source UI](./2026-04-30-data-source-data-model-plan-f-settings-ui.md)
+   Adds Settings / 数据源 with data source defaults, Data Model create/edit, field create/edit/delete, permissions, API exposure request/close, Advisor, record preview, and style-boundary coverage.
 7. [ ] [Plan G: Orchestration Data Model Node](./2026-04-30-data-source-data-model-plan-g-orchestration-node.md)
    Adds the generic Data Model node, dynamic schema loading, runtime CRUD execution, and workflow actor checks.
 8. [ ] [Plan H: Scope Provider And Final QA](./2026-04-30-data-source-data-model-plan-h-scope-provider-qa.md)

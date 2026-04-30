@@ -10,8 +10,7 @@ const dataModelStatusOptions = ['draft', 'published', 'disabled', 'broken'].map(
 const apiExposureOptions = [
   'draft',
   'published_not_exposed',
-  'api_exposed_no_permission',
-  'unsafe_external_source'
+  'api_exposed_no_permission'
 ].map((value) => ({ label: `默认 ${value}`, value }));
 
 export function DataSourcePanel({

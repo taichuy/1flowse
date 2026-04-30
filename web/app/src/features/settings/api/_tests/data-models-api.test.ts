@@ -18,6 +18,9 @@ vi.mock('@1flowbase/api-client', () => ({
   fetchConsoleDataModels: vi.fn().mockResolvedValue([]),
   fetchConsoleDataSourceInstances: vi.fn().mockResolvedValue([]),
   updateConsoleDataModel: vi.fn().mockResolvedValue({ id: 'model-1' }),
+  updateConsoleDataModelApiExposure: vi.fn().mockResolvedValue({
+    id: 'model-1'
+  }),
   updateConsoleDataModelField: vi.fn().mockResolvedValue({ id: 'field-1' }),
   updateConsoleDataModelScopeGrant: vi.fn().mockResolvedValue({
     id: 'grant-1'
@@ -31,15 +34,19 @@ import {
   createConsoleDataModel,
   createConsoleDataModelField,
   createConsoleDataModelScopeGrant,
+  deleteConsoleDataModelField,
   fetchConsoleDataModels,
   fetchConsoleDataSourceInstances,
   updateConsoleDataModel,
+  updateConsoleDataModelApiExposure,
+  updateConsoleDataModelField,
   updateConsoleDataSourceDefaults
 } from '@1flowbase/api-client';
 import {
   createSettingsDataModel,
   createSettingsDataModelField,
   createSettingsDataModelScopeGrant,
+  deleteSettingsDataModelField,
   fetchSettingsDataModels,
   fetchSettingsDataSourceInstances,
   settingsDataModelAdvisorFindingsQueryKey,
@@ -49,6 +56,8 @@ import {
   settingsDataModelScopeGrantsQueryKey,
   settingsDataSourcesQueryKey,
   updateSettingsDataModel,
+  updateSettingsDataModelApiExposure,
+  updateSettingsDataModelField,
   updateSettingsDataSourceDefaults
 } from '../data-models';
 
@@ -139,6 +148,17 @@ describe('settings data models API wrappers', () => {
       'csrf-123'
     );
 
+    await updateSettingsDataModelApiExposure(
+      'model-1',
+      { api_exposure_status: 'api_exposed_no_permission' },
+      'csrf-123'
+    );
+    expect(updateConsoleDataModelApiExposure).toHaveBeenCalledWith(
+      'model-1',
+      { api_exposure_status: 'api_exposed_no_permission' },
+      'csrf-123'
+    );
+
     await createSettingsDataModelField(
       'model-1',
       {
@@ -156,6 +176,42 @@ describe('settings data models API wrappers', () => {
       'csrf-123'
     );
     expect(createConsoleDataModelField).toHaveBeenCalled();
+
+    await updateSettingsDataModelField(
+      'model-1',
+      'field-1',
+      {
+        title: 'Primary Email',
+        is_required: true,
+        is_unique: true,
+        default_value: null,
+        display_interface: 'input',
+        display_options: {},
+        relation_options: {}
+      },
+      'csrf-123'
+    );
+    expect(updateConsoleDataModelField).toHaveBeenCalledWith(
+      'model-1',
+      'field-1',
+      {
+        title: 'Primary Email',
+        is_required: true,
+        is_unique: true,
+        default_value: null,
+        display_interface: 'input',
+        display_options: {},
+        relation_options: {}
+      },
+      'csrf-123'
+    );
+
+    await deleteSettingsDataModelField('model-1', 'field-1', 'csrf-123');
+    expect(deleteConsoleDataModelField).toHaveBeenCalledWith(
+      'model-1',
+      'field-1',
+      'csrf-123'
+    );
 
     await createSettingsDataModelScopeGrant(
       'model-1',

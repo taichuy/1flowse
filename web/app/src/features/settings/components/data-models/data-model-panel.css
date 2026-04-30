@@ -41,6 +41,10 @@
   margin: 0;
 }
 
+.data-model-panel__section-title {
+  margin: 0;
+}
+
 .data-model-panel__status-control {
   display: flex;
   flex-direction: column;

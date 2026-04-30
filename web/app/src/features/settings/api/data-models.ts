@@ -10,6 +10,7 @@ import {
   fetchConsoleDataModels,
   fetchConsoleDataSourceInstances,
   updateConsoleDataModel,
+  updateConsoleDataModelApiExposure,
   updateConsoleDataModelField,
   updateConsoleDataModelScopeGrant,
   updateConsoleDataSourceDefaults,
@@ -23,6 +24,7 @@ import {
   type CreateConsoleDataModelFieldInput,
   type CreateConsoleDataModelInput,
   type CreateConsoleDataModelScopeGrantInput,
+  type UpdateConsoleDataModelApiExposureInput,
   type UpdateConsoleDataModelFieldInput,
   type UpdateConsoleDataModelInput,
   type UpdateConsoleDataModelScopeGrantInput,
@@ -38,6 +40,8 @@ export type SettingsRuntimeRecordPreview = ConsoleRuntimeRecordPreview;
 export type SettingsDataModelOpenApiDocument = ConsoleDataModelOpenApiDocument;
 export type CreateSettingsDataModelInput = CreateConsoleDataModelInput;
 export type UpdateSettingsDataModelInput = UpdateConsoleDataModelInput;
+export type UpdateSettingsDataModelApiExposureInput =
+  UpdateConsoleDataModelApiExposureInput;
 export type CreateSettingsDataModelFieldInput =
   CreateConsoleDataModelFieldInput;
 export type UpdateSettingsDataModelFieldInput =
@@ -106,6 +110,14 @@ export function updateSettingsDataModel(
   csrfToken: string
 ) {
   return updateConsoleDataModel(modelId, input, csrfToken);
+}
+
+export function updateSettingsDataModelApiExposure(
+  modelId: string,
+  input: UpdateSettingsDataModelApiExposureInput,
+  csrfToken: string
+) {
+  return updateConsoleDataModelApiExposure(modelId, input, csrfToken);
 }
 
 export function createSettingsDataModelField(

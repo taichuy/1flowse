@@ -13,6 +13,7 @@ import {
   fetchConsoleDataModels,
   fetchConsoleDataSourceInstances,
   updateConsoleDataModel,
+  updateConsoleDataModelApiExposure,
   updateConsoleDataModelField,
   updateConsoleDataModelScopeGrant,
   updateConsoleDataSourceDefaults
@@ -86,6 +87,25 @@ describe('console-data-models client', () => {
     ).resolves.toMatchObject({
       path: '/api/console/models/model-1',
       method: 'PATCH',
+      csrfToken: 'csrf-123'
+    });
+  });
+
+  test('updates API exposure requests through the model patch route', async () => {
+    await expect(
+      updateConsoleDataModelApiExposure(
+        'model-1',
+        {
+          api_exposure_status: 'api_exposed_no_permission'
+        },
+        'csrf-123'
+      )
+    ).resolves.toMatchObject({
+      path: '/api/console/models/model-1',
+      method: 'PATCH',
+      body: {
+        api_exposure_status: 'api_exposed_no_permission'
+      },
       csrfToken: 'csrf-123'
     });
   });
