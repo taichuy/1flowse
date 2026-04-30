@@ -166,6 +166,27 @@ where
         Ok(entries)
     }
 
+    pub async fn list_instances(
+        &self,
+        actor_user_id: Uuid,
+        workspace_id: Uuid,
+    ) -> Result<Vec<DataSourceInstanceView>> {
+        let actor = load_actor_context_for_user(&self.repository, actor_user_id).await?;
+        ensure_workspace_matches(&actor, workspace_id)?;
+        ensure_external_data_source_permission(&actor, "view")?;
+
+        Ok(self
+            .repository
+            .list_instances(workspace_id)
+            .await?
+            .into_iter()
+            .map(|instance| DataSourceInstanceView {
+                instance,
+                catalog: None,
+            })
+            .collect())
+    }
+
     pub async fn create_instance(
         &self,
         command: CreateDataSourceInstanceCommand,

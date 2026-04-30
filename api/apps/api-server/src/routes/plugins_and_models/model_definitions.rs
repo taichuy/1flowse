@@ -100,6 +100,11 @@ pub struct ConfirmationQuery {
     pub confirmed: Option<bool>,
 }
 
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct ListModelsQuery {
+    pub data_source_instance_id: Option<String>,
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ModelFieldResponse {
     pub id: String,
@@ -179,7 +184,10 @@ pub fn router() -> Router<Arc<ApiState>> {
             "/models/:id/fields/:field_id",
             patch(update_field).delete(delete_field),
         )
-        .route("/models/:id/scope-grants", post(create_scope_grant))
+        .route(
+            "/models/:id/scope-grants",
+            get(list_scope_grants).post(create_scope_grant),
+        )
         .route(
             "/models/:id/scope-grants/:grant_id",
             patch(update_scope_grant).delete(delete_scope_grant),
@@ -333,11 +341,27 @@ fn mutation_service(
 pub async fn list_models(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
+    Query(query): Query<ListModelsQuery>,
 ) -> Result<Json<ApiSuccess<Vec<ModelDefinitionResponse>>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    let models = ModelDefinitionService::new(state.store.clone())
+    let mut models = ModelDefinitionService::new(state.store.clone())
         .list_models(context.user.id)
         .await?;
+    if let Some(data_source_instance_id) = query.data_source_instance_id.as_deref() {
+        if data_source_instance_id == "main_source" {
+            models.retain(|model| {
+                model.source_kind == domain::DataModelSourceKind::MainSource
+                    && model.data_source_instance_id.is_none()
+            });
+        } else {
+            let data_source_instance_id =
+                parse_uuid(data_source_instance_id, "data_source_instance_id")?;
+            models.retain(|model| {
+                model.source_kind == domain::DataModelSourceKind::ExternalSource
+                    && model.data_source_instance_id == Some(data_source_instance_id)
+            });
+        }
+    }
 
     Ok(Json(ApiSuccess::new(
         models
@@ -426,6 +450,27 @@ pub async fn get_advisor_findings(
             .into_iter()
             .map(to_advisor_finding_response)
             .collect(),
+    )))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/models/{id}/scope-grants",
+    params(("id" = String, Path, description = "Model definition id")),
+    responses((status = 200, body = [ScopeGrantResponse]), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn list_scope_grants(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(model_id): Path<String>,
+) -> Result<Json<ApiSuccess<Vec<ScopeGrantResponse>>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let grants = ModelDefinitionService::new(state.store.clone())
+        .list_scope_grants(context.user.id, parse_uuid(&model_id, "model_id")?)
+        .await?;
+
+    Ok(Json(ApiSuccess::new(
+        grants.into_iter().map(to_scope_grant_response).collect(),
     )))
 }
 

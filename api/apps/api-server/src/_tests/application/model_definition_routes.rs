@@ -579,6 +579,34 @@ async fn model_definition_routes_manage_models_and_fields_without_publish() {
     assert_eq!(created["data"]["runtime_availability"], json!("available"));
     let model_id = created["data"]["id"].as_str().unwrap().to_string();
 
+    let list_main_source_models = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/console/models?data_source_instance_id=main_source")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(list_main_source_models.status(), StatusCode::OK);
+    let list_main_source_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(list_main_source_models.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let models = list_main_source_payload["data"].as_array().unwrap();
+    assert!(models.iter().any(|model| {
+        model["id"].as_str() == Some(&model_id)
+            && model["source_kind"].as_str() == Some("main_source")
+    }));
+    assert!(models.iter().all(|model| {
+        model["data_source_instance_id"].is_null()
+            && model["source_kind"].as_str() == Some("main_source")
+    }));
+
     let field_response = app
         .clone()
         .oneshot(
@@ -1350,6 +1378,36 @@ async fn model_definition_scope_grant_routes_audit_and_update_runtime_readiness(
     )
     .unwrap();
     let grant_id = grant_payload["data"]["id"].as_str().unwrap().to_string();
+
+    let list_grants_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/console/models/{model_id}/scope-grants"))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(list_grants_response.status(), StatusCode::OK);
+    let list_grants_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(list_grants_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(list_grants_payload["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|grant| {
+            grant["id"].as_str() == Some(&grant_id)
+                && grant["data_model_id"].as_str() == Some(&model_id)
+                && grant["scope_kind"].as_str() == Some("system")
+                && grant["permission_profile"].as_str() == Some("scope_all")
+        }));
 
     let system_key_response = app
         .clone()

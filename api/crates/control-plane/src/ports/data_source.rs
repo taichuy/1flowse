@@ -90,6 +90,12 @@ pub struct CreateDataSourcePreviewSessionInput {
 
 #[async_trait]
 pub trait DataSourceRepository: Send + Sync {
+    async fn list_instances(
+        &self,
+        _workspace_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::DataSourceInstanceRecord>> {
+        anyhow::bail!("list_data_source_instances is not implemented")
+    }
     async fn create_instance(
         &self,
         input: &CreateDataSourceInstanceInput,

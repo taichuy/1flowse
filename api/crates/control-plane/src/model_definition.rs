@@ -424,6 +424,51 @@ where
         self.with_effective_exposure(model).await
     }
 
+    pub async fn list_scope_grants(
+        &self,
+        actor_user_id: Uuid,
+        model_id: Uuid,
+    ) -> Result<Vec<domain::ScopeDataModelGrantRecord>> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(actor_user_id)
+            .await?;
+        ensure_state_model_permission(&actor, "view")?;
+        self.repository
+            .get_model_definition(actor.current_workspace_id, model_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+
+        let mut grants = self
+            .repository
+            .list_scope_data_model_grants(
+                domain::DataModelScopeKind::Workspace,
+                actor.current_workspace_id,
+            )
+            .await?;
+        grants.extend(
+            self.repository
+                .list_scope_data_model_grants(
+                    domain::DataModelScopeKind::System,
+                    domain::SYSTEM_SCOPE_ID,
+                )
+                .await?,
+        );
+        grants.retain(|grant| grant.data_model_id == model_id);
+        grants.sort_by(|left, right| {
+            left.scope_kind
+                .as_str()
+                .cmp(right.scope_kind.as_str())
+                .then(
+                    left.permission_profile
+                        .as_str()
+                        .cmp(right.permission_profile.as_str()),
+                )
+                .then(left.id.cmp(&right.id))
+        });
+        Ok(grants)
+    }
+
     pub async fn update_model(
         &self,
         command: UpdateModelDefinitionCommand,

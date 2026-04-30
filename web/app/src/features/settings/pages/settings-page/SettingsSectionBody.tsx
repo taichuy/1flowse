@@ -5,15 +5,12 @@ import { MemberManagementPanel } from '../../components/MemberManagementPanel';
 import { RolePermissionPanel } from '../../components/RolePermissionPanel';
 import { SystemRuntimePanel } from '../../components/SystemRuntimePanel';
 import type { SettingsSectionKey } from '../../lib/settings-sections';
+import { SettingsDataModelsSection } from './SettingsDataModelsSection';
+import { SettingsFilesSection } from './SettingsFilesSection';
 
 const ApiDocsPanel = lazy(() =>
   import('../../components/ApiDocsPanel').then((module) => ({
     default: module.ApiDocsPanel
-  }))
-);
-const SettingsFilesSection = lazy(() =>
-  import('./SettingsFilesSection').then((module) => ({
-    default: module.SettingsFilesSection
   }))
 );
 const SettingsModelProvidersSection = lazy(() =>
@@ -43,6 +40,7 @@ export function SettingsSectionBody({
   permissions,
   canManageMembers,
   canManageRoles,
+  canManageDataModels,
   canManageModelProviders,
   canManageHostInfrastructure
 }: {
@@ -51,6 +49,7 @@ export function SettingsSectionBody({
   permissions: string[];
   canManageMembers: boolean;
   canManageRoles: boolean;
+  canManageDataModels: boolean;
   canManageModelProviders: boolean;
   canManageHostInfrastructure: boolean;
 }) {
@@ -65,17 +64,15 @@ export function SettingsSectionBody({
     case 'system-runtime':
       return <SystemRuntimePanel />;
     case 'files':
-      return (
-        <SettingsSectionBoundary>
-          <SettingsFilesSection isRoot={isRoot} permissions={permissions} />
-        </SettingsSectionBoundary>
-      );
+      return <SettingsFilesSection isRoot={isRoot} permissions={permissions} />;
     case 'model-providers':
       return (
         <SettingsSectionBoundary>
           <SettingsModelProvidersSection canManage={canManageModelProviders} />
         </SettingsSectionBoundary>
       );
+    case 'data-models':
+      return <SettingsDataModelsSection canManage={canManageDataModels} />;
     case 'host-infrastructure':
       return (
         <SettingsSectionBoundary>

@@ -1,0 +1,218 @@
+import { useState } from 'react';
+
+import { Descriptions, Table, Tabs, Tag, Typography } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+
+import type {
+  SettingsDataModel,
+  SettingsDataModelAdvisorFinding,
+  SettingsDataModelField,
+  SettingsDataModelScopeGrant,
+  SettingsRuntimeRecordPreview
+} from '../../api/data-models';
+import { DataModelAdvisorTab } from './DataModelAdvisorTab';
+import { DataModelApiTab } from './DataModelApiTab';
+import { DataModelFieldDrawer } from './DataModelFieldDrawer';
+import { DataModelPermissionsTab } from './DataModelPermissionsTab';
+import { DataModelRecordPreview } from './DataModelRecordPreview';
+
+const dataModelStatusOptions = ['draft', 'published', 'disabled', 'broken'].map(
+  (value) => ({ label: value, value })
+);
+
+export function DataModelDetail({
+  model,
+  canManage,
+  grants,
+  grantsLoading,
+  grantsSaving,
+  advisorFindings,
+  advisorLoading,
+  recordPreview,
+  recordPreviewLoading,
+  modelSaving,
+  onUpdateModelStatus,
+  onSaveGrant
+}: {
+  model: SettingsDataModel;
+  canManage: boolean;
+  grants: SettingsDataModelScopeGrant[];
+  grantsLoading: boolean;
+  grantsSaving: boolean;
+  advisorFindings: SettingsDataModelAdvisorFinding[];
+  advisorLoading: boolean;
+  recordPreview: SettingsRuntimeRecordPreview | undefined;
+  recordPreviewLoading: boolean;
+  modelSaving: boolean;
+  onUpdateModelStatus: (status: SettingsDataModel['status']) => void;
+  onSaveGrant: Parameters<typeof DataModelPermissionsTab>[0]['onSave'];
+}) {
+  const [fieldDrawerRecord, setFieldDrawerRecord] =
+    useState<SettingsDataModelField | null>(null);
+
+  const fieldColumns: ColumnsType<SettingsDataModelField> = [
+    {
+      title: '字段',
+      dataIndex: 'title',
+      key: 'title',
+      render: (_, field) => (
+        <button
+          type="button"
+          className="data-model-panel__link-button"
+          onClick={() => setFieldDrawerRecord(field)}
+        >
+          <Typography.Text strong>{field.title}</Typography.Text>
+          <Typography.Text type="secondary">{field.code}</Typography.Text>
+        </button>
+      )
+    },
+    {
+      title: '类型',
+      dataIndex: 'field_kind',
+      key: 'field_kind',
+      render: (value: string) => <Tag>{value}</Tag>
+    },
+    {
+      title: '必填',
+      dataIndex: 'is_required',
+      key: 'is_required',
+      render: (value: boolean) => (value ? '是' : '否')
+    },
+    {
+      title: '唯一',
+      dataIndex: 'is_unique',
+      key: 'is_unique',
+      render: (value: boolean) => (value ? '是' : '否')
+    }
+  ];
+
+  const relationFields = model.fields.filter(
+    (field) => field.relation_target_model_id
+  );
+
+  return (
+    <section className="data-model-panel__detail" aria-label="Data Model 详情">
+      <div className="data-model-panel__detail-head">
+        <div>
+          <Typography.Title level={4}>{model.title}</Typography.Title>
+          <Typography.Text type="secondary">{model.code}</Typography.Text>
+        </div>
+        <div className="data-model-panel__status-control">
+          <label htmlFor="data-model-status-select">Data Model 状态</label>
+          <select
+            id="data-model-status-select"
+            className="data-model-panel__native-select"
+            value={model.status}
+            disabled={!canManage || modelSaving}
+            onChange={(event) =>
+              onUpdateModelStatus(
+                event.target.value as SettingsDataModel['status']
+              )
+            }
+          >
+            {dataModelStatusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <Descriptions
+        size="small"
+        column={{ xs: 1, sm: 2, lg: 3 }}
+        items={[
+          { key: 'source', label: '来源', children: model.source_kind },
+          {
+            key: 'runtime',
+            label: 'Runtime',
+            children: model.runtime_availability
+          },
+          { key: 'table', label: '物理表', children: model.physical_table_name }
+        ]}
+      />
+
+      <Tabs
+        items={[
+          {
+            key: 'fields',
+            label: '字段',
+            children: (
+              <>
+                <Table
+                  rowKey="id"
+                  size="small"
+                  columns={fieldColumns}
+                  dataSource={model.fields}
+                  pagination={false}
+                />
+                <DataModelFieldDrawer
+                  field={fieldDrawerRecord}
+                  onClose={() => setFieldDrawerRecord(null)}
+                />
+              </>
+            )
+          },
+          {
+            key: 'relations',
+            label: '关系',
+            children: (
+              <Table
+                rowKey="id"
+                size="small"
+                columns={[
+                  { title: '字段', dataIndex: 'title', key: 'title' },
+                  {
+                    title: '目标模型',
+                    dataIndex: 'relation_target_model_id',
+                    key: 'relation_target_model_id'
+                  }
+                ]}
+                dataSource={relationFields}
+                pagination={false}
+              />
+            )
+          },
+          {
+            key: 'permissions',
+            label: '权限',
+            children: (
+              <DataModelPermissionsTab
+                grants={grants}
+                loading={grantsLoading}
+                saving={grantsSaving}
+                onSave={onSaveGrant}
+              />
+            )
+          },
+          {
+            key: 'api',
+            label: 'API',
+            children: <DataModelApiTab model={model} />
+          },
+          {
+            key: 'records',
+            label: '记录预览',
+            children: (
+              <DataModelRecordPreview
+                preview={recordPreview}
+                loading={recordPreviewLoading}
+              />
+            )
+          },
+          {
+            key: 'advisor',
+            label: 'Advisor',
+            children: (
+              <DataModelAdvisorTab
+                findings={advisorFindings}
+                loading={advisorLoading}
+              />
+            )
+          }
+        ]}
+      />
+    </section>
+  );
+}

@@ -10,6 +10,28 @@
 
 ---
 
+## Execution Checkpoint
+
+### 2026-05-01 F-A: Settings Data Model Baseline
+
+**Completed and verified**
+- Settings navigation exposes `数据源`.
+- Data source list includes `main_source` and external source instances.
+- Data source defaults can be viewed and patched.
+- Data Models can be filtered by selected data source.
+- Data Model detail shows fields, relations, permissions, API, record preview, and Advisor tabs.
+- Data Model status updates use the safe `draft / published / disabled / broken` status set.
+- `api_exposed_ready` is displayed as computed readiness, not as a manual select.
+- Scope grants can be edited for existing grants.
+- Runtime record preview reads through the runtime route.
+- Settings style-boundary mapping includes the new data-model files.
+
+**F-B remaining**
+- Add user-facing create/update Data Model flows.
+- Add user-facing create/update/delete field flows in the field drawer.
+- Add API exposure request/update UI once the console API surface is confirmed.
+- Run lint/full frontend verification and commit the completed Plan F slice.
+
 ## File Structure
 
 **Modify**
@@ -160,7 +182,7 @@ Add the new data-model files to the Settings page style boundary scenario.
 - [ ] **Step 2: Run style boundary**
 
 ```bash
-node scripts/node/check-style-boundary.js page.settings
+node scripts/node/check-style-boundary.js page page.settings
 ```
 
 Expected: pass.

@@ -180,6 +180,41 @@ fn merge_config_marker_secret_values(
 
 #[async_trait]
 impl DataSourceRepository for PgControlPlaneStore {
+    async fn list_instances(
+        &self,
+        workspace_id: Uuid,
+    ) -> Result<Vec<domain::DataSourceInstanceRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                data_source_instances.id,
+                workspace_id,
+                installation_id,
+                source_code,
+                display_name,
+                status,
+                config_json,
+                metadata_json,
+                default_data_model_status,
+                default_api_exposure_status,
+                created_by,
+                created_at,
+                data_source_instances.updated_at,
+                secrets.secret_version
+            from data_source_instances
+            left join data_source_secrets secrets
+              on secrets.data_source_instance_id = data_source_instances.id
+            where workspace_id = $1
+            order by display_name asc, data_source_instances.created_at asc
+            "#,
+        )
+        .bind(workspace_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_instance).collect()
+    }
+
     async fn create_instance(
         &self,
         input: &CreateDataSourceInstanceInput,
