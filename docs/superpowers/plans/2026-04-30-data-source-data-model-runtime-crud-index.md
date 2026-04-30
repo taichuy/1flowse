@@ -30,7 +30,7 @@ Related completed design work:
    Adds API Key actor support, scope grants, exposure readiness calculation, runtime permission checks, and audit events.
 4. [x] [Plan D: External Source And Secret Reference](./2026-04-30-data-source-data-model-plan-d-external-source-secret.md)
    Extends data-source RuntimeExtension contracts for PostgreSQL and REST CRUD, adds secret references, and blocks unsafe external exposure.
-5. [ ] [Plan E: Advisor, Protected Models, And API Docs](./2026-04-30-data-source-data-model-plan-e-advisor-protected-openapi.md)
+5. [x] [Plan E: Advisor, Protected Models, And API Docs](./2026-04-30-data-source-data-model-plan-e-advisor-protected-openapi.md)
    Adds protected-model enforcement, Data Model Advisor findings, and dynamic Data Model API documentation.
 6. [ ] [Plan F: Settings Data Source UI](./2026-04-30-data-source-data-model-plan-f-settings-ui.md)
    Adds Settings / 数据源 and Data Model pages with status controls, API exposure, permissions, field management, and record preview.

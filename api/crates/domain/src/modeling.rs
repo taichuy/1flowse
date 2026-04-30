@@ -266,6 +266,37 @@ impl Default for DataModelProtection {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+pub enum DataModelAdvisorSeverity {
+    Blocking,
+    High,
+    Medium,
+    Info,
+}
+
+impl DataModelAdvisorSeverity {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Blocking => "blocking",
+            Self::High => "high",
+            Self::Medium => "medium",
+            Self::Info => "info",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DataModelAdvisorFinding {
+    pub id: String,
+    pub data_model_id: Uuid,
+    pub severity: DataModelAdvisorSeverity,
+    pub code: String,
+    pub message: String,
+    pub recommended_action: String,
+    pub can_acknowledge: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum ScopeDataModelPermissionProfile {
     Owner,
     ScopeAll,

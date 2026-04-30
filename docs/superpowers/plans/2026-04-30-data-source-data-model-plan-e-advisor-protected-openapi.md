@@ -28,7 +28,7 @@
 - Test: `api/crates/control-plane/src/_tests/model_definition_service_tests.rs`
 - Test: `api/apps/api-server/src/_tests/application/model_definition_routes.rs`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Cover protected models cannot be:
 
@@ -40,11 +40,11 @@ changed from extension-owned to core-owned
 published with owner/scope bypass
 ```
 
-- [ ] **Step 2: Implement enforcement**
+- [x] **Step 2: Implement enforcement**
 
 Check `is_protected`, `owner_kind`, and actor privilege in control-plane commands before repository writes.
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests
@@ -58,7 +58,7 @@ cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes
 - Modify: `api/crates/control-plane/src/model_definition.rs`
 - Test: `api/crates/control-plane/src/_tests/model_definition_service_tests.rs`
 
-- [ ] **Step 1: Write failing Advisor tests**
+- [x] **Step 1: Write failing Advisor tests**
 
 Findings must include:
 
@@ -72,7 +72,7 @@ protected model exposure attempt blocking
 duplicate or risky field configuration medium
 ```
 
-- [ ] **Step 2: Implement Advisor service**
+- [x] **Step 2: Implement Advisor service**
 
 Return:
 
@@ -86,11 +86,11 @@ recommended_action
 can_acknowledge
 ```
 
-- [ ] **Step 3: Wire blocking behavior**
+- [x] **Step 3: Wire blocking behavior**
 
 Blocking/high findings must either block status/exposure transition or require explicit acknowledgement where the spec allows it.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests
@@ -105,7 +105,7 @@ cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_serv
 - Test: `api/apps/api-server/src/_tests/openapi_alignment.rs`
 - Test: `api/apps/api-server/src/_tests/openapi_docs_tests.rs`
 
-- [ ] **Step 1: Write failing docs tests**
+- [x] **Step 1: Write failing docs tests**
 
 Docs must expose per Data Model:
 
@@ -120,11 +120,11 @@ API exposure status
 external source safety limits
 ```
 
-- [ ] **Step 2: Implement docs response**
+- [x] **Step 2: Implement docs response**
 
 Start with runtime generic schema plus Data Model-specific field metadata. Do not generate one static OpenAPI file per model.
 
-- [ ] **Step 3: Run docs tests**
+- [x] **Step 3: Run docs tests**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment openapi_docs_tests
@@ -132,22 +132,36 @@ cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment openap
 
 ### Task 4: Plan E Verification And Commit
 
-- [ ] **Step 1: Format**
+- [x] **Step 1: Format**
 
 ```bash
 cargo fmt --manifest-path api/Cargo.toml
 ```
 
-- [ ] **Step 2: Targeted regression**
+- [x] **Step 2: Targeted regression**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests
 cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes openapi_alignment openapi_docs_tests
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add api/crates/domain api/crates/control-plane api/crates/storage-durable/postgres api/apps/api-server
 git commit -m "feat: add data model advisor and protected models"
 ```
+
+Skipped by worker instruction: this Plan E slice intentionally did not create a commit.
+
+## Verification Record
+
+2026-05-01:
+
+- `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests` passed: 37 passed.
+- `cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes -- --test-threads=1` passed: 17 passed.
+- `cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment -- --test-threads=1` passed: 11 passed.
+- `cargo test --manifest-path api/Cargo.toml -p api-server openapi_docs_tests -- --test-threads=1` passed: 9 passed.
+- `cargo fmt --manifest-path api/Cargo.toml --all` passed.
+- `cargo check --manifest-path api/Cargo.toml -p api-server` passed.
+- `git diff --check` passed.

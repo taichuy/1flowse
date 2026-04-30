@@ -155,6 +155,17 @@ pub struct ScopeGrantResponse {
     pub permission_profile: String,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DataModelAdvisorFindingResponse {
+    pub id: String,
+    pub data_model_id: String,
+    pub severity: String,
+    pub code: String,
+    pub message: String,
+    pub recommended_action: String,
+    pub can_acknowledge: bool,
+}
+
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route("/models", get(list_models).post(create_model))
@@ -162,6 +173,7 @@ pub fn router() -> Router<Arc<ApiState>> {
             "/models/:id",
             get(get_model).patch(update_model).delete(delete_model),
         )
+        .route("/models/:id/advisor-findings", get(get_advisor_findings))
         .route("/models/:id/fields", post(create_field))
         .route(
             "/models/:id/fields/:field_id",
@@ -235,6 +247,20 @@ fn to_scope_grant_response(grant: domain::ScopeDataModelGrantRecord) -> ScopeGra
         data_model_id: grant.data_model_id.to_string(),
         enabled: grant.enabled,
         permission_profile: grant.permission_profile.as_str().to_string(),
+    }
+}
+
+fn to_advisor_finding_response(
+    finding: domain::DataModelAdvisorFinding,
+) -> DataModelAdvisorFindingResponse {
+    DataModelAdvisorFindingResponse {
+        id: finding.id,
+        data_model_id: finding.data_model_id.to_string(),
+        severity: finding.severity.as_str().to_string(),
+        code: finding.code,
+        message: finding.message,
+        recommended_action: finding.recommended_action,
+        can_acknowledge: finding.can_acknowledge,
     }
 }
 
@@ -377,6 +403,30 @@ pub async fn get_model(
         .await?;
 
     Ok(Json(ApiSuccess::new(to_model_definition_response(model))))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/models/{id}/advisor-findings",
+    params(("id" = String, Path, description = "Model definition id")),
+    responses((status = 200, body = [DataModelAdvisorFindingResponse]), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn get_advisor_findings(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(model_id): Path<String>,
+) -> Result<Json<ApiSuccess<Vec<DataModelAdvisorFindingResponse>>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let findings = ModelDefinitionService::new(state.store.clone())
+        .advisor_findings(context.user.id, parse_uuid(&model_id, "model_id")?)
+        .await?;
+
+    Ok(Json(ApiSuccess::new(
+        findings
+            .into_iter()
+            .map(to_advisor_finding_response)
+            .collect(),
+    )))
 }
 
 #[utoipa::path(

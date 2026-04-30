@@ -166,6 +166,17 @@ fn ensure_scope_grant_lifecycle_authorized(
     Err(ControlPlaneError::PermissionDenied("permission_denied"))
 }
 
+fn ensure_protected_model_override_authorized(
+    actor: &domain::ActorContext,
+    model: &domain::ModelDefinitionRecord,
+) -> Result<(), ControlPlaneError> {
+    if model.protection.is_protected && !actor.is_root {
+        return Err(ControlPlaneError::PermissionDenied("protected_data_model"));
+    }
+
+    Ok(())
+}
+
 impl<R> ModelDefinitionService<R>
 where
     R: ModelDefinitionRepository,
@@ -341,6 +352,7 @@ where
             .get_model_definition(actor.current_workspace_id, command.model_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        ensure_protected_model_override_authorized(&actor, &previous_model)?;
         let previous_effective = self.effective_api_exposure_status(&previous_model).await?;
 
         let candidate = domain::ModelDefinitionRecord {
@@ -502,6 +514,12 @@ where
             .load_actor_context_for_user(command.actor_user_id)
             .await?;
         ensure_state_model_permission(&actor, "manage")?;
+        let model = self
+            .repository
+            .get_model_definition(actor.current_workspace_id, command.model_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        ensure_protected_model_override_authorized(&actor, &model)?;
 
         let field = self
             .repository
@@ -542,6 +560,12 @@ where
             .load_actor_context_for_user(command.actor_user_id)
             .await?;
         ensure_state_model_permission(&actor, "manage")?;
+        let model = self
+            .repository
+            .get_model_definition(actor.current_workspace_id, command.model_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        ensure_protected_model_override_authorized(&actor, &model)?;
 
         self.repository
             .delete_model_definition(command.actor_user_id, command.model_id)
@@ -570,6 +594,12 @@ where
             .load_actor_context_for_user(command.actor_user_id)
             .await?;
         ensure_state_model_permission(&actor, "manage")?;
+        let model = self
+            .repository
+            .get_model_definition(actor.current_workspace_id, command.model_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        ensure_protected_model_override_authorized(&actor, &model)?;
 
         self.repository
             .delete_model_field(command.actor_user_id, command.model_id, command.field_id)
@@ -595,6 +625,12 @@ where
             .await?;
         ensure_permission(&actor, "state_model.manage.all")
             .map_err(ControlPlaneError::PermissionDenied)?;
+        let existing = self
+            .repository
+            .get_model_definition(actor.current_workspace_id, command.model_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        ensure_protected_model_override_authorized(&actor, &existing)?;
 
         let model = self
             .repository
@@ -782,6 +818,113 @@ where
         Ok(grant)
     }
 
+    pub async fn advisor_findings(
+        &self,
+        actor_user_id: Uuid,
+        model_id: Uuid,
+    ) -> Result<Vec<domain::DataModelAdvisorFinding>> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(actor_user_id)
+            .await?;
+        ensure_state_model_permission(&actor, "view")?;
+        let model = self
+            .repository
+            .get_model_definition(actor.current_workspace_id, model_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        let effective = self.with_effective_exposure(model.clone()).await?;
+        let facts = self.api_exposure_advisor_facts(&model).await?;
+        let mut findings = Vec::new();
+
+        if effective.status == domain::DataModelStatus::Published
+            && effective.api_exposure_status == domain::ApiExposureStatus::PublishedNotExposed
+            && !facts.has_active_api_key
+        {
+            findings.push(advisor_finding(
+                model.id,
+                domain::DataModelAdvisorSeverity::Info,
+                "published_not_exposed",
+                "The Data Model is published but not exposed through API keys.",
+                "Create an API key permission path only when external API access is intended.",
+                true,
+            ));
+        }
+
+        if effective.api_exposure_status == domain::ApiExposureStatus::ApiExposedNoPermission
+            || (facts.has_active_api_key && !facts.has_ready_path)
+        {
+            findings.push(advisor_finding(
+                model.id,
+                domain::DataModelAdvisorSeverity::High,
+                "api_exposed_no_permission",
+                "An API exposure path exists but does not have complete runtime permissions.",
+                "Check API key action permissions, scope grants, scope filters, and audit readiness.",
+                false,
+            ));
+        }
+
+        if external_source_is_unsafe(&model) {
+            findings.push(advisor_finding(
+                model.id,
+                domain::DataModelAdvisorSeverity::Blocking,
+                "unsafe_external_source",
+                "The external source lacks required scope filtering safety guarantees.",
+                "Enable scope filtering in the data source capability before exposing this Data Model.",
+                false,
+            ));
+        }
+
+        if facts.has_write_permission && !facts.audit_configured {
+            findings.push(advisor_finding(
+                model.id,
+                domain::DataModelAdvisorSeverity::High,
+                "missing_audit_for_write_api",
+                "Write API permissions require an audit namespace.",
+                "Configure audit logging before enabling create, update, or delete API access.",
+                false,
+            ));
+        }
+
+        if facts.has_action_permission && !facts.has_usable_scope_filter {
+            findings.push(advisor_finding(
+                model.id,
+                domain::DataModelAdvisorSeverity::Blocking,
+                "missing_scope_filter",
+                "API access has actions but no usable scope grant for runtime filtering.",
+                "Create an enabled owner or scope_all grant for the API key scope.",
+                false,
+            ));
+        }
+
+        if model.protection.is_protected
+            && (model.api_exposure_status != domain::ApiExposureStatus::PublishedNotExposed
+                || facts.has_active_api_key)
+        {
+            findings.push(advisor_finding(
+                model.id,
+                domain::DataModelAdvisorSeverity::Blocking,
+                "protected_model_exposure_attempt",
+                "Protected Data Models cannot be exposed by normal admin API configuration.",
+                "Use root emergency override only for audited operational recovery.",
+                false,
+            ));
+        }
+
+        if has_duplicate_or_risky_field_configuration(&model.fields) {
+            findings.push(advisor_finding(
+                model.id,
+                domain::DataModelAdvisorSeverity::Medium,
+                "duplicate_risky_field_configuration",
+                "Fields contain duplicate external identifiers or risky uniqueness settings.",
+                "Review duplicate field codes, duplicate external keys, and unique JSON fields.",
+                true,
+            ));
+        }
+
+        Ok(findings)
+    }
+
     async fn with_effective_exposures(
         &self,
         models: Vec<domain::ModelDefinitionRecord>,
@@ -850,6 +993,17 @@ where
         &self,
         model: &domain::ModelDefinitionRecord,
     ) -> Result<ApiExposureReadinessFacts> {
+        let facts = self.api_exposure_advisor_facts(model).await?;
+        Ok(ApiExposureReadinessFacts {
+            has_active_api_key: facts.has_active_api_key,
+            has_ready_path: facts.has_ready_path,
+        })
+    }
+
+    async fn api_exposure_advisor_facts(
+        &self,
+        model: &domain::ModelDefinitionRecord,
+    ) -> Result<ApiExposureAdvisorFacts> {
         let api_key_facts = self
             .repository
             .list_api_key_data_model_readiness(model.id)
@@ -862,10 +1016,16 @@ where
         let audit_configured = !model.audit_namespace.trim().is_empty();
 
         let mut has_ready_path = false;
+        let mut has_action_permission = false;
+        let mut has_write_permission = false;
+        let mut has_usable_scope_filter = false;
         for key_fact in active_api_key_facts {
             if !key_fact.has_any_action_permission() {
                 continue;
             }
+            has_action_permission = true;
+            has_write_permission |=
+                key_fact.allow_create || key_fact.allow_update || key_fact.allow_delete;
             let grants = self
                 .repository
                 .list_scope_data_model_grants(key_fact.scope_kind, key_fact.scope_id)
@@ -875,15 +1035,20 @@ where
                     && grant.enabled
                     && api_key_runtime_can_use_grant_profile(grant.permission_profile)
             });
+            has_usable_scope_filter |= has_scope_filter;
             if has_scope_filter && audit_configured {
                 has_ready_path = true;
                 break;
             }
         }
 
-        Ok(ApiExposureReadinessFacts {
+        Ok(ApiExposureAdvisorFacts {
             has_active_api_key,
             has_ready_path,
+            has_action_permission,
+            has_write_permission,
+            has_usable_scope_filter,
+            audit_configured,
         })
     }
 }
@@ -891,6 +1056,55 @@ where
 struct ApiExposureReadinessFacts {
     has_active_api_key: bool,
     has_ready_path: bool,
+}
+
+struct ApiExposureAdvisorFacts {
+    has_active_api_key: bool,
+    has_ready_path: bool,
+    has_action_permission: bool,
+    has_write_permission: bool,
+    has_usable_scope_filter: bool,
+    audit_configured: bool,
+}
+
+fn advisor_finding(
+    data_model_id: Uuid,
+    severity: domain::DataModelAdvisorSeverity,
+    code: &'static str,
+    message: &'static str,
+    recommended_action: &'static str,
+    can_acknowledge: bool,
+) -> domain::DataModelAdvisorFinding {
+    domain::DataModelAdvisorFinding {
+        id: format!("{data_model_id}:{code}"),
+        data_model_id,
+        severity,
+        code: code.to_string(),
+        message: message.to_string(),
+        recommended_action: recommended_action.to_string(),
+        can_acknowledge,
+    }
+}
+
+fn has_duplicate_or_risky_field_configuration(fields: &[domain::ModelFieldRecord]) -> bool {
+    let mut codes = std::collections::HashSet::new();
+    let mut external_keys = std::collections::HashSet::new();
+
+    for field in fields {
+        if !codes.insert(field.code.as_str()) {
+            return true;
+        }
+        if let Some(external_key) = field.external_field_key.as_deref() {
+            if !external_keys.insert(external_key) {
+                return true;
+            }
+        }
+        if field.is_unique && field.field_kind == domain::ModelFieldKind::Json {
+            return true;
+        }
+    }
+
+    false
 }
 
 fn active_api_key_readiness(readiness: &ApiKeyDataModelReadinessRecord) -> bool {

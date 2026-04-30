@@ -1,8 +1,8 @@
 use control_plane::model_definition::{
     AddModelFieldCommand, CreateModelDefinitionCommand, CreateScopeDataModelGrantCommand,
-    DeleteModelDefinitionCommand, DeleteScopeDataModelGrantCommand,
-    InMemoryModelDefinitionRepository, ModelDefinitionService, UpdateModelDefinitionStatusCommand,
-    UpdateScopeDataModelGrantCommand,
+    DeleteModelDefinitionCommand, DeleteModelFieldCommand, DeleteScopeDataModelGrantCommand,
+    InMemoryModelDefinitionRepository, ModelDefinitionService, PublishModelCommand,
+    UpdateModelDefinitionStatusCommand, UpdateModelFieldCommand, UpdateScopeDataModelGrantCommand,
 };
 use control_plane::ports::{
     AddModelFieldInput, ApiKeyDataModelReadinessRecord, CreateModelDefinitionInput,
@@ -10,9 +10,9 @@ use control_plane::ports::{
     UpdateModelDefinitionStatusInput, UpdateModelFieldInput, UpdateScopeDataModelGrantInput,
 };
 use domain::{
-    ActorContext, ApiExposureStatus, AuditLogRecord, DataModelProtection, DataModelScopeKind,
-    DataModelStatus, DataSourceDefaults, ModelDefinitionRecord, ModelFieldKind, ModelFieldRecord,
-    ScopeDataModelGrantRecord, SYSTEM_SCOPE_ID,
+    ActorContext, ApiExposureStatus, AuditLogRecord, DataModelOwnerKind, DataModelProtection,
+    DataModelScopeKind, DataModelStatus, DataSourceDefaults, ModelDefinitionRecord, ModelFieldKind,
+    ModelFieldRecord, ScopeDataModelGrantRecord, SYSTEM_SCOPE_ID,
 };
 use serde_json::json;
 use std::{
@@ -166,9 +166,14 @@ impl ModelDefinitionRepository for ScopedModelDefinitionRepository {
 
     async fn update_model_definition(
         &self,
-        _input: &UpdateModelDefinitionInput,
+        input: &UpdateModelDefinitionInput,
     ) -> anyhow::Result<ModelDefinitionRecord> {
-        unimplemented!("not needed for scoped service tests")
+        let mut models = self.models.lock().expect("model lock poisoned");
+        let model = models.get_mut(&input.model_id).ok_or(
+            control_plane::errors::ControlPlaneError::NotFound("model_definition"),
+        )?;
+        model.title = input.title.clone();
+        Ok(model.clone())
     }
 
     async fn update_model_definition_status(
@@ -200,34 +205,79 @@ impl ModelDefinitionRepository for ScopedModelDefinitionRepository {
 
     async fn update_model_field(
         &self,
-        _input: &UpdateModelFieldInput,
+        input: &UpdateModelFieldInput,
     ) -> anyhow::Result<ModelFieldRecord> {
-        unimplemented!("not needed for scoped service tests")
+        let mut models = self.models.lock().expect("model lock poisoned");
+        let model = models.get_mut(&input.model_id).ok_or(
+            control_plane::errors::ControlPlaneError::NotFound("model_definition"),
+        )?;
+        let field = model
+            .fields
+            .iter_mut()
+            .find(|field| field.id == input.field_id)
+            .ok_or(control_plane::errors::ControlPlaneError::NotFound(
+                "model_field",
+            ))?;
+        field.title = input.title.clone();
+        field.is_required = input.is_required;
+        field.is_unique = input.is_unique;
+        field.default_value = input.default_value.clone();
+        field.display_interface = input.display_interface.clone();
+        field.display_options = input.display_options.clone();
+        field.relation_options = input.relation_options.clone();
+        Ok(field.clone())
     }
 
     async fn delete_model_definition(
         &self,
         _actor_user_id: Uuid,
-        _model_id: Uuid,
+        model_id: Uuid,
     ) -> anyhow::Result<()> {
-        unimplemented!("not needed for scoped service tests")
+        self.models
+            .lock()
+            .expect("model lock poisoned")
+            .remove(&model_id)
+            .ok_or(control_plane::errors::ControlPlaneError::NotFound(
+                "model_definition",
+            ))?;
+        Ok(())
     }
 
     async fn delete_model_field(
         &self,
         _actor_user_id: Uuid,
-        _model_id: Uuid,
-        _field_id: Uuid,
+        model_id: Uuid,
+        field_id: Uuid,
     ) -> anyhow::Result<()> {
-        unimplemented!("not needed for scoped service tests")
+        let mut models = self.models.lock().expect("model lock poisoned");
+        let model =
+            models
+                .get_mut(&model_id)
+                .ok_or(control_plane::errors::ControlPlaneError::NotFound(
+                    "model_definition",
+                ))?;
+        let original_len = model.fields.len();
+        model.fields.retain(|field| field.id != field_id);
+        if model.fields.len() == original_len {
+            return Err(control_plane::errors::ControlPlaneError::NotFound("model_field").into());
+        }
+        Ok(())
     }
 
     async fn publish_model_definition(
         &self,
         _actor_user_id: Uuid,
-        _model_id: Uuid,
+        model_id: Uuid,
     ) -> anyhow::Result<ModelDefinitionRecord> {
-        unimplemented!("not needed for scoped service tests")
+        let mut models = self.models.lock().expect("model lock poisoned");
+        let model =
+            models
+                .get_mut(&model_id)
+                .ok_or(control_plane::errors::ControlPlaneError::NotFound(
+                    "model_definition",
+                ))?;
+        model.status = DataModelStatus::Published;
+        Ok(model.clone())
     }
 
     async fn create_scope_data_model_grant(
@@ -372,6 +422,35 @@ fn system_model(model_id: Uuid) -> ModelDefinitionRecord {
         status: DataModelStatus::Published,
         api_exposure_status: ApiExposureStatus::PublishedNotExposed,
         protection: DataModelProtection::default(),
+    }
+}
+
+fn protected_extension_model(model_id: Uuid) -> ModelDefinitionRecord {
+    ModelDefinitionRecord {
+        protection: DataModelProtection {
+            owner_kind: DataModelOwnerKind::RuntimeExtension,
+            owner_id: Some("ext.crm".into()),
+            is_protected: true,
+        },
+        fields: vec![ModelFieldRecord {
+            id: Uuid::now_v7(),
+            data_model_id: model_id,
+            code: "email".into(),
+            title: "Email".into(),
+            physical_column_name: "email".into(),
+            external_field_key: Some("email".into()),
+            field_kind: ModelFieldKind::String,
+            is_required: false,
+            is_unique: false,
+            default_value: None,
+            display_interface: None,
+            display_options: json!({}),
+            relation_target_model_id: None,
+            relation_options: json!({}),
+            sort_order: 0,
+            availability_status: domain::MetadataAvailabilityStatus::Available,
+        }],
+        ..system_model(model_id)
     }
 }
 
@@ -1875,4 +1954,239 @@ async fn update_model_status_rejects_model_outside_actor_workspace() {
         stored.api_exposure_status,
         ApiExposureStatus::PublishedNotExposed
     );
+}
+
+#[tokio::test]
+async fn non_root_admin_cannot_mutate_protected_data_model() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let model = protected_extension_model(model_id);
+    let field_id = model.fields[0].id;
+    let repository = ScopedModelDefinitionRepository::new(scoped_manager_in_workspace(
+        actor_user_id,
+        actor_workspace_id,
+    ))
+    .with_model(model);
+    let service = ModelDefinitionService::new(repository.clone());
+
+    let status_error = service
+        .update_model_status(UpdateModelDefinitionStatusCommand {
+            actor_user_id,
+            model_id,
+            status: DataModelStatus::Disabled,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+        })
+        .await
+        .unwrap_err();
+    assert!(status_error.to_string().contains("protected_data_model"));
+
+    let update_field_error = service
+        .update_field(UpdateModelFieldCommand {
+            actor_user_id,
+            model_id,
+            field_id,
+            title: "Work Email".into(),
+            is_required: true,
+            is_unique: false,
+            default_value: None,
+            display_interface: None,
+            display_options: json!({}),
+            relation_options: json!({}),
+        })
+        .await
+        .unwrap_err();
+    assert!(update_field_error
+        .to_string()
+        .contains("protected_data_model"));
+
+    let delete_field_error = service
+        .delete_field(DeleteModelFieldCommand {
+            actor_user_id,
+            model_id,
+            field_id,
+            confirmed: true,
+        })
+        .await
+        .unwrap_err();
+    assert!(delete_field_error
+        .to_string()
+        .contains("protected_data_model"));
+
+    let publish_error = match service
+        .publish_model(PublishModelCommand {
+            actor_user_id,
+            model_id,
+        })
+        .await
+    {
+        Ok(_) => panic!("protected publish should be rejected for non-root admin"),
+        Err(error) => error,
+    };
+    assert!(publish_error.to_string().contains("protected_data_model"));
+
+    let delete_model_error = service
+        .delete_model(DeleteModelDefinitionCommand {
+            actor_user_id,
+            model_id,
+            confirmed: true,
+        })
+        .await
+        .unwrap_err();
+    assert!(delete_model_error
+        .to_string()
+        .contains("protected_data_model"));
+
+    let stored = repository
+        .models
+        .lock()
+        .expect("model lock poisoned")
+        .get(&model_id)
+        .cloned()
+        .unwrap();
+    assert_eq!(stored.status, DataModelStatus::Published);
+    assert_eq!(stored.fields[0].title, "Email");
+}
+
+#[tokio::test]
+async fn root_can_override_protected_data_model_enforcement() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let model = protected_extension_model(model_id);
+    let field_id = model.fields[0].id;
+    let repository =
+        ScopedModelDefinitionRepository::new(actor_in_workspace(actor_user_id, actor_workspace_id))
+            .with_model(model);
+    let service = ModelDefinitionService::new(repository.clone());
+
+    let updated = service
+        .update_field(UpdateModelFieldCommand {
+            actor_user_id,
+            model_id,
+            field_id,
+            title: "Emergency Email".into(),
+            is_required: true,
+            is_unique: false,
+            default_value: None,
+            display_interface: None,
+            display_options: json!({}),
+            relation_options: json!({}),
+        })
+        .await
+        .unwrap();
+    assert_eq!(updated.title, "Emergency Email");
+
+    service
+        .delete_model(DeleteModelDefinitionCommand {
+            actor_user_id,
+            model_id,
+            confirmed: true,
+        })
+        .await
+        .unwrap();
+
+    assert!(!repository
+        .models
+        .lock()
+        .expect("model lock poisoned")
+        .contains_key(&model_id));
+}
+
+#[tokio::test]
+async fn advisor_findings_report_exposure_protection_permission_and_field_risks() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let mut model = protected_extension_model(model_id);
+    model.audit_namespace = "".into();
+    model.api_exposure_status = ApiExposureStatus::ApiExposedReady;
+    model.fields.push(ModelFieldRecord {
+        id: Uuid::now_v7(),
+        data_model_id: model_id,
+        code: "email".into(),
+        title: "Email Duplicate".into(),
+        physical_column_name: "email_dup".into(),
+        external_field_key: Some("email".into()),
+        field_kind: ModelFieldKind::Json,
+        is_required: false,
+        is_unique: true,
+        default_value: None,
+        display_interface: None,
+        display_options: json!({}),
+        relation_target_model_id: None,
+        relation_options: json!({}),
+        sort_order: 1,
+        availability_status: domain::MetadataAvailabilityStatus::Available,
+    });
+    let repository =
+        ScopedModelDefinitionRepository::new(actor_in_workspace(actor_user_id, actor_workspace_id))
+            .with_model(model);
+    repository
+        .api_key_readiness
+        .lock()
+        .expect("api key readiness lock poisoned")
+        .push(ApiKeyDataModelReadinessRecord {
+            api_key_id: Uuid::now_v7(),
+            data_model_id: model_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: actor_workspace_id,
+            key_enabled: true,
+            expires_at: None,
+            allow_list: false,
+            allow_get: false,
+            allow_create: true,
+            allow_update: false,
+            allow_delete: false,
+        });
+    let service = ModelDefinitionService::new(repository);
+
+    let findings = service
+        .advisor_findings(actor_user_id, model_id)
+        .await
+        .unwrap();
+    let codes = findings
+        .iter()
+        .map(|finding| finding.code.as_str())
+        .collect::<Vec<_>>();
+
+    assert!(codes.contains(&"api_exposed_no_permission"));
+    assert!(codes.contains(&"missing_audit_for_write_api"));
+    assert!(codes.contains(&"missing_scope_filter"));
+    assert!(codes.contains(&"protected_model_exposure_attempt"));
+    assert!(codes.contains(&"duplicate_risky_field_configuration"));
+    assert!(findings
+        .iter()
+        .any(|finding| finding.severity == domain::DataModelAdvisorSeverity::Blocking));
+}
+
+#[tokio::test]
+async fn advisor_findings_report_published_not_exposed_and_unsafe_external_source() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let not_exposed_id = Uuid::now_v7();
+    let unsafe_external_id = Uuid::now_v7();
+    let repository =
+        ScopedModelDefinitionRepository::new(actor_in_workspace(actor_user_id, actor_workspace_id))
+            .with_model(system_model(not_exposed_id))
+            .with_model(unsafe_external_system_model(unsafe_external_id));
+    let service = ModelDefinitionService::new(repository);
+
+    let not_exposed = service
+        .advisor_findings(actor_user_id, not_exposed_id)
+        .await
+        .unwrap();
+    assert!(not_exposed.iter().any(|finding| {
+        finding.code == "published_not_exposed"
+            && finding.severity == domain::DataModelAdvisorSeverity::Info
+    }));
+
+    let unsafe_external = service
+        .advisor_findings(actor_user_id, unsafe_external_id)
+        .await
+        .unwrap();
+    assert!(unsafe_external.iter().any(|finding| {
+        finding.code == "unsafe_external_source"
+            && finding.severity == domain::DataModelAdvisorSeverity::Blocking
+    }));
 }

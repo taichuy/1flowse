@@ -58,6 +58,17 @@ fn operation_spec_builder_exposes_model_provider_catalog_route() {
 }
 
 #[test]
+fn operation_spec_builder_exposes_dynamic_data_model_docs_route() {
+    let registry = api_server::openapi_docs::build_default_api_docs_registry().unwrap();
+    let spec = registry.operation_spec("get_data_model_openapi").unwrap();
+
+    assert!(
+        spec["paths"]["/api/console/docs/data-models/{model_id}/openapi.json"]["get"].is_object()
+    );
+    assert!(spec["components"]["schemas"]["DataModelOpenApiDocumentResponse"].is_object());
+}
+
+#[test]
 fn operation_spec_builder_keeps_servers_and_security_schemes_for_try_it_out() {
     let canonical = json!({
         "openapi": "3.1.0",

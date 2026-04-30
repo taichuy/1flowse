@@ -70,8 +70,10 @@ async fn openapi_contains_runtime_and_model_detail_routes() {
     for route in [
         "/api/console/models/{id}",
         "/api/console/models/{id}/fields",
+        "/api/console/models/{id}/advisor-findings",
         "/api/console/models/{id}/scope-grants",
         "/api/console/models/{id}/scope-grants/{grant_id}",
+        "/api/console/docs/data-models/{model_id}/openapi.json",
         "/api/console/model-providers/catalog",
         "/api/console/model-providers/options",
         "/api/console/system/runtime-profile",
@@ -89,6 +91,48 @@ async fn openapi_contains_runtime_and_model_detail_routes() {
             paths.keys().collect::<Vec<_>>()
         );
     }
+}
+
+#[tokio::test]
+async fn openapi_contains_advisor_and_dynamic_data_model_doc_schemas() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/openapi.json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    let components = payload["components"]["schemas"]
+        .as_object()
+        .cloned()
+        .unwrap_or_default();
+
+    for schema in [
+        "DataModelAdvisorFindingResponse",
+        "DataModelOpenApiDocumentResponse",
+    ] {
+        assert!(components.contains_key(schema), "missing schema {schema}");
+    }
+
+    assert_eq!(
+        payload["paths"]["/api/console/models/{id}/advisor-findings"]["get"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["items"]["$ref"]
+            .as_str(),
+        Some("#/components/schemas/DataModelAdvisorFindingResponse")
+    );
+    assert!(
+        payload["paths"]["/api/console/docs/data-models/{model_id}/openapi.json"]["get"]
+            ["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+            .as_str()
+            .is_some()
+    );
 }
 
 #[tokio::test]
