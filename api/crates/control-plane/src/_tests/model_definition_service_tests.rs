@@ -48,6 +48,11 @@ impl ScopedModelDefinitionRepository {
         self
     }
 
+    fn with_grant(self, grant: ScopeDataModelGrantRecord) -> Self {
+        self.grants.lock().expect("grant lock poisoned").push(grant);
+        self
+    }
+
     fn with_data_source_defaults(
         self,
         workspace_id: Uuid,
@@ -274,6 +279,20 @@ impl ModelDefinitionRepository for ScopedModelDefinitionRepository {
         Ok(grants.remove(index))
     }
 
+    async fn get_scope_data_model_grant(
+        &self,
+        data_model_id: Uuid,
+        grant_id: Uuid,
+    ) -> anyhow::Result<Option<ScopeDataModelGrantRecord>> {
+        Ok(self
+            .grants
+            .lock()
+            .expect("grant lock poisoned")
+            .iter()
+            .find(|grant| grant.id == grant_id && grant.data_model_id == data_model_id)
+            .cloned())
+    }
+
     async fn list_scope_data_model_grants(
         &self,
         scope_kind: DataModelScopeKind,
@@ -302,6 +321,37 @@ fn actor_in_workspace(actor_user_id: Uuid, workspace_id: Uuid) -> ActorContext {
     ActorContext::root(actor_user_id, workspace_id, "root")
 }
 
+fn scoped_manager_in_workspace(actor_user_id: Uuid, workspace_id: Uuid) -> ActorContext {
+    ActorContext::scoped(
+        actor_user_id,
+        workspace_id,
+        "manager",
+        [
+            "state_model.view.all".into(),
+            "state_model.manage.all".into(),
+        ],
+    )
+}
+
+fn system_model(model_id: Uuid) -> ModelDefinitionRecord {
+    ModelDefinitionRecord {
+        id: model_id,
+        scope_kind: DataModelScopeKind::System,
+        scope_id: SYSTEM_SCOPE_ID,
+        code: "system_orders".into(),
+        title: "System Orders".into(),
+        physical_table_name: "rtm_system_orders".into(),
+        acl_namespace: "state_model.system_orders".into(),
+        audit_namespace: "audit.state_model.system_orders".into(),
+        fields: vec![],
+        availability_status: domain::MetadataAvailabilityStatus::Available,
+        data_source_instance_id: None,
+        status: DataModelStatus::Published,
+        api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+        protection: DataModelProtection::default(),
+    }
+}
+
 fn model_in_workspace(model_id: Uuid, workspace_id: Uuid) -> ModelDefinitionRecord {
     ModelDefinitionRecord {
         id: model_id,
@@ -318,6 +368,26 @@ fn model_in_workspace(model_id: Uuid, workspace_id: Uuid) -> ModelDefinitionReco
         status: DataModelStatus::Published,
         api_exposure_status: ApiExposureStatus::PublishedNotExposed,
         protection: DataModelProtection::default(),
+    }
+}
+
+fn scope_grant(
+    grant_id: Uuid,
+    model_id: Uuid,
+    scope_kind: DataModelScopeKind,
+    scope_id: Uuid,
+) -> ScopeDataModelGrantRecord {
+    let now = time::OffsetDateTime::now_utc();
+    ScopeDataModelGrantRecord {
+        id: grant_id,
+        scope_kind,
+        scope_id,
+        data_model_id: model_id,
+        enabled: true,
+        permission_profile: domain::ScopeDataModelPermissionProfile::ScopeAll,
+        created_by: None,
+        created_at: now,
+        updated_at: now,
     }
 }
 
@@ -850,6 +920,214 @@ async fn update_scope_grant_records_audit_event() {
     assert!(repository
         .audit_events()
         .contains(&"state_model.scope_grant_updated".to_string()));
+}
+
+#[tokio::test]
+async fn non_root_scope_grant_create_rejects_system_and_other_workspace_scope() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let other_workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let repository = ScopedModelDefinitionRepository::new(scoped_manager_in_workspace(
+        actor_user_id,
+        actor_workspace_id,
+    ))
+    .with_model(system_model(model_id));
+    let service = ModelDefinitionService::new(repository);
+
+    let system_error = service
+        .create_scope_grant(
+            control_plane::model_definition::CreateScopeDataModelGrantCommand {
+                actor_user_id,
+                scope_kind: DataModelScopeKind::System,
+                scope_id: SYSTEM_SCOPE_ID,
+                data_model_id: model_id,
+                enabled: true,
+                permission_profile: "scope_all".into(),
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(system_error.to_string().contains("permission_denied"));
+
+    let other_workspace_error = service
+        .create_scope_grant(
+            control_plane::model_definition::CreateScopeDataModelGrantCommand {
+                actor_user_id,
+                scope_kind: DataModelScopeKind::Workspace,
+                scope_id: other_workspace_id,
+                data_model_id: model_id,
+                enabled: true,
+                permission_profile: "scope_all".into(),
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(other_workspace_error
+        .to_string()
+        .contains("permission_denied"));
+
+    let current_workspace_grant = service
+        .create_scope_grant(
+            control_plane::model_definition::CreateScopeDataModelGrantCommand {
+                actor_user_id,
+                scope_kind: DataModelScopeKind::Workspace,
+                scope_id: actor_workspace_id,
+                data_model_id: model_id,
+                enabled: true,
+                permission_profile: "scope_all".into(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(current_workspace_grant.scope_id, actor_workspace_id);
+}
+
+#[tokio::test]
+async fn non_root_scope_grant_update_delete_authorizes_existing_grant_scope() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let other_workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let system_grant_id = Uuid::now_v7();
+    let other_workspace_grant_id = Uuid::now_v7();
+    let current_workspace_grant_id = Uuid::now_v7();
+    let repository = ScopedModelDefinitionRepository::new(scoped_manager_in_workspace(
+        actor_user_id,
+        actor_workspace_id,
+    ))
+    .with_model(system_model(model_id))
+    .with_grant(scope_grant(
+        system_grant_id,
+        model_id,
+        DataModelScopeKind::System,
+        SYSTEM_SCOPE_ID,
+    ))
+    .with_grant(scope_grant(
+        other_workspace_grant_id,
+        model_id,
+        DataModelScopeKind::Workspace,
+        other_workspace_id,
+    ))
+    .with_grant(scope_grant(
+        current_workspace_grant_id,
+        model_id,
+        DataModelScopeKind::Workspace,
+        actor_workspace_id,
+    ));
+    let service = ModelDefinitionService::new(repository);
+
+    for grant_id in [system_grant_id, other_workspace_grant_id] {
+        let update_error = service
+            .update_scope_grant(UpdateScopeDataModelGrantCommand {
+                actor_user_id,
+                data_model_id: model_id,
+                grant_id,
+                enabled: Some(false),
+                permission_profile: None,
+            })
+            .await
+            .unwrap_err();
+        assert!(update_error.to_string().contains("permission_denied"));
+
+        let delete_error = service
+            .delete_scope_grant(DeleteScopeDataModelGrantCommand {
+                actor_user_id,
+                data_model_id: model_id,
+                grant_id,
+            })
+            .await
+            .unwrap_err();
+        assert!(delete_error.to_string().contains("permission_denied"));
+    }
+
+    let updated = service
+        .update_scope_grant(UpdateScopeDataModelGrantCommand {
+            actor_user_id,
+            data_model_id: model_id,
+            grant_id: current_workspace_grant_id,
+            enabled: Some(false),
+            permission_profile: Some("owner".into()),
+        })
+        .await
+        .unwrap();
+    assert_eq!(updated.scope_id, actor_workspace_id);
+    assert!(!updated.enabled);
+
+    let deleted = service
+        .delete_scope_grant(DeleteScopeDataModelGrantCommand {
+            actor_user_id,
+            data_model_id: model_id,
+            grant_id: current_workspace_grant_id,
+        })
+        .await
+        .unwrap();
+    assert_eq!(deleted.scope_id, actor_workspace_id);
+}
+
+#[tokio::test]
+async fn root_scope_grant_lifecycle_can_manage_any_scope() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let other_workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let repository =
+        ScopedModelDefinitionRepository::new(actor_in_workspace(actor_user_id, actor_workspace_id))
+            .with_model(system_model(model_id));
+    let service = ModelDefinitionService::new(repository);
+
+    let system_grant = service
+        .create_scope_grant(
+            control_plane::model_definition::CreateScopeDataModelGrantCommand {
+                actor_user_id,
+                scope_kind: DataModelScopeKind::System,
+                scope_id: SYSTEM_SCOPE_ID,
+                data_model_id: model_id,
+                enabled: true,
+                permission_profile: "scope_all".into(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(system_grant.scope_kind, DataModelScopeKind::System);
+
+    let other_workspace_grant = service
+        .create_scope_grant(
+            control_plane::model_definition::CreateScopeDataModelGrantCommand {
+                actor_user_id,
+                scope_kind: DataModelScopeKind::Workspace,
+                scope_id: other_workspace_id,
+                data_model_id: model_id,
+                enabled: true,
+                permission_profile: "scope_all".into(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(other_workspace_grant.scope_id, other_workspace_id);
+
+    let updated = service
+        .update_scope_grant(UpdateScopeDataModelGrantCommand {
+            actor_user_id,
+            data_model_id: model_id,
+            grant_id: system_grant.id,
+            enabled: Some(false),
+            permission_profile: Some("owner".into()),
+        })
+        .await
+        .unwrap();
+    assert_eq!(updated.scope_kind, DataModelScopeKind::System);
+    assert!(!updated.enabled);
+
+    let deleted = service
+        .delete_scope_grant(DeleteScopeDataModelGrantCommand {
+            actor_user_id,
+            data_model_id: model_id,
+            grant_id: other_workspace_grant.id,
+        })
+        .await
+        .unwrap();
+    assert_eq!(deleted.scope_id, other_workspace_id);
 }
 
 #[tokio::test]

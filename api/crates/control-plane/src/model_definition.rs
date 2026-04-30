@@ -146,6 +146,22 @@ fn ensure_state_model_permission(
     Err(ControlPlaneError::PermissionDenied("permission_denied"))
 }
 
+fn ensure_scope_grant_lifecycle_authorized(
+    actor: &domain::ActorContext,
+    scope_kind: DataModelScopeKind,
+    scope_id: Uuid,
+) -> Result<(), ControlPlaneError> {
+    if actor.is_root {
+        return Ok(());
+    }
+
+    if scope_kind == DataModelScopeKind::Workspace && scope_id == actor.current_workspace_id {
+        return Ok(());
+    }
+
+    Err(ControlPlaneError::PermissionDenied("permission_denied"))
+}
+
 impl<R> ModelDefinitionService<R>
 where
     R: ModelDefinitionRepository,
@@ -595,6 +611,7 @@ where
             .get_model_definition(actor.current_workspace_id, command.data_model_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        ensure_scope_grant_lifecycle_authorized(&actor, command.scope_kind, command.scope_id)?;
 
         let permission_profile =
             domain::ScopeDataModelPermissionProfile::parse(&command.permission_profile)
@@ -650,6 +667,7 @@ where
             .get_scope_data_model_grant(command.data_model_id, command.grant_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("scope_data_model_grant"))?;
+        ensure_scope_grant_lifecycle_authorized(&actor, existing.scope_kind, existing.scope_id)?;
         let permission_profile = match command.permission_profile {
             Some(permission_profile) => {
                 domain::ScopeDataModelPermissionProfile::parse(&permission_profile)
@@ -700,6 +718,12 @@ where
             .get_model_definition(actor.current_workspace_id, command.data_model_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        let existing = self
+            .repository
+            .get_scope_data_model_grant(command.data_model_id, command.grant_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("scope_data_model_grant"))?;
+        ensure_scope_grant_lifecycle_authorized(&actor, existing.scope_kind, existing.scope_id)?;
 
         let grant = self
             .repository

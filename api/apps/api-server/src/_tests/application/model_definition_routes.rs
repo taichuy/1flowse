@@ -1,3 +1,5 @@
+mod scope_grant_acl;
+
 use crate::_tests::support::{login_and_capture_cookie, test_app, test_app_with_database_url};
 use axum::{
     body::{to_bytes, Body},

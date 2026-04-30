@@ -246,6 +246,14 @@ Task 3 spec review ACL parity fix, 2026-04-30:
   - `cargo check --manifest-path api/Cargo.toml -p api-server`
   - `git diff --check`
 
+Task 3 code quality REQUEST_CHANGES fix, 2026-04-30:
+
+- Fixed scope grant lifecycle authorization: root actors can manage any scope grant; non-root actors can only create/update/delete workspace grants whose `scope_id` equals `actor.current_workspace_id`.
+- Create now validates the requested `scope_kind` / `scope_id`; update and delete first load the existing grant by `model_id + grant_id`, authorize the persisted grant scope, then mutate it so request data cannot bypass scope ownership.
+- Added control-plane coverage for non-root system/other-workspace create/update/delete denial, current-workspace success, and root any-scope success.
+- Added api-server route coverage for non-root cross-workspace/system-scope `403` responses and current-workspace grant update/delete success.
+- Residual risk: scope grant readiness/listing still does repeated grant/readiness lookups in targeted paths; performance optimization is deferred and was not part of this quality fix.
+
 ### Task 4: Plan C Verification And Commit
 
 - [ ] **Step 1: Format**
