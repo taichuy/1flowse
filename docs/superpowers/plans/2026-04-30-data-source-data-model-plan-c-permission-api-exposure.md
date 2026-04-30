@@ -101,7 +101,7 @@ Task 1 quality fix validation record, 2026-04-30:
 - Modify: `api/apps/api-server/src/routes/plugins_and_models/runtime_models.rs`
 - Test: `api/apps/api-server/src/_tests/application/runtime_model_routes.rs`
 
-- [ ] **Step 1: Write failing route tests**
+- [x] **Step 1: Write failing route tests**
 
 Cover:
 
@@ -113,7 +113,7 @@ API Key cannot bypass owner scope
 session actor behavior remains unchanged
 ```
 
-- [ ] **Step 2: Implement API Key extraction**
+- [x] **Step 2: Implement API Key extraction**
 
 Support:
 
@@ -123,11 +123,26 @@ Authorization: Bearer <api_key>
 
 Convert it into the same actor context shape runtime CRUD already consumes.
 
-- [ ] **Step 3: Run api-server tests**
+- [x] **Step 3: Run api-server tests**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes auth_routes
 ```
+
+Task 2 validation record, 2026-04-30:
+
+- RED confirmed:
+  - `cargo test --manifest-path api/Cargo.toml -p api-server auth_routes` failed because `/api/console/api-keys` did not exist; new console API Key tests received `404` instead of `201/401/403`.
+  - `cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes_api_key` failed because API Key creation route was missing; runtime API Key tests received `404` at key creation.
+  - `cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes_api_key_uses_system_scope_grant` failed with `403` before adding scope-kind aware grant loading for system-scoped API Keys.
+- GREEN confirmed:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server auth_routes`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane auth`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- Scope note: Task 2 implements API Key lifecycle storage, hashed token persistence, console creation route, Bearer runtime auth, action permissions, persisted scope grant enforcement, owner filtering, and system/workspace scope grant lookup. Exposure readiness proof and full audit calculation remain for Task 3.
 
 ### Task 3: Exposure Readiness Calculation
 

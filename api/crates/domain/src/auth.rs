@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -181,4 +182,65 @@ pub struct SessionRecord {
     pub session_version: i64,
     pub csrf_token: String,
     pub expires_at_unix: i64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiKeyDataModelAction {
+    List,
+    Get,
+    Create,
+    Update,
+    Delete,
+}
+
+impl ApiKeyDataModelAction {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::List => "list",
+            Self::Get => "get",
+            Self::Create => "create",
+            Self::Update => "update",
+            Self::Delete => "delete",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ApiKeyRecord {
+    pub id: Uuid,
+    pub name: String,
+    pub token_hash: String,
+    pub token_prefix: String,
+    pub creator_user_id: Uuid,
+    pub tenant_id: Uuid,
+    pub scope_kind: crate::DataModelScopeKind,
+    pub scope_id: Uuid,
+    pub enabled: bool,
+    pub expires_at: Option<OffsetDateTime>,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ApiKeyDataModelPermissionRecord {
+    pub api_key_id: Uuid,
+    pub data_model_id: Uuid,
+    pub allow_list: bool,
+    pub allow_get: bool,
+    pub allow_create: bool,
+    pub allow_update: bool,
+    pub allow_delete: bool,
+}
+
+impl ApiKeyDataModelPermissionRecord {
+    pub fn allows(&self, action: ApiKeyDataModelAction) -> bool {
+        match action {
+            ApiKeyDataModelAction::List => self.allow_list,
+            ApiKeyDataModelAction::Get => self.allow_get,
+            ApiKeyDataModelAction::Create => self.allow_create,
+            ApiKeyDataModelAction::Update => self.allow_update,
+            ApiKeyDataModelAction::Delete => self.allow_delete,
+        }
+    }
 }

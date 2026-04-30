@@ -13,7 +13,10 @@ use utoipa::ToSchema;
 use crate::{
     app_state::ApiState,
     error_response::ApiError,
-    middleware::{require_csrf::require_csrf, require_session::require_session},
+    middleware::{
+        require_csrf::require_csrf,
+        require_session::{require_session, RequestContext},
+    },
     response::ApiSuccess,
 };
 
@@ -148,9 +151,21 @@ fn parse_expand(expand: Option<&str>) -> Vec<String> {
 async fn load_runtime_scope_grant(
     state: &ApiState,
     actor: &domain::ActorContext,
-    model_code: &str,
+    data_model_id: uuid::Uuid,
 ) -> Result<Option<runtime_core::runtime_acl::RuntimeScopeGrant>, ApiError> {
-    let model = state
+    Ok(
+        control_plane::model_definition::ModelDefinitionService::new(state.store.clone())
+            .load_runtime_scope_grant(actor, data_model_id)
+            .await?,
+    )
+}
+
+fn resolve_runtime_model(
+    state: &ApiState,
+    actor: &domain::ActorContext,
+    model_code: &str,
+) -> Option<runtime_core::model_metadata::ModelMetadata> {
+    state
         .runtime_engine
         .registry()
         .get(
@@ -164,17 +179,118 @@ async fn load_runtime_scope_grant(
                 domain::SYSTEM_SCOPE_ID,
                 model_code,
             )
-        });
+        })
+}
 
-    let Some(model) = model else {
-        return Ok(None);
-    };
+enum RuntimeCredential {
+    Session(RequestContext),
+    ApiKey(control_plane::auth::ApiKeyActor),
+}
 
-    Ok(
-        control_plane::model_definition::ModelDefinitionService::new(state.store.clone())
-            .load_runtime_scope_grant(actor, model.model_id)
-            .await?,
+impl RuntimeCredential {
+    fn actor(&self) -> &domain::ActorContext {
+        match self {
+            Self::Session(context) => &context.actor,
+            Self::ApiKey(context) => &context.actor,
+        }
+    }
+
+    fn into_actor(self) -> domain::ActorContext {
+        match self {
+            Self::Session(context) => context.actor,
+            Self::ApiKey(context) => context.actor,
+        }
+    }
+}
+
+fn bearer_token(headers: &HeaderMap) -> Option<&str> {
+    let value = headers
+        .get(axum::http::header::AUTHORIZATION)?
+        .to_str()
+        .ok()?;
+    value.strip_prefix("Bearer ")
+}
+
+async fn authenticate_runtime_request(
+    state: &ApiState,
+    headers: &HeaderMap,
+) -> Result<RuntimeCredential, ApiError> {
+    if let Some(token) = bearer_token(headers) {
+        let api_key = control_plane::auth::ApiKeyService::new(state.store.clone())
+            .authenticate_bearer_token(token)
+            .await?;
+        return Ok(RuntimeCredential::ApiKey(api_key));
+    }
+
+    Ok(RuntimeCredential::Session(
+        require_session(state, headers).await?,
+    ))
+}
+
+fn ensure_api_key_action_allowed(
+    api_key: &control_plane::auth::ApiKeyActor,
+    data_model_id: uuid::Uuid,
+    action: domain::ApiKeyDataModelAction,
+) -> Result<(), ApiError> {
+    if api_key
+        .permissions
+        .iter()
+        .any(|permission| permission.data_model_id == data_model_id && permission.allows(action))
+    {
+        return Ok(());
+    }
+
+    Err(
+        control_plane::errors::ControlPlaneError::PermissionDenied("api_key_action_not_allowed")
+            .into(),
     )
+}
+
+async fn runtime_authorization(
+    state: &ApiState,
+    headers: &HeaderMap,
+    model_code: &str,
+    action: domain::ApiKeyDataModelAction,
+) -> Result<
+    (
+        RuntimeCredential,
+        Option<runtime_core::runtime_acl::RuntimeScopeGrant>,
+    ),
+    ApiError,
+> {
+    let credential = authenticate_runtime_request(state, headers).await?;
+    let Some(model) = resolve_runtime_model(state, credential.actor(), model_code) else {
+        return Ok((credential, None));
+    };
+    if let RuntimeCredential::ApiKey(api_key) = &credential {
+        ensure_api_key_action_allowed(api_key, model.model_id, action)?;
+    }
+
+    let scope_grant = match &credential {
+        RuntimeCredential::ApiKey(api_key) => {
+            control_plane::model_definition::ModelDefinitionService::new(state.store.clone())
+                .load_runtime_scope_grant_for_scope(
+                    api_key.api_key.scope_kind,
+                    api_key.api_key.scope_id,
+                    model.model_id,
+                )
+                .await?
+        }
+        RuntimeCredential::Session(_) => {
+            load_runtime_scope_grant(state, credential.actor(), model.model_id).await?
+        }
+    };
+    Ok((credential, scope_grant))
+}
+
+fn require_session_csrf_for_write(
+    headers: &HeaderMap,
+    credential: &RuntimeCredential,
+) -> Result<(), ApiError> {
+    if let RuntimeCredential::Session(context) = credential {
+        require_csrf(headers, &context.session)?;
+    }
+    Ok(())
 }
 
 #[utoipa::path(
@@ -189,12 +305,17 @@ pub async fn list_records(
     Path(model_code): Path<String>,
     Query(query): Query<RuntimeListQueryParams>,
 ) -> Result<Json<ApiSuccess<RuntimeListResponse>>, ApiError> {
-    let context = require_session(&state, &headers).await?;
-    let scope_grant = load_runtime_scope_grant(&state, &context.actor, &model_code).await?;
+    let (credential, scope_grant) = runtime_authorization(
+        &state,
+        &headers,
+        &model_code,
+        domain::ApiKeyDataModelAction::List,
+    )
+    .await?;
     let result = state
         .runtime_engine
         .list_records(runtime_core::runtime_engine::RuntimeListInput {
-            actor: context.actor.clone(),
+            actor: credential.into_actor(),
             model_code,
             scope_grant,
             filters: parse_filters(query.filter.as_deref())?,
@@ -226,12 +347,17 @@ pub async fn get_record(
     headers: HeaderMap,
     Path((model_code, record_id)): Path<(String, String)>,
 ) -> Result<Json<ApiSuccess<Value>>, ApiError> {
-    let context = require_session(&state, &headers).await?;
-    let scope_grant = load_runtime_scope_grant(&state, &context.actor, &model_code).await?;
+    let (credential, scope_grant) = runtime_authorization(
+        &state,
+        &headers,
+        &model_code,
+        domain::ApiKeyDataModelAction::Get,
+    )
+    .await?;
     let record = state
         .runtime_engine
         .get_record(runtime_core::runtime_engine::RuntimeGetInput {
-            actor: context.actor.clone(),
+            actor: credential.into_actor(),
             model_code,
             record_id,
             scope_grant,
@@ -258,14 +384,19 @@ pub async fn create_record(
     Path(model_code): Path<String>,
     Json(payload): Json<Value>,
 ) -> Result<(StatusCode, Json<ApiSuccess<Value>>), ApiError> {
-    let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
-    let scope_grant = load_runtime_scope_grant(&state, &context.actor, &model_code).await?;
+    let (credential, scope_grant) = runtime_authorization(
+        &state,
+        &headers,
+        &model_code,
+        domain::ApiKeyDataModelAction::Create,
+    )
+    .await?;
+    require_session_csrf_for_write(&headers, &credential)?;
 
     let record = state
         .runtime_engine
         .create_record(runtime_core::runtime_engine::RuntimeCreateInput {
-            actor: context.actor.clone(),
+            actor: credential.into_actor(),
             model_code,
             payload,
             scope_grant,
@@ -292,14 +423,19 @@ pub async fn update_record(
     Path((model_code, record_id)): Path<(String, String)>,
     Json(payload): Json<Value>,
 ) -> Result<Json<ApiSuccess<Value>>, ApiError> {
-    let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
-    let scope_grant = load_runtime_scope_grant(&state, &context.actor, &model_code).await?;
+    let (credential, scope_grant) = runtime_authorization(
+        &state,
+        &headers,
+        &model_code,
+        domain::ApiKeyDataModelAction::Update,
+    )
+    .await?;
+    require_session_csrf_for_write(&headers, &credential)?;
 
     let record = state
         .runtime_engine
         .update_record(runtime_core::runtime_engine::RuntimeUpdateInput {
-            actor: context.actor.clone(),
+            actor: credential.into_actor(),
             model_code,
             record_id,
             payload,
@@ -325,14 +461,19 @@ pub async fn delete_record(
     headers: HeaderMap,
     Path((model_code, record_id)): Path<(String, String)>,
 ) -> Result<Json<ApiSuccess<Value>>, ApiError> {
-    let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
-    let scope_grant = load_runtime_scope_grant(&state, &context.actor, &model_code).await?;
+    let (credential, scope_grant) = runtime_authorization(
+        &state,
+        &headers,
+        &model_code,
+        domain::ApiKeyDataModelAction::Delete,
+    )
+    .await?;
+    require_session_csrf_for_write(&headers, &credential)?;
 
     let result = state
         .runtime_engine
         .delete_record(runtime_core::runtime_engine::RuntimeDeleteInput {
-            actor: context.actor.clone(),
+            actor: credential.into_actor(),
             model_code,
             record_id,
             scope_grant,

@@ -24,8 +24,9 @@ pub use application::{
 };
 pub use audit::AuditLogRecord;
 pub use auth::{
-    ActorContext, AuthenticatorRecord, BoundRole, PermissionDefinition, RoleScopeKind,
-    RoleTemplate, SessionRecord, UserAuthIdentity, UserRecord, UserStatus,
+    ActorContext, ApiKeyDataModelAction, ApiKeyDataModelPermissionRecord, ApiKeyRecord,
+    AuthenticatorRecord, BoundRole, PermissionDefinition, RoleScopeKind, RoleTemplate,
+    SessionRecord, UserAuthIdentity, UserRecord, UserStatus,
 };
 pub use base::BaseFields;
 pub use data_source::{

@@ -169,6 +169,22 @@ where
             .map(runtime_scope_grant_from_record))
     }
 
+    pub async fn load_runtime_scope_grant_for_scope(
+        &self,
+        scope_kind: DataModelScopeKind,
+        scope_id: Uuid,
+        data_model_id: Uuid,
+    ) -> Result<Option<runtime_core::runtime_acl::RuntimeScopeGrant>> {
+        let grants = self
+            .repository
+            .list_scope_data_model_grants(scope_kind, scope_id)
+            .await?;
+        Ok(grants
+            .iter()
+            .find(|grant| grant.data_model_id == data_model_id)
+            .map(runtime_scope_grant_from_record))
+    }
+
     pub async fn list_models(
         &self,
         actor_user_id: Uuid,
