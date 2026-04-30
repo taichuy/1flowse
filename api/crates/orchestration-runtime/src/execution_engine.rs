@@ -336,6 +336,36 @@ where
             resolved_inputs,
             rendered_templates,
         );
+        if invocation_input.messages.is_empty() {
+            let error_payload = build_empty_prompt_messages_error_payload(attempt_runtime);
+            let attempt = build_attempt_metric(
+                attempt_index,
+                attempt_runtime,
+                "failed",
+                false,
+                Some(&error_payload),
+                &ProviderUsage::default(),
+                0,
+            );
+            attempt_metrics.push(attempt);
+
+            return Ok(LlmNodeExecution {
+                output_payload: build_failed_llm_output_payload(
+                    node,
+                    attempt_runtime,
+                    &error_payload,
+                ),
+                error_payload: Some(error_payload),
+                metrics_payload: build_llm_metrics_payload(
+                    attempt_runtime,
+                    ProviderUsage::default(),
+                    Some(ProviderFinishReason::Error),
+                    0,
+                    attempt_metrics,
+                ),
+                provider_events: Vec::new(),
+            });
+        }
         let output = match invoker.invoke_llm(attempt_runtime, invocation_input).await {
             Ok(output) => output,
             Err(error) => {
@@ -628,19 +658,7 @@ fn build_provider_invocation_input(
 ) -> ProviderInvocationInput {
     let (system, messages) = binding_prompt_messages(rendered_templates, resolved_inputs)
         .map(provider_messages_from_prompt_messages)
-        .unwrap_or_else(|| {
-            let system = binding_text(rendered_templates, resolved_inputs, "system_prompt");
-            let messages = binding_text(rendered_templates, resolved_inputs, "user_prompt")
-                .map(|content| {
-                    vec![ProviderMessage {
-                        role: ProviderMessageRole::User,
-                        content,
-                    }]
-                })
-                .unwrap_or_default();
-
-            (system, messages)
-        });
+        .unwrap_or_else(|| legacy_provider_messages(rendered_templates, resolved_inputs));
 
     let trace_context = BTreeMap::from([
         ("node_id".to_string(), node.node_id.clone()),
@@ -665,6 +683,33 @@ fn build_provider_invocation_input(
             Value::Object(resolved_inputs.clone()),
         )]),
     }
+}
+
+fn build_empty_prompt_messages_error_payload(runtime: &CompiledLlmRuntime) -> Value {
+    json!({
+        "provider_instance_id": runtime.provider_instance_id,
+        "provider_code": runtime.provider_code,
+        "protocol": runtime.protocol,
+        "error_kind": "prompt_messages_empty",
+        "message": "LLM node requires at least one non-empty user or assistant prompt message",
+    })
+}
+
+fn legacy_provider_messages(
+    rendered_templates: &Map<String, Value>,
+    resolved_inputs: &Map<String, Value>,
+) -> (Option<String>, Vec<ProviderMessage>) {
+    let system = binding_text(rendered_templates, resolved_inputs, "system_prompt");
+    let messages = binding_text(rendered_templates, resolved_inputs, "user_prompt")
+        .map(|content| {
+            vec![ProviderMessage {
+                role: ProviderMessageRole::User,
+                content,
+            }]
+        })
+        .unwrap_or_default();
+
+    (system, messages)
 }
 
 fn build_response_format(config: &Value) -> Option<Value> {

@@ -1,4 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { useEffect, type ReactNode } from 'react';
 import { describe, expect, test } from 'vitest';
 
@@ -87,6 +89,33 @@ function promptMessagesFrom(
 }
 
 describe('LLM prompt messages field', () => {
+  test('uses dark role trigger text to match the fixed system label', async () => {
+    const cssSource = await readFile(
+      path.resolve(
+        process.cwd(),
+        'src/features/agent-flow/components/editor/styles/inspector.css'
+      ),
+      'utf8'
+    );
+
+    expect(cssSource).toContain(
+      '.agent-flow-llm-prompt-messages__role-trigger {\n' +
+        '  display: inline-flex;\n' +
+        '  align-items: center;\n' +
+        '  gap: 4px;\n' +
+        '  height: 28px;\n' +
+        '  padding: 0;\n' +
+        '  border: 0;\n' +
+        '  border-radius: 0;\n' +
+        '  background: transparent;\n' +
+        '  color: #101828;'
+    );
+    expect(cssSource).toContain(
+      '.agent-flow-llm-prompt-messages__role-icon {\n' +
+        '  color: #101828;'
+    );
+  });
+
   test('keeps system first and only lets dynamic messages switch between user and assistant', async () => {
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
