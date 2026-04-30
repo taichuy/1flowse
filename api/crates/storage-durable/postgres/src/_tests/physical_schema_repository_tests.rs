@@ -1,3 +1,4 @@
+use control_plane::errors::ControlPlaneError;
 use control_plane::ports::{
     AddModelFieldInput, CreateModelDefinitionInput, ModelDefinitionRepository,
     UpdateModelDefinitionInput, UpdateModelFieldInput,
@@ -157,6 +158,14 @@ async fn create_main_source_table_adds_platform_columns_and_scope_indexes() {
     assert!(index_defs
         .iter()
         .any(|def| def.contains("(scope_id, created_by)")));
+
+    let model_id = model.id.simple().to_string();
+    assert!(index_defs
+        .iter()
+        .any(|def| def.contains(&format!("idx_scope_created_{model_id}"))));
+    assert!(index_defs
+        .iter()
+        .any(|def| def.contains(&format!("idx_scope_creator_{model_id}"))));
 }
 
 #[tokio::test]
@@ -276,6 +285,52 @@ async fn delete_model_field_drops_dynamic_columns_but_rejects_platform_columns()
     assert!(delete_result.is_err());
     let columns_after_platform_delete = runtime_columns(&store, &model.physical_table_name).await;
     assert!(columns_after_platform_delete.contains(&"created_at".to_string()));
+}
+
+#[tokio::test]
+async fn add_model_field_rejects_codes_that_sanitize_to_platform_columns_without_metadata() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let workspace_id = create_test_workspace(&store).await;
+    let model =
+        create_main_source_model(&store, workspace_id, "reserved_field_orders", "Orders").await;
+
+    let result = ModelDefinitionRepository::add_model_field(
+        &store,
+        &AddModelFieldInput {
+            actor_user_id: Uuid::nil(),
+            model_id: model.id,
+            code: "created-at".into(),
+            title: "Created At".into(),
+            field_kind: ModelFieldKind::String,
+            is_required: false,
+            is_unique: false,
+            default_value: None,
+            display_interface: Some("input".into()),
+            display_options: serde_json::json!({}),
+            relation_target_model_id: None,
+            relation_options: serde_json::json!({}),
+        },
+    )
+    .await;
+
+    let error = result.unwrap_err();
+    assert!(matches!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::InvalidInput("physical_column_name"))
+    ));
+
+    let field_count: i64 = sqlx::query_scalar(
+        "select count(*)::bigint from model_fields where data_model_id = $1 and code = $2",
+    )
+    .bind(model.id)
+    .bind("created-at")
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+
+    assert_eq!(field_count, 0);
 }
 
 #[tokio::test]

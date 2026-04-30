@@ -21,7 +21,7 @@ use crate::{
     physical_schema_repository::{
         add_fk_column_and_constraint, add_scalar_column, create_join_table,
         create_runtime_model_table, drop_join_table, drop_runtime_column, drop_runtime_model_table,
-        join_table_name,
+        is_platform_runtime_column, join_table_name,
     },
     repositories::{tenant_id_for_workspace, workspace_id_for_user, PgControlPlaneStore},
 };
@@ -425,12 +425,17 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
             ),
             None => None,
         };
+        let physical_column_name = build_physical_column_name(&input.code);
+        if is_platform_runtime_column(&physical_column_name) {
+            return Err(ControlPlaneError::InvalidInput("physical_column_name").into());
+        }
+
         let field = domain::ModelFieldRecord {
             id: Uuid::now_v7(),
             data_model_id: model.id,
             code: input.code.clone(),
             title: input.title.clone(),
-            physical_column_name: build_physical_column_name(&input.code),
+            physical_column_name,
             field_kind: input.field_kind,
             is_required: input.is_required,
             is_unique: input.is_unique,

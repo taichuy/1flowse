@@ -136,6 +136,18 @@ cargo test --manifest-path api/Cargo.toml -p storage-postgres physical_schema_re
 
 Final run passed: 7 passed, 0 failed.
 
+Plan B Task 2 code quality feedback fix:
+
+```bash
+cargo test --manifest-path api/Cargo.toml -p storage-postgres physical_schema_repository_tests
+```
+
+Red run failed as expected: `create_main_source_table_adds_platform_columns_and_scope_indexes` failed because the scope index names did not include the full model UUID simple string, and `add_model_field_rejects_codes_that_sanitize_to_platform_columns_without_metadata` failed because `created-at` reached DDL and returned an uncontrolled error path.
+
+The fix keeps existing FK / unique constraint naming unchanged, gives the new `(scope_id, created_at)` and `(scope_id, created_by)` indexes full model UUID suffixes, and rejects field codes whose sanitized physical column name is a platform runtime column before field metadata is inserted.
+
+Green run passed: 8 passed, 0 failed.
+
 ### Task 3: API Route Behavior
 
 **Files:**

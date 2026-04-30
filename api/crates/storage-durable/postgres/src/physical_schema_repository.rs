@@ -180,11 +180,15 @@ pub async fn drop_runtime_column(
 }
 
 fn ensure_dynamic_runtime_column(column_name: &str) -> Result<()> {
-    if PLATFORM_RUNTIME_COLUMNS.contains(&column_name) {
+    if is_platform_runtime_column(column_name) {
         return Err(anyhow!("cannot drop platform runtime column"));
     }
 
     Ok(())
+}
+
+pub fn is_platform_runtime_column(column_name: &str) -> bool {
+    PLATFORM_RUNTIME_COLUMNS.contains(&column_name)
 }
 
 fn quote_identifier(value: &str) -> Result<String> {
@@ -203,13 +207,17 @@ fn constraint_name(prefix: &str, id: uuid::Uuid) -> String {
     format!("{prefix}_{}", &simple[..16])
 }
 
+fn full_uuid_name(prefix: &str, id: uuid::Uuid) -> String {
+    format!("{prefix}_{}", id.simple())
+}
+
 async fn create_runtime_scope_indexes(
     tx: &mut Transaction<'_, Postgres>,
     model: &domain::ModelDefinitionRecord,
 ) -> Result<()> {
     let table_name = quote_identifier(&model.physical_table_name)?;
-    let scope_created_at_index = quote_identifier(&constraint_name("idx_scope_created", model.id))?;
-    let scope_created_by_index = quote_identifier(&constraint_name("idx_scope_creator", model.id))?;
+    let scope_created_at_index = quote_identifier(&full_uuid_name("idx_scope_created", model.id))?;
+    let scope_created_by_index = quote_identifier(&full_uuid_name("idx_scope_creator", model.id))?;
 
     sqlx::query(&format!(
         "create index {scope_created_at_index} on {table_name} (scope_id, created_at)"
