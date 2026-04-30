@@ -1,6 +1,6 @@
 use crate::{
-    ApiExposureReadiness, ApiExposureStatus, DataModelOwnerKind, DataModelStatus,
-    ExposureCompatibility, ExternalSourceValidation, RuntimeAvailability,
+    ApiExposureReadiness, ApiExposureStatus, DataModelOwnerKind, DataModelSourceKind,
+    DataModelStatus, ExposureCompatibility, ExternalSourceValidation, RuntimeAvailability,
 };
 
 #[test]
@@ -88,6 +88,28 @@ fn owner_kind_values_are_stable_db_strings() {
     assert_eq!(
         DataModelOwnerKind::from_db("unknown_owner"),
         DataModelOwnerKind::Core
+    );
+}
+
+#[test]
+fn source_kind_values_are_stable_db_strings() {
+    assert_eq!(DataModelSourceKind::MainSource.as_str(), "main_source");
+    assert_eq!(
+        DataModelSourceKind::ExternalSource.as_str(),
+        "external_source"
+    );
+
+    assert_eq!(
+        DataModelSourceKind::from_db("main_source"),
+        DataModelSourceKind::MainSource
+    );
+    assert_eq!(
+        DataModelSourceKind::from_db("external_source"),
+        DataModelSourceKind::ExternalSource
+    );
+    assert_eq!(
+        DataModelSourceKind::from_db("unknown_source"),
+        DataModelSourceKind::MainSource
     );
 }
 

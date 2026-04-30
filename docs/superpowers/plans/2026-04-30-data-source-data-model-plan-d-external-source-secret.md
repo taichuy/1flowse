@@ -220,6 +220,19 @@ cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_t
 cargo test --manifest-path api/Cargo.toml -p api-server data_sources_routes runtime_model_routes
 ```
 
+Task 3a validation record, 2026-04-30:
+
+- Green evidence:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p domain modeling_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p plugin-framework data_source`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p storage-postgres model_definition_repository_tests -- --test-threads=1`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- Scope note: This commit completes the external Data Model metadata/storage mapping slice: `source_kind`, `external_resource_key`, and `external_field_key` are persisted and reloaded, and external-source Data Model creation skips local runtime table/column DDL. It also documents `supports_transactions` / `transaction_id` semantics and adds get/create/update data-source DTO JSON shape tests.
+- Remaining Task 3 scope: runtime CRUD dispatch through `RuntimeRecordBackend`, plugin capability snapshot persistence, and complete external safety readiness remain for Task 3a-2 or Task 3b. In particular, `unsafe_external_source` readiness and `system_all` explicit confirmation are not implemented in this slice beyond existing domain/status scaffolding.
+
 ### Task 4: REST API Connector Rules
 
 **Files:**

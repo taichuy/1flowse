@@ -129,6 +129,8 @@ fn model_definition(
         fields: vec![],
         availability_status: MetadataAvailabilityStatus::Available,
         data_source_instance_id: None,
+        source_kind: domain::DataModelSourceKind::MainSource,
+        external_resource_key: None,
         status: domain::DataModelStatus::Published,
         api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
         protection: domain::DataModelProtection::default(),

@@ -107,6 +107,9 @@ pub struct DataSourceCrudCapabilities {
     pub supports_scope_filter: bool,
     #[serde(default)]
     pub supports_write: bool,
+    /// Declares that the adapter can apply write requests inside a host-provided
+    /// transaction context. This is a capability snapshot only; the platform
+    /// must not infer implicit transaction behavior when this is false.
     #[serde(default)]
     pub supports_transactions: bool,
 }
@@ -202,6 +205,10 @@ pub struct DataSourceCreateRecordInput {
     pub record: Value,
     #[serde(default)]
     pub context: DataSourceRecordScopeContext,
+    /// Optional host transaction context identifier. Adapters that declare
+    /// `supports_transactions` may bind the write to this context; adapters
+    /// that do not support transactions should reject or ignore it according to
+    /// their contract version.
     #[serde(default)]
     pub transaction_id: Option<String>,
     #[serde(default)]
@@ -226,6 +233,8 @@ pub struct DataSourceUpdateRecordInput {
     pub patch: Value,
     #[serde(default)]
     pub context: DataSourceRecordScopeContext,
+    /// Optional host transaction context identifier. It identifies an existing
+    /// write transaction context and does not request the plugin to open one.
     #[serde(default)]
     pub transaction_id: Option<String>,
     #[serde(default)]
@@ -248,6 +257,8 @@ pub struct DataSourceDeleteRecordInput {
     pub record_id: String,
     #[serde(default)]
     pub context: DataSourceRecordScopeContext,
+    /// Optional host transaction context identifier. It identifies an existing
+    /// write transaction context and does not request the plugin to open one.
     #[serde(default)]
     pub transaction_id: Option<String>,
     #[serde(default)]

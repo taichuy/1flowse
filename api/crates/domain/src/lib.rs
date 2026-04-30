@@ -59,9 +59,10 @@ pub use model_provider::{
 };
 pub use modeling::{
     ApiExposureReadiness, ApiExposureStatus, DataModelOwnerKind, DataModelProtection,
-    DataModelScopeKind, DataModelStatus, ExposureCompatibility, ExternalSourceValidation,
-    MetadataAvailabilityStatus, ModelDefinitionRecord, ModelFieldKind, ModelFieldRecord,
-    RuntimeAvailability, ScopeDataModelGrantRecord, ScopeDataModelPermissionProfile,
+    DataModelScopeKind, DataModelSourceKind, DataModelStatus, ExposureCompatibility,
+    ExternalSourceValidation, MetadataAvailabilityStatus, ModelDefinitionRecord, ModelFieldKind,
+    ModelFieldRecord, RuntimeAvailability, ScopeDataModelGrantRecord,
+    ScopeDataModelPermissionProfile,
 };
 pub use node_contribution::{NodeContributionDependencyStatus, NodeContributionRegistryEntry};
 pub use orchestration::{

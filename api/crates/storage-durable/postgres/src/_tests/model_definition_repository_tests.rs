@@ -1,10 +1,10 @@
 use control_plane::ports::{
-    CreateModelDefinitionInput, CreateScopeDataModelGrantInput, ModelDefinitionRepository,
-    UpdateModelDefinitionStatusInput, UpdateScopeDataModelGrantInput,
+    AddModelFieldInput, CreateModelDefinitionInput, CreateScopeDataModelGrantInput,
+    ModelDefinitionRepository, UpdateModelDefinitionStatusInput, UpdateScopeDataModelGrantInput,
 };
 use domain::{
-    ApiExposureStatus, DataModelProtection, DataModelScopeKind, DataModelStatus,
-    ScopeDataModelPermissionProfile, SYSTEM_SCOPE_ID,
+    ApiExposureStatus, DataModelProtection, DataModelScopeKind, DataModelSourceKind,
+    DataModelStatus, ModelFieldKind, ScopeDataModelPermissionProfile, SYSTEM_SCOPE_ID,
 };
 use sqlx::PgPool;
 use storage_postgres::{connect, run_migrations, PgControlPlaneStore};
@@ -162,6 +162,8 @@ async fn model_definition_repository_creates_scope_bound_metadata_without_publis
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
             data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
             code: code.clone(),
             title: "Orders".into(),
             status: DataModelStatus::Published,
@@ -186,6 +188,8 @@ async fn model_definition_repository_creates_scope_bound_metadata_without_publis
             scope_kind: DataModelScopeKind::System,
             scope_id: SYSTEM_SCOPE_ID,
             data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
             code: format!("system_{}", Uuid::now_v7().simple()),
             title: "System Orders".into(),
             status: DataModelStatus::Published,
@@ -227,6 +231,8 @@ async fn model_definition_repository_persists_status_exposure_owner_and_scope_gr
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
             data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
             code: format!("customers_{}", Uuid::now_v7().simple()),
             title: "Customers".into(),
             status: DataModelStatus::Draft,
@@ -270,6 +276,8 @@ async fn model_definition_repository_persists_status_exposure_owner_and_scope_gr
             scope_kind: DataModelScopeKind::System,
             scope_id: SYSTEM_SCOPE_ID,
             data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
             code: format!("system_customers_{}", Uuid::now_v7().simple()),
             title: "System Customers".into(),
             status: DataModelStatus::Published,
@@ -337,6 +345,8 @@ async fn model_definition_repository_rejects_scope_grant_for_workspace_model() {
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
             data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
             code: format!("workspace_grant_{}", Uuid::now_v7().simple()),
             title: "Workspace Grant Model".into(),
             status: DataModelStatus::Published,
@@ -388,6 +398,8 @@ async fn model_definition_repository_rejects_scope_grant_update_for_workspace_mo
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
             data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
             code: format!("workspace_grant_update_{}", Uuid::now_v7().simple()),
             title: "Workspace Grant Update Model".into(),
             status: DataModelStatus::Published,
@@ -435,6 +447,8 @@ async fn model_definition_repository_blocks_duplicate_code_inside_same_data_sour
         scope_kind: DataModelScopeKind::Workspace,
         scope_id: workspace_id,
         data_source_instance_id: Some(data_source_instance_id),
+        source_kind: DataModelSourceKind::ExternalSource,
+        external_resource_key: Some("orders".into()),
         code,
         title: "Orders".into(),
         status: DataModelStatus::Published,
@@ -472,6 +486,8 @@ async fn model_definition_repository_blocks_duplicate_code_inside_main_source() 
         scope_kind: DataModelScopeKind::Workspace,
         scope_id: workspace_id,
         data_source_instance_id: None,
+        source_kind: domain::DataModelSourceKind::MainSource,
+        external_resource_key: None,
         code,
         title: "Orders".into(),
         status: DataModelStatus::Published,
@@ -520,6 +536,8 @@ async fn model_definition_repository_allows_duplicate_code_across_data_sources_i
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
             data_source_instance_id: Some(first_data_source_id),
+            source_kind: DataModelSourceKind::ExternalSource,
+            external_resource_key: Some("orders".into()),
             code: code.clone(),
             title: "Orders".into(),
             status: DataModelStatus::Published,
@@ -537,6 +555,8 @@ async fn model_definition_repository_allows_duplicate_code_across_data_sources_i
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
             data_source_instance_id: Some(second_data_source_id),
+            source_kind: DataModelSourceKind::ExternalSource,
+            external_resource_key: Some("orders".into()),
             code: code.clone(),
             title: "Orders Copy".into(),
             status: DataModelStatus::Published,
@@ -583,6 +603,8 @@ async fn model_definition_repository_rejects_workspace_model_with_foreign_data_s
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
             data_source_instance_id: Some(foreign_data_source_id),
+            source_kind: DataModelSourceKind::ExternalSource,
+            external_resource_key: Some("orders".into()),
             code: format!("orders_{}", Uuid::now_v7().simple()),
             title: "Orders".into(),
             status: DataModelStatus::Published,
@@ -633,6 +655,108 @@ async fn model_definition_repository_reads_data_source_defaults_only_inside_work
 }
 
 #[tokio::test]
+async fn model_definition_repository_persists_external_source_mapping_without_local_table_columns()
+{
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let (workspace_id, actor_user_id, installation_id) =
+        seed_data_source_workspace(&store, "external-mapping-workspace", "external_crm").await;
+    let data_source_instance_id = seed_data_source_instance(
+        &store,
+        workspace_id,
+        actor_user_id,
+        installation_id,
+        "external_crm",
+        "External CRM",
+    )
+    .await;
+
+    let created = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: Some(data_source_instance_id),
+            source_kind: DataModelSourceKind::ExternalSource,
+            external_resource_key: Some("crm.contacts".into()),
+            code: format!("external_contacts_{}", Uuid::now_v7().simple()),
+            title: "External Contacts".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let created_table_count: i64 =
+        sqlx::query_scalar("select count(*) from information_schema.tables where table_name = $1")
+            .bind(&created.physical_table_name)
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert_eq!(created.source_kind, DataModelSourceKind::ExternalSource);
+    assert_eq!(
+        created.external_resource_key.as_deref(),
+        Some("crm.contacts")
+    );
+    assert_eq!(created_table_count, 0);
+
+    let field = ModelDefinitionRepository::add_model_field(
+        &store,
+        &AddModelFieldInput {
+            actor_user_id,
+            model_id: created.id,
+            external_field_key: Some("properties.email".into()),
+            code: "email".into(),
+            title: "Email".into(),
+            field_kind: ModelFieldKind::String,
+            is_required: true,
+            is_unique: true,
+            default_value: None,
+            display_interface: Some("input".into()),
+            display_options: serde_json::json!({}),
+            relation_target_model_id: None,
+            relation_options: serde_json::json!({}),
+        },
+    )
+    .await
+    .unwrap();
+
+    let column_count: i64 = sqlx::query_scalar(
+        "select count(*) from information_schema.columns where table_name = $1 and column_name = $2",
+    )
+    .bind(&created.physical_table_name)
+    .bind(&field.physical_column_name)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        field.external_field_key.as_deref(),
+        Some("properties.email")
+    );
+    assert_eq!(column_count, 0);
+
+    let reloaded =
+        ModelDefinitionRepository::get_model_definition(&store, workspace_id, created.id)
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(reloaded.source_kind, DataModelSourceKind::ExternalSource);
+    assert_eq!(
+        reloaded.external_resource_key.as_deref(),
+        Some("crm.contacts")
+    );
+    assert_eq!(reloaded.fields.len(), 1);
+    assert_eq!(
+        reloaded.fields[0].external_field_key.as_deref(),
+        Some("properties.email")
+    );
+}
+
+#[tokio::test]
 async fn model_definition_repository_status_update_requires_visible_workspace() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();
@@ -666,6 +790,8 @@ async fn model_definition_repository_status_update_requires_visible_workspace() 
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: foreign_workspace_id,
             data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
             code: format!("foreign_orders_{}", Uuid::now_v7().simple()),
             title: "Foreign Orders".into(),
             status: DataModelStatus::Published,

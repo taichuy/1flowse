@@ -57,6 +57,29 @@ impl DataModelStatus {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+pub enum DataModelSourceKind {
+    MainSource,
+    ExternalSource,
+}
+
+impl DataModelSourceKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::MainSource => "main_source",
+            Self::ExternalSource => "external_source",
+        }
+    }
+
+    pub fn from_db(value: &str) -> Self {
+        match value {
+            "external_source" => Self::ExternalSource,
+            _ => Self::MainSource,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum ApiExposureStatus {
     Draft,
     PublishedNotExposed,
@@ -373,6 +396,7 @@ pub struct ModelFieldRecord {
     pub code: String,
     pub title: String,
     pub physical_column_name: String,
+    pub external_field_key: Option<String>,
     pub field_kind: ModelFieldKind,
     pub is_required: bool,
     pub is_unique: bool,
@@ -391,6 +415,8 @@ pub struct ModelDefinitionRecord {
     pub scope_kind: DataModelScopeKind,
     pub scope_id: Uuid,
     pub data_source_instance_id: Option<Uuid>,
+    pub source_kind: DataModelSourceKind,
+    pub external_resource_key: Option<String>,
     pub code: String,
     pub title: String,
     pub physical_table_name: String,

@@ -749,6 +749,7 @@ fn to_model_field_record(row: PgRow) -> domain::ModelFieldRecord {
         code: row.get("code"),
         title: row.get("title"),
         physical_column_name: row.get("physical_column_name"),
+        external_field_key: row.get("external_field_key"),
         field_kind: domain::ModelFieldKind::from_db(row.get("field_kind")),
         is_required: row.get("is_required"),
         is_unique: row.get("is_unique"),

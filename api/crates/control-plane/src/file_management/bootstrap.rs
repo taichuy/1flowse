@@ -54,6 +54,8 @@ where
             scope_kind: input.model_scope_kind,
             scope_id: input.model_scope_id,
             data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
             status: domain::DataModelStatus::Published,
             api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
             protection: domain::DataModelProtection::default(),
@@ -67,6 +69,7 @@ where
             .add_model_field(&AddModelFieldInput {
                 actor_user_id: input.actor_user_id,
                 model_id: model.id,
+                external_field_key: None,
                 code: field.code,
                 title: field.title,
                 field_kind: field.field_kind,

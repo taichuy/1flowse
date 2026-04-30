@@ -97,6 +97,8 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                 scope_kind,
                 scope_id,
                 data_source_instance_id,
+                source_kind,
+                external_resource_key,
                 code,
                 title,
                 physical_table_name,
@@ -128,6 +130,8 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                     scope_kind: row.get("scope_kind"),
                     scope_id: row.get("scope_id"),
                     data_source_instance_id: row.get("data_source_instance_id"),
+                    source_kind: row.get("source_kind"),
+                    external_resource_key: row.get("external_resource_key"),
                     code: row.get("code"),
                     title: row.get("title"),
                     physical_table_name: row.get("physical_table_name"),
@@ -201,6 +205,8 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
             scope_kind: input.scope_kind,
             scope_id: input.scope_id,
             data_source_instance_id: input.data_source_instance_id,
+            source_kind: input.source_kind,
+            external_resource_key: input.external_resource_key.clone(),
             code: input.code.clone(),
             title: input.title.clone(),
             physical_table_name: build_physical_table_name(input.scope_kind, &input.code),
@@ -225,7 +231,9 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                 domain::MetadataAvailabilityStatus::Available,
             )
             .await?;
-            create_runtime_model_table(&mut tx, &model).await?;
+            if model.source_kind == domain::DataModelSourceKind::MainSource {
+                create_runtime_model_table(&mut tx, &model).await?;
+            }
             append_change_log_tx(
                 &mut tx,
                 &ChangeLogEntry {
@@ -294,6 +302,8 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                 scope_kind,
                 scope_id,
                 data_source_instance_id,
+                source_kind,
+                external_resource_key,
                 code,
                 title,
                 physical_table_name,
@@ -321,6 +331,8 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                 scope_kind: row.get("scope_kind"),
                 scope_id: row.get("scope_id"),
                 data_source_instance_id: row.get("data_source_instance_id"),
+                source_kind: row.get("source_kind"),
+                external_resource_key: row.get("external_resource_key"),
                 code: row.get("code"),
                 title: row.get("title"),
                 physical_table_name: row.get("physical_table_name"),
@@ -362,6 +374,8 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                 scope_kind,
                 scope_id,
                 data_source_instance_id,
+                source_kind,
+                external_resource_key,
                 code,
                 title,
                 physical_table_name,
@@ -391,6 +405,8 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                 scope_kind: row.get("scope_kind"),
                 scope_id: row.get("scope_id"),
                 data_source_instance_id: row.get("data_source_instance_id"),
+                source_kind: row.get("source_kind"),
+                external_resource_key: row.get("external_resource_key"),
                 code: row.get("code"),
                 title: row.get("title"),
                 physical_table_name: row.get("physical_table_name"),
@@ -437,6 +453,7 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
             code: input.code.clone(),
             title: input.title.clone(),
             physical_column_name,
+            external_field_key: input.external_field_key.clone(),
             field_kind: input.field_kind,
             is_required: input.is_required,
             is_unique: input.is_unique,
@@ -460,22 +477,24 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                 domain::MetadataAvailabilityStatus::Available,
             )
             .await?;
-            match field.field_kind {
-                domain::ModelFieldKind::ManyToOne => {
-                    let target = relation_target
-                        .as_ref()
-                        .ok_or(ControlPlaneError::InvalidInput("relation_target_model_id"))?;
-                    add_fk_column_and_constraint(&mut tx, &model, &field, target).await?;
-                }
-                domain::ModelFieldKind::OneToMany => {}
-                domain::ModelFieldKind::ManyToMany => {
-                    let target = relation_target
-                        .as_ref()
-                        .ok_or(ControlPlaneError::InvalidInput("relation_target_model_id"))?;
-                    create_join_table(&mut tx, &model, target).await?;
-                }
-                _ => {
-                    add_scalar_column(&mut tx, &model, &field).await?;
+            if model.source_kind == domain::DataModelSourceKind::MainSource {
+                match field.field_kind {
+                    domain::ModelFieldKind::ManyToOne => {
+                        let target = relation_target
+                            .as_ref()
+                            .ok_or(ControlPlaneError::InvalidInput("relation_target_model_id"))?;
+                        add_fk_column_and_constraint(&mut tx, &model, &field, target).await?;
+                    }
+                    domain::ModelFieldKind::OneToMany => {}
+                    domain::ModelFieldKind::ManyToMany => {
+                        let target = relation_target
+                            .as_ref()
+                            .ok_or(ControlPlaneError::InvalidInput("relation_target_model_id"))?;
+                        create_join_table(&mut tx, &model, target).await?;
+                    }
+                    _ => {
+                        add_scalar_column(&mut tx, &model, &field).await?;
+                    }
                 }
             }
             append_change_log_tx(

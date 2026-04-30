@@ -97,6 +97,8 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
             data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
             status: domain::DataModelStatus::Published,
             api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
             protection: domain::DataModelProtection::default(),
@@ -113,6 +115,8 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
             data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
             status: domain::DataModelStatus::Published,
             api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
             protection: domain::DataModelProtection::default(),
@@ -128,6 +132,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: customer_model.id,
+            external_field_key: None,
             code: "name".into(),
             title: "Name".into(),
             field_kind: ModelFieldKind::String,
@@ -147,6 +152,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: order_model.id,
+            external_field_key: None,
             code: "title".into(),
             title: "Title".into(),
             field_kind: ModelFieldKind::String,
@@ -166,6 +172,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: order_model.id,
+            external_field_key: None,
             code: "status".into(),
             title: "Status".into(),
             field_kind: ModelFieldKind::Enum,
@@ -185,6 +192,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: order_model.id,
+            external_field_key: None,
             code: "customer".into(),
             title: "Customer".into(),
             field_kind: ModelFieldKind::ManyToOne,
@@ -204,6 +212,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: customer_model.id,
+            external_field_key: None,
             code: "orders".into(),
             title: "Orders".into(),
             field_kind: ModelFieldKind::OneToMany,
@@ -378,6 +387,8 @@ async fn runtime_record_repository_blocks_expanding_draft_relation_targets() {
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
             data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
             status: domain::DataModelStatus::Draft,
             api_exposure_status: domain::ApiExposureStatus::Draft,
             protection: domain::DataModelProtection::default(),
@@ -394,6 +405,8 @@ async fn runtime_record_repository_blocks_expanding_draft_relation_targets() {
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
             data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
             status: domain::DataModelStatus::Published,
             api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
             protection: domain::DataModelProtection::default(),
@@ -409,6 +422,7 @@ async fn runtime_record_repository_blocks_expanding_draft_relation_targets() {
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: customer_model.id,
+            external_field_key: None,
             code: "name".into(),
             title: "Name".into(),
             field_kind: ModelFieldKind::String,
@@ -428,6 +442,7 @@ async fn runtime_record_repository_blocks_expanding_draft_relation_targets() {
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: order_model.id,
+            external_field_key: None,
             code: "title".into(),
             title: "Title".into(),
             field_kind: ModelFieldKind::String,
@@ -447,6 +462,7 @@ async fn runtime_record_repository_blocks_expanding_draft_relation_targets() {
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: order_model.id,
+            external_field_key: None,
             code: "customer".into(),
             title: "Customer".into(),
             field_kind: ModelFieldKind::ManyToOne,
@@ -547,6 +563,8 @@ async fn runtime_record_repository_enforces_owner_scope() {
             scope_kind: DataModelScopeKind::Workspace,
             scope_id: workspace_id,
             data_source_instance_id: None,
+            source_kind: domain::DataModelSourceKind::MainSource,
+            external_resource_key: None,
             status: domain::DataModelStatus::Published,
             api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
             protection: domain::DataModelProtection::default(),
@@ -561,6 +579,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         &AddModelFieldInput {
             actor_user_id: Uuid::nil(),
             model_id: order_model.id,
+            external_field_key: None,
             code: "title".into(),
             title: "Title".into(),
             field_kind: ModelFieldKind::String,

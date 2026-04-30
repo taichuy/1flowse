@@ -1,8 +1,9 @@
 use plugin_framework::data_source_contract::{
-    DataSourceCatalogEntry, DataSourceCrudCapabilities, DataSourceDeleteRecordInput,
-    DataSourceListRecordsInput, DataSourceRecordFilter, DataSourceRecordPage,
-    DataSourceRecordScopeContext, DataSourceRecordSort, DataSourceResourceDescriptor,
-    DataSourceStdioMethod,
+    DataSourceCatalogEntry, DataSourceCreateRecordInput, DataSourceCrudCapabilities,
+    DataSourceDeleteRecordInput, DataSourceGetRecordInput, DataSourceListRecordsInput,
+    DataSourceRecordFilter, DataSourceRecordPage, DataSourceRecordScopeContext,
+    DataSourceRecordSort, DataSourceResourceDescriptor, DataSourceStdioMethod,
+    DataSourceUpdateRecordInput,
 };
 use serde_json::json;
 
@@ -142,6 +143,75 @@ fn list_records_input_carries_filter_sort_pagination_and_owner_scope_context() {
     assert_eq!(value["filters"][0]["field_key"], "email");
     assert_eq!(value["sort"][0]["descending"], true);
     assert_eq!(value["page"]["limit"], 50);
+}
+
+#[test]
+fn get_record_input_json_shape_is_stable() {
+    let input = DataSourceGetRecordInput {
+        connection: Default::default(),
+        resource_key: "contacts".to_string(),
+        record_id: "contact-1".to_string(),
+        context: DataSourceRecordScopeContext {
+            owner_id: Some("user-1".to_string()),
+            scope_id: Some("workspace-1".to_string()),
+        },
+        options_json: json!({ "projection": ["email"] }),
+    };
+
+    let value = serde_json::to_value(input).unwrap();
+    assert_eq!(value["resource_key"], "contacts");
+    assert_eq!(value["record_id"], "contact-1");
+    assert_eq!(value["context"]["owner_id"], "user-1");
+    assert_eq!(value["context"]["scope_id"], "workspace-1");
+    assert_eq!(value["options_json"]["projection"][0], "email");
+}
+
+#[test]
+fn create_record_input_json_shape_includes_record_context_and_transaction() {
+    let input = DataSourceCreateRecordInput {
+        connection: Default::default(),
+        resource_key: "contacts".to_string(),
+        record: json!({ "email": "person@example.com" }),
+        context: DataSourceRecordScopeContext {
+            owner_id: Some("user-1".to_string()),
+            scope_id: Some("workspace-1".to_string()),
+        },
+        transaction_id: Some("tx-1".to_string()),
+        options_json: json!({ "upsert": false }),
+    };
+
+    let value = serde_json::to_value(input).unwrap();
+    assert_eq!(value["resource_key"], "contacts");
+    assert_eq!(value["record"]["email"], "person@example.com");
+    assert_eq!(value["context"]["owner_id"], "user-1");
+    assert_eq!(value["context"]["scope_id"], "workspace-1");
+    assert_eq!(value["transaction_id"], "tx-1");
+    assert_eq!(value["options_json"]["upsert"], false);
+}
+
+#[test]
+fn update_record_input_json_shape_includes_patch_context_and_transaction() {
+    let input = DataSourceUpdateRecordInput {
+        connection: Default::default(),
+        resource_key: "contacts".to_string(),
+        record_id: "contact-1".to_string(),
+        patch: json!({ "email": "updated@example.com" }),
+        context: DataSourceRecordScopeContext {
+            owner_id: Some("user-1".to_string()),
+            scope_id: Some("workspace-1".to_string()),
+        },
+        transaction_id: Some("tx-1".to_string()),
+        options_json: json!({ "return_record": true }),
+    };
+
+    let value = serde_json::to_value(input).unwrap();
+    assert_eq!(value["resource_key"], "contacts");
+    assert_eq!(value["record_id"], "contact-1");
+    assert_eq!(value["patch"]["email"], "updated@example.com");
+    assert_eq!(value["context"]["owner_id"], "user-1");
+    assert_eq!(value["context"]["scope_id"], "workspace-1");
+    assert_eq!(value["transaction_id"], "tx-1");
+    assert_eq!(value["options_json"]["return_record"], true);
 }
 
 #[test]

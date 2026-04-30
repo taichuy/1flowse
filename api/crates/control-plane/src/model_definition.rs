@@ -257,6 +257,11 @@ where
         let status = command.status.unwrap_or(defaults.data_model_status);
         let api_exposure_status =
             normalize_api_exposure_for_status(status, defaults.api_exposure_status)?;
+        let source_kind = if command.data_source_instance_id.is_some() {
+            domain::DataModelSourceKind::ExternalSource
+        } else {
+            domain::DataModelSourceKind::MainSource
+        };
 
         let model = self
             .repository
@@ -265,6 +270,8 @@ where
                 scope_kind: DataModelScopeKind::System,
                 scope_id: domain::SYSTEM_SCOPE_ID,
                 data_source_instance_id: command.data_source_instance_id,
+                source_kind,
+                external_resource_key: None,
                 code: command.code,
                 title: command.title,
                 status,
@@ -447,6 +454,7 @@ where
                 model_id: command.model_id,
                 code: command.code,
                 title: command.title,
+                external_field_key: None,
                 field_kind: command.field_kind,
                 is_required: command.is_required,
                 is_unique: command.is_unique,
@@ -949,6 +957,8 @@ impl InMemoryModelDefinitionRepository {
                 fields: vec![],
                 availability_status: domain::MetadataAvailabilityStatus::Available,
                 data_source_instance_id: None,
+                source_kind: domain::DataModelSourceKind::MainSource,
+                external_resource_key: None,
                 status: domain::DataModelStatus::Published,
                 api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
                 protection: domain::DataModelProtection::default(),
@@ -1016,6 +1026,8 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
             scope_kind: input.scope_kind,
             scope_id: input.scope_id,
             data_source_instance_id: input.data_source_instance_id,
+            source_kind: input.source_kind,
+            external_resource_key: input.external_resource_key.clone(),
             code: input.code.clone(),
             title: input.title.clone(),
             physical_table_name: build_physical_table_name(input.scope_kind, &input.code),
@@ -1078,6 +1090,7 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
             code: input.code.clone(),
             title: input.title.clone(),
             physical_column_name: build_physical_column_name(&input.code),
+            external_field_key: input.external_field_key.clone(),
             field_kind: input.field_kind,
             is_required: input.is_required,
             is_unique: input.is_unique,

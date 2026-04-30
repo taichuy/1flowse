@@ -18,6 +18,8 @@ pub(super) async fn load_model_definition(
             scope_kind,
             scope_id,
             data_source_instance_id,
+            source_kind,
+            external_resource_key,
             code,
             title,
             physical_table_name,
@@ -43,6 +45,8 @@ pub(super) async fn load_model_definition(
             scope_kind: row.get("scope_kind"),
             scope_id: row.get("scope_id"),
             data_source_instance_id: row.get("data_source_instance_id"),
+            source_kind: row.get("source_kind"),
+            external_resource_key: row.get("external_resource_key"),
             code: row.get("code"),
             title: row.get("title"),
             physical_table_name: row.get("physical_table_name"),
@@ -82,6 +86,8 @@ pub(super) async fn load_model_definition_with_lock(
             scope_kind,
             scope_id,
             data_source_instance_id,
+            source_kind,
+            external_resource_key,
             code,
             title,
             physical_table_name,
@@ -112,6 +118,8 @@ pub(super) async fn load_model_definition_with_lock(
             scope_kind: row.get("scope_kind"),
             scope_id: row.get("scope_id"),
             data_source_instance_id: row.get("data_source_instance_id"),
+            source_kind: row.get("source_kind"),
+            external_resource_key: row.get("external_resource_key"),
             code: row.get("code"),
             title: row.get("title"),
             physical_table_name: row.get("physical_table_name"),
@@ -141,6 +149,8 @@ pub(super) async fn insert_model_definition(
             scope_kind,
             scope_id,
             data_source_instance_id,
+            source_kind,
+            external_resource_key,
             code,
             title,
             physical_table_name,
@@ -155,13 +165,15 @@ pub(super) async fn insert_model_definition(
             created_by,
             updated_by
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $18)
         "#,
     )
     .bind(model.id)
     .bind(model.scope_kind.as_str())
     .bind(model.scope_id)
     .bind(model.data_source_instance_id)
+    .bind(model.source_kind.as_str())
+    .bind(&model.external_resource_key)
     .bind(&model.code)
     .bind(&model.title)
     .bind(&model.physical_table_name)
@@ -192,6 +204,8 @@ pub(super) async fn insert_model_definition_after_failure(
             scope_kind,
             scope_id,
             data_source_instance_id,
+            source_kind,
+            external_resource_key,
             code,
             title,
             physical_table_name,
@@ -206,7 +220,7 @@ pub(super) async fn insert_model_definition_after_failure(
             created_by,
             updated_by
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $18)
         on conflict (id) do update
         set availability_status = excluded.availability_status,
             status = excluded.status,
@@ -219,6 +233,8 @@ pub(super) async fn insert_model_definition_after_failure(
     .bind(model.scope_kind.as_str())
     .bind(model.scope_id)
     .bind(model.data_source_instance_id)
+    .bind(model.source_kind.as_str())
+    .bind(&model.external_resource_key)
     .bind(&model.code)
     .bind(&model.title)
     .bind(&model.physical_table_name)
