@@ -9,7 +9,8 @@ use axum::{
 use control_plane::data_source::{
     CreateDataSourceInstanceCommand, DataSourceCatalogEntryView, DataSourceInstanceView,
     DataSourceService, PreviewDataSourceReadCommand, PreviewDataSourceReadResult,
-    ValidateDataSourceInstanceCommand, ValidateDataSourceInstanceResult,
+    RotateDataSourceSecretCommand, ValidateDataSourceInstanceCommand,
+    ValidateDataSourceInstanceResult,
 };
 use serde::{Deserialize, Serialize};
 use storage_durable::MainDurableStore;
@@ -43,6 +44,12 @@ pub struct PreviewDataSourceReadBody {
     pub cursor: Option<String>,
     #[schema(value_type = Object)]
     pub options_json: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RotateDataSourceSecretBody {
+    #[schema(value_type = Object)]
+    pub secret_json: serde_json::Value,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -114,6 +121,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/data-sources/instances/:instance_id/validate",
             post(validate_instance),
+        )
+        .route(
+            "/data-sources/instances/:instance_id/secret/rotate",
+            post(rotate_secret),
         )
         .route(
             "/data-sources/instances/:instance_id/preview-read",
@@ -277,6 +288,32 @@ pub async fn validate_instance(
         })
         .await?;
     Ok(Json(ApiSuccess::new(to_validate_response(result))))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/data-sources/instances/{instance_id}/secret/rotate",
+    operation_id = "data_source_rotate_secret",
+    request_body = RotateDataSourceSecretBody,
+    responses((status = 200, body = DataSourceInstanceResponse), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn rotate_secret(
+    State(state): State<Arc<ApiState>>,
+    Path(instance_id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<RotateDataSourceSecretBody>,
+) -> Result<Json<ApiSuccess<DataSourceInstanceResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let result = service(&state)
+        .rotate_secret(RotateDataSourceSecretCommand {
+            actor_user_id: context.user.id,
+            workspace_id: context.actor.current_workspace_id,
+            instance_id: parse_uuid(&instance_id, "instance_id")?,
+            secret_json: body.secret_json,
+        })
+        .await?;
+    Ok(Json(ApiSuccess::new(to_instance_response(result))))
 }
 
 #[utoipa::path(

@@ -121,7 +121,7 @@ set -euo pipefail
 payload="$(cat)"
 case "${payload}" in
   *'"method":"validate_config"'*)
-    printf '%s' '{"ok":true,"result":{"ok":true}}'
+    printf '%s' '{"ok":true,"result":{"ok":true,"echoed":"route-secret-echo","nested":{"token":"route-secret-echo"}}}'
     ;;
   *'"method":"test_connection"'*)
     printf '%s' '{"ok":true,"result":{"status":"ok"}}'
@@ -130,7 +130,7 @@ case "${payload}" in
     printf '%s' '{"ok":true,"result":[{"resource_key":"contacts","display_name":"Contacts","resource_kind":"object","metadata":{}}]}'
     ;;
   *'"method":"preview_read"'*)
-    printf '%s' '{"ok":true,"result":{"rows":[{"id":"1","email":"person@example.com"}],"next_cursor":null}}'
+    printf '%s' '{"ok":true,"result":{"rows":[{"id":"1","email":"person@example.com","token":"route-secret-echo","nested":{"secret":"route-secret-echo"}}],"next_cursor":null}}'
     ;;
   *)
     printf '%s' '{"ok":false,"error":{"message":"unknown method","provider_summary":null}}'
@@ -250,8 +250,14 @@ async fn data_source_routes_create_validate_preview_and_catalog() {
                         "source_code": "fixture_data_source",
                         "display_name": "Fixture Data Source",
                         "installation_id": installation_id,
-                        "config_json": { "client_id": "abc" },
-                        "secret_json": { "client_secret": "secret" }
+                        "config_json": {
+                            "client_id": "abc",
+                            "headers": [
+                                { "name": "Authorization", "value": "route-header-secret" },
+                                { "name": "X-Trace", "value": "not-secret" }
+                            ]
+                        },
+                        "secret_json": { "client_secret": "route-secret-echo" }
                     })
                     .to_string(),
                 ))
@@ -264,6 +270,12 @@ async fn data_source_routes_create_validate_preview_and_catalog() {
         serde_json::from_slice(&to_bytes(create.into_body(), usize::MAX).await.unwrap()).unwrap();
     let instance_id = create_payload["data"]["id"].as_str().unwrap().to_string();
     assert_eq!(create_payload["data"]["status"].as_str(), Some("draft"));
+    assert!(!create_payload.to_string().contains("route-header-secret"));
+    assert!(!create_payload.to_string().contains("route-secret-echo"));
+    assert_eq!(
+        create_payload["data"]["config_json"]["headers"][0]["value"]["secret_ref"],
+        create_payload["data"]["secret_ref"]
+    );
 
     let validate = app
         .clone()
@@ -290,6 +302,11 @@ async fn data_source_routes_create_validate_preview_and_catalog() {
     assert_eq!(
         validate_payload["data"]["catalog"]["refresh_status"].as_str(),
         Some("ready")
+    );
+    assert!(!validate_payload.to_string().contains("route-secret-echo"));
+    assert_eq!(
+        validate_payload["data"]["output"]["echoed"].as_str(),
+        Some("***")
     );
 
     let preview = app
@@ -322,4 +339,43 @@ async fn data_source_routes_create_validate_preview_and_catalog() {
         preview_payload["data"]["output"]["rows"][0]["email"].as_str(),
         Some("person@example.com")
     );
+    assert!(!preview_payload.to_string().contains("route-secret-echo"));
+    assert_eq!(
+        preview_payload["data"]["output"]["rows"][0]["token"].as_str(),
+        Some("***")
+    );
+
+    let rotate = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/data-sources/instances/{instance_id}/secret/rotate"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "secret_json": { "client_secret": "rotated-route-secret" }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let rotate_status = rotate.status();
+    let rotate_body = to_bytes(rotate.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        rotate_status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&rotate_body)
+    );
+    let rotate_payload: Value = serde_json::from_slice(&rotate_body).unwrap();
+    assert_eq!(rotate_payload["data"]["secret_version"].as_i64(), Some(2));
+    assert!(rotate_payload["data"]["secret_ref"].as_str().is_some());
+    assert!(!rotate_payload.to_string().contains("rotated-route-secret"));
 }

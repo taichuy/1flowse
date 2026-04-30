@@ -14,7 +14,7 @@ use crate::{
     errors::ControlPlaneError,
     ports::{
         AuthRepository, CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput,
-        DataSourceRepository, DataSourceRuntimePort, PluginRepository,
+        DataSourceRepository, DataSourceRuntimePort, PluginRepository, RotateDataSourceSecretInput,
         UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceConfigInput,
         UpdateDataSourceInstanceStatusInput, UpsertDataSourceCatalogCacheInput,
         UpsertDataSourceSecretInput,
@@ -119,7 +119,7 @@ where
     ) -> Result<Vec<DataSourceCatalogEntryView>> {
         let actor = load_actor_context_for_user(&self.repository, actor_user_id).await?;
         ensure_workspace_matches(&actor, workspace_id)?;
-        ensure_state_model_permission(&actor, "view")?;
+        ensure_external_data_source_permission(&actor, "view")?;
 
         let assigned_installation_ids = self
             .repository
@@ -155,7 +155,7 @@ where
     ) -> Result<DataSourceInstanceView> {
         let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
         ensure_workspace_matches(&actor, command.workspace_id)?;
-        ensure_state_model_permission(&actor, "manage")?;
+        ensure_external_data_source_permission(&actor, "configure")?;
 
         let installation = self
             .repository
@@ -237,7 +237,7 @@ where
     ) -> Result<ValidateDataSourceInstanceResult> {
         let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
         ensure_workspace_matches(&actor, command.workspace_id)?;
-        ensure_state_model_permission(&actor, "manage")?;
+        ensure_external_data_source_permission(&actor, "configure")?;
 
         let existing = self
             .repository
@@ -263,6 +263,7 @@ where
             .unwrap_or_else(|| json!({}));
 
         self.runtime.ensure_loaded(&installation).await?;
+        let secret_values = collect_secret_strings(&secret_json);
         let output = self
             .runtime
             .validate_config(
@@ -271,6 +272,7 @@ where
                 secret_json.clone(),
             )
             .await?;
+        let output = redact_value(&output, &secret_values);
         self.runtime
             .test_connection(
                 &installation,
@@ -333,7 +335,7 @@ where
     ) -> Result<domain::DataSourceInstanceRecord> {
         let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
         ensure_workspace_matches(&actor, command.workspace_id)?;
-        ensure_state_model_permission(&actor, "manage")?;
+        ensure_external_data_source_permission(&actor, "configure")?;
         ensure_data_source_defaults_compatible(command.defaults)?;
 
         let instance = self
@@ -369,7 +371,7 @@ where
     ) -> Result<DataSourceInstanceView> {
         let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
         ensure_workspace_matches(&actor, command.workspace_id)?;
-        ensure_state_model_permission(&actor, "manage")?;
+        ensure_external_data_source_permission(&actor, "configure")?;
 
         let existing = self
             .repository
@@ -380,25 +382,22 @@ where
             .secret_ref
             .clone()
             .unwrap_or_else(|| domain::data_source_secret_ref(existing.id));
-        let secret_version = self
-            .repository
-            .get_secret_record(existing.id)
-            .await?
-            .map(|record| record.secret_version + 1)
-            .unwrap_or(1);
         let secret_json = ensure_json_object(&command.secret_json, "secret_json")?;
 
-        self.repository
-            .upsert_secret(&UpsertDataSourceSecretInput {
+        let secret = self
+            .repository
+            .rotate_secret(&RotateDataSourceSecretInput {
                 data_source_instance_id: existing.id,
                 secret_ref: secret_ref.clone(),
                 secret_json,
-                secret_version,
             })
             .await?;
 
-        let config_json =
-            refresh_secret_reference_versions(&existing.config_json, &secret_ref, secret_version);
+        let config_json = refresh_secret_reference_versions(
+            &existing.config_json,
+            &secret_ref,
+            secret.secret_version,
+        );
         let instance = self
             .repository
             .update_instance_config(&UpdateDataSourceInstanceConfigInput {
@@ -418,7 +417,7 @@ where
                 "data_source.secret_rotated",
                 json!({
                     "secret_ref": secret_ref,
-                    "secret_version": secret_version,
+                    "secret_version": secret.secret_version,
                 }),
             ))
             .await?;
@@ -435,7 +434,7 @@ where
     ) -> Result<PreviewDataSourceReadResult> {
         let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
         ensure_workspace_matches(&actor, command.workspace_id)?;
-        ensure_state_model_permission(&actor, "manage")?;
+        ensure_external_data_source_permission(&actor, "configure")?;
 
         let instance = self
             .repository
@@ -459,6 +458,7 @@ where
             .get_secret_json(instance.id)
             .await?
             .unwrap_or_else(|| json!({}));
+        let secret_values = collect_secret_strings(&secret_json);
         let preview_input = DataSourcePreviewReadInput {
             connection: DataSourceConfigInput {
                 config_json: instance.config_json.clone(),
@@ -473,6 +473,7 @@ where
             .runtime
             .preview_read(&installation, preview_input.clone())
             .await?;
+        let output = redact_preview_output(output, &secret_values);
         let preview_json = serde_json::to_value(&output)?;
         let preview_session = self
             .repository
@@ -528,13 +529,13 @@ fn ensure_workspace_matches(actor: &domain::ActorContext, workspace_id: Uuid) ->
     }
 }
 
-fn ensure_state_model_permission(
+fn ensure_external_data_source_permission(
     actor: &domain::ActorContext,
     action: &str,
 ) -> Result<(), ControlPlaneError> {
     if actor.is_root
-        || actor.has_permission(&format!("state_model.{action}.all"))
-        || actor.has_permission(&format!("state_model.{action}.own"))
+        || actor.has_permission(&format!("external_data_source.{action}.all"))
+        || actor.has_permission(&format!("external_data_source.{action}.own"))
     {
         return Ok(());
     }
@@ -622,7 +623,9 @@ fn scrub_secret_like_config_values(
             let mut sanitized = Map::new();
             for (key, child) in object {
                 path.push(key.clone());
-                let next = if is_secret_like_config_key(key) && !is_secret_reference_marker(child) {
+                let next = if is_secret_bearing_config_value(key, child, path)
+                    && !is_secret_reference_marker(child)
+                {
                     store_config_secret_value(secret_json, path, child.clone());
                     secret_reference_marker(secret_ref, secret_version)
                 } else {
@@ -699,11 +702,103 @@ fn is_secret_like_config_key(key: &str) -> bool {
         || normalized.contains("private_key")
 }
 
+fn is_secret_bearing_config_value(key: &str, child: &Value, path: &[String]) -> bool {
+    if is_secret_like_config_key(key) {
+        return true;
+    }
+
+    if key == "value" && path_matches_headers_value(path) {
+        return true;
+    }
+
+    key == "value" && path_matches_credentials_value(path) && !child.is_null()
+}
+
+fn path_matches_headers_value(path: &[String]) -> bool {
+    path.len() >= 3
+        && path.last().map(String::as_str) == Some("value")
+        && path.get(path.len() - 3).map(String::as_str) == Some("headers")
+        && path
+            .get(path.len() - 2)
+            .map(|segment| segment.parse::<usize>().is_ok())
+            .unwrap_or(false)
+}
+
+fn path_matches_credentials_value(path: &[String]) -> bool {
+    path.len() >= 2
+        && path.last().map(String::as_str) == Some("value")
+        && path.get(path.len() - 2).map(String::as_str) == Some("credentials")
+}
+
 fn is_secret_reference_marker(value: &Value) -> bool {
     value
         .as_object()
         .map(|object| object.contains_key("secret_ref") && object.contains_key("secret_version"))
         .unwrap_or(false)
+}
+
+fn collect_secret_strings(value: &Value) -> HashSet<String> {
+    let mut secrets = HashSet::new();
+    collect_secret_strings_into(value, &mut secrets);
+    secrets
+}
+
+fn collect_secret_strings_into(value: &Value, secrets: &mut HashSet<String>) {
+    match value {
+        Value::String(raw) if !raw.is_empty() => {
+            secrets.insert(raw.clone());
+        }
+        Value::Array(items) => {
+            for item in items {
+                collect_secret_strings_into(item, secrets);
+            }
+        }
+        Value::Object(object) => {
+            for child in object.values() {
+                collect_secret_strings_into(child, secrets);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn redact_value(value: &Value, secrets: &HashSet<String>) -> Value {
+    match value {
+        Value::String(raw) if secrets.contains(raw) => json!("***"),
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| redact_value(item, secrets))
+                .collect(),
+        ),
+        Value::Object(object) => Value::Object(
+            object
+                .iter()
+                .map(|(key, child)| (key.clone(), redact_value(child, secrets)))
+                .collect(),
+        ),
+        _ => value.clone(),
+    }
+}
+
+fn redact_preview_output(
+    output: DataSourcePreviewReadOutput,
+    secrets: &HashSet<String>,
+) -> DataSourcePreviewReadOutput {
+    DataSourcePreviewReadOutput {
+        rows: output
+            .rows
+            .into_iter()
+            .map(|row| redact_value(&row, secrets))
+            .collect(),
+        next_cursor: output.next_cursor.map(|cursor| {
+            if secrets.contains(&cursor) {
+                "***".to_string()
+            } else {
+                cursor
+            }
+        }),
+    }
 }
 
 fn secret_reference_marker(secret_ref: &str, secret_version: i32) -> Value {

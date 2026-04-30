@@ -48,6 +48,13 @@ pub struct UpsertDataSourceSecretInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct RotateDataSourceSecretInput {
+    pub data_source_instance_id: Uuid,
+    pub secret_ref: String,
+    pub secret_json: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
 pub struct UpsertDataSourceCatalogCacheInput {
     pub data_source_instance_id: Uuid,
     pub refresh_status: domain::DataSourceCatalogRefreshStatus,
@@ -93,6 +100,10 @@ pub trait DataSourceRepository: Send + Sync {
     async fn upsert_secret(
         &self,
         input: &UpsertDataSourceSecretInput,
+    ) -> anyhow::Result<domain::DataSourceSecretRecord>;
+    async fn rotate_secret(
+        &self,
+        input: &RotateDataSourceSecretInput,
     ) -> anyhow::Result<domain::DataSourceSecretRecord>;
     async fn get_secret_record(
         &self,

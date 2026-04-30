@@ -4,8 +4,9 @@ use control_plane::{
     errors::ControlPlaneError,
     ports::{
         CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput, DataSourceRepository,
-        UpdateDataSourceInstanceConfigInput, UpdateDataSourceInstanceStatusInput,
-        UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
+        RotateDataSourceSecretInput, UpdateDataSourceInstanceConfigInput,
+        UpdateDataSourceInstanceStatusInput, UpsertDataSourceCatalogCacheInput,
+        UpsertDataSourceSecretInput,
     },
 };
 use sqlx::Row;
@@ -393,6 +394,39 @@ impl DataSourceRepository for PgControlPlaneStore {
         .bind(input.data_source_instance_id)
         .bind(&input.secret_json)
         .bind(input.secret_version)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_secret(row)
+    }
+
+    async fn rotate_secret(
+        &self,
+        input: &RotateDataSourceSecretInput,
+    ) -> Result<domain::DataSourceSecretRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into data_source_secrets (
+                data_source_instance_id,
+                encrypted_secret_json,
+                secret_version
+            ) values (
+                $1, $2, 1
+            )
+            on conflict (data_source_instance_id) do update
+            set
+                encrypted_secret_json = excluded.encrypted_secret_json,
+                secret_version = data_source_secrets.secret_version + 1,
+                updated_at = now()
+            returning
+                data_source_instance_id,
+                encrypted_secret_json,
+                secret_version,
+                updated_at
+            "#,
+        )
+        .bind(input.data_source_instance_id)
+        .bind(&input.secret_json)
         .fetch_one(self.pool())
         .await?;
 

@@ -65,6 +65,23 @@ Task 1 validation record, 2026-04-30:
   - `git diff --check`
 - Scope note: Task 1 added data-source secret reference/version records, config secret extraction, console DTO reference output, and `data_source.secret_rotated` audit. It did not implement plugin CRUD contracts, external Data Model mapping, REST connector fixtures, or `unsafe_external_source`.
 
+Task 1 spec review FAIL fix validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests` failed because `headers[].value` / `credentials.value` persisted cleartext and validate/preview returned runtime-echoed secret values.
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests::create_instance_requires_external_data_source_configure_permission_not_state_model_manage` failed because `state_model.manage.all` still authorized data-source instance creation.
+  - `cargo test --manifest-path api/Cargo.toml -p storage-postgres data_source_repository_tests` failed because `RotateDataSourceSecretInput` and repository `rotate_secret` did not exist.
+  - `cargo test --manifest-path api/Cargo.toml -p api-server data_sources_routes` failed because route response still exposed `route-header-secret`; after adding the rotate route test, Axum rejected literal `secret:rotate` as an extra path parameter, so the production route was set to `/api/console/data-sources/instances/{instance_id}/secret/rotate`.
+- Green evidence:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p storage-postgres data_source_repository_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server data_sources_routes`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- Scope note: The fix added a session/CSRF protected console rotate route using existing `external_data_source.configure.*` permission, redacted exact stored secret string values from validate output and preview rows before response/session persistence, extracted `headers[].value` and `credentials.value` into data-source secret storage, and moved rotation version increments into repository SQL atomic upsert. Task 2 schema-aware config extraction remains the planned refinement for connector-specific shapes beyond these conservative generic guards.
+
 ### Task 2: Data Source Plugin CRUD Contract
 
 **Files:**

@@ -1,6 +1,7 @@
 use control_plane::ports::{
     CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput, DataSourceRepository,
-    UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput, UpsertPluginInstallationInput,
+    RotateDataSourceSecretInput, UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
+    UpsertPluginInstallationInput,
 };
 use domain::{
     ApiExposureStatus, DataModelStatus, DataSourceCatalogRefreshStatus, DataSourceDefaults,
@@ -242,6 +243,71 @@ async fn instance_record_returns_secret_reference_and_version_without_secret_val
     );
     assert_eq!(loaded.secret_version, Some(2));
     assert!(!loaded.config_json.to_string().contains(plaintext));
+}
+
+#[tokio::test]
+async fn rotate_secret_increments_version_inside_repository_update() {
+    let (store, workspace, actor, installation_id) = seed_store().await;
+    let created = <PgControlPlaneStore as DataSourceRepository>::create_instance(
+        &store,
+        &CreateDataSourceInstanceInput {
+            instance_id: Uuid::now_v7(),
+            workspace_id: workspace.id,
+            installation_id,
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            status: DataSourceInstanceStatus::Draft,
+            config_json: json!({ "client_id": "abc" }),
+            metadata_json: json!({}),
+            defaults: DataSourceDefaults::default(),
+            created_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as DataSourceRepository>::upsert_secret(
+        &store,
+        &UpsertDataSourceSecretInput {
+            data_source_instance_id: created.id,
+            secret_ref: domain::data_source_secret_ref(created.id),
+            secret_json: json!({ "client_secret": "initial" }),
+            secret_version: 1,
+        },
+    )
+    .await
+    .unwrap();
+
+    let rotated_once = <PgControlPlaneStore as DataSourceRepository>::rotate_secret(
+        &store,
+        &RotateDataSourceSecretInput {
+            data_source_instance_id: created.id,
+            secret_ref: domain::data_source_secret_ref(created.id),
+            secret_json: json!({ "client_secret": "rotated-once" }),
+        },
+    )
+    .await
+    .unwrap();
+    let rotated_twice = <PgControlPlaneStore as DataSourceRepository>::rotate_secret(
+        &store,
+        &RotateDataSourceSecretInput {
+            data_source_instance_id: created.id,
+            secret_ref: domain::data_source_secret_ref(created.id),
+            secret_json: json!({ "client_secret": "rotated-twice" }),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(rotated_once.secret_version, 2);
+    assert_eq!(rotated_twice.secret_version, 3);
+    assert_eq!(
+        <PgControlPlaneStore as DataSourceRepository>::get_secret_json(&store, created.id)
+            .await
+            .unwrap()
+            .unwrap()["client_secret"],
+        "rotated-twice"
+    );
 }
 
 #[tokio::test]
