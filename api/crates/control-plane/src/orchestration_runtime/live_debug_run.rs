@@ -2,7 +2,10 @@ use anyhow::{anyhow, Result};
 use plugin_framework::provider_contract::ProviderStreamEvent;
 use serde_json::{json, Value};
 use time::OffsetDateTime;
-use tokio::sync::mpsc;
+use tokio::{
+    sync::mpsc,
+    time::{self as tokio_time, Duration, MissedTickBehavior},
+};
 use uuid::Uuid;
 
 use crate::{
@@ -18,9 +21,10 @@ use crate::{
         UpdateFlowRunInput, UpdateNodeRunInput,
     },
     runtime_observability::{
-        append_host_event, append_host_span, append_provider_stream_event,
+        append_host_event, append_host_span, append_provider_stream_events_raw,
         projection::{estimate_tokens_for_text, model_input_hash},
         AppendHostSpanInput, LiveEventCoalescer, PROVIDER_DELTA_COALESCE_MAX_BYTES,
+        PROVIDER_DELTA_COALESCE_MAX_DELAY_MS,
     },
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
@@ -1060,46 +1064,70 @@ where
     R: OrchestrationRuntimeRepository,
 {
     let mut coalescer = LiveEventCoalescer::new(PROVIDER_DELTA_COALESCE_MAX_BYTES);
+    let mut flush_interval =
+        tokio_time::interval(Duration::from_millis(PROVIDER_DELTA_COALESCE_MAX_DELAY_MS));
+    flush_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-    while let Some(event) = receiver.recv().await {
-        for ready in coalescer.push(event) {
-            write_single_provider_event(
-                &repository,
-                flow_run_id,
-                Some(node_run_id),
-                Some(span_id),
-                &ready,
-            )
-            .await?;
+    loop {
+        tokio::select! {
+            maybe_event = receiver.recv() => {
+                let Some(event) = maybe_event else {
+                    break;
+                };
+                write_provider_event_batch(
+                    &repository,
+                    flow_run_id,
+                    Some(node_run_id),
+                    Some(span_id),
+                    &coalescer.push(event),
+                )
+                .await?;
+            }
+            _ = flush_interval.tick() => {
+                write_provider_event_batch(
+                    &repository,
+                    flow_run_id,
+                    Some(node_run_id),
+                    Some(span_id),
+                    &coalescer.flush_buffered(),
+                )
+                .await?;
+            }
         }
     }
 
-    for remaining in coalescer.finish() {
-        write_single_provider_event(
-            &repository,
-            flow_run_id,
-            Some(node_run_id),
-            Some(span_id),
-            &remaining,
-        )
-        .await?;
-    }
+    write_provider_event_batch(
+        &repository,
+        flow_run_id,
+        Some(node_run_id),
+        Some(span_id),
+        &coalescer.finish(),
+    )
+    .await?;
 
     Ok(())
 }
 
-async fn write_single_provider_event<R>(
+async fn write_provider_event_batch<R>(
     repository: &R,
     flow_run_id: Uuid,
     node_run_id: Option<Uuid>,
     span_id: Option<Uuid>,
-    event: &ProviderStreamEvent,
+    events: &[ProviderStreamEvent],
 ) -> Result<()>
 where
     R: OrchestrationRuntimeRepository,
 {
-    append_provider_stream_event(repository, flow_run_id, node_run_id, span_id, event).await?;
-    append_provider_capability_intent(repository, flow_run_id, node_run_id, span_id, event).await?;
+    if events.is_empty() {
+        return Ok(());
+    }
+
+    append_provider_stream_events_raw(repository, flow_run_id, node_run_id, span_id, events)
+        .await?;
+    for event in events {
+        append_provider_capability_intent(repository, flow_run_id, node_run_id, span_id, event)
+            .await?;
+    }
 
     Ok(())
 }

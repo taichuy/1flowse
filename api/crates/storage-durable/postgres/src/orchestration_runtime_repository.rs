@@ -9,7 +9,7 @@ use control_plane::ports::{
     LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
     UpdateNodeRunInput, UpsertCompiledPlanInput,
 };
-use sqlx::{postgres::PgRow, Postgres, Row, Transaction};
+use sqlx::{postgres::PgRow, Postgres, QueryBuilder, Row, Transaction};
 use uuid::Uuid;
 
 use crate::{
@@ -489,6 +489,68 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         Ok(map_run_event_record(row))
     }
 
+    async fn append_run_events(
+        &self,
+        inputs: &[AppendRunEventInput],
+    ) -> Result<Vec<domain::RunEventRecord>> {
+        if inputs.is_empty() {
+            return Ok(Vec::new());
+        }
+        if inputs
+            .iter()
+            .any(|input| input.flow_run_id != inputs[0].flow_run_id)
+        {
+            let mut records = Vec::with_capacity(inputs.len());
+            for input in inputs {
+                records.push(self.append_run_event(input).await?);
+            }
+            return Ok(records);
+        }
+
+        let mut tx = self.pool().begin().await?;
+        let first_sequence = next_event_sequence(&mut tx, inputs[0].flow_run_id).await?;
+        let mut builder = QueryBuilder::<Postgres>::new(
+            r#"
+            insert into flow_run_events (
+                id,
+                flow_run_id,
+                node_run_id,
+                sequence,
+                event_type,
+                payload
+            ) "#,
+        );
+        builder.push_values(inputs.iter().enumerate(), |mut row, (index, input)| {
+            row.push_bind(Uuid::now_v7())
+                .push_bind(input.flow_run_id)
+                .push_bind(input.node_run_id)
+                .push_bind(first_sequence + index as i64)
+                .push_bind(&input.event_type)
+                .push_bind(&input.payload);
+        });
+        builder.push(
+            r#"
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                sequence,
+                event_type,
+                payload,
+                created_at
+            "#,
+        );
+        let rows = builder.build().fetch_all(&mut *tx).await?;
+        tx.commit().await?;
+
+        let mut records = rows
+            .into_iter()
+            .map(map_run_event_record)
+            .collect::<Vec<_>>();
+        records.sort_by_key(|record| record.sequence);
+        Ok(records)
+    }
+
     async fn append_runtime_span(
         &self,
         input: &AppendRuntimeSpanInput,
@@ -612,6 +674,95 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         tx.commit().await?;
 
         map_runtime_event_record(row)
+    }
+
+    async fn append_runtime_events(
+        &self,
+        inputs: &[AppendRuntimeEventInput],
+    ) -> Result<Vec<domain::RuntimeEventRecord>> {
+        if inputs.is_empty() {
+            return Ok(Vec::new());
+        }
+        if inputs
+            .iter()
+            .any(|input| input.flow_run_id != inputs[0].flow_run_id)
+        {
+            let mut records = Vec::with_capacity(inputs.len());
+            for input in inputs {
+                records.push(self.append_runtime_event(input).await?);
+            }
+            return Ok(records);
+        }
+
+        let mut tx = self.pool().begin().await?;
+        let first_sequence = next_runtime_event_sequence(&mut tx, inputs[0].flow_run_id).await?;
+        let mut builder = QueryBuilder::<Postgres>::new(
+            r#"
+            insert into runtime_events (
+                id,
+                flow_run_id,
+                node_run_id,
+                span_id,
+                parent_span_id,
+                sequence,
+                event_type,
+                layer,
+                source,
+                trust_level,
+                item_id,
+                ledger_ref,
+                payload,
+                visibility,
+                durability
+            ) "#,
+        );
+        builder.push_values(inputs.iter().enumerate(), |mut row, (index, input)| {
+            row.push_bind(Uuid::now_v7())
+                .push_bind(input.flow_run_id)
+                .push_bind(input.node_run_id)
+                .push_bind(input.span_id)
+                .push_bind(input.parent_span_id)
+                .push_bind(first_sequence + index as i64)
+                .push_bind(&input.event_type)
+                .push_bind(input.layer.as_str())
+                .push_bind(input.source.as_str())
+                .push_bind(input.trust_level.as_str())
+                .push_bind(input.item_id)
+                .push_bind(input.ledger_ref.as_deref())
+                .push_bind(&input.payload)
+                .push_bind(input.visibility.as_str())
+                .push_bind(input.durability.as_str());
+        });
+        builder.push(
+            r#"
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                span_id,
+                parent_span_id,
+                sequence,
+                event_type,
+                layer,
+                source,
+                trust_level,
+                item_id,
+                ledger_ref,
+                payload,
+                visibility,
+                durability,
+                created_at
+            "#,
+        );
+        let rows = builder.build().fetch_all(&mut *tx).await?;
+        tx.commit().await?;
+
+        let mut records = rows
+            .into_iter()
+            .map(map_runtime_event_record)
+            .collect::<Result<Vec<_>>>()?;
+        records.sort_by_key(|record| record.sequence);
+        Ok(records)
     }
 
     async fn append_runtime_item(

@@ -17,6 +17,7 @@ pub mod projection;
 pub use items::item_kind_for_event;
 
 pub const PROVIDER_DELTA_COALESCE_MAX_BYTES: usize = 4096;
+pub const PROVIDER_DELTA_COALESCE_MAX_DELAY_MS: u64 = 250;
 
 pub struct AppendHostSpanInput {
     pub flow_run_id: Uuid,
@@ -229,6 +230,72 @@ where
     Ok(record)
 }
 
+pub async fn append_provider_stream_events_raw<R>(
+    repository: &R,
+    flow_run_id: Uuid,
+    node_run_id: Option<Uuid>,
+    span_id: Option<Uuid>,
+    events: &[ProviderStreamEvent],
+) -> Result<Vec<domain::RunEventRecord>>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    if events.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut run_inputs = Vec::with_capacity(events.len());
+    let mut runtime_inputs = Vec::with_capacity(events.len());
+
+    for event in events {
+        let event_type = provider_stream_event_type(event);
+        let payload = serde_json::to_value(event)?;
+        run_inputs.push(AppendRunEventInput {
+            flow_run_id,
+            node_run_id,
+            event_type: event_type.to_string(),
+            payload: payload.clone(),
+        });
+        runtime_inputs.push(AppendRuntimeEventInput {
+            flow_run_id,
+            node_run_id,
+            span_id,
+            parent_span_id: None,
+            event_type: event_type.to_string(),
+            layer: domain::RuntimeEventLayer::ProviderRaw,
+            source: domain::RuntimeEventSource::Host,
+            trust_level: domain::RuntimeTrustLevel::HostFact,
+            item_id: None,
+            ledger_ref: None,
+            payload,
+            visibility: domain::RuntimeEventVisibility::Workspace,
+            durability: domain::RuntimeEventDurability::Durable,
+        });
+    }
+
+    let records = repository.append_run_events(&run_inputs).await?;
+    let runtime_records = repository.append_runtime_events(&runtime_inputs).await?;
+    for runtime_record in runtime_records {
+        if let Some(kind) = item_kind_for_event(&runtime_record.event_type) {
+            repository
+                .append_runtime_item(&AppendRuntimeItemInput {
+                    flow_run_id,
+                    span_id,
+                    kind,
+                    status: domain::RuntimeItemStatus::Created,
+                    source_event_id: Some(runtime_record.id),
+                    input_ref: None,
+                    output_ref: None,
+                    usage_ledger_id: None,
+                    trust_level: domain::RuntimeTrustLevel::HostFact,
+                })
+                .await?;
+        }
+    }
+
+    Ok(records)
+}
+
 pub fn provider_stream_event_type(event: &ProviderStreamEvent) -> &'static str {
     match event {
         ProviderStreamEvent::TextDelta { .. } => "text_delta",
@@ -325,6 +392,11 @@ impl LiveEventCoalescer {
 
     /// Drain remaining coalesced deltas. Call this when the event stream ends.
     pub fn finish(&mut self) -> Vec<ProviderStreamEvent> {
+        self.flush_buffered()
+    }
+
+    /// Drain currently buffered deltas without ending the stream.
+    pub fn flush_buffered(&mut self) -> Vec<ProviderStreamEvent> {
         let mut ready = Vec::new();
         self.flush_text(&mut ready);
         self.flush_reasoning(&mut ready);

@@ -368,6 +368,16 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         &self,
         input: &AppendRunEventInput,
     ) -> anyhow::Result<domain::RunEventRecord>;
+    async fn append_run_events(
+        &self,
+        inputs: &[AppendRunEventInput],
+    ) -> anyhow::Result<Vec<domain::RunEventRecord>> {
+        let mut records = Vec::with_capacity(inputs.len());
+        for input in inputs {
+            records.push(self.append_run_event(input).await?);
+        }
+        Ok(records)
+    }
     async fn append_runtime_span(
         &self,
         input: &AppendRuntimeSpanInput,
@@ -376,6 +386,16 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         &self,
         input: &AppendRuntimeEventInput,
     ) -> anyhow::Result<domain::RuntimeEventRecord>;
+    async fn append_runtime_events(
+        &self,
+        inputs: &[AppendRuntimeEventInput],
+    ) -> anyhow::Result<Vec<domain::RuntimeEventRecord>> {
+        let mut records = Vec::with_capacity(inputs.len());
+        for input in inputs {
+            records.push(self.append_runtime_event(input).await?);
+        }
+        Ok(records)
+    }
     async fn append_runtime_item(
         &self,
         input: &AppendRuntimeItemInput,

@@ -15,9 +15,10 @@ use crate::{
         UpdateFlowRunInput, UpdateNodeRunInput,
     },
     runtime_observability::{
-        append_host_event, append_host_span, coalesce_provider_stream_events,
+        append_host_event, append_host_span, append_provider_stream_events_raw,
+        coalesce_provider_stream_events,
         projection::{estimate_tokens_for_text, model_input_hash},
-        provider_stream_event_type, AppendHostSpanInput, PROVIDER_DELTA_COALESCE_MAX_BYTES,
+        AppendHostSpanInput, PROVIDER_DELTA_COALESCE_MAX_BYTES,
     },
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
@@ -358,30 +359,10 @@ where
     let runtime_bus = RuntimeEventBus::new((events.len() + 4).max(16));
     let events =
         coalesce_provider_stream_events(&runtime_bus, events, PROVIDER_DELTA_COALESCE_MAX_BYTES)?;
-    let mut records = Vec::with_capacity(events.len());
+    let records =
+        append_provider_stream_events_raw(repository, flow_run_id, node_run_id, span_id, &events)
+            .await?;
     for event in &events {
-        let event_type = provider_stream_event_type(event);
-        let payload = serde_json::to_value(event)?;
-        records.push(
-            repository
-                .append_run_event(&AppendRunEventInput {
-                    flow_run_id,
-                    node_run_id,
-                    event_type: event_type.to_string(),
-                    payload: payload.clone(),
-                })
-                .await?,
-        );
-        append_host_event(
-            repository,
-            flow_run_id,
-            node_run_id,
-            span_id,
-            event_type,
-            domain::RuntimeEventLayer::ProviderRaw,
-            payload,
-        )
-        .await?;
         append_provider_capability_intent(repository, flow_run_id, node_run_id, span_id, event)
             .await?;
     }

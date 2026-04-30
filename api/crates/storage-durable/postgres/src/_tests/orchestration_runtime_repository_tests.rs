@@ -285,6 +285,90 @@ async fn orchestration_runtime_repository_persists_compiled_plan_runs_and_events
 }
 
 #[tokio::test]
+async fn orchestration_runtime_repository_batch_appends_run_and_runtime_events() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-04-17 09:00:00 UTC);
+    let run = seed_flow_run(&store, &seeded, &compiled, started_at).await;
+
+    let run_events = <PgControlPlaneStore as OrchestrationRuntimeRepository>::append_run_events(
+        &store,
+        &[
+            AppendRunEventInput {
+                flow_run_id: run.id,
+                node_run_id: None,
+                event_type: "text_delta".into(),
+                payload: json!({ "delta": "hello" }),
+            },
+            AppendRunEventInput {
+                flow_run_id: run.id,
+                node_run_id: None,
+                event_type: "finish".into(),
+                payload: json!({ "reason": "stop" }),
+            },
+        ],
+    )
+    .await
+    .unwrap();
+    let runtime_events =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::append_runtime_events(
+            &store,
+            &[
+                AppendRuntimeEventInput {
+                    flow_run_id: run.id,
+                    node_run_id: None,
+                    span_id: None,
+                    parent_span_id: None,
+                    event_type: "text_delta".into(),
+                    layer: domain::RuntimeEventLayer::ProviderRaw,
+                    source: domain::RuntimeEventSource::Host,
+                    trust_level: domain::RuntimeTrustLevel::HostFact,
+                    item_id: None,
+                    ledger_ref: None,
+                    payload: json!({ "delta": "hello" }),
+                    visibility: domain::RuntimeEventVisibility::Workspace,
+                    durability: domain::RuntimeEventDurability::Durable,
+                },
+                AppendRuntimeEventInput {
+                    flow_run_id: run.id,
+                    node_run_id: None,
+                    span_id: None,
+                    parent_span_id: None,
+                    event_type: "finish".into(),
+                    layer: domain::RuntimeEventLayer::ProviderRaw,
+                    source: domain::RuntimeEventSource::Host,
+                    trust_level: domain::RuntimeTrustLevel::HostFact,
+                    item_id: None,
+                    ledger_ref: None,
+                    payload: json!({ "reason": "stop" }),
+                    visibility: domain::RuntimeEventVisibility::Workspace,
+                    durability: domain::RuntimeEventDurability::Durable,
+                },
+            ],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        run_events
+            .iter()
+            .map(|event| (event.sequence, event.event_type.as_str()))
+            .collect::<Vec<_>>(),
+        vec![(1, "text_delta"), (2, "finish")]
+    );
+    assert_eq!(
+        runtime_events
+            .iter()
+            .map(|event| (event.sequence, event.event_type.as_str()))
+            .collect::<Vec<_>>(),
+        vec![(1, "text_delta"), (2, "finish")]
+    );
+}
+
+#[tokio::test]
 async fn orchestration_runtime_repository_persists_waiting_human_checkpoint() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();
