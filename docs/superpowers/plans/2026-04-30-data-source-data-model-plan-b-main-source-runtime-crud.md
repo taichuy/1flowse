@@ -156,7 +156,7 @@ Green run passed: 8 passed, 0 failed.
 - Test: `api/apps/api-server/src/_tests/application/model_definition_routes.rs`
 - Test: `api/apps/api-server/src/_tests/application/runtime_model_routes.rs`
 
-- [ ] **Step 1: Write failing route tests**
+- [x] **Step 1: Write failing route tests**
 
 Cover:
 
@@ -165,14 +165,25 @@ creating model without status returns published + published_not_exposed
 creating model with draft blocks runtime CRUD
 changing status to published enables runtime CRUD
 changing status to disabled blocks runtime CRUD
+changing status to broken blocks runtime CRUD
 runtime CRUD uses DEFAULT_SCOPE_ID in single-machine mode
+created-at field code returns field-specific 400 instead of broken metadata
 ```
 
-- [ ] **Step 2: Add DTO fields**
+Red run failed as expected:
+
+```bash
+cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes
+cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes
+```
+
+`model_definition_routes_manage_models_and_fields_without_publish` failed because `status` was missing from the create response. `runtime_model_routes_gate_crud_by_model_status_changes` failed because draft route input was ignored and runtime CRUD returned 200 instead of 409.
+
+- [x] **Step 2: Add DTO fields**
 
 Expose `status`, `api_exposure_status`, and effective runtime availability in console responses.
 
-- [ ] **Step 3: Map runtime errors**
+- [x] **Step 3: Map runtime errors**
 
 Map:
 
@@ -180,18 +191,27 @@ Map:
 draft => 409 model_not_published
 disabled => 409 model_disabled
 broken => 409 model_broken
-missing grant => 403 data_model_scope_not_granted
+missing grant => 403 data_model_scope_not_granted when emitted by an existing path
 ```
 
-- [ ] **Step 4: Run api-server route tests**
+- [x] **Step 4: Run api-server route tests**
 
 Run:
 
 ```bash
-cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes runtime_model_routes
+cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes
+cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes
 ```
 
-Expected: pass.
+Green runs passed after implementation:
+
+```bash
+cargo fmt --manifest-path api/Cargo.toml --all
+cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes
+cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes
+```
+
+The route DTO now accepts optional create status and PATCH status while routing status changes through `update_model_status`. Console responses expose `status`, `api_exposure_status`, and status-derived `runtime_availability`. Runtime model status errors map to `model_not_published`, `model_disabled`, and `model_broken`; no Plan C grant path was implemented.
 
 ### Task 4: Plan B Verification And Commit
 

@@ -9,7 +9,7 @@ use axum::{
 use control_plane::model_definition::{
     AddModelFieldCommand, CreateModelDefinitionCommand, DeleteModelDefinitionCommand,
     DeleteModelFieldCommand, ModelDefinitionService, UpdateModelDefinitionCommand,
-    UpdateModelFieldCommand,
+    UpdateModelDefinitionStatusCommand, UpdateModelFieldCommand,
 };
 use control_plane::runtime_registry_sync::ModelDefinitionMutationService;
 use serde::{Deserialize, Serialize};
@@ -30,11 +30,13 @@ pub struct CreateModelDefinitionBody {
     pub scope_kind: String,
     pub code: String,
     pub title: String,
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateModelDefinitionBody {
-    pub title: String,
+    pub title: Option<String>,
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -102,6 +104,9 @@ pub struct ModelDefinitionResponse {
     pub scope_id: String,
     pub code: String,
     pub title: String,
+    pub status: String,
+    pub api_exposure_status: String,
+    pub runtime_availability: String,
     pub physical_table_name: String,
     pub acl_namespace: String,
     pub audit_namespace: String,
@@ -156,6 +161,9 @@ fn to_model_definition_response(model: domain::ModelDefinitionRecord) -> ModelDe
         scope_id: model.scope_id.to_string(),
         code: model.code,
         title: model.title,
+        status: model.status.as_str().to_string(),
+        api_exposure_status: model.api_exposure_status.as_str().to_string(),
+        runtime_availability: runtime_availability_for_status(model.status).to_string(),
         physical_table_name: model.physical_table_name,
         acl_namespace: model.acl_namespace,
         audit_namespace: model.audit_namespace,
@@ -164,6 +172,19 @@ fn to_model_definition_response(model: domain::ModelDefinitionRecord) -> ModelDe
             .into_iter()
             .map(to_model_field_response)
             .collect(),
+    }
+}
+
+fn runtime_availability_for_status(status: domain::DataModelStatus) -> &'static str {
+    match runtime_core::runtime_model_registry::RuntimeDataModelAvailability::from_status(status) {
+        runtime_core::runtime_model_registry::RuntimeDataModelAvailability::Available => {
+            "available"
+        }
+        runtime_core::runtime_model_registry::RuntimeDataModelAvailability::NotPublished => {
+            "not_published"
+        }
+        runtime_core::runtime_model_registry::RuntimeDataModelAvailability::Disabled => "disabled",
+        runtime_core::runtime_model_registry::RuntimeDataModelAvailability::Broken => "broken",
     }
 }
 
@@ -177,6 +198,16 @@ fn parse_scope_kind(raw: &str) -> Result<domain::DataModelScopeKind, ApiError> {
         "workspace" => Ok(domain::DataModelScopeKind::Workspace),
         "system" => Ok(domain::DataModelScopeKind::System),
         _ => Err(control_plane::errors::ControlPlaneError::InvalidInput("scope_kind").into()),
+    }
+}
+
+fn parse_model_status(raw: &str) -> Result<domain::DataModelStatus, ApiError> {
+    match raw {
+        "draft" => Ok(domain::DataModelStatus::Draft),
+        "published" => Ok(domain::DataModelStatus::Published),
+        "disabled" => Ok(domain::DataModelStatus::Disabled),
+        "broken" => Ok(domain::DataModelStatus::Broken),
+        _ => Err(control_plane::errors::ControlPlaneError::InvalidInput("status").into()),
     }
 }
 
@@ -241,8 +272,10 @@ pub async fn create_model(
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
     let scope_kind = parse_scope_kind(&body.scope_kind)?;
+    let requested_status = body.status.as_deref().map(parse_model_status).transpose()?;
 
-    let model = mutation_service(&state)
+    let mutation_service = mutation_service(&state);
+    let mut model = mutation_service
         .create_model(CreateModelDefinitionCommand {
             actor_user_id: context.user.id,
             scope_kind,
@@ -251,6 +284,16 @@ pub async fn create_model(
             title: body.title,
         })
         .await?;
+    if let Some(status) = requested_status {
+        model = mutation_service
+            .update_model_status(UpdateModelDefinitionStatusCommand {
+                actor_user_id: context.user.id,
+                model_id: model.id,
+                status,
+                api_exposure_status: domain::ApiExposureStatus::default_for_status(status),
+            })
+            .await?;
+    }
 
     Ok((
         StatusCode::CREATED,
@@ -293,13 +336,36 @@ pub async fn update_model(
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    let model = mutation_service(&state)
-        .update_model(UpdateModelDefinitionCommand {
-            actor_user_id: context.user.id,
-            model_id: parse_uuid(&model_id, "model_id")?,
-            title: body.title,
-        })
-        .await?;
+    let model_id = parse_uuid(&model_id, "model_id")?;
+    let requested_status = body.status.as_deref().map(parse_model_status).transpose()?;
+    let mutation_service = mutation_service(&state);
+    let mut model = None;
+    if let Some(title) = body.title {
+        model = Some(
+            mutation_service
+                .update_model(UpdateModelDefinitionCommand {
+                    actor_user_id: context.user.id,
+                    model_id,
+                    title,
+                })
+                .await?,
+        );
+    }
+    if let Some(status) = requested_status {
+        model = Some(
+            mutation_service
+                .update_model_status(UpdateModelDefinitionStatusCommand {
+                    actor_user_id: context.user.id,
+                    model_id,
+                    status,
+                    api_exposure_status: domain::ApiExposureStatus::default_for_status(status),
+                })
+                .await?,
+        );
+    }
+    let model = model.ok_or(control_plane::errors::ControlPlaneError::InvalidInput(
+        "model_update",
+    ))?;
 
     Ok(Json(ApiSuccess::new(to_model_definition_response(model))))
 }

@@ -169,6 +169,12 @@ async fn model_definition_routes_manage_models_and_fields_without_publish() {
             .unwrap(),
     )
     .unwrap();
+    assert_eq!(created["data"]["status"], json!("published"));
+    assert_eq!(
+        created["data"]["api_exposure_status"],
+        json!("published_not_exposed")
+    );
+    assert_eq!(created["data"]["runtime_availability"], json!("available"));
     let model_id = created["data"]["id"].as_str().unwrap().to_string();
 
     let field_response = app
@@ -581,4 +587,72 @@ async fn create_model_route_accepts_workspace_and_system_scope_kinds_only() {
         .unwrap();
 
     assert_eq!(legacy_response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn create_model_route_rejects_field_code_that_sanitizes_to_platform_column() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/models")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "scope_kind": "workspace",
+                        "code": "platform_column_orders",
+                        "title": "Platform Column Orders"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+    let created: serde_json::Value = serde_json::from_slice(
+        &to_bytes(create_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let model_id = created["data"]["id"].as_str().unwrap();
+
+    let field_response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/console/models/{model_id}/fields"))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "code": "created-at",
+                        "title": "Created At",
+                        "field_kind": "datetime",
+                        "is_required": false,
+                        "is_unique": false
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(field_response.status(), StatusCode::BAD_REQUEST);
+    let error: serde_json::Value = serde_json::from_slice(
+        &to_bytes(field_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(error["code"], json!("physical_column_name"));
 }

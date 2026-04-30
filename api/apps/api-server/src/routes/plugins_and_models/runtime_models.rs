@@ -28,12 +28,20 @@ fn map_runtime_error(error: anyhow::Error) -> ApiError {
         return control_plane::errors::ControlPlaneError::NotFound("runtime_record").into();
     }
 
-    if error
-        .downcast_ref::<runtime_core::runtime_engine::RuntimeModelError>()
-        .is_some()
+    if let Some(model_error) =
+        error.downcast_ref::<runtime_core::runtime_engine::RuntimeModelError>()
     {
-        return control_plane::errors::ControlPlaneError::Conflict("runtime_model_unavailable")
-            .into();
+        let code = match model_error {
+            runtime_core::runtime_engine::RuntimeModelError::Unavailable(_) => {
+                "runtime_model_unavailable"
+            }
+            runtime_core::runtime_engine::RuntimeModelError::NotPublished(_) => {
+                "model_not_published"
+            }
+            runtime_core::runtime_engine::RuntimeModelError::Disabled(_) => "model_disabled",
+            runtime_core::runtime_engine::RuntimeModelError::Broken(_) => "model_broken",
+        };
+        return control_plane::errors::ControlPlaneError::Conflict(code).into();
     }
 
     error.into()

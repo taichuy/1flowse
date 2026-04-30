@@ -391,7 +391,114 @@ async fn runtime_model_routes_enforce_state_data_acl() {
     assert_eq!(root_get.status(), StatusCode::OK);
 }
 
+#[tokio::test]
+async fn runtime_model_routes_gate_crud_by_model_status_changes() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let model_code = "status_route_orders";
+    let model_id = create_model_with_status(&app, &cookie, &csrf, model_code, Some("draft")).await;
+    create_text_field(&app, &cookie, &csrf, &model_id, "title").await;
+
+    assert_runtime_crud_blocked(
+        &app,
+        &cookie,
+        &csrf,
+        model_code,
+        StatusCode::CONFLICT,
+        "model_not_published",
+    )
+    .await;
+
+    let published = update_model_status(&app, &cookie, &csrf, &model_id, "published").await;
+    assert_eq!(published["data"]["status"], json!("published"));
+    assert_eq!(
+        published["data"]["runtime_availability"],
+        json!("available")
+    );
+
+    let created = create_runtime_record(&app, &cookie, &csrf, model_code, "created").await;
+    let record_id = created["data"]["id"].as_str().unwrap().to_string();
+
+    let get_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/runtime/models/{model_code}/records/{record_id}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(get_response.status(), StatusCode::OK);
+
+    let disabled = update_model_status(&app, &cookie, &csrf, &model_id, "disabled").await;
+    assert_eq!(disabled["data"]["status"], json!("disabled"));
+    assert_eq!(disabled["data"]["runtime_availability"], json!("disabled"));
+
+    assert_runtime_crud_blocked(
+        &app,
+        &cookie,
+        &csrf,
+        model_code,
+        StatusCode::CONFLICT,
+        "model_disabled",
+    )
+    .await;
+
+    let broken = update_model_status(&app, &cookie, &csrf, &model_id, "broken").await;
+    assert_eq!(broken["data"]["status"], json!("broken"));
+    assert_eq!(broken["data"]["runtime_availability"], json!("broken"));
+
+    assert_runtime_crud_blocked(
+        &app,
+        &cookie,
+        &csrf,
+        model_code,
+        StatusCode::CONFLICT,
+        "model_broken",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn runtime_model_routes_use_default_scope_id_for_system_model_crud() {
+    let (app, database_url) = test_app_with_database_url().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let model_code = "system_route_orders";
+    let model_id = create_system_model(&app, &cookie, &csrf, model_code).await;
+    create_text_field(&app, &cookie, &csrf, &model_id, "title").await;
+
+    create_runtime_record(&app, &cookie, &csrf, model_code, "system scoped").await;
+
+    let durable = storage_durable::build_main_durable_postgres(&database_url)
+        .await
+        .unwrap();
+    let pool = durable.store;
+    let physical_table_name: String =
+        sqlx::query_scalar("select physical_table_name from model_definitions where id = $1")
+            .bind(uuid::Uuid::parse_str(&model_id).unwrap())
+            .fetch_one(pool.pool())
+            .await
+            .unwrap();
+    let scope_id: uuid::Uuid = sqlx::query_scalar(&format!(
+        "select scope_id from \"{physical_table_name}\" limit 1"
+    ))
+    .fetch_one(pool.pool())
+    .await
+    .unwrap();
+
+    assert_eq!(scope_id, domain::SYSTEM_SCOPE_ID);
+}
+
 async fn create_orders_model(app: &axum::Router, cookie: &str, csrf: &str) -> String {
+    create_model_with_status(app, cookie, csrf, "orders", None).await
+}
+
+async fn create_system_model(app: &axum::Router, cookie: &str, csrf: &str, code: &str) -> String {
     let response = app
         .clone()
         .oneshot(
@@ -403,9 +510,9 @@ async fn create_orders_model(app: &axum::Router, cookie: &str, csrf: &str) -> St
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({
-                        "scope_kind": "workspace",
-                        "code": "orders",
-                        "title": "Orders"
+                        "scope_kind": "system",
+                        "code": code,
+                        "title": code
                     })
                     .to_string(),
                 ))
@@ -417,6 +524,155 @@ async fn create_orders_model(app: &axum::Router, cookie: &str, csrf: &str) -> St
     let payload: serde_json::Value =
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
     payload["data"]["id"].as_str().unwrap().to_string()
+}
+
+async fn create_model_with_status(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    code: &str,
+    status: Option<&str>,
+) -> String {
+    let mut body = json!({
+        "scope_kind": "workspace",
+        "code": code,
+        "title": code
+    });
+    if let Some(status) = status {
+        body["status"] = json!(status);
+    }
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/models")
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let payload: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    payload["data"]["id"].as_str().unwrap().to_string()
+}
+
+async fn update_model_status(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    model_id: &str,
+    status: &str,
+) -> serde_json::Value {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/api/console/models/{model_id}"))
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "status": status }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap()
+}
+
+async fn create_runtime_record(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    model_code: &str,
+    title: &str,
+) -> serde_json::Value {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/runtime/models/{model_code}/records"))
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "title": title }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap()
+}
+
+async fn assert_runtime_crud_blocked(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    model_code: &str,
+    expected_status: StatusCode,
+    expected_code: &str,
+) {
+    let record_id = uuid::Uuid::now_v7();
+    let requests = [
+        Request::builder()
+            .method("GET")
+            .uri(format!("/api/runtime/models/{model_code}/records"))
+            .header("cookie", cookie)
+            .body(Body::empty())
+            .unwrap(),
+        Request::builder()
+            .method("GET")
+            .uri(format!(
+                "/api/runtime/models/{model_code}/records/{record_id}"
+            ))
+            .header("cookie", cookie)
+            .body(Body::empty())
+            .unwrap(),
+        Request::builder()
+            .method("POST")
+            .uri(format!("/api/runtime/models/{model_code}/records"))
+            .header("cookie", cookie)
+            .header("x-csrf-token", csrf)
+            .header("content-type", "application/json")
+            .body(Body::from(json!({ "title": "blocked" }).to_string()))
+            .unwrap(),
+        Request::builder()
+            .method("PATCH")
+            .uri(format!(
+                "/api/runtime/models/{model_code}/records/{record_id}"
+            ))
+            .header("cookie", cookie)
+            .header("x-csrf-token", csrf)
+            .header("content-type", "application/json")
+            .body(Body::from(json!({ "title": "blocked" }).to_string()))
+            .unwrap(),
+        Request::builder()
+            .method("DELETE")
+            .uri(format!(
+                "/api/runtime/models/{model_code}/records/{record_id}"
+            ))
+            .header("cookie", cookie)
+            .header("x-csrf-token", csrf)
+            .body(Body::empty())
+            .unwrap(),
+    ];
+
+    for request in requests {
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), expected_status);
+        let payload: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(payload["code"], json!(expected_code));
+    }
 }
 
 async fn create_text_field(
