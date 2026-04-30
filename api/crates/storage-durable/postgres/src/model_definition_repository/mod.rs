@@ -796,6 +796,8 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
         &self,
         input: &CreateScopeDataModelGrantInput,
     ) -> Result<domain::ScopeDataModelGrantRecord> {
+        ensure_system_model_definition(self.pool(), input.data_model_id).await?;
+
         let row = sqlx::query(
             r#"
             insert into scope_data_model_grants (
@@ -807,10 +809,7 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                 permission_profile,
                 created_by
             )
-            select $1, $2, $3, $4, $5, $6, $7
-            from model_definitions
-            where id = $4
-              and scope_kind = 'system'
+            values ($1, $2, $3, $4, $5, $6, $7)
             returning
                 id,
                 scope_kind,
@@ -840,6 +839,8 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
         &self,
         input: &UpdateScopeDataModelGrantInput,
     ) -> Result<domain::ScopeDataModelGrantRecord> {
+        ensure_system_model_definition(self.pool(), input.data_model_id).await?;
+
         let row = sqlx::query(
             r#"
             update scope_data_model_grants
@@ -849,12 +850,6 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
             where scope_kind = $1
               and scope_id = $2
               and data_model_id = $3
-              and exists (
-                  select 1
-                  from model_definitions
-                  where id = $3
-                    and scope_kind = 'system'
-              )
             returning
                 id,
                 scope_kind,
@@ -912,6 +907,28 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
 
     async fn append_audit_log(&self, event: &domain::AuditLogRecord) -> Result<()> {
         AuthRepository::append_audit_log(self, event).await
+    }
+}
+
+async fn ensure_system_model_definition(pool: &sqlx::PgPool, model_id: Uuid) -> Result<()> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        select exists(
+            select 1
+            from model_definitions
+            where id = $1
+              and scope_kind = 'system'
+        )
+        "#,
+    )
+    .bind(model_id)
+    .fetch_one(pool)
+    .await?;
+
+    if exists {
+        Ok(())
+    } else {
+        Err(ControlPlaneError::NotFound("model_definition").into())
     }
 }
 

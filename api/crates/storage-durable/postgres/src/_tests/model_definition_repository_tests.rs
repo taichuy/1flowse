@@ -360,7 +360,8 @@ async fn model_definition_repository_rejects_scope_grant_for_workspace_model() {
         },
     )
     .await;
-    assert!(created.is_err());
+    let error = created.unwrap_err();
+    assert!(error.to_string().contains("model_definition"));
 }
 
 #[tokio::test]
@@ -397,20 +398,6 @@ async fn model_definition_repository_rejects_scope_grant_update_for_workspace_mo
     .await
     .unwrap();
 
-    sqlx::query(
-        r#"
-        insert into scope_data_model_grants (
-            id, scope_kind, scope_id, data_model_id, enabled, permission_profile, created_by
-        ) values ($1, 'workspace', $2, $3, true, 'scope_all', null)
-        "#,
-    )
-    .bind(Uuid::now_v7())
-    .bind(workspace_id)
-    .bind(workspace_model.id)
-    .execute(store.pool())
-    .await
-    .unwrap();
-
     let updated = ModelDefinitionRepository::update_scope_data_model_grant(
         &store,
         &UpdateScopeDataModelGrantInput {
@@ -422,7 +409,8 @@ async fn model_definition_repository_rejects_scope_grant_update_for_workspace_mo
         },
     )
     .await;
-    assert!(updated.is_err());
+    let error = updated.unwrap_err();
+    assert!(error.to_string().contains("model_definition"));
 }
 
 #[tokio::test]
