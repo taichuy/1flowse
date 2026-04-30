@@ -133,7 +133,7 @@ Task 1 code quality REQUEST_CHANGES validation record, 2026-04-30:
 - Test: `api/crates/plugin-framework/src/_tests/data_source_contract_tests.rs`
 - Test: `api/crates/control-plane/src/_tests/data_source_service_tests.rs`
 
-- [ ] **Step 1: Write failing contract tests**
+- [x] **Step 1: Write failing contract tests**
 
 Contract must describe:
 
@@ -148,16 +148,29 @@ write capability
 transaction capability
 ```
 
-- [ ] **Step 2: Implement contract structs**
+- [x] **Step 2: Implement contract structs**
 
 Add explicit request/response DTOs for CRUD so runtime-core does not know plugin runner internals.
 
-- [ ] **Step 3: Run contract tests**
+- [x] **Step 3: Run contract tests**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p plugin-framework data_source
 cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests
 ```
+
+Task 2 validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p plugin-framework data_source` failed before implementation because `DataSourceCrudCapabilities`, CRUD DTOs, `DataSourceResourceDescriptor.capabilities`, and `ListRecords/GetRecord/CreateRecord/UpdateRecord/DeleteRecord` stdio methods did not exist.
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests` failed before implementation because CRUD DTOs and `DataSourceCrudRuntimePort` did not exist.
+- Green evidence:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p plugin-framework data_source`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- Scope note: Task 2 defines and tests the data-source RuntimeExtension CRUD contract, capability declarations, owner/scope context, transaction identifiers on write DTOs, and a control-plane CRUD runtime port. It does not implement external Data Model mapping, runtime-core dispatch, REST fixture behavior, or `unsafe_external_source` readiness.
 
 ### Task 3: External Data Model Mapping And Safety
 

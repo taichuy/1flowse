@@ -3,8 +3,11 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::Result;
 use async_trait::async_trait;
 use plugin_framework::data_source_contract::{
-    DataSourceCatalogEntry, DataSourceConfigInput, DataSourcePreviewReadInput,
-    DataSourcePreviewReadOutput,
+    DataSourceCatalogEntry, DataSourceConfigInput, DataSourceCreateRecordInput,
+    DataSourceCreateRecordOutput, DataSourceDeleteRecordInput, DataSourceDeleteRecordOutput,
+    DataSourceGetRecordInput, DataSourceGetRecordOutput, DataSourceListRecordsInput,
+    DataSourceListRecordsOutput, DataSourcePreviewReadInput, DataSourcePreviewReadOutput,
+    DataSourceRecordScopeContext, DataSourceUpdateRecordInput, DataSourceUpdateRecordOutput,
 };
 use serde_json::{json, Value};
 use time::OffsetDateTime;
@@ -19,13 +22,14 @@ use crate::{
     },
     ports::{
         AuthRepository, CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput,
-        CreatePluginAssignmentInput, CreatePluginTaskInput, DataSourceRepository,
-        DataSourceRuntimePort, RotateDataSourceSecretInput, RotateDataSourceSecretOutput,
-        UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceConfigInput,
-        UpdateDataSourceInstanceStatusInput, UpdatePluginArtifactSnapshotInput,
-        UpdatePluginDesiredStateInput, UpdatePluginRuntimeSnapshotInput,
-        UpdatePluginTaskStatusInput, UpdateProfileInput, UpsertDataSourceCatalogCacheInput,
-        UpsertDataSourceSecretInput, UpsertPluginInstallationInput,
+        CreatePluginAssignmentInput, CreatePluginTaskInput, DataSourceCrudRuntimePort,
+        DataSourceRepository, DataSourceRuntimePort, RotateDataSourceSecretInput,
+        RotateDataSourceSecretOutput, UpdateDataSourceDefaultsInput,
+        UpdateDataSourceInstanceConfigInput, UpdateDataSourceInstanceStatusInput,
+        UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
+        UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
+        UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
+        UpsertPluginInstallationInput,
     },
 };
 use domain::{
@@ -680,6 +684,7 @@ impl DataSourceRuntimePort for StubDataSourceRuntime {
                 resource_key: "contacts".to_string(),
                 display_name: "Contacts".to_string(),
                 resource_kind: "object".to_string(),
+                capabilities: Default::default(),
                 metadata: json!({
                     "authorization": format!("Bearer {secret}"),
                     "nested": {
@@ -692,6 +697,7 @@ impl DataSourceRuntimePort for StubDataSourceRuntime {
             resource_key: "contacts".to_string(),
             display_name: "Contacts".to_string(),
             resource_kind: "object".to_string(),
+            capabilities: Default::default(),
             metadata: json!({}),
         }])?)
     }
@@ -1347,4 +1353,112 @@ async fn preview_read_uses_stored_secret_and_creates_preview_session() {
         }
     );
     assert_eq!(runtime_input.resource_key, "contacts");
+}
+
+#[async_trait]
+impl DataSourceCrudRuntimePort for StubDataSourceRuntime {
+    async fn list_records(
+        &self,
+        _installation: &PluginInstallationRecord,
+        input: DataSourceListRecordsInput,
+    ) -> Result<DataSourceListRecordsOutput> {
+        assert_eq!(input.resource_key, "contacts");
+        assert_eq!(input.context.owner_id.as_deref(), Some("user-1"));
+        assert_eq!(input.context.scope_id.as_deref(), Some("workspace-1"));
+        Ok(DataSourceListRecordsOutput {
+            rows: vec![json!({ "id": "contact-1" })],
+            next_cursor: Some("next".to_string()),
+            total_count: Some(1),
+            metadata: json!({}),
+        })
+    }
+
+    async fn get_record(
+        &self,
+        _installation: &PluginInstallationRecord,
+        input: DataSourceGetRecordInput,
+    ) -> Result<DataSourceGetRecordOutput> {
+        Ok(DataSourceGetRecordOutput {
+            record: Some(json!({ "id": input.record_id })),
+            metadata: json!({}),
+        })
+    }
+
+    async fn create_record(
+        &self,
+        _installation: &PluginInstallationRecord,
+        input: DataSourceCreateRecordInput,
+    ) -> Result<DataSourceCreateRecordOutput> {
+        Ok(DataSourceCreateRecordOutput {
+            record: input.record,
+            metadata: json!({}),
+        })
+    }
+
+    async fn update_record(
+        &self,
+        _installation: &PluginInstallationRecord,
+        input: DataSourceUpdateRecordInput,
+    ) -> Result<DataSourceUpdateRecordOutput> {
+        Ok(DataSourceUpdateRecordOutput {
+            record: input.patch,
+            metadata: json!({}),
+        })
+    }
+
+    async fn delete_record(
+        &self,
+        _installation: &PluginInstallationRecord,
+        input: DataSourceDeleteRecordInput,
+    ) -> Result<DataSourceDeleteRecordOutput> {
+        assert_eq!(input.record_id, "contact-1");
+        assert_eq!(input.transaction_id.as_deref(), Some("tx-1"));
+        Ok(DataSourceDeleteRecordOutput {
+            deleted: true,
+            metadata: json!({}),
+        })
+    }
+}
+
+#[tokio::test]
+async fn data_source_crud_runtime_port_exposes_owner_scope_aware_crud_contract() {
+    let port = StubDataSourceRuntime::ready();
+    let installation = seeded_installation();
+    let context = DataSourceRecordScopeContext {
+        owner_id: Some("user-1".to_string()),
+        scope_id: Some("workspace-1".to_string()),
+    };
+
+    let list = port
+        .list_records(
+            &installation,
+            DataSourceListRecordsInput {
+                connection: Default::default(),
+                resource_key: "contacts".to_string(),
+                context: context.clone(),
+                filters: Vec::new(),
+                sort: Vec::new(),
+                page: None,
+                options_json: json!({}),
+            },
+        )
+        .await
+        .unwrap();
+    let delete = port
+        .delete_record(
+            &installation,
+            DataSourceDeleteRecordInput {
+                connection: Default::default(),
+                resource_key: "contacts".to_string(),
+                record_id: "contact-1".to_string(),
+                context,
+                transaction_id: Some("tx-1".to_string()),
+                options_json: json!({}),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(list.total_count, Some(1));
+    assert!(delete.deleted);
 }

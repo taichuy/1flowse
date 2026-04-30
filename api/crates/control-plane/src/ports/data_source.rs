@@ -1,4 +1,10 @@
 use super::*;
+use plugin_framework::data_source_contract::{
+    DataSourceCreateRecordInput, DataSourceCreateRecordOutput, DataSourceDeleteRecordInput,
+    DataSourceDeleteRecordOutput, DataSourceGetRecordInput, DataSourceGetRecordOutput,
+    DataSourceListRecordsInput, DataSourceListRecordsOutput, DataSourceUpdateRecordInput,
+    DataSourceUpdateRecordOutput,
+};
 
 #[derive(Debug, Clone)]
 pub struct CreateDataSourceInstanceInput {
@@ -127,4 +133,37 @@ pub trait DataSourceRepository: Send + Sync {
         &self,
         input: &CreateDataSourcePreviewSessionInput,
     ) -> anyhow::Result<domain::DataSourcePreviewSessionRecord>;
+}
+
+#[async_trait]
+pub trait DataSourceCrudRuntimePort: Send + Sync {
+    async fn list_records(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceListRecordsInput,
+    ) -> anyhow::Result<DataSourceListRecordsOutput>;
+
+    async fn get_record(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceGetRecordInput,
+    ) -> anyhow::Result<DataSourceGetRecordOutput>;
+
+    async fn create_record(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceCreateRecordInput,
+    ) -> anyhow::Result<DataSourceCreateRecordOutput>;
+
+    async fn update_record(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceUpdateRecordInput,
+    ) -> anyhow::Result<DataSourceUpdateRecordOutput>;
+
+    async fn delete_record(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceDeleteRecordInput,
+    ) -> anyhow::Result<DataSourceDeleteRecordOutput>;
 }
