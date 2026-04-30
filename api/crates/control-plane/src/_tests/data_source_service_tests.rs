@@ -932,7 +932,79 @@ impl DataSourceRuntimePort for StubDataSourceRuntime {
         _installation: &PluginInstallationRecord,
         input: DataSourceDescribeResourceInput,
     ) -> Result<DataSourceResourceDescriptor> {
+        let echoed_secret = input.connection.secret_json["client_secret"].clone();
         self.describe_inputs.write().await.push(input.clone());
+        if self.echo_secret_output {
+            let secret = echoed_secret.as_str().unwrap_or_default();
+            return Ok(DataSourceResourceDescriptor {
+                resource_key: format!("{}-{secret}", input.resource_key),
+                primary_key: Some("id".to_string()),
+                fields: vec![
+                    PluginFormFieldSchema {
+                        key: "id".to_string(),
+                        label: format!("Record {secret} ID"),
+                        field_type: "string".to_string(),
+                        control: None,
+                        group: None,
+                        order: Some(0),
+                        advanced: None,
+                        required: Some(true),
+                        send_mode: None,
+                        enabled_by_default: None,
+                        description: Some(format!("Primary key {secret}")),
+                        placeholder: None,
+                        default_value: None,
+                        min: None,
+                        max: None,
+                        step: None,
+                        precision: None,
+                        unit: None,
+                        options: vec![],
+                        visible_when: vec![],
+                        disabled_when: vec![],
+                    },
+                    PluginFormFieldSchema {
+                        key: format!("properties.email.{secret}"),
+                        label: format!("Email {secret}"),
+                        field_type: "email".to_string(),
+                        control: None,
+                        group: None,
+                        order: Some(1),
+                        advanced: None,
+                        required: Some(false),
+                        send_mode: None,
+                        enabled_by_default: None,
+                        description: None,
+                        placeholder: None,
+                        default_value: Some(json!({ "echoed": secret })),
+                        min: None,
+                        max: None,
+                        step: None,
+                        precision: None,
+                        unit: None,
+                        options: vec![],
+                        visible_when: vec![],
+                        disabled_when: vec![],
+                    },
+                ],
+                supports_preview_read: true,
+                supports_import_snapshot: false,
+                capabilities: plugin_framework::data_source_contract::DataSourceCrudCapabilities {
+                    supports_list: true,
+                    supports_get: true,
+                    supports_filter: true,
+                    supports_scope_filter: true,
+                    ..Default::default()
+                },
+                metadata: json!({
+                    "display_name": format!("Contacts {secret}"),
+                    "authorization": format!("Bearer {secret}"),
+                    "nested": {
+                        "token": echoed_secret,
+                    },
+                }),
+            });
+        }
         Ok(DataSourceResourceDescriptor {
             resource_key: input.resource_key,
             primary_key: Some("id".to_string()),
@@ -1736,6 +1808,75 @@ async fn map_resource_to_model_uses_descriptor_fields_capabilities_and_stored_se
         && event.payload["resource_key"] == json!("contacts")));
     let audit_text = serde_json::to_string(&audit_events).unwrap();
     assert!(!audit_text.contains("secret-for-describe"));
+}
+
+#[tokio::test]
+async fn map_resource_to_model_redacts_descriptor_secret_echoes_before_mapping() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::echoing_secret();
+    let service = DataSourceService::new(repository.clone(), runtime.clone());
+    let plaintext = "descriptor-secret-substring";
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": plaintext }),
+        })
+        .await
+        .unwrap();
+
+    let mapped = service
+        .map_resource_to_model(MapDataSourceResourceToModelCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            resource_key: "contacts".into(),
+        })
+        .await
+        .unwrap();
+
+    let runtime_input = runtime.last_describe_input().await.unwrap();
+    assert_eq!(
+        runtime_input.connection,
+        DataSourceConfigInput {
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": plaintext }),
+        }
+    );
+
+    assert!(!mapped.model.title.contains(plaintext));
+    assert!(!mapped
+        .model
+        .external_resource_key
+        .as_deref()
+        .unwrap()
+        .contains(plaintext));
+    assert!(mapped.fields.iter().all(|field| {
+        !field.title.contains(plaintext)
+            && !field
+                .external_field_key
+                .as_deref()
+                .unwrap()
+                .contains(plaintext)
+    }));
+
+    let mapped_text = serde_json::to_string(&json!({
+        "model_title": mapped.model.title,
+        "external_resource_key": mapped.model.external_resource_key,
+        "fields": mapped.fields,
+    }))
+    .unwrap();
+    let model_store_text = serde_json::to_string(&repository.mapped_models().await).unwrap();
+    let audit_text = serde_json::to_string(&repository.audit_events().await).unwrap();
+    assert!(!mapped_text.contains(plaintext));
+    assert!(!model_store_text.contains(plaintext));
+    assert!(!audit_text.contains(plaintext));
+    assert!(mapped_text.contains("***"));
 }
 
 #[tokio::test]

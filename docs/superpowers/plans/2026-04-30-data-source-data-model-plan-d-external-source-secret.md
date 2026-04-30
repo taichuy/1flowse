@@ -290,6 +290,17 @@ Task 3a-2b catalog mapping validation record, 2026-04-30:
   - `git diff --check`
 - Scope note: This slice adds the control-plane service entrypoint that maps a data-source instance `resource_key` through runtime `describe_resource` into an external-source Data Model and fields. It persists `data_source_instance_id`, `source_kind=external_source`, `external_resource_key`, per-field `external_field_key`, and `external_capability_snapshot`, using stored config/secret while keeping audit payloads secret-free. No console route was added in this slice; a data-sources route such as map resource to model remains follow-up. Runtime CRUD dispatch remains Task 3b; REST fixture remains Task 4.
 
+Task 3a-2b catalog mapping secret-redaction fix validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane map_resource_to_model_redacts_descriptor_secret_echoes_before_mapping` failed because descriptor `metadata.display_name` containing `descriptor-secret-substring` was used directly as the mapped Data Model title.
+- Green evidence:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- Scope note: `map_resource_to_model` now recursively redacts `describe_resource` descriptor output with stored secret string values before deriving Data Model title, external resource key, fields, field display options, and audit payload. The runtime still receives the original stored config and secret input. Console route/runtime dispatch/REST fixture remain outside this fix.
+
 ### Task 4: REST API Connector Rules
 
 **Files:**

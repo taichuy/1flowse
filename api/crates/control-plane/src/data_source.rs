@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use anyhow::Result;
 use plugin_framework::data_source_contract::{
     DataSourceCatalogEntry, DataSourceConfigInput, DataSourceDescribeResourceInput,
-    DataSourcePreviewReadInput, DataSourcePreviewReadOutput,
+    DataSourcePreviewReadInput, DataSourcePreviewReadOutput, DataSourceResourceDescriptor,
 };
 use plugin_framework::provider_contract::PluginFormFieldSchema;
 use serde_json::{json, Map, Value};
@@ -472,6 +472,7 @@ where
             .get_secret_json(instance.id)
             .await?
             .unwrap_or_else(|| json!({}));
+        let secret_values = collect_secret_strings(&secret_json);
         self.runtime.ensure_loaded(&installation).await?;
         let descriptor = self
             .runtime
@@ -486,6 +487,8 @@ where
                 },
             )
             .await?;
+        let descriptor = redact_value(&serde_json::to_value(descriptor)?, &secret_values);
+        let descriptor: DataSourceResourceDescriptor = serde_json::from_value(descriptor)?;
 
         let descriptor_resource_key =
             normalize_required_text(&descriptor.resource_key, "external_resource_key")?;
