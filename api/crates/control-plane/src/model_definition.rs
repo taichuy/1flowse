@@ -640,8 +640,6 @@ where
         ensure_scope_grant_lifecycle_authorized(&actor, command.scope_kind, command.scope_id)?;
         ensure_unsafe_external_system_all_confirmed(
             &model,
-            command.scope_kind,
-            command.scope_id,
             permission_profile,
             command.confirm_unsafe_external_source_system_all,
         )?;
@@ -708,8 +706,6 @@ where
         let enabled = command.enabled.unwrap_or(existing.enabled);
         ensure_unsafe_external_system_all_confirmed(
             &model,
-            existing.scope_kind,
-            existing.scope_id,
             permission_profile,
             command.confirm_unsafe_external_source_system_all,
         )?;
@@ -930,14 +926,10 @@ fn external_source_is_unsafe(model: &domain::ModelDefinitionRecord) -> bool {
 
 fn ensure_unsafe_external_system_all_confirmed(
     model: &domain::ModelDefinitionRecord,
-    scope_kind: DataModelScopeKind,
-    scope_id: Uuid,
     permission_profile: ScopeDataModelPermissionProfile,
     confirmed: bool,
 ) -> Result<(), ControlPlaneError> {
-    if scope_kind == DataModelScopeKind::System
-        && scope_id == domain::SYSTEM_SCOPE_ID
-        && permission_profile == ScopeDataModelPermissionProfile::SystemAll
+    if permission_profile == ScopeDataModelPermissionProfile::SystemAll
         && external_source_is_unsafe(model)
         && !confirmed
     {

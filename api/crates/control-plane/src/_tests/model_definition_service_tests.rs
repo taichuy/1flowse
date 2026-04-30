@@ -388,6 +388,19 @@ fn unsafe_external_system_model(model_id: Uuid) -> ModelDefinitionRecord {
     }
 }
 
+fn safe_external_system_model(model_id: Uuid) -> ModelDefinitionRecord {
+    ModelDefinitionRecord {
+        data_source_instance_id: Some(Uuid::now_v7()),
+        source_kind: domain::DataModelSourceKind::ExternalSource,
+        external_resource_key: Some("safe.contacts".into()),
+        external_capability_snapshot: Some(json!({
+            "supports_list": true,
+            "supports_scope_filter": true
+        })),
+        ..system_model(model_id)
+    }
+}
+
 fn model_in_workspace(model_id: Uuid, workspace_id: Uuid) -> ModelDefinitionRecord {
     ModelDefinitionRecord {
         id: model_id,
@@ -1508,6 +1521,50 @@ async fn unsafe_external_system_all_scope_grant_requires_explicit_confirmation()
 }
 
 #[tokio::test]
+async fn unsafe_external_workspace_scope_system_all_grant_requires_explicit_confirmation() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let repository =
+        ScopedModelDefinitionRepository::new(actor_in_workspace(actor_user_id, actor_workspace_id))
+            .with_model(unsafe_external_system_model(model_id));
+    let service = ModelDefinitionService::new(repository);
+
+    let error = service
+        .create_scope_grant(CreateScopeDataModelGrantCommand {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: actor_workspace_id,
+            data_model_id: model_id,
+            enabled: true,
+            permission_profile: "system_all".into(),
+            confirm_unsafe_external_source_system_all: false,
+        })
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("confirmation"));
+
+    let grant = service
+        .create_scope_grant(CreateScopeDataModelGrantCommand {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: actor_workspace_id,
+            data_model_id: model_id,
+            enabled: true,
+            permission_profile: "system_all".into(),
+            confirm_unsafe_external_source_system_all: true,
+        })
+        .await
+        .unwrap();
+    assert_eq!(grant.scope_kind, DataModelScopeKind::Workspace);
+    assert_eq!(grant.scope_id, actor_workspace_id);
+    assert_eq!(
+        grant.permission_profile,
+        domain::ScopeDataModelPermissionProfile::SystemAll
+    );
+}
+
+#[tokio::test]
 async fn unsafe_external_system_all_scope_grant_update_requires_explicit_confirmation() {
     let actor_user_id = Uuid::now_v7();
     let actor_workspace_id = Uuid::now_v7();
@@ -1550,6 +1607,106 @@ async fn unsafe_external_system_all_scope_grant_update_requires_explicit_confirm
         .unwrap();
     assert_eq!(
         grant.permission_profile,
+        domain::ScopeDataModelPermissionProfile::SystemAll
+    );
+}
+
+#[tokio::test]
+async fn unsafe_external_workspace_scope_system_all_grant_update_requires_explicit_confirmation() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let grant_id = Uuid::now_v7();
+    let repository =
+        ScopedModelDefinitionRepository::new(actor_in_workspace(actor_user_id, actor_workspace_id))
+            .with_model(unsafe_external_system_model(model_id))
+            .with_grant(scope_grant(
+                grant_id,
+                model_id,
+                DataModelScopeKind::Workspace,
+                actor_workspace_id,
+            ));
+    let service = ModelDefinitionService::new(repository);
+
+    let error = service
+        .update_scope_grant(UpdateScopeDataModelGrantCommand {
+            actor_user_id,
+            data_model_id: model_id,
+            grant_id,
+            enabled: Some(true),
+            permission_profile: Some("system_all".into()),
+            confirm_unsafe_external_source_system_all: false,
+        })
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("confirmation"));
+
+    let grant = service
+        .update_scope_grant(UpdateScopeDataModelGrantCommand {
+            actor_user_id,
+            data_model_id: model_id,
+            grant_id,
+            enabled: Some(true),
+            permission_profile: Some("system_all".into()),
+            confirm_unsafe_external_source_system_all: true,
+        })
+        .await
+        .unwrap();
+    assert_eq!(grant.scope_kind, DataModelScopeKind::Workspace);
+    assert_eq!(grant.scope_id, actor_workspace_id);
+    assert_eq!(
+        grant.permission_profile,
+        domain::ScopeDataModelPermissionProfile::SystemAll
+    );
+}
+
+#[tokio::test]
+async fn safe_external_system_all_scope_grant_does_not_require_risk_confirmation() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let grant_id = Uuid::now_v7();
+    let repository =
+        ScopedModelDefinitionRepository::new(actor_in_workspace(actor_user_id, actor_workspace_id))
+            .with_model(safe_external_system_model(model_id))
+            .with_grant(scope_grant(
+                grant_id,
+                model_id,
+                DataModelScopeKind::Workspace,
+                actor_workspace_id,
+            ));
+    let service = ModelDefinitionService::new(repository);
+
+    let created = service
+        .create_scope_grant(CreateScopeDataModelGrantCommand {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: actor_workspace_id,
+            data_model_id: model_id,
+            enabled: true,
+            permission_profile: "system_all".into(),
+            confirm_unsafe_external_source_system_all: false,
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        created.permission_profile,
+        domain::ScopeDataModelPermissionProfile::SystemAll
+    );
+
+    let updated = service
+        .update_scope_grant(UpdateScopeDataModelGrantCommand {
+            actor_user_id,
+            data_model_id: model_id,
+            grant_id,
+            enabled: Some(true),
+            permission_profile: Some("system_all".into()),
+            confirm_unsafe_external_source_system_all: false,
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        updated.permission_profile,
         domain::ScopeDataModelPermissionProfile::SystemAll
     );
 }

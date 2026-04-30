@@ -265,6 +265,18 @@ Task 3a-2b-2 explicit confirmation validation record, 2026-04-30:
   - `cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes`
 - Scope note: This slice completes explicit confirmation for creating or updating `system_all` grants on unsafe external-source Data Models through control-plane commands and console route DTOs. `main_source` Data Models and safe external-source Data Models do not require the confirmation. Data-source catalog/describe-resource mapping is deferred to the next 3a-2b slice. Runtime CRUD dispatch remains Task 3b; REST fixture remains Task 4.
 
+Task 3a-2b-2 confirmation quality fix validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane unsafe_external_workspace_scope_system_all_grant_requires_explicit_confirmation` failed because a workspace-scoped unsafe external `system_all` grant was created without `confirm_unsafe_external_source_system_all`.
+- Green evidence:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- Scope note: The explicit confirmation applies to any `system_all` grant profile on an unsafe external-source target model, regardless of the grant `scope_kind` or `scope_id`. `main_source` models and safe external-source models with `supports_scope_filter: true` remain exempt. Route coverage stays on the existing route path because the route only forwards the confirmation flag and scope fields to the service; the service tests cover the workspace-scope distinction.
+
 ### Task 4: REST API Connector Rules
 
 **Files:**
