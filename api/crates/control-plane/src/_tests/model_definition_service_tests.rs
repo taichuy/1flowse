@@ -3,13 +3,14 @@ use control_plane::model_definition::{
     InMemoryModelDefinitionRepository, ModelDefinitionService, UpdateModelDefinitionStatusCommand,
 };
 use control_plane::ports::{
-    AddModelFieldInput, CreateModelDefinitionInput, ModelDefinitionRepository,
-    UpdateModelDefinitionInput, UpdateModelDefinitionStatusInput, UpdateModelFieldInput,
+    AddModelFieldInput, CreateModelDefinitionInput, CreateScopeDataModelGrantInput,
+    ModelDefinitionRepository, UpdateModelDefinitionInput, UpdateModelDefinitionStatusInput,
+    UpdateModelFieldInput,
 };
 use domain::{
     ActorContext, ApiExposureStatus, AuditLogRecord, DataModelProtection, DataModelScopeKind,
     DataModelStatus, DataSourceDefaults, ModelDefinitionRecord, ModelFieldKind, ModelFieldRecord,
-    SYSTEM_SCOPE_ID,
+    ScopeDataModelGrantRecord, SYSTEM_SCOPE_ID,
 };
 use serde_json::json;
 use std::{
@@ -23,6 +24,7 @@ struct ScopedModelDefinitionRepository {
     actor: ActorContext,
     models: Arc<Mutex<HashMap<Uuid, ModelDefinitionRecord>>>,
     data_source_defaults: Arc<Mutex<HashMap<(Uuid, Uuid), DataSourceDefaults>>>,
+    grants: Arc<Mutex<Vec<ScopeDataModelGrantRecord>>>,
 }
 
 impl ScopedModelDefinitionRepository {
@@ -31,6 +33,7 @@ impl ScopedModelDefinitionRepository {
             actor,
             models: Arc::default(),
             data_source_defaults: Arc::default(),
+            grants: Arc::default(),
         }
     }
 
@@ -204,6 +207,44 @@ impl ModelDefinitionRepository for ScopedModelDefinitionRepository {
         unimplemented!("not needed for scoped service tests")
     }
 
+    async fn create_scope_data_model_grant(
+        &self,
+        input: &CreateScopeDataModelGrantInput,
+    ) -> anyhow::Result<ScopeDataModelGrantRecord> {
+        let now = time::OffsetDateTime::now_utc();
+        let grant = ScopeDataModelGrantRecord {
+            id: input.grant_id,
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            data_model_id: input.data_model_id,
+            enabled: input.enabled,
+            permission_profile: input.permission_profile,
+            created_by: input.created_by,
+            created_at: now,
+            updated_at: now,
+        };
+        self.grants
+            .lock()
+            .expect("grant lock poisoned")
+            .push(grant.clone());
+        Ok(grant)
+    }
+
+    async fn list_scope_data_model_grants(
+        &self,
+        scope_kind: DataModelScopeKind,
+        scope_id: Uuid,
+    ) -> anyhow::Result<Vec<ScopeDataModelGrantRecord>> {
+        Ok(self
+            .grants
+            .lock()
+            .expect("grant lock poisoned")
+            .iter()
+            .filter(|grant| grant.scope_kind == scope_kind && grant.scope_id == scope_id)
+            .cloned()
+            .collect())
+    }
+
     async fn append_audit_log(&self, _event: &AuditLogRecord) -> anyhow::Result<()> {
         Ok(())
     }
@@ -319,7 +360,7 @@ async fn create_system_model_uses_fixed_system_scope_id() {
 }
 
 #[tokio::test]
-async fn create_workspace_model_uses_current_workspace_id() {
+async fn create_workspace_model_creates_system_model_and_workspace_grant() {
     let service = ModelDefinitionService::for_tests();
 
     let created = service
@@ -334,8 +375,23 @@ async fn create_workspace_model_uses_current_workspace_id() {
         .await
         .unwrap();
 
-    assert_eq!(created.scope_kind, DataModelScopeKind::Workspace);
-    assert_eq!(created.scope_id, Uuid::nil());
+    assert_eq!(created.scope_kind, DataModelScopeKind::System);
+    assert_eq!(created.scope_id, SYSTEM_SCOPE_ID);
+
+    let grant = service
+        .load_runtime_scope_grant(
+            &ActorContext::root(Uuid::nil(), Uuid::nil(), "root"),
+            created.id,
+        )
+        .await
+        .unwrap()
+        .expect("workspace create path should persist a workspace grant");
+    assert_eq!(grant.scope_kind, DataModelScopeKind::Workspace);
+    assert_eq!(grant.scope_id, Uuid::nil());
+    assert_eq!(
+        grant.permission_profile,
+        domain::ScopeDataModelPermissionProfile::ScopeAll
+    );
 }
 
 #[tokio::test]

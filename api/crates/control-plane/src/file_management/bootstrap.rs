@@ -6,7 +6,7 @@ use crate::{
     file_management::attachments_template_fields,
     ports::{
         AddModelFieldInput, CreateFileTableRegistrationInput, CreateModelDefinitionInput,
-        FileManagementRepository, ModelDefinitionRepository,
+        CreateScopeDataModelGrantInput, FileManagementRepository, ModelDefinitionRepository,
     },
 };
 
@@ -30,6 +30,8 @@ struct ProvisionFileTableInput {
     actor_user_id: Uuid,
     model_scope_kind: DataModelScopeKind,
     model_scope_id: Uuid,
+    grant_scope_kind: DataModelScopeKind,
+    grant_scope_id: Uuid,
     code: String,
     title: String,
     file_table_scope_kind: FileTableScopeKind,
@@ -84,6 +86,18 @@ where
         .await?;
 
     repository
+        .create_scope_data_model_grant(&CreateScopeDataModelGrantInput {
+            grant_id: Uuid::now_v7(),
+            scope_kind: input.grant_scope_kind,
+            scope_id: input.grant_scope_id,
+            data_model_id: published.id,
+            enabled: true,
+            permission_profile: domain::ScopeDataModelPermissionProfile::ScopeAll,
+            created_by: Some(input.actor_user_id),
+        })
+        .await?;
+
+    repository
         .create_file_table_registration(&CreateFileTableRegistrationInput {
             file_table_id: Uuid::now_v7(),
             actor_user_id: input.actor_user_id,
@@ -127,6 +141,8 @@ where
                 actor_user_id,
                 model_scope_kind: DataModelScopeKind::System,
                 model_scope_id: SYSTEM_SCOPE_ID,
+                grant_scope_kind: DataModelScopeKind::System,
+                grant_scope_id: SYSTEM_SCOPE_ID,
                 code: default_code.to_string(),
                 title: "Attachments".into(),
                 file_table_scope_kind: FileTableScopeKind::System,
@@ -156,8 +172,10 @@ where
             &self.repository,
             ProvisionFileTableInput {
                 actor_user_id: command.actor_user_id,
-                model_scope_kind: DataModelScopeKind::Workspace,
-                model_scope_id: command.workspace_id,
+                model_scope_kind: DataModelScopeKind::System,
+                model_scope_id: SYSTEM_SCOPE_ID,
+                grant_scope_kind: DataModelScopeKind::Workspace,
+                grant_scope_id: command.workspace_id,
                 code: command.code,
                 title: command.title,
                 file_table_scope_kind: FileTableScopeKind::Workspace,

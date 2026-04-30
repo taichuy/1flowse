@@ -25,11 +25,11 @@ use crate::ports::{
     UpdateProfileInput, UpdateWorkspaceRoleInput, WorkspaceRepository,
 };
 use domain::{
-    ActorContext, AuditLogRecord, AuthenticatorRecord, BoundRole, FileStorageHealthStatus,
-    FileStorageRecord, FileTableRecord, FileTableScopeKind, MetadataAvailabilityStatus,
-    ModelDefinitionRecord, ModelFieldRecord, PermissionDefinition, RoleScopeKind, RoleTemplate,
-    ScopeContext, ScopeDataModelGrantRecord, SessionRecord, TenantRecord, UserRecord, UserStatus,
-    WorkspaceRecord,
+    ActorContext, AuditLogRecord, AuthenticatorRecord, BoundRole, DataModelScopeKind,
+    FileStorageHealthStatus, FileStorageRecord, FileTableRecord, FileTableScopeKind,
+    MetadataAvailabilityStatus, ModelDefinitionRecord, ModelFieldRecord, PermissionDefinition,
+    RoleScopeKind, RoleTemplate, ScopeContext, ScopeDataModelGrantRecord, SessionRecord,
+    TenantRecord, UserRecord, UserStatus, WorkspaceRecord,
 };
 
 #[derive(Default, Clone)]
@@ -1240,6 +1240,7 @@ impl ModelDefinitionRepository for MemoryFileManagementRepository {
 #[derive(Clone, Default)]
 pub struct MemoryProvisioningRepository {
     models: Arc<Mutex<HashMap<Uuid, ModelDefinitionRecord>>>,
+    grants: Arc<Mutex<Vec<ScopeDataModelGrantRecord>>>,
     pub file_tables: Arc<Mutex<Vec<FileTableRecord>>>,
 }
 
@@ -1497,6 +1498,51 @@ impl ModelDefinitionRepository for MemoryProvisioningRepository {
             .get(&model_id)
             .expect("model should exist for publish")
             .clone())
+    }
+
+    async fn create_scope_data_model_grant(
+        &self,
+        input: &CreateScopeDataModelGrantInput,
+    ) -> Result<ScopeDataModelGrantRecord> {
+        self.models
+            .lock()
+            .expect("model lock poisoned")
+            .get(&input.data_model_id)
+            .filter(|model| matches!(model.scope_kind, DataModelScopeKind::System))
+            .expect("grant target should be a system model");
+
+        let now = OffsetDateTime::now_utc();
+        let grant = ScopeDataModelGrantRecord {
+            id: input.grant_id,
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            data_model_id: input.data_model_id,
+            enabled: input.enabled,
+            permission_profile: input.permission_profile,
+            created_by: input.created_by,
+            created_at: now,
+            updated_at: now,
+        };
+        self.grants
+            .lock()
+            .expect("grant lock poisoned")
+            .push(grant.clone());
+        Ok(grant)
+    }
+
+    async fn list_scope_data_model_grants(
+        &self,
+        scope_kind: DataModelScopeKind,
+        scope_id: Uuid,
+    ) -> Result<Vec<ScopeDataModelGrantRecord>> {
+        Ok(self
+            .grants
+            .lock()
+            .expect("grant lock poisoned")
+            .iter()
+            .filter(|grant| grant.scope_kind == scope_kind && grant.scope_id == scope_id)
+            .cloned()
+            .collect())
     }
 
     async fn append_audit_log(&self, _event: &AuditLogRecord) -> Result<()> {

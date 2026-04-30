@@ -76,6 +76,23 @@ Task 1 validation record, 2026-04-30:
   - `cargo check --manifest-path api/Cargo.toml -p api-server`
 - Scope constant note: current domain exposes `SYSTEM_SCOPE_ID` and no separate `DEFAULT_SCOPE_ID`; Task 1 used `SYSTEM_SCOPE_ID` as the single-machine default scope constant and did not introduce workspace/team/app aliases.
 
+Task 1 quality fix validation record, 2026-04-30:
+
+- RED confirmed:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests::create_workspace_model_creates_system_model_and_workspace_grant` failed because console-style workspace creation still persisted a workspace-scoped Data Model instead of a system Data Model plus workspace grant.
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane file_management_bootstrap_tests` failed because file table provisioning still created a workspace-scoped Data Model for workspace file tables and builtin attachments provisioning had no persisted grant.
+- GREEN confirmed:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_acl_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane file_management_bootstrap_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane file_management_upload_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server file_management_routes`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- Quality fix note: console model creation and file table provisioning now create system Data Models and persisted `scope_all` grants for the requested system/workspace scope. Route happy paths no longer use direct SQL grant inserts; direct SQL is only used to revoke grants for missing-grant assertions.
+
 ### Task 2: API Key Actor And Runtime Access
 
 **Files:**

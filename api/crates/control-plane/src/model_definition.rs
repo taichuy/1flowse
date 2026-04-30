@@ -193,7 +193,7 @@ where
             .await?;
         ensure_permission(&actor, "state_model.create.all")
             .map_err(ControlPlaneError::PermissionDenied)?;
-        let scope_id = match command.scope_kind {
+        let grant_scope_id = match command.scope_kind {
             DataModelScopeKind::Workspace => actor.current_workspace_id,
             DataModelScopeKind::System => domain::SYSTEM_SCOPE_ID,
         };
@@ -213,8 +213,8 @@ where
             .repository
             .create_model_definition(&CreateModelDefinitionInput {
                 actor_user_id: command.actor_user_id,
-                scope_kind: command.scope_kind,
-                scope_id,
+                scope_kind: DataModelScopeKind::System,
+                scope_id: domain::SYSTEM_SCOPE_ID,
                 data_source_instance_id: command.data_source_instance_id,
                 code: command.code,
                 title: command.title,
@@ -231,6 +231,33 @@ where
                 Some(model.id),
                 "state_model.created",
                 serde_json::json!({ "code": model.code }),
+            ))
+            .await?;
+        let grant = self
+            .repository
+            .create_scope_data_model_grant(&CreateScopeDataModelGrantInput {
+                grant_id: Uuid::now_v7(),
+                scope_kind: command.scope_kind,
+                scope_id: grant_scope_id,
+                data_model_id: model.id,
+                enabled: true,
+                permission_profile: domain::ScopeDataModelPermissionProfile::ScopeAll,
+                created_by: Some(command.actor_user_id),
+            })
+            .await?;
+        self.repository
+            .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
+                Some(command.actor_user_id),
+                "state_model",
+                Some(model.id),
+                "state_model.scope_grant_created",
+                serde_json::json!({
+                    "scope_kind": grant.scope_kind.as_str(),
+                    "scope_id": grant.scope_id,
+                    "enabled": grant.enabled,
+                    "permission_profile": grant.permission_profile.as_str(),
+                }),
             ))
             .await?;
 

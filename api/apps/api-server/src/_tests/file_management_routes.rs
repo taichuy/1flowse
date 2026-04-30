@@ -70,34 +70,6 @@ async fn model_id_for_file_table(database_url: &str, file_table_id: &str) -> Str
     model_id.to_string()
 }
 
-async fn grant_model_to_workspace(database_url: &str, model_id: &str, workspace_id: &str) {
-    let pool = sqlx::PgPool::connect(database_url).await.unwrap();
-    sqlx::query(
-        r#"
-        insert into scope_data_model_grants (
-            id,
-            scope_kind,
-            scope_id,
-            data_model_id,
-            enabled,
-            permission_profile,
-            created_by
-        )
-        values ($1, 'workspace', $2, $3, true, 'scope_all', null)
-        on conflict (scope_kind, scope_id, data_model_id)
-        do update set enabled = true,
-                      permission_profile = 'scope_all',
-                      updated_at = now()
-        "#,
-    )
-    .bind(Uuid::now_v7())
-    .bind(Uuid::parse_str(workspace_id).unwrap())
-    .bind(Uuid::parse_str(model_id).unwrap())
-    .execute(&pool)
-    .await
-    .unwrap();
-}
-
 async fn revoke_model_grant(database_url: &str, model_id: &str, workspace_id: &str) {
     let pool = sqlx::PgPool::connect(database_url).await.unwrap();
     sqlx::query(
@@ -112,9 +84,8 @@ async fn revoke_model_grant(database_url: &str, model_id: &str, workspace_id: &s
 
 #[tokio::test]
 async fn file_management_routes_create_workspace_table_upload_and_read_by_storage_snapshot() {
-    let (app, database_url) = test_app_with_database_url().await;
+    let app = test_app().await;
     let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
-    let workspace_id = current_workspace_id(&app, &root_cookie).await;
     let member_id = create_member(&app, &root_cookie, &root_csrf, "file-admin", "change-me").await;
     replace_member_roles(&app, &root_cookie, &root_csrf, &member_id, &["admin"]).await;
     let (admin_cookie, admin_csrf) =
@@ -162,8 +133,6 @@ async fn file_management_routes_create_workspace_table_upload_and_read_by_storag
     assert_eq!(create_table_response.status(), StatusCode::CREATED);
     let table_payload = response_json(create_table_response).await;
     let file_table_id = table_payload["data"]["id"].as_str().unwrap().to_string();
-    let file_model_id = model_id_for_file_table(&database_url, &file_table_id).await;
-    grant_model_to_workspace(&database_url, &file_model_id, &workspace_id).await;
     assert_eq!(
         table_payload["data"]["bound_storage_id"].as_str(),
         Some(default_storage_id.as_str())
@@ -379,37 +348,6 @@ async fn file_routes_reject_upload_and_read_without_persisted_scope_grant() {
     let file_table_id = table_payload["data"]["id"].as_str().unwrap().to_string();
     let file_model_id = model_id_for_file_table(&database_url, &file_table_id).await;
 
-    let boundary = "----1flowbase-file-upload-blocked";
-    let blocked_upload = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/console/files/upload")
-                .header("cookie", &root_cookie)
-                .header("x-csrf-token", &root_csrf)
-                .header(
-                    "content-type",
-                    format!("multipart/form-data; boundary={boundary}"),
-                )
-                .body(Body::from(build_file_upload_body(
-                    boundary,
-                    &file_table_id,
-                    "blocked.txt",
-                    "text/plain",
-                    b"blocked",
-                )))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(blocked_upload.status(), StatusCode::FORBIDDEN);
-    assert_eq!(
-        response_json(blocked_upload).await["code"],
-        json!("data_model_scope_not_granted")
-    );
-
-    grant_model_to_workspace(&database_url, &file_model_id, &workspace_id).await;
     let allowed_boundary = "----1flowbase-file-upload-allowed";
     let allowed_upload = app
         .clone()
@@ -442,6 +380,36 @@ async fn file_routes_reject_upload_and_read_without_persisted_scope_grant() {
         .to_string();
 
     revoke_model_grant(&database_url, &file_model_id, &workspace_id).await;
+    let blocked_upload_boundary = "----1flowbase-file-upload-blocked";
+    let blocked_upload = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/files/upload")
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .header(
+                    "content-type",
+                    format!("multipart/form-data; boundary={blocked_upload_boundary}"),
+                )
+                .body(Body::from(build_file_upload_body(
+                    blocked_upload_boundary,
+                    &file_table_id,
+                    "blocked.txt",
+                    "text/plain",
+                    b"blocked",
+                )))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(blocked_upload.status(), StatusCode::FORBIDDEN);
+    assert_eq!(
+        response_json(blocked_upload).await["code"],
+        json!("data_model_scope_not_granted")
+    );
+
     let blocked_read = app
         .clone()
         .oneshot(

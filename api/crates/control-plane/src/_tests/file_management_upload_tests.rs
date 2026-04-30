@@ -8,7 +8,7 @@ use control_plane::ports::{FileManagementRepository, UpdateFileStorageBindingInp
 use domain::{
     ActorContext, DataModelScopeKind, FileStorageHealthStatus, FileTableScopeKind,
     MetadataAvailabilityStatus, ModelDefinitionRecord, ScopeDataModelGrantRecord,
-    ScopeDataModelPermissionProfile,
+    ScopeDataModelPermissionProfile, SYSTEM_SCOPE_ID,
 };
 use runtime_core::{
     model_metadata::ModelMetadata,
@@ -191,8 +191,8 @@ async fn upload_service_writes_object_and_runtime_record_with_storage_snapshot()
     let model_id = Uuid::now_v7();
     let model = model_definition(
         model_id,
-        DataModelScopeKind::Workspace,
-        workspace_id,
+        DataModelScopeKind::System,
+        SYSTEM_SCOPE_ID,
         "assets",
     );
     let root = temp_root("file-upload-service");
@@ -295,8 +295,8 @@ async fn upload_service_uses_current_table_binding_for_each_new_upload() {
     let model_id = Uuid::now_v7();
     let model = model_definition(
         model_id,
-        DataModelScopeKind::Workspace,
-        workspace_id,
+        DataModelScopeKind::System,
+        SYSTEM_SCOPE_ID,
         "assets",
     );
     let first_root = temp_root("file-upload-first");
@@ -404,8 +404,8 @@ async fn upload_service_requires_persisted_scope_grant_before_writing_runtime_re
     let model_id = Uuid::now_v7();
     let model = model_definition(
         model_id,
-        DataModelScopeKind::Workspace,
-        workspace_id,
+        DataModelScopeKind::System,
+        SYSTEM_SCOPE_ID,
         "assets",
     );
     let root = temp_root("file-upload-no-grant");
