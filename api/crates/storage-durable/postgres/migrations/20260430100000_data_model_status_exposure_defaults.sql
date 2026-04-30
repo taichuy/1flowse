@@ -7,7 +7,10 @@ alter table data_source_instances
 do $$
 begin
   if not exists (
-    select 1 from pg_constraint where conname = 'data_source_instances_default_data_model_status_check'
+    select 1
+    from pg_constraint
+    where conname = 'data_source_instances_default_data_model_status_check'
+      and conrelid = 'data_source_instances'::regclass
   ) then
     alter table data_source_instances
       add constraint data_source_instances_default_data_model_status_check
@@ -18,7 +21,10 @@ end $$;
 do $$
 begin
   if not exists (
-    select 1 from pg_constraint where conname = 'data_source_instances_default_api_exposure_status_check'
+    select 1
+    from pg_constraint
+    where conname = 'data_source_instances_default_api_exposure_status_check'
+      and conrelid = 'data_source_instances'::regclass
   ) then
     alter table data_source_instances
       add constraint data_source_instances_default_api_exposure_status_check
@@ -53,7 +59,10 @@ alter table model_definitions
 do $$
 begin
   if not exists (
-    select 1 from pg_constraint where conname = 'model_definitions_status_check'
+    select 1
+    from pg_constraint
+    where conname = 'model_definitions_status_check'
+      and conrelid = 'model_definitions'::regclass
   ) then
     alter table model_definitions
       add constraint model_definitions_status_check
@@ -64,7 +73,10 @@ end $$;
 do $$
 begin
   if not exists (
-    select 1 from pg_constraint where conname = 'model_definitions_api_exposure_status_check'
+    select 1
+    from pg_constraint
+    where conname = 'model_definitions_api_exposure_status_check'
+      and conrelid = 'model_definitions'::regclass
   ) then
     alter table model_definitions
       add constraint model_definitions_api_exposure_status_check
@@ -84,7 +96,10 @@ begin
     drop constraint if exists model_definitions_owner_kind_check;
 
   if not exists (
-    select 1 from pg_constraint where conname = 'model_definitions_owner_kind_check'
+    select 1
+    from pg_constraint
+    where conname = 'model_definitions_owner_kind_check'
+      and conrelid = 'model_definitions'::regclass
   ) then
     alter table model_definitions
       add constraint model_definitions_owner_kind_check

@@ -39,6 +39,40 @@ use self::{
     naming::{build_physical_column_name, build_physical_table_name, nullable_actor_user_id},
 };
 
+async fn ensure_workspace_data_source_belongs_to_scope(
+    store: &PgControlPlaneStore,
+    input: &CreateModelDefinitionInput,
+) -> Result<()> {
+    if !matches!(input.scope_kind, domain::DataModelScopeKind::Workspace) {
+        return Ok(());
+    }
+
+    let Some(data_source_instance_id) = input.data_source_instance_id else {
+        return Ok(());
+    };
+
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        select exists (
+            select 1
+            from data_source_instances
+            where id = $1
+              and workspace_id = $2
+        )
+        "#,
+    )
+    .bind(data_source_instance_id)
+    .bind(input.scope_id)
+    .fetch_one(store.pool())
+    .await?;
+
+    if exists {
+        Ok(())
+    } else {
+        Err(ControlPlaneError::NotFound("data_source_instance").into())
+    }
+}
+
 #[async_trait]
 impl ModelDefinitionRepository for PgControlPlaneStore {
     async fn load_actor_context_for_user(
@@ -159,6 +193,8 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
         &self,
         input: &CreateModelDefinitionInput,
     ) -> Result<domain::ModelDefinitionRecord> {
+        ensure_workspace_data_source_belongs_to_scope(self, input).await?;
+
         let model = domain::ModelDefinitionRecord {
             id: Uuid::now_v7(),
             scope_kind: input.scope_kind,

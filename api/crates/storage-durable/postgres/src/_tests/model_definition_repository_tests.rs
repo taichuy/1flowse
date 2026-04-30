@@ -440,6 +440,46 @@ async fn model_definition_repository_allows_duplicate_code_across_data_sources_i
 }
 
 #[tokio::test]
+async fn model_definition_repository_rejects_workspace_model_with_foreign_data_source() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let (workspace_id, actor_user_id, _installation_id) =
+        seed_data_source_workspace(&store, "model-source-current-workspace", "current_source")
+            .await;
+    let (foreign_workspace_id, foreign_actor_user_id, foreign_installation_id) =
+        seed_data_source_workspace(&store, "model-source-foreign-workspace", "foreign_source")
+            .await;
+    let foreign_data_source_id = seed_data_source_instance(
+        &store,
+        foreign_workspace_id,
+        foreign_actor_user_id,
+        foreign_installation_id,
+        "foreign_source",
+        "Foreign Source",
+    )
+    .await;
+
+    let created = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: Some(foreign_data_source_id),
+            code: format!("orders_{}", Uuid::now_v7().simple()),
+            title: "Orders".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
+        },
+    )
+    .await;
+
+    assert!(created.is_err());
+}
+
+#[tokio::test]
 async fn model_definition_repository_reads_data_source_defaults_only_inside_workspace() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();
