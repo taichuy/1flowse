@@ -2,9 +2,10 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 use plugin_framework::data_source_contract::{
-    DataSourceCatalogEntry, DataSourceConfigInput, DataSourcePreviewReadInput,
-    DataSourcePreviewReadOutput,
+    DataSourceCatalogEntry, DataSourceConfigInput, DataSourceDescribeResourceInput,
+    DataSourcePreviewReadInput, DataSourcePreviewReadOutput,
 };
+use plugin_framework::provider_contract::PluginFormFieldSchema;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use time::{Duration, OffsetDateTime};
@@ -14,8 +15,10 @@ use crate::{
     audit::audit_log,
     errors::ControlPlaneError,
     ports::{
-        AuthRepository, CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput,
-        DataSourceRepository, DataSourceRuntimePort, PluginRepository, RotateDataSourceSecretInput,
+        AddModelFieldInput, AuthRepository, CreateDataSourceInstanceInput,
+        CreateDataSourcePreviewSessionInput, CreateModelDefinitionInput,
+        CreateScopeDataModelGrantInput, DataSourceRepository, DataSourceRuntimePort,
+        ModelDefinitionRepository, PluginRepository, RotateDataSourceSecretInput,
         UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceStatusInput,
         UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
     },
@@ -67,6 +70,14 @@ pub struct PreviewDataSourceReadCommand {
 }
 
 #[derive(Debug, Clone)]
+pub struct MapDataSourceResourceToModelCommand {
+    pub actor_user_id: Uuid,
+    pub workspace_id: Uuid,
+    pub instance_id: Uuid,
+    pub resource_key: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct DataSourceInstanceView {
     pub instance: domain::DataSourceInstanceRecord,
     pub catalog: Option<domain::DataSourceCatalogCacheRecord>,
@@ -95,6 +106,12 @@ pub struct PreviewDataSourceReadResult {
     pub output: DataSourcePreviewReadOutput,
 }
 
+#[derive(Debug, Clone)]
+pub struct MapDataSourceResourceToModelResult {
+    pub model: domain::ModelDefinitionRecord,
+    pub fields: Vec<domain::ModelFieldRecord>,
+}
+
 pub struct DataSourceService<R, H> {
     repository: R,
     runtime: H,
@@ -102,7 +119,7 @@ pub struct DataSourceService<R, H> {
 
 impl<R, H> DataSourceService<R, H>
 where
-    R: AuthRepository + PluginRepository + DataSourceRepository,
+    R: AuthRepository + PluginRepository + DataSourceRepository + ModelDefinitionRepository,
     H: DataSourceRuntimePort,
 {
     pub fn new(repository: R, runtime: H) -> Self {
@@ -209,8 +226,9 @@ where
             .await?
             .unwrap_or(instance);
 
-        self.repository
-            .append_audit_log(&audit_log(
+        AuthRepository::append_audit_log(
+            &self.repository,
+            &audit_log(
                 Some(command.workspace_id),
                 Some(actor.user_id),
                 "data_source_instance",
@@ -222,8 +240,9 @@ where
                     "secret_ref": secret_ref,
                     "secret_version": 1,
                 }),
-            ))
-            .await?;
+            ),
+        )
+        .await?;
 
         Ok(DataSourceInstanceView {
             instance,
@@ -310,8 +329,9 @@ where
             })
             .await?;
 
-        self.repository
-            .append_audit_log(&audit_log(
+        AuthRepository::append_audit_log(
+            &self.repository,
+            &audit_log(
                 Some(command.workspace_id),
                 Some(actor.user_id),
                 "data_source_instance",
@@ -320,8 +340,9 @@ where
                 json!({
                     "refresh_status": catalog.refresh_status.as_str(),
                 }),
-            ))
-            .await?;
+            ),
+        )
+        .await?;
 
         Ok(ValidateDataSourceInstanceResult {
             instance,
@@ -349,8 +370,9 @@ where
             })
             .await?;
 
-        self.repository
-            .append_audit_log(&audit_log(
+        AuthRepository::append_audit_log(
+            &self.repository,
+            &audit_log(
                 Some(command.workspace_id),
                 Some(actor.user_id),
                 "data_source_instance",
@@ -360,8 +382,9 @@ where
                     "default_data_model_status": instance.defaults.data_model_status.as_str(),
                     "default_api_exposure_status": instance.defaults.api_exposure_status.as_str(),
                 }),
-            ))
-            .await?;
+            ),
+        )
+        .await?;
 
         Ok(instance)
     }
@@ -396,8 +419,9 @@ where
             })
             .await?;
 
-        self.repository
-            .append_audit_log(&audit_log(
+        AuthRepository::append_audit_log(
+            &self.repository,
+            &audit_log(
                 Some(command.workspace_id),
                 Some(actor.user_id),
                 "data_source_instance",
@@ -407,13 +431,155 @@ where
                     "secret_ref": secret_ref,
                     "secret_version": secret.secret.secret_version,
                 }),
-            ))
-            .await?;
+            ),
+        )
+        .await?;
 
         Ok(DataSourceInstanceView {
             instance: secret.instance,
             catalog: None,
         })
+    }
+
+    pub async fn map_resource_to_model(
+        &self,
+        command: MapDataSourceResourceToModelCommand,
+    ) -> Result<MapDataSourceResourceToModelResult> {
+        let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
+        ensure_workspace_matches(&actor, command.workspace_id)?;
+        ensure_external_data_source_permission(&actor, "configure")?;
+
+        let instance = self
+            .repository
+            .get_instance(command.workspace_id, command.instance_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("data_source_instance"))?;
+        let installation = self
+            .repository
+            .get_installation(instance.installation_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        ensure_installation_assigned(
+            &self.repository,
+            command.workspace_id,
+            instance.installation_id,
+        )
+        .await?;
+
+        let resource_key = normalize_required_text(&command.resource_key, "resource_key")?;
+        let secret_json = self
+            .repository
+            .get_secret_json(instance.id)
+            .await?
+            .unwrap_or_else(|| json!({}));
+        self.runtime.ensure_loaded(&installation).await?;
+        let descriptor = self
+            .runtime
+            .describe_resource(
+                &installation,
+                DataSourceDescribeResourceInput {
+                    connection: DataSourceConfigInput {
+                        config_json: instance.config_json.clone(),
+                        secret_json,
+                    },
+                    resource_key,
+                },
+            )
+            .await?;
+
+        let descriptor_resource_key =
+            normalize_required_text(&descriptor.resource_key, "external_resource_key")?;
+        let defaults = instance.defaults;
+        let status = defaults.data_model_status;
+        let api_exposure_status =
+            normalize_data_source_api_exposure_for_status(status, defaults.api_exposure_status)?;
+        let model_code = normalize_code_identifier(&descriptor_resource_key, "resource_key")?;
+        let model_title = descriptor
+            .metadata
+            .get("display_name")
+            .or_else(|| descriptor.metadata.get("title"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(&descriptor_resource_key)
+            .to_string();
+
+        let model = self
+            .repository
+            .create_model_definition(&CreateModelDefinitionInput {
+                actor_user_id: actor.user_id,
+                scope_kind: domain::DataModelScopeKind::System,
+                scope_id: domain::SYSTEM_SCOPE_ID,
+                data_source_instance_id: Some(instance.id),
+                source_kind: domain::DataModelSourceKind::ExternalSource,
+                external_resource_key: Some(descriptor_resource_key.clone()),
+                external_capability_snapshot: Some(serde_json::to_value(&descriptor.capabilities)?),
+                code: model_code,
+                title: model_title,
+                status,
+                api_exposure_status,
+                protection: domain::DataModelProtection::default(),
+            })
+            .await?;
+
+        self.repository
+            .create_scope_data_model_grant(&CreateScopeDataModelGrantInput {
+                grant_id: Uuid::now_v7(),
+                scope_kind: domain::DataModelScopeKind::Workspace,
+                scope_id: command.workspace_id,
+                data_model_id: model.id,
+                enabled: true,
+                permission_profile: domain::ScopeDataModelPermissionProfile::ScopeAll,
+                created_by: Some(actor.user_id),
+            })
+            .await?;
+
+        let mut fields = Vec::new();
+        for schema in descriptor.fields {
+            let external_field_key = normalize_required_text(&schema.key, "external_field_key")?;
+            let field = self
+                .repository
+                .add_model_field(&AddModelFieldInput {
+                    actor_user_id: actor.user_id,
+                    model_id: model.id,
+                    code: normalize_code_identifier(&external_field_key, "external_field_key")?,
+                    title: field_title(&schema),
+                    external_field_key: Some(external_field_key),
+                    field_kind: model_field_kind_from_schema(&schema),
+                    is_required: schema.required.unwrap_or(false),
+                    is_unique: descriptor
+                        .primary_key
+                        .as_deref()
+                        .map(|primary_key| primary_key == schema.key)
+                        .unwrap_or(false),
+                    default_value: schema.default_value.clone(),
+                    display_interface: schema.control.clone(),
+                    display_options: serde_json::to_value(&schema)?,
+                    relation_target_model_id: None,
+                    relation_options: json!({}),
+                })
+                .await?;
+            fields.push(field);
+        }
+
+        AuthRepository::append_audit_log(
+            &self.repository,
+            &audit_log(
+                Some(command.workspace_id),
+                Some(actor.user_id),
+                "state_model",
+                Some(model.id),
+                "data_source.resource_mapped_to_model",
+                json!({
+                    "data_source_instance_id": instance.id,
+                    "resource_key": descriptor_resource_key,
+                    "field_count": fields.len(),
+                }),
+            ),
+        )
+        .await?;
+
+        Ok(MapDataSourceResourceToModelResult { model, fields })
     }
 
     pub async fn preview_read(
@@ -476,8 +642,9 @@ where
             })
             .await?;
 
-        self.repository
-            .append_audit_log(&audit_log(
+        AuthRepository::append_audit_log(
+            &self.repository,
+            &audit_log(
                 Some(command.workspace_id),
                 Some(actor.user_id),
                 "data_source_instance",
@@ -486,8 +653,9 @@ where
                 json!({
                     "resource_key": preview_input.resource_key,
                 }),
-            ))
-            .await?;
+            ),
+        )
+        .await?;
 
         Ok(PreviewDataSourceReadResult {
             preview_session,
@@ -570,6 +738,63 @@ fn normalize_required_text(value: &str, field: &'static str) -> Result<String> {
         Err(ControlPlaneError::InvalidInput(field).into())
     } else {
         Ok(trimmed.to_string())
+    }
+}
+
+fn normalize_code_identifier(value: &str, field: &'static str) -> Result<String> {
+    let mut code = String::new();
+    let mut last_was_separator = false;
+    for character in value.trim().chars() {
+        if character.is_ascii_alphanumeric() {
+            code.push(character.to_ascii_lowercase());
+            last_was_separator = false;
+        } else if !last_was_separator {
+            code.push('_');
+            last_was_separator = true;
+        }
+    }
+    let code = code.trim_matches('_').to_string();
+    if code.is_empty() {
+        Err(ControlPlaneError::InvalidInput(field).into())
+    } else {
+        Ok(code)
+    }
+}
+
+fn field_title(schema: &PluginFormFieldSchema) -> String {
+    let label = schema.label.trim();
+    if label.is_empty() {
+        schema.key.clone()
+    } else {
+        label.to_string()
+    }
+}
+
+fn model_field_kind_from_schema(schema: &PluginFormFieldSchema) -> domain::ModelFieldKind {
+    match schema.field_type.trim().to_ascii_lowercase().as_str() {
+        "number" | "integer" | "float" | "decimal" => domain::ModelFieldKind::Number,
+        "boolean" | "bool" => domain::ModelFieldKind::Boolean,
+        "datetime" | "date_time" | "timestamp" | "date" => domain::ModelFieldKind::Datetime,
+        "enum" | "select" | "multi_select" => domain::ModelFieldKind::Enum,
+        "textarea" | "text" | "markdown" | "rich_text" => domain::ModelFieldKind::Text,
+        "json" | "object" | "array" => domain::ModelFieldKind::Json,
+        _ => domain::ModelFieldKind::String,
+    }
+}
+
+fn normalize_data_source_api_exposure_for_status(
+    status: domain::DataModelStatus,
+    api_exposure_status: domain::ApiExposureStatus,
+) -> Result<domain::ApiExposureStatus> {
+    if status == domain::DataModelStatus::Draft {
+        match api_exposure_status {
+            domain::ApiExposureStatus::Draft => Ok(api_exposure_status),
+            _ => Err(ControlPlaneError::InvalidInput("default_api_exposure_status").into()),
+        }
+    } else if matches!(api_exposure_status, domain::ApiExposureStatus::Draft) {
+        Ok(domain::ApiExposureStatus::PublishedNotExposed)
+    } else {
+        Ok(api_exposure_status)
     }
 }
 

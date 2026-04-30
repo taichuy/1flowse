@@ -12,7 +12,8 @@ use control_plane::{
 };
 use plugin_framework::{
     data_source_contract::{
-        DataSourceConfigInput, DataSourcePreviewReadInput, DataSourcePreviewReadOutput,
+        DataSourceConfigInput, DataSourceDescribeResourceInput, DataSourcePreviewReadInput,
+        DataSourcePreviewReadOutput, DataSourceResourceDescriptor,
     },
     error::PluginFrameworkError,
     provider_contract::{ProviderInvocationInput, ProviderModelDescriptor},
@@ -210,6 +211,23 @@ impl DataSourceRuntimePort for ApiProviderRuntime {
             .await
             .map_err(|error| map_framework_error(error, "data_source_runtime"))?;
         Ok(serde_json::to_value(output.entries)?)
+    }
+
+    async fn describe_resource(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        input: DataSourceDescribeResourceInput,
+    ) -> anyhow::Result<DataSourceResourceDescriptor> {
+        self.ensure_data_source_loaded(installation).await?;
+        let host = self.services.data_source_host.read().await;
+        host.describe_resource(
+            &installation.plugin_id,
+            input.connection,
+            input.resource_key,
+        )
+        .await
+        .map(|output| output.descriptor)
+        .map_err(|error| map_framework_error(error, "data_source_runtime"))
     }
 
     async fn preview_read(

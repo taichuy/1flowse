@@ -5,10 +5,12 @@ use async_trait::async_trait;
 use plugin_framework::data_source_contract::{
     DataSourceCatalogEntry, DataSourceConfigInput, DataSourceCreateRecordInput,
     DataSourceCreateRecordOutput, DataSourceDeleteRecordInput, DataSourceDeleteRecordOutput,
-    DataSourceGetRecordInput, DataSourceGetRecordOutput, DataSourceListRecordsInput,
-    DataSourceListRecordsOutput, DataSourcePreviewReadInput, DataSourcePreviewReadOutput,
-    DataSourceRecordScopeContext, DataSourceUpdateRecordInput, DataSourceUpdateRecordOutput,
+    DataSourceDescribeResourceInput, DataSourceGetRecordInput, DataSourceGetRecordOutput,
+    DataSourceListRecordsInput, DataSourceListRecordsOutput, DataSourcePreviewReadInput,
+    DataSourcePreviewReadOutput, DataSourceRecordScopeContext, DataSourceResourceDescriptor,
+    DataSourceUpdateRecordInput, DataSourceUpdateRecordOutput,
 };
+use plugin_framework::provider_contract::PluginFormFieldSchema;
 use serde_json::{json, Value};
 use time::OffsetDateTime;
 use tokio::sync::RwLock;
@@ -16,29 +18,33 @@ use uuid::Uuid;
 
 use crate::{
     data_source::{
-        CreateDataSourceInstanceCommand, DataSourceService, PreviewDataSourceReadCommand,
-        RotateDataSourceSecretCommand, UpdateDataSourceDefaultsCommand,
-        ValidateDataSourceInstanceCommand,
+        CreateDataSourceInstanceCommand, DataSourceService, MapDataSourceResourceToModelCommand,
+        PreviewDataSourceReadCommand, RotateDataSourceSecretCommand,
+        UpdateDataSourceDefaultsCommand, ValidateDataSourceInstanceCommand,
     },
     ports::{
-        AuthRepository, CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput,
-        CreatePluginAssignmentInput, CreatePluginTaskInput, DataSourceCrudRuntimePort,
-        DataSourceRepository, DataSourceRuntimePort, RotateDataSourceSecretInput,
-        RotateDataSourceSecretOutput, UpdateDataSourceDefaultsInput,
-        UpdateDataSourceInstanceConfigInput, UpdateDataSourceInstanceStatusInput,
-        UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
-        UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
+        AddModelFieldInput, AuthRepository, CreateDataSourceInstanceInput,
+        CreateDataSourcePreviewSessionInput, CreateModelDefinitionInput,
+        CreatePluginAssignmentInput, CreatePluginTaskInput, CreateScopeDataModelGrantInput,
+        DataSourceCrudRuntimePort, DataSourceRepository, DataSourceRuntimePort,
+        ModelDefinitionRepository, RotateDataSourceSecretInput, RotateDataSourceSecretOutput,
+        UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceConfigInput,
+        UpdateDataSourceInstanceStatusInput, UpdateModelDefinitionInput,
+        UpdateModelDefinitionStatusInput, UpdateModelFieldInput, UpdatePluginArtifactSnapshotInput,
+        UpdatePluginDesiredStateInput, UpdatePluginRuntimeSnapshotInput,
+        UpdatePluginTaskStatusInput, UpdateProfileInput, UpdateScopeDataModelGrantInput,
         UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
         UpsertPluginInstallationInput,
     },
 };
 use domain::{
-    ActorContext, AuditLogRecord, AuthenticatorRecord, DataSourceCatalogCacheRecord,
-    DataSourceCatalogRefreshStatus, DataSourceDefaults, DataSourceInstanceRecord,
-    DataSourceInstanceStatus, DataSourcePreviewSessionRecord, DataSourceSecretRecord,
-    PermissionDefinition, PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus,
-    PluginDesiredState, PluginInstallationRecord, PluginRuntimeStatus, PluginTaskRecord,
-    PluginVerificationStatus, ScopeContext, UserRecord,
+    ActorContext, AuditLogRecord, AuthenticatorRecord, DataModelScopeKind,
+    DataSourceCatalogCacheRecord, DataSourceCatalogRefreshStatus, DataSourceDefaults,
+    DataSourceInstanceRecord, DataSourceInstanceStatus, DataSourcePreviewSessionRecord,
+    DataSourceSecretRecord, ModelDefinitionRecord, ModelFieldRecord, PermissionDefinition,
+    PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
+    PluginInstallationRecord, PluginRuntimeStatus, PluginTaskRecord, PluginVerificationStatus,
+    ScopeContext, ScopeDataModelGrantRecord, UserRecord,
 };
 
 fn tenant_id() -> Uuid {
@@ -102,6 +108,8 @@ struct InMemoryDataSourceRepository {
     secret_records: Arc<RwLock<HashMap<Uuid, DataSourceSecretRecord>>>,
     caches: Arc<RwLock<HashMap<Uuid, DataSourceCatalogCacheRecord>>>,
     preview_sessions: Arc<RwLock<HashMap<Uuid, DataSourcePreviewSessionRecord>>>,
+    models: Arc<RwLock<HashMap<Uuid, ModelDefinitionRecord>>>,
+    grants: Arc<RwLock<Vec<ScopeDataModelGrantRecord>>>,
     audit_logs: Arc<RwLock<Vec<AuditLogRecord>>>,
 }
 
@@ -129,6 +137,8 @@ impl Default for InMemoryDataSourceRepository {
             secret_records: Arc::new(RwLock::new(HashMap::new())),
             caches: Arc::new(RwLock::new(HashMap::new())),
             preview_sessions: Arc::new(RwLock::new(HashMap::new())),
+            models: Arc::new(RwLock::new(HashMap::new())),
+            grants: Arc::new(RwLock::new(Vec::new())),
             audit_logs: Arc::new(RwLock::new(Vec::new())),
         }
     }
@@ -156,6 +166,10 @@ impl InMemoryDataSourceRepository {
 
     async fn audit_events(&self) -> Vec<AuditLogRecord> {
         self.audit_logs.read().await.clone()
+    }
+
+    async fn mapped_models(&self) -> Vec<ModelDefinitionRecord> {
+        self.models.read().await.values().cloned().collect()
     }
 }
 
@@ -533,6 +547,210 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
     }
 }
 
+#[async_trait]
+impl ModelDefinitionRepository for InMemoryDataSourceRepository {
+    async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
+        AuthRepository::load_actor_context_for_user(self, actor_user_id).await
+    }
+
+    async fn list_model_definitions(
+        &self,
+        _workspace_id: Uuid,
+    ) -> Result<Vec<ModelDefinitionRecord>> {
+        Ok(self.models.read().await.values().cloned().collect())
+    }
+
+    async fn get_model_definition(
+        &self,
+        workspace_id: Uuid,
+        model_id: Uuid,
+    ) -> Result<Option<ModelDefinitionRecord>> {
+        Ok(self
+            .models
+            .read()
+            .await
+            .get(&model_id)
+            .filter(|model| {
+                workspace_id.is_nil()
+                    || !matches!(model.scope_kind, DataModelScopeKind::Workspace)
+                    || model.scope_id == workspace_id
+            })
+            .cloned())
+    }
+
+    async fn get_data_source_defaults(
+        &self,
+        workspace_id: Uuid,
+        data_source_instance_id: Uuid,
+    ) -> Result<DataSourceDefaults> {
+        self.instances
+            .read()
+            .await
+            .get(&data_source_instance_id)
+            .filter(|instance| instance.workspace_id == workspace_id)
+            .map(|instance| instance.defaults)
+            .ok_or_else(|| {
+                control_plane::errors::ControlPlaneError::NotFound("data_source_instance").into()
+            })
+    }
+
+    async fn create_model_definition(
+        &self,
+        input: &CreateModelDefinitionInput,
+    ) -> Result<ModelDefinitionRecord> {
+        let model = ModelDefinitionRecord {
+            id: Uuid::now_v7(),
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            data_source_instance_id: input.data_source_instance_id,
+            source_kind: input.source_kind,
+            external_resource_key: input.external_resource_key.clone(),
+            external_capability_snapshot: input.external_capability_snapshot.clone(),
+            code: input.code.clone(),
+            title: input.title.clone(),
+            physical_table_name: format!("rtm_workspace_{}", input.code),
+            acl_namespace: format!("state_model.{}", input.code),
+            audit_namespace: format!("audit.state_model.{}", input.code),
+            fields: vec![],
+            availability_status: domain::MetadataAvailabilityStatus::Available,
+            status: input.status,
+            api_exposure_status: input.api_exposure_status,
+            protection: input.protection.clone(),
+        };
+        self.models.write().await.insert(model.id, model.clone());
+        Ok(model)
+    }
+
+    async fn update_model_definition(
+        &self,
+        _input: &UpdateModelDefinitionInput,
+    ) -> Result<ModelDefinitionRecord> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn update_model_definition_status(
+        &self,
+        _input: &UpdateModelDefinitionStatusInput,
+    ) -> Result<ModelDefinitionRecord> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn add_model_field(&self, input: &AddModelFieldInput) -> Result<ModelFieldRecord> {
+        let mut models = self.models.write().await;
+        let model = models
+            .get_mut(&input.model_id)
+            .expect("model should exist for test");
+        let field = ModelFieldRecord {
+            id: Uuid::now_v7(),
+            data_model_id: input.model_id,
+            code: input.code.clone(),
+            title: input.title.clone(),
+            physical_column_name: format!("col_{}", input.code),
+            external_field_key: input.external_field_key.clone(),
+            field_kind: input.field_kind,
+            is_required: input.is_required,
+            is_unique: input.is_unique,
+            default_value: input.default_value.clone(),
+            display_interface: input.display_interface.clone(),
+            display_options: input.display_options.clone(),
+            relation_target_model_id: input.relation_target_model_id,
+            relation_options: input.relation_options.clone(),
+            sort_order: model.fields.len() as i32,
+            availability_status: domain::MetadataAvailabilityStatus::Available,
+        };
+        model.fields.push(field.clone());
+        Ok(field)
+    }
+
+    async fn update_model_field(&self, _input: &UpdateModelFieldInput) -> Result<ModelFieldRecord> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn delete_model_definition(&self, _actor_user_id: Uuid, _model_id: Uuid) -> Result<()> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn delete_model_field(
+        &self,
+        _actor_user_id: Uuid,
+        _model_id: Uuid,
+        _field_id: Uuid,
+    ) -> Result<()> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn publish_model_definition(
+        &self,
+        _actor_user_id: Uuid,
+        _model_id: Uuid,
+    ) -> Result<ModelDefinitionRecord> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn create_scope_data_model_grant(
+        &self,
+        input: &CreateScopeDataModelGrantInput,
+    ) -> Result<ScopeDataModelGrantRecord> {
+        let now = OffsetDateTime::now_utc();
+        let grant = ScopeDataModelGrantRecord {
+            id: input.grant_id,
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            data_model_id: input.data_model_id,
+            enabled: input.enabled,
+            permission_profile: input.permission_profile,
+            created_by: input.created_by,
+            created_at: now,
+            updated_at: now,
+        };
+        self.grants.write().await.push(grant.clone());
+        Ok(grant)
+    }
+
+    async fn update_scope_data_model_grant(
+        &self,
+        _input: &UpdateScopeDataModelGrantInput,
+    ) -> Result<ScopeDataModelGrantRecord> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn get_scope_data_model_grant(
+        &self,
+        _data_model_id: Uuid,
+        _grant_id: Uuid,
+    ) -> Result<Option<ScopeDataModelGrantRecord>> {
+        Ok(None)
+    }
+
+    async fn delete_scope_data_model_grant(
+        &self,
+        _data_model_id: Uuid,
+        _grant_id: Uuid,
+    ) -> Result<ScopeDataModelGrantRecord> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn list_scope_data_model_grants(
+        &self,
+        scope_kind: DataModelScopeKind,
+        scope_id: Uuid,
+    ) -> Result<Vec<ScopeDataModelGrantRecord>> {
+        Ok(self
+            .grants
+            .read()
+            .await
+            .iter()
+            .filter(|grant| grant.scope_kind == scope_kind && grant.scope_id == scope_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn append_audit_log(&self, event: &AuditLogRecord) -> Result<()> {
+        self.audit_logs.write().await.push(event.clone());
+        Ok(())
+    }
+}
+
 fn refresh_test_secret_reference_versions(
     value: &Value,
     secret_ref: &str,
@@ -613,6 +831,7 @@ fn merge_config_marker_secret_values(existing: Option<&Value>, incoming: &Value)
 #[derive(Clone)]
 struct StubDataSourceRuntime {
     preview_inputs: Arc<RwLock<Vec<DataSourcePreviewReadInput>>>,
+    describe_inputs: Arc<RwLock<Vec<DataSourceDescribeResourceInput>>>,
     echo_secret_output: bool,
 }
 
@@ -620,6 +839,7 @@ impl StubDataSourceRuntime {
     fn ready() -> Self {
         Self {
             preview_inputs: Arc::new(RwLock::new(Vec::new())),
+            describe_inputs: Arc::new(RwLock::new(Vec::new())),
             echo_secret_output: false,
         }
     }
@@ -627,12 +847,17 @@ impl StubDataSourceRuntime {
     fn echoing_secret() -> Self {
         Self {
             preview_inputs: Arc::new(RwLock::new(Vec::new())),
+            describe_inputs: Arc::new(RwLock::new(Vec::new())),
             echo_secret_output: true,
         }
     }
 
     async fn last_preview_input(&self) -> Option<DataSourcePreviewReadInput> {
         self.preview_inputs.read().await.last().cloned()
+    }
+
+    async fn last_describe_input(&self) -> Option<DataSourceDescribeResourceInput> {
+        self.describe_inputs.read().await.last().cloned()
     }
 }
 
@@ -700,6 +925,76 @@ impl DataSourceRuntimePort for StubDataSourceRuntime {
             capabilities: Default::default(),
             metadata: json!({}),
         }])?)
+    }
+
+    async fn describe_resource(
+        &self,
+        _installation: &PluginInstallationRecord,
+        input: DataSourceDescribeResourceInput,
+    ) -> Result<DataSourceResourceDescriptor> {
+        self.describe_inputs.write().await.push(input.clone());
+        Ok(DataSourceResourceDescriptor {
+            resource_key: input.resource_key,
+            primary_key: Some("id".to_string()),
+            fields: vec![
+                PluginFormFieldSchema {
+                    key: "id".to_string(),
+                    label: "Record ID".to_string(),
+                    field_type: "string".to_string(),
+                    control: None,
+                    group: None,
+                    order: Some(0),
+                    advanced: None,
+                    required: Some(true),
+                    send_mode: None,
+                    enabled_by_default: None,
+                    description: None,
+                    placeholder: None,
+                    default_value: None,
+                    min: None,
+                    max: None,
+                    step: None,
+                    precision: None,
+                    unit: None,
+                    options: vec![],
+                    visible_when: vec![],
+                    disabled_when: vec![],
+                },
+                PluginFormFieldSchema {
+                    key: "properties.email".to_string(),
+                    label: "Email".to_string(),
+                    field_type: "email".to_string(),
+                    control: None,
+                    group: None,
+                    order: Some(1),
+                    advanced: None,
+                    required: Some(false),
+                    send_mode: None,
+                    enabled_by_default: None,
+                    description: None,
+                    placeholder: None,
+                    default_value: None,
+                    min: None,
+                    max: None,
+                    step: None,
+                    precision: None,
+                    unit: None,
+                    options: vec![],
+                    visible_when: vec![],
+                    disabled_when: vec![],
+                },
+            ],
+            supports_preview_read: true,
+            supports_import_snapshot: false,
+            capabilities: plugin_framework::data_source_contract::DataSourceCrudCapabilities {
+                supports_list: true,
+                supports_get: true,
+                supports_filter: true,
+                supports_scope_filter: true,
+                ..Default::default()
+            },
+            metadata: json!({ "display_name": "Contacts" }),
+        })
     }
 
     async fn preview_read(
@@ -1353,6 +1648,125 @@ async fn preview_read_uses_stored_secret_and_creates_preview_session() {
         }
     );
     assert_eq!(runtime_input.resource_key, "contacts");
+}
+
+#[tokio::test]
+async fn map_resource_to_model_uses_descriptor_fields_capabilities_and_stored_secret() {
+    let repository = InMemoryDataSourceRepository::default();
+    let runtime = StubDataSourceRuntime::ready();
+    let service = DataSourceService::new(repository.clone(), runtime.clone());
+
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": "secret-for-describe" }),
+        })
+        .await
+        .unwrap();
+
+    let mapped = service
+        .map_resource_to_model(MapDataSourceResourceToModelCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            instance_id: created.instance.id,
+            resource_key: "contacts".into(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        mapped.model.data_source_instance_id,
+        Some(created.instance.id)
+    );
+    assert_eq!(
+        mapped.model.source_kind,
+        domain::DataModelSourceKind::ExternalSource
+    );
+    assert_eq!(
+        mapped.model.external_resource_key.as_deref(),
+        Some("contacts")
+    );
+    assert_eq!(
+        mapped.model.external_capability_snapshot,
+        Some(json!({
+            "supports_list": true,
+            "supports_get": true,
+            "supports_create": false,
+            "supports_update": false,
+            "supports_delete": false,
+            "supports_filter": true,
+            "supports_sort": false,
+            "supports_pagination": false,
+            "supports_owner_filter": false,
+            "supports_scope_filter": true,
+            "supports_write": false,
+            "supports_transactions": false
+        }))
+    );
+    assert_eq!(mapped.fields.len(), 2);
+    assert_eq!(mapped.fields[0].external_field_key.as_deref(), Some("id"));
+    assert_eq!(
+        mapped.fields[1].external_field_key.as_deref(),
+        Some("properties.email")
+    );
+    assert_eq!(mapped.fields[1].code, "properties_email");
+
+    let runtime_input = runtime.last_describe_input().await.unwrap();
+    assert_eq!(
+        runtime_input.connection,
+        DataSourceConfigInput {
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({ "client_secret": "secret-for-describe" }),
+        }
+    );
+    assert_eq!(runtime_input.resource_key, "contacts");
+
+    let models = repository.mapped_models().await;
+    assert_eq!(models.len(), 1);
+    let audit_events = repository.audit_events().await;
+    assert!(audit_events.iter().any(|event| event.event_code
+        == "data_source.resource_mapped_to_model"
+        && event.target_id == Some(mapped.model.id)
+        && event.payload["data_source_instance_id"] == json!(created.instance.id)
+        && event.payload["resource_key"] == json!("contacts")));
+    let audit_text = serde_json::to_string(&audit_events).unwrap();
+    assert!(!audit_text.contains("secret-for-describe"));
+}
+
+#[tokio::test]
+async fn map_resource_to_model_rejects_foreign_instance_workspace() {
+    let repository = InMemoryDataSourceRepository::default();
+    let service = DataSourceService::new(repository.clone(), StubDataSourceRuntime::ready());
+    let created = service
+        .create_instance(CreateDataSourceInstanceCommand {
+            actor_user_id: user_id(),
+            workspace_id: workspace_id(),
+            installation_id: installation_id(),
+            source_code: "acme_hubspot_source".into(),
+            display_name: "HubSpot".into(),
+            config_json: json!({ "client_id": "abc" }),
+            secret_json: json!({}),
+        })
+        .await
+        .unwrap();
+
+    let error = service
+        .map_resource_to_model(MapDataSourceResourceToModelCommand {
+            actor_user_id: user_id(),
+            workspace_id: Uuid::from_u128(0x999),
+            instance_id: created.instance.id,
+            resource_key: "contacts".into(),
+        })
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("workspace_id"));
+    assert!(repository.mapped_models().await.is_empty());
 }
 
 #[async_trait]
