@@ -33,6 +33,109 @@ async fn root_tenant_id(store: &PgControlPlaneStore) -> Uuid {
         .unwrap()
 }
 
+async fn seed_data_source_workspace(
+    store: &PgControlPlaneStore,
+    workspace_name: &str,
+    provider_code: &str,
+) -> (Uuid, Uuid, Uuid) {
+    let tenant = store.upsert_root_tenant().await.unwrap();
+    let workspace = store
+        .upsert_workspace(tenant.id, workspace_name)
+        .await
+        .unwrap();
+    store
+        .upsert_permission_catalog(&access_control::permission_catalog())
+        .await
+        .unwrap();
+    store.upsert_builtin_roles(workspace.id).await.unwrap();
+    store
+        .upsert_authenticator(&domain::AuthenticatorRecord {
+            name: "password-local".into(),
+            auth_type: "password-local".into(),
+            title: "Password".into(),
+            enabled: true,
+            is_builtin: true,
+            options: serde_json::json!({}),
+        })
+        .await
+        .unwrap();
+    let actor = store
+        .upsert_root_user(
+            workspace.id,
+            "root",
+            "root@example.com",
+            "$argon2id$v=19$m=19456,t=2,p=1$test$test",
+            "Root",
+            "Root",
+        )
+        .await
+        .unwrap();
+    let installation_id = Uuid::now_v7();
+    control_plane::ports::PluginRepository::upsert_installation(
+        store,
+        &control_plane::ports::UpsertPluginInstallationInput {
+            installation_id,
+            provider_code: provider_code.into(),
+            plugin_id: format!("{provider_code}@builtin"),
+            plugin_version: "0.1.0".into(),
+            contract_version: "1flowbase.data_source/v1".into(),
+            protocol: "builtin".into(),
+            display_name: "Main Source".into(),
+            source_kind: "uploaded".into(),
+            trust_level: "checksum_only".into(),
+            verification_status: domain::PluginVerificationStatus::Valid,
+            desired_state: domain::PluginDesiredState::ActiveRequested,
+            artifact_status: domain::PluginArtifactStatus::Ready,
+            runtime_status: domain::PluginRuntimeStatus::Active,
+            availability_status: domain::PluginAvailabilityStatus::Available,
+            package_path: None,
+            installed_path: format!("/tmp/{provider_code}"),
+            checksum: None,
+            manifest_fingerprint: None,
+            signature_status: None,
+            signature_algorithm: None,
+            signing_key_id: None,
+            last_load_error: None,
+            metadata_json: serde_json::json!({}),
+            actor_user_id: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    (workspace.id, actor.id, installation_id)
+}
+
+async fn seed_data_source_instance(
+    store: &PgControlPlaneStore,
+    workspace_id: Uuid,
+    actor_user_id: Uuid,
+    installation_id: Uuid,
+    source_code: &str,
+    display_name: &str,
+) -> Uuid {
+    let data_source_instance_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        insert into data_source_instances (
+            id, workspace_id, installation_id, source_code, display_name, status,
+            config_json, metadata_json, created_by
+        ) values ($1, $2, $3, $4, $5, 'ready', '{}', '{}', $6)
+        "#,
+    )
+    .bind(data_source_instance_id)
+    .bind(workspace_id)
+    .bind(installation_id)
+    .bind(source_code)
+    .bind(display_name)
+    .bind(actor_user_id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    data_source_instance_id
+}
+
 #[tokio::test]
 async fn model_definition_repository_creates_scope_bound_metadata_without_publish_state() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
@@ -197,92 +300,23 @@ async fn model_definition_repository_blocks_duplicate_code_inside_same_data_sour
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();
     let store = PgControlPlaneStore::new(pool);
-    let tenant = store.upsert_root_tenant().await.unwrap();
-    let workspace = store
-        .upsert_workspace(tenant.id, "duplicate-code-workspace")
-        .await
-        .unwrap();
-    store
-        .upsert_permission_catalog(&access_control::permission_catalog())
-        .await
-        .unwrap();
-    store.upsert_builtin_roles(workspace.id).await.unwrap();
-    store
-        .upsert_authenticator(&domain::AuthenticatorRecord {
-            name: "password-local".into(),
-            auth_type: "password-local".into(),
-            title: "Password".into(),
-            enabled: true,
-            is_builtin: true,
-            options: serde_json::json!({}),
-        })
-        .await
-        .unwrap();
-    let actor = store
-        .upsert_root_user(
-            workspace.id,
-            "root",
-            "root@example.com",
-            "$argon2id$v=19$m=19456,t=2,p=1$test$test",
-            "Root",
-            "Root",
-        )
-        .await
-        .unwrap();
-    let installation_id = Uuid::now_v7();
-    control_plane::ports::PluginRepository::upsert_installation(
+    let (workspace_id, actor_user_id, installation_id) =
+        seed_data_source_workspace(&store, "duplicate-code-workspace", "main_source").await;
+    let data_source_instance_id = seed_data_source_instance(
         &store,
-        &control_plane::ports::UpsertPluginInstallationInput {
-            installation_id,
-            provider_code: "main_source".into(),
-            plugin_id: "main_source@builtin".into(),
-            plugin_version: "0.1.0".into(),
-            contract_version: "1flowbase.data_source/v1".into(),
-            protocol: "builtin".into(),
-            display_name: "Main Source".into(),
-            source_kind: "uploaded".into(),
-            trust_level: "checksum_only".into(),
-            verification_status: domain::PluginVerificationStatus::Valid,
-            desired_state: domain::PluginDesiredState::ActiveRequested,
-            artifact_status: domain::PluginArtifactStatus::Ready,
-            runtime_status: domain::PluginRuntimeStatus::Active,
-            availability_status: domain::PluginAvailabilityStatus::Available,
-            package_path: None,
-            installed_path: "/tmp/main-source".into(),
-            checksum: None,
-            manifest_fingerprint: None,
-            signature_status: None,
-            signature_algorithm: None,
-            signing_key_id: None,
-            last_load_error: None,
-            metadata_json: serde_json::json!({}),
-            actor_user_id: actor.id,
-        },
+        workspace_id,
+        actor_user_id,
+        installation_id,
+        "main_source",
+        "Main Source",
     )
-    .await
-    .unwrap();
-    let data_source_instance_id = Uuid::now_v7();
-    sqlx::query(
-        r#"
-        insert into data_source_instances (
-            id, workspace_id, installation_id, source_code, display_name, status,
-            config_json, metadata_json, created_by
-        ) values ($1, $2, $3, 'main_source', 'Main Source', 'ready', '{}', '{}', $4)
-        "#,
-    )
-    .bind(data_source_instance_id)
-    .bind(workspace.id)
-    .bind(installation_id)
-    .bind(actor.id)
-    .execute(store.pool())
-    .await
-    .unwrap();
+    .await;
 
     let code = format!("orders_{}", Uuid::now_v7().simple());
     let input = CreateModelDefinitionInput {
-        actor_user_id: actor.id,
+        actor_user_id,
         scope_kind: DataModelScopeKind::Workspace,
-        scope_id: workspace.id,
+        scope_id: workspace_id,
         data_source_instance_id: Some(data_source_instance_id),
         code,
         title: "Orders".into(),
@@ -296,4 +330,73 @@ async fn model_definition_repository_blocks_duplicate_code_inside_same_data_sour
 
     let duplicate = ModelDefinitionRepository::create_model_definition(&store, &input).await;
     assert!(duplicate.is_err());
+}
+
+#[tokio::test]
+async fn model_definition_repository_allows_duplicate_code_across_data_sources_in_same_workspace() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let (workspace_id, actor_user_id, installation_id) =
+        seed_data_source_workspace(&store, "duplicate-code-across-sources", "main_source").await;
+    let first_data_source_id = seed_data_source_instance(
+        &store,
+        workspace_id,
+        actor_user_id,
+        installation_id,
+        "main_source",
+        "Main Source",
+    )
+    .await;
+    let second_data_source_id = seed_data_source_instance(
+        &store,
+        workspace_id,
+        actor_user_id,
+        installation_id,
+        "main_source",
+        "Secondary Source",
+    )
+    .await;
+
+    let code = format!("orders_{}", Uuid::now_v7().simple());
+    let first = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: Some(first_data_source_id),
+            code: code.clone(),
+            title: "Orders".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let second = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id,
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: Some(second_data_source_id),
+            code: code.clone(),
+            title: "Orders Copy".into(),
+            status: DataModelStatus::Published,
+            api_exposure_status: ApiExposureStatus::PublishedNotExposed,
+            protection: DataModelProtection::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(first.code, code);
+    assert_eq!(second.code, code);
+    assert_ne!(
+        first.data_source_instance_id,
+        second.data_source_instance_id
+    );
 }

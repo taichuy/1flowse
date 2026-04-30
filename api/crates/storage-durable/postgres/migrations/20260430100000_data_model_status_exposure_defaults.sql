@@ -89,6 +89,9 @@ begin
   end if;
 end $$;
 
+alter table model_definitions
+  drop constraint if exists model_definitions_scope_kind_scope_id_code_key;
+
 create unique index if not exists model_definitions_data_source_code_uidx
   on model_definitions (data_source_instance_id, code)
   where data_source_instance_id is not null;
