@@ -31,7 +31,7 @@
 - Test: `api/crates/runtime-core/src/_tests/runtime_model_registry_tests.rs`
 - Test: `api/crates/runtime-core/src/_tests/runtime_engine_tests.rs`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Cover:
 
@@ -43,7 +43,7 @@ broken model returns broken error
 api_exposure_status does not by itself enable runtime CRUD
 ```
 
-- [ ] **Step 2: Implement availability checks**
+- [x] **Step 2: Implement availability checks**
 
 Add one runtime decision function:
 
@@ -53,7 +53,7 @@ RuntimeDataModelAvailability::from_status(status)
 
 Use it before list/get/create/update/delete dispatch.
 
-- [ ] **Step 3: Run runtime-core tests**
+- [x] **Step 3: Run runtime-core tests**
 
 Run:
 
@@ -62,6 +62,15 @@ cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_model_registry
 ```
 
 Expected: pass.
+
+Verification note: Cargo accepts one test filter, so Task 1 verification was split into:
+
+```bash
+cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_model_registry_tests
+cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_engine_tests
+```
+
+Both passed after the red test run failed on the missing status-aware registry API and runtime error variants.
 
 ### Task 2: main_source Physical Schema Rules
 

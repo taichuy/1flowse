@@ -14,7 +14,9 @@ use crate::{
     capability_slots::{DefaultValueResolver, RecordValidator},
     model_metadata::ModelMetadata,
     runtime_acl::{resolve_access_scope, RuntimeDataAction},
-    runtime_model_registry::RuntimeModelRegistry,
+    runtime_model_registry::{
+        RegisteredRuntimeModel, RuntimeDataModelAvailability, RuntimeModelRegistry,
+    },
     runtime_record_repository::RuntimeRecordRepository,
 };
 
@@ -62,15 +64,33 @@ pub struct RuntimeDeleteInput {
     pub record_id: String,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum RuntimeModelError {
     #[error("runtime model unavailable: {0}")]
     Unavailable(String),
+    #[error("runtime model not published: {0}")]
+    NotPublished(String),
+    #[error("runtime model disabled: {0}")]
+    Disabled(String),
+    #[error("runtime model broken: {0}")]
+    Broken(String),
 }
 
 impl RuntimeModelError {
     pub fn unavailable(model_code: impl Into<String>) -> Self {
         Self::Unavailable(model_code.into())
+    }
+
+    pub fn not_published(model_code: impl Into<String>) -> Self {
+        Self::NotPublished(model_code.into())
+    }
+
+    pub fn disabled(model_code: impl Into<String>) -> Self {
+        Self::Disabled(model_code.into())
+    }
+
+    pub fn broken(model_code: impl Into<String>) -> Self {
+        Self::Broken(model_code.into())
     }
 }
 
@@ -107,7 +127,8 @@ impl RuntimeEngine {
     }
 
     pub async fn list_records(&self, input: RuntimeListInput) -> Result<RuntimeListResult> {
-        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
+        let metadata =
+            self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
         let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
         let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::View)?;
 
@@ -128,7 +149,8 @@ impl RuntimeEngine {
     }
 
     pub async fn get_record(&self, input: RuntimeGetInput) -> Result<Option<Value>> {
-        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
+        let metadata =
+            self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
         let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
         let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::View)?;
 
@@ -143,8 +165,9 @@ impl RuntimeEngine {
     }
 
     pub async fn create_record(&self, input: RuntimeCreateInput) -> Result<Value> {
+        let metadata =
+            self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
         resolve_access_scope(&input.actor, RuntimeDataAction::Create)?;
-        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
         let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
         let payload = self
             .default_value_resolver
@@ -160,7 +183,8 @@ impl RuntimeEngine {
     }
 
     pub async fn update_record(&self, input: RuntimeUpdateInput) -> Result<Value> {
-        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
+        let metadata =
+            self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
         let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
         let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::Edit)?;
         self.validator
@@ -180,7 +204,8 @@ impl RuntimeEngine {
     }
 
     pub async fn delete_record(&self, input: RuntimeDeleteInput) -> Result<Value> {
-        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
+        let metadata =
+            self.load_available_metadata(&input.model_code, input.actor.current_workspace_id)?;
         let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
         let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::Delete)?;
         let deleted = self
@@ -200,21 +225,51 @@ impl RuntimeEngine {
         Ok(serde_json::json!({ "deleted": true }))
     }
 
-    fn load_metadata(&self, model_code: &str, workspace_id: Uuid) -> Result<ModelMetadata> {
+    fn load_available_metadata(
+        &self,
+        model_code: &str,
+        workspace_id: Uuid,
+    ) -> Result<ModelMetadata> {
+        let runtime_model = self.load_runtime_model(model_code, workspace_id)?;
+        self.ensure_available(&runtime_model)?;
+        Ok(runtime_model.metadata)
+    }
+
+    fn load_runtime_model(
+        &self,
+        model_code: &str,
+        workspace_id: Uuid,
+    ) -> Result<RegisteredRuntimeModel> {
         self.registry
-            .get(
+            .get_runtime_model(
                 domain::DataModelScopeKind::Workspace,
                 workspace_id,
                 model_code,
             )
             .or_else(|| {
-                self.registry.get(
+                self.registry.get_runtime_model(
                     domain::DataModelScopeKind::System,
                     domain::SYSTEM_SCOPE_ID,
                     model_code,
                 )
             })
             .ok_or_else(|| RuntimeModelError::unavailable(model_code).into())
+    }
+
+    fn ensure_available(&self, runtime_model: &RegisteredRuntimeModel) -> Result<()> {
+        let model_code = &runtime_model.metadata.model_code;
+        match runtime_model.availability {
+            RuntimeDataModelAvailability::Available => Ok(()),
+            RuntimeDataModelAvailability::NotPublished => {
+                Err(RuntimeModelError::not_published(model_code).into())
+            }
+            RuntimeDataModelAvailability::Disabled => {
+                Err(RuntimeModelError::disabled(model_code).into())
+            }
+            RuntimeDataModelAvailability::Broken => {
+                Err(RuntimeModelError::broken(model_code).into())
+            }
+        }
     }
 
     fn scope_id_for(&self, metadata: &ModelMetadata, workspace_id: Uuid) -> Uuid {

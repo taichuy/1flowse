@@ -1,7 +1,7 @@
 use domain::ActorContext;
 use runtime_core::runtime_engine::{
     RuntimeCreateInput, RuntimeDeleteInput, RuntimeEngine, RuntimeFilterInput, RuntimeGetInput,
-    RuntimeListInput, RuntimeSortInput, RuntimeUpdateInput,
+    RuntimeListInput, RuntimeModelError, RuntimeSortInput, RuntimeUpdateInput,
 };
 use runtime_core::{model_metadata::ModelMetadata, resource_descriptor::ResourceDescriptor};
 use serde_json::json;
@@ -185,4 +185,167 @@ async fn runtime_engine_prefers_workspace_metadata_before_system_fallback() {
 
     assert_eq!(listed.total, 1);
     assert_eq!(listed.items[0]["title"], json!("workspace-order"));
+}
+
+#[tokio::test]
+async fn draft_model_is_visible_in_metadata_but_blocked_from_crud() {
+    let engine = runtime_engine_for_status(domain::DataModelStatus::Draft);
+    let actor = ActorContext::root(Uuid::now_v7(), Uuid::nil(), "root");
+
+    assert!(engine
+        .registry()
+        .get(
+            domain::DataModelScopeKind::Workspace,
+            Uuid::nil(),
+            "status_orders"
+        )
+        .is_some());
+
+    assert_crud_blocked_by_model_error(
+        &engine,
+        actor,
+        RuntimeModelError::not_published("status_orders"),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn disabled_model_returns_disabled_error() {
+    let engine = runtime_engine_for_status(domain::DataModelStatus::Disabled);
+    let actor = ActorContext::root(Uuid::now_v7(), Uuid::nil(), "root");
+
+    assert_crud_blocked_by_model_error(
+        &engine,
+        actor,
+        RuntimeModelError::disabled("status_orders"),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn broken_model_returns_broken_error() {
+    let engine = runtime_engine_for_status(domain::DataModelStatus::Broken);
+    let actor = ActorContext::root(Uuid::now_v7(), Uuid::nil(), "root");
+
+    assert_crud_blocked_by_model_error(&engine, actor, RuntimeModelError::broken("status_orders"))
+        .await;
+}
+
+#[tokio::test]
+async fn api_exposure_status_does_not_by_itself_enable_runtime_crud() {
+    let api_exposure_status = domain::ApiExposureStatus::ApiExposedReady;
+    let engine = runtime_engine_for_status(domain::DataModelStatus::Draft);
+    let actor = ActorContext::root(Uuid::now_v7(), Uuid::nil(), "root");
+
+    assert_eq!(
+        api_exposure_status,
+        domain::ApiExposureStatus::ApiExposedReady
+    );
+    assert_model_error(
+        engine
+            .create_record(RuntimeCreateInput {
+                actor,
+                model_code: "status_orders".into(),
+                payload: json!({ "title": "A-001" }),
+            })
+            .await
+            .unwrap_err(),
+        RuntimeModelError::not_published("status_orders"),
+    );
+}
+
+fn runtime_engine_for_status(status: domain::DataModelStatus) -> RuntimeEngine {
+    let engine = RuntimeEngine::for_tests();
+    engine
+        .registry()
+        .rebuild_with_status(vec![(status_model_metadata("status_orders"), status)]);
+    engine
+}
+
+fn status_model_metadata(model_code: &str) -> ModelMetadata {
+    ModelMetadata {
+        model_id: Uuid::now_v7(),
+        model_code: model_code.into(),
+        scope_kind: domain::DataModelScopeKind::Workspace,
+        scope_id: Uuid::nil(),
+        physical_table_name: format!("rtm_workspace_demo_{model_code}"),
+        scope_column_name: "scope_id".into(),
+        fields: vec![],
+        resource: ResourceDescriptor::runtime_model(
+            model_code,
+            domain::DataModelScopeKind::Workspace,
+        ),
+    }
+}
+
+async fn assert_crud_blocked_by_model_error(
+    engine: &RuntimeEngine,
+    actor: ActorContext,
+    expected: RuntimeModelError,
+) {
+    assert_model_error(
+        engine
+            .list_records(RuntimeListInput {
+                actor: actor.clone(),
+                model_code: "status_orders".into(),
+                filters: vec![],
+                sorts: vec![],
+                expand_relations: vec![],
+                page: 1,
+                page_size: 20,
+            })
+            .await
+            .unwrap_err(),
+        expected.clone(),
+    );
+    assert_model_error(
+        engine
+            .get_record(RuntimeGetInput {
+                actor: actor.clone(),
+                model_code: "status_orders".into(),
+                record_id: "missing".into(),
+            })
+            .await
+            .unwrap_err(),
+        expected.clone(),
+    );
+    assert_model_error(
+        engine
+            .create_record(RuntimeCreateInput {
+                actor: actor.clone(),
+                model_code: "status_orders".into(),
+                payload: json!({ "title": "A-001" }),
+            })
+            .await
+            .unwrap_err(),
+        expected.clone(),
+    );
+    assert_model_error(
+        engine
+            .update_record(RuntimeUpdateInput {
+                actor: actor.clone(),
+                model_code: "status_orders".into(),
+                record_id: "missing".into(),
+                payload: json!({ "title": "A-002" }),
+            })
+            .await
+            .unwrap_err(),
+        expected.clone(),
+    );
+    assert_model_error(
+        engine
+            .delete_record(RuntimeDeleteInput {
+                actor,
+                model_code: "status_orders".into(),
+                record_id: "missing".into(),
+            })
+            .await
+            .unwrap_err(),
+        expected,
+    );
+}
+
+fn assert_model_error(error: anyhow::Error, expected: RuntimeModelError) {
+    let actual = error.downcast_ref::<RuntimeModelError>().unwrap();
+    assert_eq!(actual, &expected);
 }
