@@ -99,11 +99,16 @@ pub struct CreateScopeDataModelGrantCommand {
 
 pub struct UpdateScopeDataModelGrantCommand {
     pub actor_user_id: Uuid,
-    pub scope_kind: DataModelScopeKind,
-    pub scope_id: Uuid,
     pub data_model_id: Uuid,
-    pub enabled: bool,
-    pub permission_profile: String,
+    pub grant_id: Uuid,
+    pub enabled: Option<bool>,
+    pub permission_profile: Option<String>,
+}
+
+pub struct DeleteScopeDataModelGrantCommand {
+    pub actor_user_id: Uuid,
+    pub data_model_id: Uuid,
+    pub grant_id: Uuid,
 }
 
 pub struct PublishedModel {
@@ -640,17 +645,26 @@ where
             .await?
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
 
-        let permission_profile =
-            domain::ScopeDataModelPermissionProfile::parse(&command.permission_profile)
-                .ok_or(ControlPlaneError::InvalidInput("permission_profile"))?;
+        let existing = self
+            .repository
+            .get_scope_data_model_grant(command.data_model_id, command.grant_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("scope_data_model_grant"))?;
+        let permission_profile = match command.permission_profile {
+            Some(permission_profile) => {
+                domain::ScopeDataModelPermissionProfile::parse(&permission_profile)
+                    .ok_or(ControlPlaneError::InvalidInput("permission_profile"))?
+            }
+            None => existing.permission_profile,
+        };
+        let enabled = command.enabled.unwrap_or(existing.enabled);
 
         let grant = self
             .repository
             .update_scope_data_model_grant(&UpdateScopeDataModelGrantInput {
-                scope_kind: command.scope_kind,
-                scope_id: command.scope_id,
                 data_model_id: command.data_model_id,
-                enabled: command.enabled,
+                grant_id: command.grant_id,
+                enabled,
                 permission_profile,
             })
             .await?;
@@ -662,6 +676,44 @@ where
                 Some(command.data_model_id),
                 "state_model.scope_grant_updated",
                 serde_json::json!({
+                    "scope_kind": grant.scope_kind.as_str(),
+                    "scope_id": grant.scope_id,
+                    "enabled": grant.enabled,
+                    "permission_profile": grant.permission_profile.as_str(),
+                }),
+            ))
+            .await?;
+
+        Ok(grant)
+    }
+
+    pub async fn delete_scope_grant(
+        &self,
+        command: DeleteScopeDataModelGrantCommand,
+    ) -> Result<domain::ScopeDataModelGrantRecord> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
+        ensure_state_model_permission(&actor, "manage")?;
+        self.repository
+            .get_model_definition(actor.current_workspace_id, command.data_model_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+
+        let grant = self
+            .repository
+            .delete_scope_data_model_grant(command.data_model_id, command.grant_id)
+            .await?;
+        self.repository
+            .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
+                Some(command.actor_user_id),
+                "state_model",
+                Some(command.data_model_id),
+                "state_model.scope_grant_deleted",
+                serde_json::json!({
+                    "grant_id": grant.id,
                     "scope_kind": grant.scope_kind.as_str(),
                     "scope_id": grant.scope_id,
                     "enabled": grant.enabled,
@@ -726,13 +778,7 @@ where
 
         let readiness = self.api_exposure_readiness(model).await?;
         if !readiness.has_active_api_key {
-            return Ok(match model.api_exposure_status {
-                domain::ApiExposureStatus::ApiExposedReady
-                | domain::ApiExposureStatus::ApiExposedNoPermission => {
-                    domain::ApiExposureStatus::ApiExposedNoPermission
-                }
-                _ => domain::ApiExposureStatus::PublishedNotExposed,
-            });
+            return Ok(domain::ApiExposureStatus::PublishedNotExposed);
         }
         if readiness.has_ready_path {
             return Ok(domain::ApiExposureStatus::ApiExposedReady);
@@ -1109,17 +1155,42 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
             .filter(|model| matches!(model.scope_kind, DataModelScopeKind::System))
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
 
-        Ok(domain::ScopeDataModelGrantRecord {
-            id: Uuid::now_v7(),
-            scope_kind: input.scope_kind,
-            scope_id: input.scope_id,
-            data_model_id: input.data_model_id,
-            enabled: input.enabled,
-            permission_profile: input.permission_profile,
-            created_by: None,
-            created_at: time::OffsetDateTime::now_utc(),
-            updated_at: time::OffsetDateTime::now_utc(),
-        })
+        let mut grants = self.grants.lock().expect("in-memory grant lock poisoned");
+        let grant = grants
+            .iter_mut()
+            .find(|grant| grant.id == input.grant_id && grant.data_model_id == input.data_model_id)
+            .ok_or(ControlPlaneError::NotFound("scope_data_model_grant"))?;
+        grant.enabled = input.enabled;
+        grant.permission_profile = input.permission_profile;
+        grant.updated_at = time::OffsetDateTime::now_utc();
+        Ok(grant.clone())
+    }
+
+    async fn get_scope_data_model_grant(
+        &self,
+        data_model_id: Uuid,
+        grant_id: Uuid,
+    ) -> Result<Option<domain::ScopeDataModelGrantRecord>> {
+        Ok(self
+            .grants
+            .lock()
+            .expect("in-memory grant lock poisoned")
+            .iter()
+            .find(|grant| grant.id == grant_id && grant.data_model_id == data_model_id)
+            .cloned())
+    }
+
+    async fn delete_scope_data_model_grant(
+        &self,
+        data_model_id: Uuid,
+        grant_id: Uuid,
+    ) -> Result<domain::ScopeDataModelGrantRecord> {
+        let mut grants = self.grants.lock().expect("in-memory grant lock poisoned");
+        let index = grants
+            .iter()
+            .position(|grant| grant.id == grant_id && grant.data_model_id == data_model_id)
+            .ok_or(ControlPlaneError::NotFound("scope_data_model_grant"))?;
+        Ok(grants.remove(index))
     }
 
     async fn list_scope_data_model_grants(

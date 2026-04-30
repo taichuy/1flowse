@@ -42,9 +42,8 @@ pub struct CreateScopeDataModelGrantInput {
 
 #[derive(Debug, Clone)]
 pub struct UpdateScopeDataModelGrantInput {
-    pub scope_kind: DataModelScopeKind,
-    pub scope_id: Uuid,
     pub data_model_id: Uuid,
+    pub grant_id: Uuid,
     pub enabled: bool,
     pub permission_profile: domain::ScopeDataModelPermissionProfile,
 }
@@ -173,6 +172,20 @@ pub trait ModelDefinitionRepository: Send + Sync {
         _input: &UpdateScopeDataModelGrantInput,
     ) -> anyhow::Result<domain::ScopeDataModelGrantRecord> {
         anyhow::bail!("update_scope_data_model_grant is not implemented")
+    }
+    async fn get_scope_data_model_grant(
+        &self,
+        _data_model_id: Uuid,
+        _grant_id: Uuid,
+    ) -> anyhow::Result<Option<domain::ScopeDataModelGrantRecord>> {
+        anyhow::bail!("get_scope_data_model_grant is not implemented")
+    }
+    async fn delete_scope_data_model_grant(
+        &self,
+        _data_model_id: Uuid,
+        _grant_id: Uuid,
+    ) -> anyhow::Result<domain::ScopeDataModelGrantRecord> {
+        anyhow::bail!("delete_scope_data_model_grant is not implemented")
     }
     async fn list_scope_data_model_grants(
         &self,

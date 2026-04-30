@@ -401,9 +401,8 @@ async fn model_definition_repository_rejects_scope_grant_update_for_workspace_mo
     let updated = ModelDefinitionRepository::update_scope_data_model_grant(
         &store,
         &UpdateScopeDataModelGrantInput {
-            scope_kind: DataModelScopeKind::Workspace,
-            scope_id: workspace_id,
             data_model_id: workspace_model.id,
+            grant_id: Uuid::now_v7(),
             enabled: false,
             permission_profile: ScopeDataModelPermissionProfile::ScopeAll,
         },

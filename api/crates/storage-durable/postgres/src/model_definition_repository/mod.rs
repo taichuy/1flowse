@@ -850,12 +850,11 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
         let row = sqlx::query(
             r#"
             update scope_data_model_grants
-            set enabled = $4,
-                permission_profile = $5,
+            set enabled = $3,
+                permission_profile = $4,
                 updated_at = now()
-            where scope_kind = $1
-              and scope_id = $2
-              and data_model_id = $3
+            where data_model_id = $1
+              and id = $2
             returning
                 id,
                 scope_kind,
@@ -868,11 +867,71 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                 updated_at
             "#,
         )
-        .bind(input.scope_kind.as_str())
-        .bind(input.scope_id)
         .bind(input.data_model_id)
+        .bind(input.grant_id)
         .bind(input.enabled)
         .bind(input.permission_profile.as_str())
+        .fetch_optional(self.pool())
+        .await?
+        .ok_or(ControlPlaneError::NotFound("scope_data_model_grant"))?;
+
+        map_scope_data_model_grant(row)
+    }
+
+    async fn get_scope_data_model_grant(
+        &self,
+        data_model_id: Uuid,
+        grant_id: Uuid,
+    ) -> Result<Option<domain::ScopeDataModelGrantRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                id,
+                scope_kind,
+                scope_id,
+                data_model_id,
+                enabled,
+                permission_profile,
+                created_by,
+                created_at,
+                updated_at
+            from scope_data_model_grants
+            where data_model_id = $1
+              and id = $2
+            "#,
+        )
+        .bind(data_model_id)
+        .bind(grant_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_scope_data_model_grant).transpose()
+    }
+
+    async fn delete_scope_data_model_grant(
+        &self,
+        data_model_id: Uuid,
+        grant_id: Uuid,
+    ) -> Result<domain::ScopeDataModelGrantRecord> {
+        let row = sqlx::query(
+            r#"
+            delete from scope_data_model_grants
+            where data_model_id = $1
+              and id = $2
+            returning
+                id,
+                scope_kind,
+                scope_id,
+                data_model_id,
+                enabled,
+                permission_profile,
+                created_by,
+                created_at,
+                updated_at
+            "#,
+        )
+        .bind(data_model_id)
+        .bind(grant_id)
         .fetch_optional(self.pool())
         .await?
         .ok_or(ControlPlaneError::NotFound("scope_data_model_grant"))?;

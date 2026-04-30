@@ -188,7 +188,7 @@ API Key runtime access denied
 API Key runtime write success/failure
 ```
 
-Scope grant create already had audit payload; update service path now emits audit and is tested. No delete route/service path exists in this slice, so no delete action was added.
+Scope grant create, update, and delete now all have production service/repository paths, console routes, and audit events.
 
 - [x] **Step 4: Run tests**
 
@@ -211,6 +211,23 @@ Task 3 validation record, 2026-04-30:
   - `cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment`
   - `cargo check --manifest-path api/Cargo.toml -p api-server`
   - `git diff --check`
+
+Task 3 spec review fix, 2026-04-30:
+
+- Fixed no-key exposure calculation: published Data Models with stored raw `api_exposed_ready` or `api_exposed_no_permission` now return computed `published_not_exposed` when there is no active API Key.
+- Added production scope grant lifecycle routes:
+  - `POST /api/console/models/{id}/scope-grants`
+  - `PATCH /api/console/models/{id}/scope-grants/{grant_id}`
+  - `DELETE /api/console/models/{id}/scope-grants/{grant_id}`
+- Scope grant update/delete now validate `state_model.manage`, visible target model, and grant-to-model ownership through service and repository paths, then write `state_model.scope_grant_updated` / `state_model.scope_grant_deleted` audit events.
+- OpenAPI now registers the scope grant routes and DTO schemas; `openapi_alignment` covers the new paths.
+- RED confirmed:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests` failed because `DeleteScopeDataModelGrantCommand`, grant-id repository update, and delete repository path were missing.
+  - `cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes` failed because scope grant production routes were missing and, after route implementation, system API Key denied audit attempted to write `SYSTEM_SCOPE_ID` as a workspace FK.
+- GREEN confirmed:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment`
 
 ### Task 4: Plan C Verification And Commit
 

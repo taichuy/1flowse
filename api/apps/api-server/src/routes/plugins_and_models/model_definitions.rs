@@ -7,9 +7,10 @@ use axum::{
     Json, Router,
 };
 use control_plane::model_definition::{
-    AddModelFieldCommand, CreateModelDefinitionCommand, DeleteModelDefinitionCommand,
-    DeleteModelFieldCommand, ModelDefinitionService, UpdateModelDefinitionCommand,
-    UpdateModelDefinitionStatusCommand, UpdateModelFieldCommand,
+    AddModelFieldCommand, CreateModelDefinitionCommand, CreateScopeDataModelGrantCommand,
+    DeleteModelDefinitionCommand, DeleteModelFieldCommand, DeleteScopeDataModelGrantCommand,
+    ModelDefinitionService, UpdateModelDefinitionCommand, UpdateModelDefinitionStatusCommand,
+    UpdateModelFieldCommand, UpdateScopeDataModelGrantCommand,
 };
 use control_plane::runtime_registry_sync::ModelDefinitionMutationService;
 use serde::{Deserialize, Serialize};
@@ -72,6 +73,21 @@ pub struct UpdateModelFieldBody {
     pub relation_options: serde_json::Value,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateScopeGrantBody {
+    pub scope_kind: String,
+    pub scope_id: Uuid,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub permission_profile: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateScopeGrantBody {
+    pub enabled: Option<bool>,
+    pub permission_profile: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ConfirmationQuery {
     pub confirmed: Option<bool>,
@@ -118,6 +134,16 @@ pub struct DeletedResponse {
     pub deleted: bool,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ScopeGrantResponse {
+    pub id: String,
+    pub scope_kind: String,
+    pub scope_id: String,
+    pub data_model_id: String,
+    pub enabled: bool,
+    pub permission_profile: String,
+}
+
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route("/models", get(list_models).post(create_model))
@@ -130,10 +156,19 @@ pub fn router() -> Router<Arc<ApiState>> {
             "/models/:id/fields/:field_id",
             patch(update_field).delete(delete_field),
         )
+        .route("/models/:id/scope-grants", post(create_scope_grant))
+        .route(
+            "/models/:id/scope-grants/:grant_id",
+            patch(update_scope_grant).delete(delete_scope_grant),
+        )
 }
 
 fn empty_json_object() -> serde_json::Value {
     serde_json::json!({})
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn to_model_field_response(field: domain::ModelFieldRecord) -> ModelFieldResponse {
@@ -172,6 +207,17 @@ fn to_model_definition_response(model: domain::ModelDefinitionRecord) -> ModelDe
             .into_iter()
             .map(to_model_field_response)
             .collect(),
+    }
+}
+
+fn to_scope_grant_response(grant: domain::ScopeDataModelGrantRecord) -> ScopeGrantResponse {
+    ScopeGrantResponse {
+        id: grant.id.to_string(),
+        scope_kind: grant.scope_kind.as_str().to_string(),
+        scope_id: grant.scope_id.to_string(),
+        data_model_id: grant.data_model_id.to_string(),
+        enabled: grant.enabled,
+        permission_profile: grant.permission_profile.as_str().to_string(),
     }
 }
 
@@ -497,6 +543,106 @@ pub async fn delete_field(
             model_id: parse_uuid(&model_id, "model_id")?,
             field_id: parse_uuid(&field_id, "field_id")?,
             confirmed: query.confirmed.unwrap_or(false),
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(
+        serde_json::json!({ "deleted": true }),
+    )))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/models/{id}/scope-grants",
+    request_body = CreateScopeGrantBody,
+    params(("id" = String, Path, description = "Model definition id")),
+    responses((status = 201, body = ScopeGrantResponse), (status = 400, body = crate::error_response::ErrorBody), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn create_scope_grant(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(model_id): Path<String>,
+    Json(body): Json<CreateScopeGrantBody>,
+) -> Result<(StatusCode, Json<ApiSuccess<ScopeGrantResponse>>), ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+
+    let grant = ModelDefinitionService::new(state.store.clone())
+        .create_scope_grant(CreateScopeDataModelGrantCommand {
+            actor_user_id: context.user.id,
+            scope_kind: parse_scope_kind(&body.scope_kind)?,
+            scope_id: body.scope_id,
+            data_model_id: parse_uuid(&model_id, "model_id")?,
+            enabled: body.enabled,
+            permission_profile: body.permission_profile,
+        })
+        .await?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(ApiSuccess::new(to_scope_grant_response(grant))),
+    ))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/console/models/{id}/scope-grants/{grant_id}",
+    request_body = UpdateScopeGrantBody,
+    params(
+        ("id" = String, Path, description = "Model definition id"),
+        ("grant_id" = String, Path, description = "Scope grant id")
+    ),
+    responses((status = 200, body = ScopeGrantResponse), (status = 400, body = crate::error_response::ErrorBody), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn update_scope_grant(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((model_id, grant_id)): Path<(String, String)>,
+    Json(body): Json<UpdateScopeGrantBody>,
+) -> Result<Json<ApiSuccess<ScopeGrantResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    if body.enabled.is_none() && body.permission_profile.is_none() {
+        return Err(
+            control_plane::errors::ControlPlaneError::InvalidInput("scope_grant_update").into(),
+        );
+    }
+
+    let grant = ModelDefinitionService::new(state.store.clone())
+        .update_scope_grant(UpdateScopeDataModelGrantCommand {
+            actor_user_id: context.user.id,
+            data_model_id: parse_uuid(&model_id, "model_id")?,
+            grant_id: parse_uuid(&grant_id, "grant_id")?,
+            enabled: body.enabled,
+            permission_profile: body.permission_profile,
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_scope_grant_response(grant))))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/console/models/{id}/scope-grants/{grant_id}",
+    params(
+        ("id" = String, Path, description = "Model definition id"),
+        ("grant_id" = String, Path, description = "Scope grant id")
+    ),
+    responses((status = 200, body = DeletedResponse), (status = 400, body = crate::error_response::ErrorBody), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn delete_scope_grant(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((model_id, grant_id)): Path<(String, String)>,
+) -> Result<Json<ApiSuccess<serde_json::Value>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+
+    ModelDefinitionService::new(state.store.clone())
+        .delete_scope_grant(DeleteScopeDataModelGrantCommand {
+            actor_user_id: context.user.id,
+            data_model_id: parse_uuid(&model_id, "model_id")?,
+            grant_id: parse_uuid(&grant_id, "grant_id")?,
         })
         .await?;
 

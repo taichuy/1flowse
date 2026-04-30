@@ -260,10 +260,15 @@ async fn append_api_key_runtime_audit(
     };
     let model_id =
         resolve_runtime_model(state, credential.actor(), model_code).map(|model| model.model_id);
+    let workspace_id = if api_key.actor.current_workspace_id == domain::SYSTEM_SCOPE_ID {
+        None
+    } else {
+        Some(api_key.actor.current_workspace_id)
+    };
     AuthRepository::append_audit_log(
         &state.store,
         &audit_log(
-            Some(api_key.actor.current_workspace_id),
+            workspace_id,
             Some(api_key.actor.user_id),
             "state_model",
             model_id,
@@ -333,6 +338,10 @@ async fn runtime_authorization(
                     Some("data_model_scope_not_granted"),
                 )
                 .await?;
+                return Err(control_plane::errors::ControlPlaneError::PermissionDenied(
+                    "data_model_scope_not_granted",
+                )
+                .into());
             }
             grant
         }

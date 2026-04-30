@@ -1,12 +1,12 @@
 use control_plane::model_definition::{
     AddModelFieldCommand, CreateModelDefinitionCommand, DeleteModelDefinitionCommand,
-    InMemoryModelDefinitionRepository, ModelDefinitionService, UpdateModelDefinitionStatusCommand,
-    UpdateScopeDataModelGrantCommand,
+    DeleteScopeDataModelGrantCommand, InMemoryModelDefinitionRepository, ModelDefinitionService,
+    UpdateModelDefinitionStatusCommand, UpdateScopeDataModelGrantCommand,
 };
 use control_plane::ports::{
     AddModelFieldInput, ApiKeyDataModelReadinessRecord, CreateModelDefinitionInput,
     CreateScopeDataModelGrantInput, ModelDefinitionRepository, UpdateModelDefinitionInput,
-    UpdateModelDefinitionStatusInput, UpdateModelFieldInput,
+    UpdateModelDefinitionStatusInput, UpdateModelFieldInput, UpdateScopeDataModelGrantInput,
 };
 use domain::{
     ActorContext, ApiExposureStatus, AuditLogRecord, DataModelProtection, DataModelScopeKind,
@@ -26,6 +26,7 @@ struct ScopedModelDefinitionRepository {
     models: Arc<Mutex<HashMap<Uuid, ModelDefinitionRecord>>>,
     data_source_defaults: Arc<Mutex<HashMap<(Uuid, Uuid), DataSourceDefaults>>>,
     grants: Arc<Mutex<Vec<ScopeDataModelGrantRecord>>>,
+    audit_logs: Arc<Mutex<Vec<AuditLogRecord>>>,
 }
 
 impl ScopedModelDefinitionRepository {
@@ -35,6 +36,7 @@ impl ScopedModelDefinitionRepository {
             models: Arc::default(),
             data_source_defaults: Arc::default(),
             grants: Arc::default(),
+            audit_logs: Arc::default(),
         }
     }
 
@@ -57,6 +59,15 @@ impl ScopedModelDefinitionRepository {
             .expect("data source defaults lock poisoned")
             .insert((workspace_id, data_source_instance_id), defaults);
         self
+    }
+
+    fn audit_events(&self) -> Vec<String> {
+        self.audit_logs
+            .lock()
+            .expect("audit log lock poisoned")
+            .iter()
+            .map(|event| event.event_code.clone())
+            .collect()
     }
 }
 
@@ -231,6 +242,38 @@ impl ModelDefinitionRepository for ScopedModelDefinitionRepository {
         Ok(grant)
     }
 
+    async fn update_scope_data_model_grant(
+        &self,
+        input: &UpdateScopeDataModelGrantInput,
+    ) -> anyhow::Result<ScopeDataModelGrantRecord> {
+        let mut grants = self.grants.lock().expect("grant lock poisoned");
+        let grant = grants
+            .iter_mut()
+            .find(|grant| grant.id == input.grant_id && grant.data_model_id == input.data_model_id)
+            .ok_or(control_plane::errors::ControlPlaneError::NotFound(
+                "scope_data_model_grant",
+            ))?;
+        grant.enabled = input.enabled;
+        grant.permission_profile = input.permission_profile;
+        grant.updated_at = time::OffsetDateTime::now_utc();
+        Ok(grant.clone())
+    }
+
+    async fn delete_scope_data_model_grant(
+        &self,
+        data_model_id: Uuid,
+        grant_id: Uuid,
+    ) -> anyhow::Result<ScopeDataModelGrantRecord> {
+        let mut grants = self.grants.lock().expect("grant lock poisoned");
+        let index = grants
+            .iter()
+            .position(|grant| grant.id == grant_id && grant.data_model_id == data_model_id)
+            .ok_or(control_plane::errors::ControlPlaneError::NotFound(
+                "scope_data_model_grant",
+            ))?;
+        Ok(grants.remove(index))
+    }
+
     async fn list_scope_data_model_grants(
         &self,
         scope_kind: DataModelScopeKind,
@@ -246,7 +289,11 @@ impl ModelDefinitionRepository for ScopedModelDefinitionRepository {
             .collect())
     }
 
-    async fn append_audit_log(&self, _event: &AuditLogRecord) -> anyhow::Result<()> {
+    async fn append_audit_log(&self, event: &AuditLogRecord) -> anyhow::Result<()> {
+        self.audit_logs
+            .lock()
+            .expect("audit log lock poisoned")
+            .push(event.clone());
         Ok(())
     }
 }
@@ -543,7 +590,7 @@ async fn update_model_status_forces_draft_exposure_and_downgrades_direct_ready()
 
     assert_eq!(
         direct_ready.api_exposure_status,
-        ApiExposureStatus::ApiExposedNoPermission
+        ApiExposureStatus::PublishedNotExposed
     );
 }
 
@@ -575,8 +622,34 @@ async fn update_model_status_downgrades_raw_ready_without_readiness_facts() {
     assert_eq!(updated.status, DataModelStatus::Published);
     assert_eq!(
         updated.api_exposure_status,
-        ApiExposureStatus::ApiExposedNoPermission
+        ApiExposureStatus::PublishedNotExposed
     );
+}
+
+#[tokio::test]
+async fn get_model_maps_stored_ready_or_no_permission_without_api_key_to_not_exposed() {
+    let actor_user_id = Uuid::now_v7();
+    let workspace_id = Uuid::now_v7();
+    for stored_status in [
+        ApiExposureStatus::ApiExposedReady,
+        ApiExposureStatus::ApiExposedNoPermission,
+    ] {
+        let model_id = Uuid::now_v7();
+        let repository =
+            ScopedModelDefinitionRepository::new(actor_in_workspace(actor_user_id, workspace_id))
+                .with_model(ModelDefinitionRecord {
+                    api_exposure_status: stored_status,
+                    ..model_in_workspace(model_id, workspace_id)
+                });
+        let service = ModelDefinitionService::new(repository);
+
+        let model = service.get_model(actor_user_id, model_id).await.unwrap();
+
+        assert_eq!(
+            model.api_exposure_status,
+            ApiExposureStatus::PublishedNotExposed
+        );
+    }
 }
 
 #[tokio::test]
@@ -659,10 +732,23 @@ async fn update_model_status_audits_effective_api_exposure_transition() {
             data_source_instance_id: None,
             code: "transition_audit_orders".into(),
             title: "Transition Audit Orders".into(),
-            status: None,
+            status: Some(DataModelStatus::Draft),
         })
         .await
         .unwrap();
+    repository.add_api_key_readiness(ApiKeyDataModelReadinessRecord {
+        api_key_id: Uuid::now_v7(),
+        data_model_id: created.id,
+        scope_kind: DataModelScopeKind::Workspace,
+        scope_id: Uuid::nil(),
+        key_enabled: true,
+        expires_at: None,
+        allow_list: true,
+        allow_get: false,
+        allow_create: false,
+        allow_update: false,
+        allow_delete: false,
+    });
 
     service
         .update_model_status(UpdateModelDefinitionStatusCommand {
@@ -694,15 +780,27 @@ async fn update_scope_grant_records_audit_event() {
         })
         .await
         .unwrap();
+    let grant = service
+        .create_scope_grant(
+            control_plane::model_definition::CreateScopeDataModelGrantCommand {
+                actor_user_id: Uuid::nil(),
+                scope_kind: DataModelScopeKind::System,
+                scope_id: SYSTEM_SCOPE_ID,
+                data_model_id: created.id,
+                enabled: true,
+                permission_profile: "scope_all".into(),
+            },
+        )
+        .await
+        .unwrap();
 
     service
         .update_scope_grant(UpdateScopeDataModelGrantCommand {
             actor_user_id: Uuid::nil(),
-            scope_kind: DataModelScopeKind::Workspace,
-            scope_id: Uuid::nil(),
             data_model_id: created.id,
-            enabled: false,
-            permission_profile: "owner".into(),
+            grant_id: grant.id,
+            enabled: Some(false),
+            permission_profile: Some("owner".into()),
         })
         .await
         .unwrap();
@@ -710,6 +808,104 @@ async fn update_scope_grant_records_audit_event() {
     assert!(repository
         .audit_events()
         .contains(&"state_model.scope_grant_updated".to_string()));
+}
+
+#[tokio::test]
+async fn delete_scope_grant_records_audit_event() {
+    let repository = InMemoryModelDefinitionRepository::default();
+    let service = ModelDefinitionService::new(repository.clone());
+    let created = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
+            code: "delete_scope_grant_audit_orders".into(),
+            title: "Delete Scope Grant Audit Orders".into(),
+            status: None,
+        })
+        .await
+        .unwrap();
+    let grant = service
+        .create_scope_grant(
+            control_plane::model_definition::CreateScopeDataModelGrantCommand {
+                actor_user_id: Uuid::nil(),
+                scope_kind: DataModelScopeKind::System,
+                scope_id: SYSTEM_SCOPE_ID,
+                data_model_id: created.id,
+                enabled: true,
+                permission_profile: "scope_all".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+    service
+        .delete_scope_grant(DeleteScopeDataModelGrantCommand {
+            actor_user_id: Uuid::nil(),
+            data_model_id: created.id,
+            grant_id: grant.id,
+        })
+        .await
+        .unwrap();
+
+    assert!(repository
+        .audit_events()
+        .contains(&"state_model.scope_grant_deleted".to_string()));
+}
+
+#[tokio::test]
+async fn delete_scope_grant_rejects_invisible_model_and_wrong_model_grant_pair() {
+    let actor_user_id = Uuid::now_v7();
+    let actor_workspace_id = Uuid::now_v7();
+    let foreign_workspace_id = Uuid::now_v7();
+    let foreign_model_id = Uuid::now_v7();
+    let grant_model_id = Uuid::now_v7();
+    let wrong_model_id = Uuid::now_v7();
+    let repository =
+        ScopedModelDefinitionRepository::new(actor_in_workspace(actor_user_id, actor_workspace_id))
+            .with_model(model_in_workspace(foreign_model_id, foreign_workspace_id))
+            .with_model(model_in_workspace(grant_model_id, actor_workspace_id))
+            .with_model(model_in_workspace(wrong_model_id, actor_workspace_id));
+    let service = ModelDefinitionService::new(repository.clone());
+    let grant = service
+        .create_scope_grant(
+            control_plane::model_definition::CreateScopeDataModelGrantCommand {
+                actor_user_id,
+                scope_kind: DataModelScopeKind::Workspace,
+                scope_id: actor_workspace_id,
+                data_model_id: grant_model_id,
+                enabled: true,
+                permission_profile: "scope_all".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+    let invisible_error = service
+        .delete_scope_grant(DeleteScopeDataModelGrantCommand {
+            actor_user_id,
+            data_model_id: foreign_model_id,
+            grant_id: grant.id,
+        })
+        .await
+        .unwrap_err();
+    assert!(invisible_error.to_string().contains("model_definition"));
+
+    let wrong_pair_error = service
+        .delete_scope_grant(DeleteScopeDataModelGrantCommand {
+            actor_user_id,
+            data_model_id: wrong_model_id,
+            grant_id: grant.id,
+        })
+        .await
+        .unwrap_err();
+    assert!(wrong_pair_error
+        .to_string()
+        .contains("scope_data_model_grant"));
+
+    assert!(!repository
+        .audit_events()
+        .contains(&"state_model.scope_grant_deleted".to_string()));
 }
 
 #[tokio::test]
