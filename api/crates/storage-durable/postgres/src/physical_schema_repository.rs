@@ -1,6 +1,15 @@
 use anyhow::{anyhow, Result};
 use sqlx::{Postgres, Transaction};
 
+const PLATFORM_RUNTIME_COLUMNS: &[&str] = &[
+    "id",
+    "scope_id",
+    "created_by",
+    "updated_by",
+    "created_at",
+    "updated_at",
+];
+
 pub fn sanitize_identifier_fragment(value: &str) -> String {
     value
         .chars()
@@ -49,6 +58,7 @@ pub async fn create_runtime_model_table(
     );
 
     sqlx::query(&statement).execute(&mut **tx).await?;
+    create_runtime_scope_indexes(tx, model).await?;
     Ok(())
 }
 
@@ -159,12 +169,21 @@ pub async fn drop_runtime_column(
     table_name: &str,
     column_name: &str,
 ) -> Result<()> {
+    ensure_dynamic_runtime_column(column_name)?;
     let quoted_table_name = quote_identifier(table_name)?;
     let quoted_column_name = quote_identifier(column_name)?;
     let statement = format!(
         "alter table {quoted_table_name} drop column if exists {quoted_column_name} cascade"
     );
     sqlx::query(&statement).execute(&mut **tx).await?;
+    Ok(())
+}
+
+fn ensure_dynamic_runtime_column(column_name: &str) -> Result<()> {
+    if PLATFORM_RUNTIME_COLUMNS.contains(&column_name) {
+        return Err(anyhow!("cannot drop platform runtime column"));
+    }
+
     Ok(())
 }
 
@@ -182,6 +201,27 @@ fn quote_identifier(value: &str) -> Result<String> {
 fn constraint_name(prefix: &str, id: uuid::Uuid) -> String {
     let simple = id.simple().to_string();
     format!("{prefix}_{}", &simple[..16])
+}
+
+async fn create_runtime_scope_indexes(
+    tx: &mut Transaction<'_, Postgres>,
+    model: &domain::ModelDefinitionRecord,
+) -> Result<()> {
+    let table_name = quote_identifier(&model.physical_table_name)?;
+    let scope_created_at_index = quote_identifier(&constraint_name("idx_scope_created", model.id))?;
+    let scope_created_by_index = quote_identifier(&constraint_name("idx_scope_creator", model.id))?;
+
+    sqlx::query(&format!(
+        "create index {scope_created_at_index} on {table_name} (scope_id, created_at)"
+    ))
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(&format!(
+        "create index {scope_created_by_index} on {table_name} (scope_id, created_by)"
+    ))
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 async fn maybe_create_unique_index(

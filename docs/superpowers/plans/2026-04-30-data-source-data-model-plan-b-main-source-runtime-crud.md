@@ -96,7 +96,7 @@ The red run failed because `storage-postgres` expanded a published parent model'
 - Modify: `api/crates/storage-durable/postgres/src/physical_schema_repository.rs`
 - Test: `api/crates/storage-durable/postgres/src/_tests/physical_schema_repository_tests.rs`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Cover:
 
@@ -107,11 +107,11 @@ physical table name and physical column name remain immutable
 field delete drops only allowed dynamic columns
 ```
 
-- [ ] **Step 2: Implement missing indexes and guards**
+- [x] **Step 2: Implement missing indexes and guards**
 
 Keep `scope_id` as the only physical scope column. Do not add `workspace_id`, `team_id`, or `app_id`.
 
-- [ ] **Step 3: Run storage tests**
+- [x] **Step 3: Run storage tests**
 
 Run:
 
@@ -120,6 +120,21 @@ cargo test --manifest-path api/Cargo.toml -p storage-postgres physical_schema_re
 ```
 
 Expected: pass.
+
+Verification notes:
+
+```bash
+cargo test --manifest-path api/Cargo.toml -p storage-postgres physical_schema_repository_tests
+```
+
+Red run failed as expected: `create_main_source_table_adds_platform_columns_and_scope_indexes` failed on missing `(scope_id, created_at)` index, and `delete_model_field_drops_dynamic_columns_but_rejects_platform_columns` failed because deleting a field mapped to `created_at` was not rejected.
+
+```bash
+cargo fmt --manifest-path api/Cargo.toml --all
+cargo test --manifest-path api/Cargo.toml -p storage-postgres physical_schema_repository_tests
+```
+
+Final run passed: 7 passed, 0 failed.
 
 ### Task 3: API Route Behavior
 
