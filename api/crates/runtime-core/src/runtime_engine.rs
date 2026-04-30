@@ -94,6 +94,22 @@ impl RuntimeModelError {
     }
 }
 
+pub fn ensure_runtime_model_available(
+    model_code: &str,
+    availability: RuntimeDataModelAvailability,
+) -> Result<()> {
+    match availability {
+        RuntimeDataModelAvailability::Available => Ok(()),
+        RuntimeDataModelAvailability::NotPublished => {
+            Err(RuntimeModelError::not_published(model_code).into())
+        }
+        RuntimeDataModelAvailability::Disabled => {
+            Err(RuntimeModelError::disabled(model_code).into())
+        }
+        RuntimeDataModelAvailability::Broken => Err(RuntimeModelError::broken(model_code).into()),
+    }
+}
+
 #[derive(Clone)]
 pub struct RuntimeEngine {
     default_value_resolver: Arc<dyn DefaultValueResolver>,
@@ -257,19 +273,10 @@ impl RuntimeEngine {
     }
 
     fn ensure_available(&self, runtime_model: &RegisteredRuntimeModel) -> Result<()> {
-        let model_code = &runtime_model.metadata.model_code;
-        match runtime_model.availability {
-            RuntimeDataModelAvailability::Available => Ok(()),
-            RuntimeDataModelAvailability::NotPublished => {
-                Err(RuntimeModelError::not_published(model_code).into())
-            }
-            RuntimeDataModelAvailability::Disabled => {
-                Err(RuntimeModelError::disabled(model_code).into())
-            }
-            RuntimeDataModelAvailability::Broken => {
-                Err(RuntimeModelError::broken(model_code).into())
-            }
-        }
+        ensure_runtime_model_available(
+            &runtime_model.metadata.model_code,
+            runtime_model.availability,
+        )
     }
 
     fn scope_id_for(&self, metadata: &ModelMetadata, workspace_id: Uuid) -> Uuid {

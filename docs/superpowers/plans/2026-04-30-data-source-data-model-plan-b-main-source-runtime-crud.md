@@ -82,6 +82,14 @@ cargo test --manifest-path api/Cargo.toml -p storage-postgres runtime_registry_h
 
 The first red run failed because `ModelMetadata` had no `status` field. The fix makes `ModelMetadata` carry `DataModelStatus`, has `storage-postgres` preserve it in `list_runtime_model_metadata()`, and makes the production `RuntimeModelRegistry::rebuild(Vec<ModelMetadata>)` / `upsert(ModelMetadata)` derive runtime availability from `metadata.status` instead of defaulting every model to `Available`.
 
+Plan B Task 1 relation expansion gap fix:
+
+```bash
+cargo test --manifest-path api/Cargo.toml -p storage-postgres runtime_record_repository_blocks_expanding_draft_relation_targets
+```
+
+The red run failed because `storage-postgres` expanded a published parent model's relation to a draft target model and returned the target record data. The fix reuses the runtime-core availability gate for relation target metadata by deriving `RuntimeDataModelAvailability::from_status(target_metadata.status)` before reading the target table, so draft / disabled / broken relation targets return controlled `RuntimeModelError` values instead of being expanded.
+
 ### Task 2: main_source Physical Schema Rules
 
 **Files:**

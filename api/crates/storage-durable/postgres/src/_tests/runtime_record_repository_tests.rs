@@ -2,6 +2,7 @@ use control_plane::ports::{
     AddModelFieldInput, CreateModelDefinitionInput, ModelDefinitionRepository,
 };
 use domain::{DataModelScopeKind, ModelFieldKind};
+use runtime_core::runtime_engine::RuntimeModelError;
 use runtime_core::runtime_record_repository::{
     RuntimeFilterInput, RuntimeListQuery, RuntimeRecordRepository, RuntimeSortInput,
 };
@@ -52,6 +53,20 @@ async fn insert_user(store: &PgControlPlaneStore, user_id: Uuid, account: &str) 
     .bind(format!("{unique_account}@example.com"))
     .bind(&unique_account)
     .bind(&unique_account)
+    .execute(store.pool())
+    .await
+    .unwrap();
+}
+
+async fn insert_workspace(store: &PgControlPlaneStore, workspace_id: Uuid) {
+    let tenant_id = root_tenant_id(store).await;
+    let workspace_name = format!("Core Workspace {}", workspace_id.simple());
+    sqlx::query(
+        "insert into workspaces (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
+    )
+    .bind(workspace_id)
+    .bind(tenant_id)
+    .bind(&workspace_name)
     .execute(store.pool())
     .await
     .unwrap();
@@ -341,6 +356,160 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
     .await
     .unwrap();
     assert!(deleted);
+}
+
+#[tokio::test]
+async fn runtime_record_repository_blocks_expanding_draft_relation_targets() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let workspace_id = Uuid::now_v7();
+    insert_workspace(&store, workspace_id).await;
+
+    let customer_model = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: None,
+            status: domain::DataModelStatus::Draft,
+            api_exposure_status: domain::ApiExposureStatus::Draft,
+            protection: domain::DataModelProtection::default(),
+            code: "draft_relation_customers".into(),
+            title: "Draft Relation Customers".into(),
+        },
+    )
+    .await
+    .unwrap();
+    let order_model = ModelDefinitionRepository::create_model_definition(
+        &store,
+        &CreateModelDefinitionInput {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            scope_id: workspace_id,
+            data_source_instance_id: None,
+            status: domain::DataModelStatus::Published,
+            api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
+            protection: domain::DataModelProtection::default(),
+            code: "draft_relation_orders".into(),
+            title: "Draft Relation Orders".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    ModelDefinitionRepository::add_model_field(
+        &store,
+        &AddModelFieldInput {
+            actor_user_id: Uuid::nil(),
+            model_id: customer_model.id,
+            code: "name".into(),
+            title: "Name".into(),
+            field_kind: ModelFieldKind::String,
+            is_required: true,
+            is_unique: false,
+            default_value: None,
+            display_interface: Some("input".into()),
+            display_options: json!({}),
+            relation_target_model_id: None,
+            relation_options: json!({}),
+        },
+    )
+    .await
+    .unwrap();
+    ModelDefinitionRepository::add_model_field(
+        &store,
+        &AddModelFieldInput {
+            actor_user_id: Uuid::nil(),
+            model_id: order_model.id,
+            code: "title".into(),
+            title: "Title".into(),
+            field_kind: ModelFieldKind::String,
+            is_required: true,
+            is_unique: false,
+            default_value: None,
+            display_interface: Some("input".into()),
+            display_options: json!({}),
+            relation_target_model_id: None,
+            relation_options: json!({}),
+        },
+    )
+    .await
+    .unwrap();
+    ModelDefinitionRepository::add_model_field(
+        &store,
+        &AddModelFieldInput {
+            actor_user_id: Uuid::nil(),
+            model_id: order_model.id,
+            code: "customer".into(),
+            title: "Customer".into(),
+            field_kind: ModelFieldKind::ManyToOne,
+            is_required: true,
+            is_unique: false,
+            default_value: None,
+            display_interface: Some("select".into()),
+            display_options: json!({}),
+            relation_target_model_id: Some(customer_model.id),
+            relation_options: json!({}),
+        },
+    )
+    .await
+    .unwrap();
+
+    let metadata = store.list_runtime_model_metadata().await.unwrap();
+    let customer_metadata = metadata
+        .iter()
+        .find(|model| model.model_code == "draft_relation_customers")
+        .unwrap()
+        .clone();
+    let order_metadata = metadata
+        .iter()
+        .find(|model| model.model_code == "draft_relation_orders")
+        .unwrap()
+        .clone();
+
+    let customer = RuntimeRecordRepository::create_record(
+        &store,
+        &customer_metadata,
+        Uuid::nil(),
+        workspace_id,
+        json!({ "name": "Draft Customer" }),
+    )
+    .await
+    .unwrap();
+    let customer_id = customer["id"].as_str().unwrap().to_string();
+    RuntimeRecordRepository::create_record(
+        &store,
+        &order_metadata,
+        Uuid::nil(),
+        workspace_id,
+        json!({ "title": "Published Order", "customer": customer_id }),
+    )
+    .await
+    .unwrap();
+
+    let error = RuntimeRecordRepository::list_records(
+        &store,
+        &order_metadata,
+        RuntimeListQuery {
+            scope_id: workspace_id,
+            owner_user_id: None,
+            filters: vec![],
+            sorts: vec![],
+            expand_relations: vec!["customer".into()],
+            page: 1,
+            page_size: 20,
+        },
+    )
+    .await
+    .unwrap_err();
+
+    let model_error = error.downcast_ref::<RuntimeModelError>().unwrap();
+    assert_eq!(
+        model_error,
+        &RuntimeModelError::not_published("draft_relation_customers")
+    );
 }
 
 #[tokio::test]

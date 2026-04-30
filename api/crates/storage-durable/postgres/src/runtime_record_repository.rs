@@ -5,6 +5,8 @@ use async_trait::async_trait;
 use control_plane::ports::ModelDefinitionRepository;
 use runtime_core::{
     model_metadata::ModelMetadata,
+    runtime_engine::ensure_runtime_model_available,
+    runtime_model_registry::RuntimeDataModelAvailability,
     runtime_record_repository::{
         RuntimeFilterInput, RuntimeListQuery, RuntimeListResult, RuntimeRecordRepository,
         RuntimeSortInput,
@@ -38,6 +40,20 @@ impl PgControlPlaneStore {
             .refresh_runtime_model_health(model)
             .await?
             .map(to_runtime_model_metadata))
+    }
+
+    async fn available_relation_target_metadata(
+        &self,
+        model_id: Uuid,
+    ) -> Result<Option<ModelMetadata>> {
+        let Some(metadata) = self.runtime_model_metadata_by_id(model_id).await? else {
+            return Ok(None);
+        };
+        ensure_runtime_model_available(
+            &metadata.model_code,
+            RuntimeDataModelAvailability::from_status(metadata.status),
+        )?;
+        Ok(Some(metadata))
     }
 
     async fn refresh_runtime_model_health(
@@ -446,8 +462,9 @@ impl PgControlPlaneStore {
                     else {
                         continue;
                     };
-                    let Some(target_metadata) =
-                        self.runtime_model_metadata_by_id(target_model_id).await?
+                    let Some(target_metadata) = self
+                        .available_relation_target_metadata(target_model_id)
+                        .await?
                     else {
                         continue;
                     };
@@ -466,8 +483,9 @@ impl PgControlPlaneStore {
                     let Some(target_model_id) = field.relation_target_model_id else {
                         continue;
                     };
-                    let Some(target_metadata) =
-                        self.runtime_model_metadata_by_id(target_model_id).await?
+                    let Some(target_metadata) = self
+                        .available_relation_target_metadata(target_model_id)
+                        .await?
                     else {
                         continue;
                     };
