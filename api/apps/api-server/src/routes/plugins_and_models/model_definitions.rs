@@ -319,7 +319,7 @@ pub async fn list_models(
     post,
     path = "/api/console/models",
     request_body = CreateModelDefinitionBody,
-    responses((status = 201, body = ModelDefinitionResponse), (status = 403, body = crate::error_response::ErrorBody))
+    responses((status = 201, body = ModelDefinitionResponse), (status = 400, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody))
 )]
 pub async fn create_model(
     State(state): State<Arc<ApiState>>,

@@ -1,3 +1,4 @@
+mod external_mapping;
 mod scope_grant_acl;
 
 use crate::_tests::support::{login_and_capture_cookie, test_app, test_app_with_database_url};
@@ -510,6 +511,17 @@ async fn model_definition_routes_reject_main_source_external_mapping_keys() {
         create_with_external_resource_key.status(),
         StatusCode::BAD_REQUEST
     );
+    let error: serde_json::Value = serde_json::from_slice(
+        &to_bytes(create_with_external_resource_key.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(error["code"], json!("external_resource_key"));
+    assert_eq!(
+        error["message"],
+        json!("invalid input: external_resource_key")
+    );
 
     let create_response = app
         .clone()
@@ -564,6 +576,14 @@ async fn model_definition_routes_reject_main_source_external_mapping_keys() {
         .await
         .unwrap();
     assert_eq!(field_with_external_key.status(), StatusCode::BAD_REQUEST);
+    let error: serde_json::Value = serde_json::from_slice(
+        &to_bytes(field_with_external_key.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(error["code"], json!("external_field_key"));
+    assert_eq!(error["message"], json!("invalid input: external_field_key"));
 }
 
 #[tokio::test]

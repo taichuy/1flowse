@@ -91,6 +91,25 @@ async fn openapi_contains_runtime_and_model_detail_routes() {
 }
 
 #[tokio::test]
+async fn openapi_documents_model_mutation_bad_request_responses() {
+    let paths = openapi_paths().await;
+
+    for (route, method) in [
+        ("/api/console/models", "post"),
+        ("/api/console/models/{id}/fields", "post"),
+        ("/api/console/models/{id}/fields/{field_id}", "patch"),
+    ] {
+        assert_eq!(
+            paths[route][method]["responses"]["400"]["content"]["application/json"]["schema"]
+                ["$ref"]
+                .as_str(),
+            Some("#/components/schemas/ErrorBody"),
+            "expected {method} {route} to document 400 ErrorBody"
+        );
+    }
+}
+
+#[tokio::test]
 async fn openapi_contains_api_key_create_schemas() {
     let response = app()
         .oneshot(
