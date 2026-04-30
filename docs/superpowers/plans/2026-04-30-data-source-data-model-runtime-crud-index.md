@@ -26,7 +26,7 @@ Related completed design work:
    Adds Data Model status, API exposure status, data source defaults, protected-model metadata, and scope grant persistence.
 2. [x] [Plan B: main_source Runtime CRUD](./2026-04-30-data-source-data-model-plan-b-main-source-runtime-crud.md)
    Makes `main_source` create system-owned dynamic tables, enforces status gates, and keeps runtime CRUD scoped through `DEFAULT_SCOPE_ID`.
-3. [ ] [Plan C: Permission And API Exposure](./2026-04-30-data-source-data-model-plan-c-permission-api-exposure.md)
+3. [x] [Plan C: Permission And API Exposure](./2026-04-30-data-source-data-model-plan-c-permission-api-exposure.md)
    Adds API Key actor support, scope grants, exposure readiness calculation, runtime permission checks, and audit events.
 4. [ ] [Plan D: External Source And Secret Reference](./2026-04-30-data-source-data-model-plan-d-external-source-secret.md)
    Extends data-source RuntimeExtension contracts for PostgreSQL and REST CRUD, adds secret references, and blocks unsafe external exposure.

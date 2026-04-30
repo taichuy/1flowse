@@ -256,23 +256,32 @@ Task 3 code quality REQUEST_CHANGES fix, 2026-04-30:
 
 ### Task 4: Plan C Verification And Commit
 
-- [ ] **Step 1: Format**
+- [x] **Step 1: Format**
 
 ```bash
-cargo fmt --manifest-path api/Cargo.toml
+cargo fmt --manifest-path api/Cargo.toml --all --check
 ```
 
-- [ ] **Step 2: Targeted regression**
+- [x] **Step 2: Targeted regression**
 
 ```bash
 cargo test --manifest-path api/Cargo.toml -p access-control
-cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_acl_tests model_definition_service_tests
-cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes model_definition_routes auth_routes
+cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_acl_tests
+cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests
+cargo test --manifest-path api/Cargo.toml -p control-plane auth
+cargo test --manifest-path api/Cargo.toml -p api-server auth_routes
+cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes
+cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes
+cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment
+cargo test --manifest-path api/Cargo.toml -p runtime-core runtime_acl_tests
+cargo test --manifest-path api/Cargo.toml -p storage-postgres model_definition_repository_tests
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
-git add api/crates/domain api/crates/access-control api/crates/control-plane api/crates/runtime-core api/apps/api-server
-git commit -m "feat: enforce data model api exposure permissions"
+git add docs/superpowers/plans/2026-04-30-data-source-data-model-plan-c-permission-api-exposure.md docs/superpowers/plans/2026-04-30-data-source-data-model-runtime-crud-index.md
+git commit -m "docs: mark data model plan c complete"
 ```
+
+Task-scoped QA passed with `qa-evaluation`: scope grant permission profiles, API Key Bearer runtime access, action and model permission checks, owner/scope filtering, computed API exposure readiness, scope grant lifecycle audit, API Key denied/write audit, OpenAPI registration, and storage grant persistence all have direct targeted test evidence. Plan D/E external source unsafe state, Advisor, and UI behavior were intentionally left outside Plan C.
