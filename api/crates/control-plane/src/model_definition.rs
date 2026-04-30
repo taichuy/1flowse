@@ -699,6 +699,13 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
         &self,
         input: &CreateScopeDataModelGrantInput,
     ) -> Result<domain::ScopeDataModelGrantRecord> {
+        self.models
+            .lock()
+            .expect("in-memory model lock poisoned")
+            .get(&input.data_model_id)
+            .filter(|model| matches!(model.scope_kind, DataModelScopeKind::System))
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+
         Ok(domain::ScopeDataModelGrantRecord {
             id: input.grant_id,
             scope_kind: input.scope_kind,
@@ -716,6 +723,13 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
         &self,
         input: &UpdateScopeDataModelGrantInput,
     ) -> Result<domain::ScopeDataModelGrantRecord> {
+        self.models
+            .lock()
+            .expect("in-memory model lock poisoned")
+            .get(&input.data_model_id)
+            .filter(|model| matches!(model.scope_kind, DataModelScopeKind::System))
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+
         Ok(domain::ScopeDataModelGrantRecord {
             id: Uuid::now_v7(),
             scope_kind: input.scope_kind,

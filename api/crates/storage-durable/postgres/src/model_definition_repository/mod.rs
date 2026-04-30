@@ -806,7 +806,11 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
                 enabled,
                 permission_profile,
                 created_by
-            ) values ($1, $2, $3, $4, $5, $6, $7)
+            )
+            select $1, $2, $3, $4, $5, $6, $7
+            from model_definitions
+            where id = $4
+              and scope_kind = 'system'
             returning
                 id,
                 scope_kind,
@@ -845,6 +849,12 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
             where scope_kind = $1
               and scope_id = $2
               and data_model_id = $3
+              and exists (
+                  select 1
+                  from model_definitions
+                  where id = $3
+                    and scope_kind = 'system'
+              )
             returning
                 id,
                 scope_kind,
