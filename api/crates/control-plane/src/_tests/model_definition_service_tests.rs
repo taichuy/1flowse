@@ -467,6 +467,48 @@ async fn create_model_defaults_to_main_source_published_not_exposed() {
 }
 
 #[tokio::test]
+async fn api_key_readiness_treats_system_all_as_not_ready_for_non_root_runtime_actor() {
+    let repository = InMemoryModelDefinitionRepository::default();
+    let service = ModelDefinitionService::new(repository.clone());
+    let created = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::System,
+            data_source_instance_id: None,
+            code: "system_all_api_key_orders".into(),
+            title: "System All API Key Orders".into(),
+            status: None,
+        })
+        .await
+        .unwrap();
+
+    repository.replace_grant_permission_profile_for_tests(
+        created.id,
+        domain::ScopeDataModelPermissionProfile::SystemAll,
+    );
+    repository.add_api_key_readiness(ApiKeyDataModelReadinessRecord {
+        api_key_id: Uuid::now_v7(),
+        data_model_id: created.id,
+        scope_kind: DataModelScopeKind::System,
+        scope_id: SYSTEM_SCOPE_ID,
+        key_enabled: true,
+        expires_at: None,
+        allow_list: true,
+        allow_get: false,
+        allow_create: false,
+        allow_update: false,
+        allow_delete: false,
+    });
+
+    let effective = service.get_model(Uuid::nil(), created.id).await.unwrap();
+
+    assert_eq!(
+        effective.api_exposure_status,
+        ApiExposureStatus::ApiExposedNoPermission
+    );
+}
+
+#[tokio::test]
 async fn create_model_persists_explicit_draft_status_in_initial_create_path() {
     let service = ModelDefinitionService::for_tests();
 

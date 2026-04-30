@@ -51,6 +51,16 @@ fn map_runtime_error(error: anyhow::Error) -> ApiError {
     error.into()
 }
 
+fn runtime_acl_denial_reason(error: &anyhow::Error) -> Option<&'static str> {
+    if let Some(runtime_core::runtime_acl::RuntimeAclError::PermissionDenied(reason)) =
+        error.downcast_ref::<runtime_core::runtime_acl::RuntimeAclError>()
+    {
+        return Some(reason);
+    }
+
+    None
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub struct RuntimeListQueryParams {
     pub filter: Option<String>,
@@ -195,13 +205,6 @@ impl RuntimeCredential {
             Self::ApiKey(context) => &context.actor,
         }
     }
-
-    fn into_actor(self) -> domain::ActorContext {
-        match self {
-            Self::Session(context) => context.actor,
-            Self::ApiKey(context) => context.actor,
-        }
-    }
 }
 
 fn bearer_token(headers: &HeaderMap) -> Option<&str> {
@@ -284,6 +287,28 @@ async fn append_api_key_runtime_audit(
         ),
     )
     .await?;
+    Ok(())
+}
+
+async fn append_api_key_engine_acl_denied_audit(
+    state: &ApiState,
+    credential: &RuntimeCredential,
+    model_code: &str,
+    action: domain::ApiKeyDataModelAction,
+    error: &anyhow::Error,
+) -> Result<(), ApiError> {
+    if let Some(reason) = runtime_acl_denial_reason(error) {
+        append_api_key_runtime_audit(
+            state,
+            credential,
+            model_code,
+            action,
+            "state_model.api_key_runtime_access_denied",
+            Some(reason),
+        )
+        .await?;
+    }
+
     Ok(())
 }
 
@@ -384,8 +409,8 @@ pub async fn list_records(
     let result = state
         .runtime_engine
         .list_records(runtime_core::runtime_engine::RuntimeListInput {
-            actor: credential.into_actor(),
-            model_code,
+            actor: credential.actor().clone(),
+            model_code: model_code.clone(),
             scope_grant,
             filters: parse_filters(query.filter.as_deref())?,
             sorts: parse_sorts(query.sort.as_deref())?,
@@ -393,8 +418,21 @@ pub async fn list_records(
             page: query.page.unwrap_or(1),
             page_size: query.page_size.unwrap_or(20),
         })
-        .await
-        .map_err(map_runtime_error)?;
+        .await;
+    let result = match result {
+        Ok(result) => result,
+        Err(error) => {
+            append_api_key_engine_acl_denied_audit(
+                &state,
+                &credential,
+                &model_code,
+                domain::ApiKeyDataModelAction::List,
+                &error,
+            )
+            .await?;
+            return Err(map_runtime_error(error));
+        }
+    };
 
     Ok(Json(ApiSuccess::new(RuntimeListResponse {
         items: result.items,
@@ -426,16 +464,28 @@ pub async fn get_record(
     let record = state
         .runtime_engine
         .get_record(runtime_core::runtime_engine::RuntimeGetInput {
-            actor: credential.into_actor(),
-            model_code,
+            actor: credential.actor().clone(),
+            model_code: model_code.clone(),
             record_id,
             scope_grant,
         })
-        .await
-        .map_err(map_runtime_error)?
-        .ok_or(control_plane::errors::ControlPlaneError::NotFound(
+        .await;
+    let record = match record {
+        Ok(record) => record.ok_or(control_plane::errors::ControlPlaneError::NotFound(
             "runtime_record",
-        ))?;
+        ))?,
+        Err(error) => {
+            append_api_key_engine_acl_denied_audit(
+                &state,
+                &credential,
+                &model_code,
+                domain::ApiKeyDataModelAction::Get,
+                &error,
+            )
+            .await?;
+            return Err(map_runtime_error(error));
+        }
+    };
 
     Ok(Json(ApiSuccess::new(record)))
 }
@@ -486,6 +536,14 @@ pub async fn create_record(
         }
         Err(error) => {
             let reason = error.to_string();
+            append_api_key_engine_acl_denied_audit(
+                &state,
+                &credential,
+                &model_code,
+                domain::ApiKeyDataModelAction::Create,
+                &error,
+            )
+            .await?;
             append_api_key_runtime_audit(
                 &state,
                 &credential,
@@ -552,6 +610,14 @@ pub async fn update_record(
         }
         Err(error) => {
             let reason = error.to_string();
+            append_api_key_engine_acl_denied_audit(
+                &state,
+                &credential,
+                &model_code,
+                domain::ApiKeyDataModelAction::Update,
+                &error,
+            )
+            .await?;
             append_api_key_runtime_audit(
                 &state,
                 &credential,
@@ -615,6 +681,14 @@ pub async fn delete_record(
         }
         Err(error) => {
             let reason = error.to_string();
+            append_api_key_engine_acl_denied_audit(
+                &state,
+                &credential,
+                &model_code,
+                domain::ApiKeyDataModelAction::Delete,
+                &error,
+            )
+            .await?;
             append_api_key_runtime_audit(
                 &state,
                 &credential,

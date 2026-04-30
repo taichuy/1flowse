@@ -184,6 +184,22 @@ async fn set_stored_api_exposure_status(database_url: &str, model_id: &str, stat
     .unwrap();
 }
 
+async fn set_model_grant_permission_profile(database_url: &str, model_id: &str, profile: &str) {
+    let pool = sqlx::PgPool::connect(database_url).await.unwrap();
+    sqlx::query(
+        r#"
+        update scope_data_model_grants
+        set permission_profile = $2
+        where data_model_id = $1
+        "#,
+    )
+    .bind(uuid::Uuid::parse_str(model_id).unwrap())
+    .bind(profile)
+    .execute(&pool)
+    .await
+    .unwrap();
+}
+
 async fn audit_event_count(database_url: &str, event_code: &str) -> i64 {
     let pool = sqlx::PgPool::connect(database_url).await.unwrap();
     sqlx::query_scalar("select count(*) from audit_logs where event_code = $1")
@@ -1116,6 +1132,141 @@ async fn model_definition_scope_grant_routes_audit_and_update_runtime_readiness(
     );
     assert_eq!(
         audit_event_count(&database_url, "state_model.scope_grant_deleted").await,
+        1
+    );
+}
+
+#[tokio::test]
+async fn model_definition_routes_do_not_mark_system_all_api_key_path_ready() {
+    let (app, database_url) = test_app_with_database_url().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let create_model_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/models")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "scope_kind": "system",
+                        "code": "system_all_route_orders",
+                        "title": "System All Route Orders"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_model_response.status(), StatusCode::CREATED);
+    let created: serde_json::Value = serde_json::from_slice(
+        &to_bytes(create_model_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let model_id = created["data"]["id"].as_str().unwrap().to_string();
+
+    set_model_grant_permission_profile(&database_url, &model_id, "system_all").await;
+
+    let system_key_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/api-keys")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "name": "system all non-root key",
+                        "scope_kind": "system",
+                        "scope_id": domain::SYSTEM_SCOPE_ID,
+                        "permissions": [
+                            {
+                                "data_model_id": model_id,
+                                "list": true,
+                                "get": false,
+                                "create": false,
+                                "update": false,
+                                "delete": false
+                            }
+                        ]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(system_key_response.status(), StatusCode::CREATED);
+    let system_key_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(system_key_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let token = system_key_payload["data"]["token"].as_str().unwrap();
+
+    let ready_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/console/models/{model_id}"))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ready_response.status(), StatusCode::OK);
+    let ready_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(ready_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        ready_payload["data"]["api_exposure_status"],
+        json!("api_exposed_no_permission")
+    );
+
+    let runtime_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/runtime/models/system_all_route_orders/records")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let runtime_status = runtime_response.status();
+    let runtime_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(runtime_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        runtime_status,
+        StatusCode::FORBIDDEN,
+        "unexpected runtime payload: {runtime_payload}"
+    );
+    assert_eq!(
+        runtime_payload["code"],
+        json!("system_all_requires_system_actor")
+    );
+    assert_eq!(
+        audit_event_count(&database_url, "state_model.api_key_runtime_access_denied").await,
         1
     );
 }

@@ -518,6 +518,100 @@ async fn runtime_model_routes_api_key_uses_system_scope_grant() {
 }
 
 #[tokio::test]
+async fn runtime_model_routes_audit_api_key_engine_level_acl_denials() {
+    let (app, database_url) = test_app_with_database_url().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let model_code = "api_key_system_all_acl_orders";
+    let model_id = create_system_model(&app, &cookie, &csrf, model_code).await;
+    create_text_field(&app, &cookie, &csrf, &model_id, "title").await;
+    set_model_grant_permission_profile(&database_url, &model_id, "system_all").await;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/api-keys")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "name": "runtime system all denied key",
+                        "scope_kind": "system",
+                        "scope_id": domain::SYSTEM_SCOPE_ID,
+                        "permissions": [
+                            {
+                                "data_model_id": model_id,
+                                "list": true,
+                                "get": false,
+                                "create": true,
+                                "update": false,
+                                "delete": false
+                            }
+                        ]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let payload: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let token = payload["data"]["token"].as_str().unwrap();
+
+    let (list_status, list_payload) = list_records_with_api_key(&app, model_code, token).await;
+    assert_eq!(list_status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        list_payload["code"],
+        json!("system_all_requires_system_actor")
+    );
+    assert_eq!(
+        audit_event_count(&database_url, "state_model.api_key_runtime_access_denied").await,
+        1
+    );
+
+    let create_denied = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/runtime/models/{model_code}/records"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "title": "denied" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_denied.status(), StatusCode::FORBIDDEN);
+    let create_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(create_denied.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        create_payload["code"],
+        json!("system_all_requires_system_actor")
+    );
+    assert_eq!(
+        audit_event_count(&database_url, "state_model.api_key_runtime_access_denied").await,
+        2
+    );
+    assert_eq!(
+        audit_event_count(&database_url, "state_model.api_key_runtime_write_failed").await,
+        1
+    );
+    assert_eq!(
+        audit_event_count(&database_url, "state_model.api_key_runtime_write_succeeded").await,
+        0
+    );
+}
+
+#[tokio::test]
 async fn runtime_model_routes_create_fetch_update_delete_and_filter_records() {
     let (app, database_url) = test_app_with_database_url().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;

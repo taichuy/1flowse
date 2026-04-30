@@ -813,12 +813,7 @@ where
             let has_scope_filter = grants.iter().any(|grant| {
                 grant.data_model_id == model.id
                     && grant.enabled
-                    && matches!(
-                        grant.permission_profile,
-                        ScopeDataModelPermissionProfile::Owner
-                            | ScopeDataModelPermissionProfile::ScopeAll
-                            | ScopeDataModelPermissionProfile::SystemAll
-                    )
+                    && api_key_runtime_can_use_grant_profile(grant.permission_profile)
             });
             if has_scope_filter && audit_configured {
                 has_ready_path = true;
@@ -843,6 +838,15 @@ fn active_api_key_readiness(readiness: &ApiKeyDataModelReadinessRecord) -> bool 
         && readiness
             .expires_at
             .is_none_or(|expires_at| expires_at > OffsetDateTime::now_utc())
+}
+
+fn api_key_runtime_can_use_grant_profile(
+    permission_profile: ScopeDataModelPermissionProfile,
+) -> bool {
+    match permission_profile {
+        ScopeDataModelPermissionProfile::Owner | ScopeDataModelPermissionProfile::ScopeAll => true,
+        ScopeDataModelPermissionProfile::SystemAll => false,
+    }
 }
 
 #[derive(Default, Clone)]
@@ -876,6 +880,20 @@ impl InMemoryModelDefinitionRepository {
             .lock()
             .expect("in-memory api key readiness lock poisoned")
             .push(readiness);
+    }
+
+    pub fn replace_grant_permission_profile_for_tests(
+        &self,
+        data_model_id: Uuid,
+        permission_profile: domain::ScopeDataModelPermissionProfile,
+    ) {
+        let mut grants = self.grants.lock().expect("in-memory grant lock poisoned");
+        for grant in grants
+            .iter_mut()
+            .filter(|grant| grant.data_model_id == data_model_id)
+        {
+            grant.permission_profile = permission_profile;
+        }
     }
 
     pub fn audit_events(&self) -> Vec<String> {

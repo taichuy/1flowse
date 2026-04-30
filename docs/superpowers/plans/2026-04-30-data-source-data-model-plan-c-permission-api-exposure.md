@@ -229,6 +229,23 @@ Task 3 spec review fix, 2026-04-30:
   - `cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes`
   - `cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment`
 
+Task 3 spec review ACL parity fix, 2026-04-30:
+
+- Fixed API Key exposure readiness/runtime ACL parity: API Key readiness now treats persisted `system_all` grants as not ready because API Key runtime actors are non-root and runtime-core rejects `system_all_requires_system_actor`.
+- Fixed API Key engine-level ACL denial audit: read routes and write routes now emit `state_model.api_key_runtime_access_denied` when runtime-core returns `RuntimeAclError::PermissionDenied` after route authorization has passed. Write routes keep one write failure audit and do not emit success on denied failures.
+- RED confirmed:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane api_key_readiness_treats_system_all_as_not_ready_for_non_root_runtime_actor` failed because effective readiness returned `api_exposed_ready` for an API Key path backed only by `system_all`.
+  - `cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes_do_not_mark_system_all_api_key_path_ready` failed because console readiness returned `api_exposed_ready` instead of `api_exposed_no_permission`.
+  - `cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes_audit_api_key_engine_level_acl_denials` failed because engine-level API Key ACL denial emitted no `state_model.api_key_runtime_access_denied` audit event.
+- GREEN confirmed:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server runtime_model_routes`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+
 ### Task 4: Plan C Verification And Commit
 
 - [ ] **Step 1: Format**
