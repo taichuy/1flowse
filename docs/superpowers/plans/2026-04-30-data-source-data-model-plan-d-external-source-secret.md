@@ -82,6 +82,21 @@ Task 1 spec review FAIL fix validation record, 2026-04-30:
   - `git diff --check`
 - Scope note: The fix added a session/CSRF protected console rotate route using existing `external_data_source.configure.*` permission, redacted exact stored secret string values from validate output and preview rows before response/session persistence, extracted `headers[].value` and `credentials.value` into data-source secret storage, and moved rotation version increments into repository SQL atomic upsert. Task 2 schema-aware config extraction remains the planned refinement for connector-specific shapes beyond these conservative generic guards.
 
+Task 1 spec review FAIL follow-up validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests::validate_and_preview_redact_runtime_echoed_secret_values` failed because `data_source_preview_sessions.config_fingerprint` still contained the preview secret value.
+  - `cargo test --manifest-path api/Cargo.toml -p storage-postgres data_source_repository_tests::rotate_secret_increments_version_inside_repository_update -- --test-threads=1` failed to compile because `rotate_secret` only accepted secret-row input and returned only `DataSourceSecretRecord`, so the repository contract could not prove the returned instance config markers matched the secret row version.
+- Green evidence:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane data_source_service_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p storage-postgres data_source_repository_tests -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server data_sources_routes -- --test-threads=1`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server openapi_alignment -- --test-threads=1`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- QA note: Preview sessions now persist a `sha256:` fingerprint over redacted preview input, not serialized secret JSON. Secret rotation now returns a repository-owned `RotateDataSourceSecretOutput` containing both the new secret row and the instance updated in the same PostgreSQL transaction after locking the instance row; service no longer performs a separate config-marker update after rotation.
+
 ### Task 2: Data Source Plugin CRUD Contract
 
 **Files:**

@@ -248,16 +248,22 @@ async fn instance_record_returns_secret_reference_and_version_without_secret_val
 #[tokio::test]
 async fn rotate_secret_increments_version_inside_repository_update() {
     let (store, workspace, actor, installation_id) = seed_store().await;
+    let instance_id = Uuid::now_v7();
     let created = <PgControlPlaneStore as DataSourceRepository>::create_instance(
         &store,
         &CreateDataSourceInstanceInput {
-            instance_id: Uuid::now_v7(),
+            instance_id,
             workspace_id: workspace.id,
             installation_id,
             source_code: "acme_hubspot_source".into(),
             display_name: "HubSpot".into(),
             status: DataSourceInstanceStatus::Draft,
-            config_json: json!({ "client_id": "abc" }),
+            config_json: json!({
+                "access_token": {
+                    "secret_ref": domain::data_source_secret_ref(instance_id),
+                    "secret_version": 1
+                }
+            }),
             metadata_json: json!({}),
             defaults: DataSourceDefaults::default(),
             created_by: actor.id,
@@ -281,9 +287,11 @@ async fn rotate_secret_increments_version_inside_repository_update() {
     let rotated_once = <PgControlPlaneStore as DataSourceRepository>::rotate_secret(
         &store,
         &RotateDataSourceSecretInput {
+            workspace_id: workspace.id,
             data_source_instance_id: created.id,
             secret_ref: domain::data_source_secret_ref(created.id),
             secret_json: json!({ "client_secret": "rotated-once" }),
+            updated_by: actor.id,
         },
     )
     .await
@@ -291,16 +299,28 @@ async fn rotate_secret_increments_version_inside_repository_update() {
     let rotated_twice = <PgControlPlaneStore as DataSourceRepository>::rotate_secret(
         &store,
         &RotateDataSourceSecretInput {
+            workspace_id: workspace.id,
             data_source_instance_id: created.id,
             secret_ref: domain::data_source_secret_ref(created.id),
             secret_json: json!({ "client_secret": "rotated-twice" }),
+            updated_by: actor.id,
         },
     )
     .await
     .unwrap();
 
-    assert_eq!(rotated_once.secret_version, 2);
-    assert_eq!(rotated_twice.secret_version, 3);
+    assert_eq!(rotated_once.secret.secret_version, 2);
+    assert_eq!(rotated_once.instance.secret_version, Some(2));
+    assert_eq!(
+        rotated_once.instance.config_json["access_token"]["secret_version"],
+        json!(2)
+    );
+    assert_eq!(rotated_twice.secret.secret_version, 3);
+    assert_eq!(rotated_twice.instance.secret_version, Some(3));
+    assert_eq!(
+        rotated_twice.instance.config_json["access_token"]["secret_version"],
+        json!(3)
+    );
     assert_eq!(
         <PgControlPlaneStore as DataSourceRepository>::get_secret_json(&store, created.id)
             .await

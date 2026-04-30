@@ -49,9 +49,17 @@ pub struct UpsertDataSourceSecretInput {
 
 #[derive(Debug, Clone)]
 pub struct RotateDataSourceSecretInput {
+    pub workspace_id: Uuid,
     pub data_source_instance_id: Uuid,
     pub secret_ref: String,
     pub secret_json: serde_json::Value,
+    pub updated_by: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct RotateDataSourceSecretOutput {
+    pub secret: domain::DataSourceSecretRecord,
+    pub instance: domain::DataSourceInstanceRecord,
 }
 
 #[derive(Debug, Clone)]
@@ -104,7 +112,7 @@ pub trait DataSourceRepository: Send + Sync {
     async fn rotate_secret(
         &self,
         input: &RotateDataSourceSecretInput,
-    ) -> anyhow::Result<domain::DataSourceSecretRecord>;
+    ) -> anyhow::Result<RotateDataSourceSecretOutput>;
     async fn get_secret_record(
         &self,
         instance_id: Uuid,

@@ -6,6 +6,7 @@ use plugin_framework::data_source_contract::{
     DataSourcePreviewReadOutput,
 };
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
@@ -15,9 +16,8 @@ use crate::{
     ports::{
         AuthRepository, CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput,
         DataSourceRepository, DataSourceRuntimePort, PluginRepository, RotateDataSourceSecretInput,
-        UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceConfigInput,
-        UpdateDataSourceInstanceStatusInput, UpsertDataSourceCatalogCacheInput,
-        UpsertDataSourceSecretInput,
+        UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceStatusInput,
+        UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
     },
 };
 
@@ -387,23 +387,10 @@ where
         let secret = self
             .repository
             .rotate_secret(&RotateDataSourceSecretInput {
+                workspace_id: command.workspace_id,
                 data_source_instance_id: existing.id,
                 secret_ref: secret_ref.clone(),
                 secret_json,
-            })
-            .await?;
-
-        let config_json = refresh_secret_reference_versions(
-            &existing.config_json,
-            &secret_ref,
-            secret.secret_version,
-        );
-        let instance = self
-            .repository
-            .update_instance_config(&UpdateDataSourceInstanceConfigInput {
-                workspace_id: command.workspace_id,
-                instance_id: existing.id,
-                config_json,
                 updated_by: actor.user_id,
             })
             .await?;
@@ -413,17 +400,17 @@ where
                 Some(command.workspace_id),
                 Some(actor.user_id),
                 "data_source_instance",
-                Some(instance.id),
+                Some(secret.instance.id),
                 "data_source.secret_rotated",
                 json!({
                     "secret_ref": secret_ref,
-                    "secret_version": secret.secret_version,
+                    "secret_version": secret.secret.secret_version,
                 }),
             ))
             .await?;
 
         Ok(DataSourceInstanceView {
-            instance,
+            instance: secret.instance,
             catalog: None,
         })
     }
@@ -482,7 +469,7 @@ where
                 workspace_id: command.workspace_id,
                 actor_user_id: actor.user_id,
                 data_source_instance_id: Some(instance.id),
-                config_fingerprint: build_preview_fingerprint(&preview_input)?,
+                config_fingerprint: build_preview_fingerprint(&preview_input, &secret_values)?,
                 preview_json,
                 expires_at: OffsetDateTime::now_utc() + Duration::minutes(15),
             })
@@ -808,45 +795,6 @@ fn secret_reference_marker(secret_ref: &str, secret_version: i32) -> Value {
     })
 }
 
-fn refresh_secret_reference_versions(
-    value: &Value,
-    secret_ref: &str,
-    secret_version: i32,
-) -> Value {
-    match value {
-        Value::Object(object) if is_secret_reference_marker(value) => {
-            let mut updated = object.clone();
-            if updated
-                .get("secret_ref")
-                .and_then(Value::as_str)
-                .map(|value| value == secret_ref)
-                .unwrap_or(false)
-            {
-                updated.insert("secret_version".to_string(), json!(secret_version));
-            }
-            Value::Object(updated)
-        }
-        Value::Object(object) => Value::Object(
-            object
-                .iter()
-                .map(|(key, child)| {
-                    (
-                        key.clone(),
-                        refresh_secret_reference_versions(child, secret_ref, secret_version),
-                    )
-                })
-                .collect(),
-        ),
-        Value::Array(items) => Value::Array(
-            items
-                .iter()
-                .map(|item| refresh_secret_reference_versions(item, secret_ref, secret_version))
-                .collect(),
-        ),
-        _ => value.clone(),
-    }
-}
-
 fn ensure_data_source_defaults_compatible(defaults: domain::DataSourceDefaults) -> Result<()> {
     if domain::ApiExposureStatus::validate_for_status(
         defaults.data_model_status,
@@ -861,6 +809,26 @@ fn ensure_data_source_defaults_compatible(defaults: domain::DataSourceDefaults) 
     }
 }
 
-fn build_preview_fingerprint(input: &DataSourcePreviewReadInput) -> Result<String> {
-    Ok(serde_json::to_string(input)?)
+fn build_preview_fingerprint(
+    input: &DataSourcePreviewReadInput,
+    secret_values: &HashSet<String>,
+) -> Result<String> {
+    let mut sanitized = input.clone();
+    sanitized.connection.config_json =
+        redact_value(&sanitized.connection.config_json, secret_values);
+    sanitized.connection.secret_json =
+        redact_value(&sanitized.connection.secret_json, secret_values);
+    let bytes = serde_json::to_vec(&sanitized)?;
+    let digest = Sha256::digest(bytes);
+    Ok(format!("sha256:{}", to_hex(&digest)))
+}
+
+fn to_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(HEX[(byte >> 4) as usize] as char);
+        output.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    output
 }

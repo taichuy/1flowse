@@ -4,9 +4,9 @@ use control_plane::{
     errors::ControlPlaneError,
     ports::{
         CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput, DataSourceRepository,
-        RotateDataSourceSecretInput, UpdateDataSourceInstanceConfigInput,
-        UpdateDataSourceInstanceStatusInput, UpsertDataSourceCatalogCacheInput,
-        UpsertDataSourceSecretInput,
+        RotateDataSourceSecretInput, RotateDataSourceSecretOutput,
+        UpdateDataSourceInstanceConfigInput, UpdateDataSourceInstanceStatusInput,
+        UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
     },
 };
 use sqlx::Row;
@@ -95,6 +95,55 @@ fn map_preview_session(
         expires_at: row.get("expires_at"),
         created_at: row.get("created_at"),
     })
+}
+
+fn refresh_secret_reference_versions(
+    value: &serde_json::Value,
+    secret_ref: &str,
+    secret_version: i32,
+) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(object) if is_secret_reference_marker(value) => {
+            let mut updated = object.clone();
+            if updated
+                .get("secret_ref")
+                .and_then(serde_json::Value::as_str)
+                .map(|value| value == secret_ref)
+                .unwrap_or(false)
+            {
+                updated.insert(
+                    "secret_version".to_string(),
+                    serde_json::json!(secret_version),
+                );
+            }
+            serde_json::Value::Object(updated)
+        }
+        serde_json::Value::Object(object) => serde_json::Value::Object(
+            object
+                .iter()
+                .map(|(key, child)| {
+                    (
+                        key.clone(),
+                        refresh_secret_reference_versions(child, secret_ref, secret_version),
+                    )
+                })
+                .collect(),
+        ),
+        serde_json::Value::Array(items) => serde_json::Value::Array(
+            items
+                .iter()
+                .map(|item| refresh_secret_reference_versions(item, secret_ref, secret_version))
+                .collect(),
+        ),
+        _ => value.clone(),
+    }
+}
+
+fn is_secret_reference_marker(value: &serde_json::Value) -> bool {
+    value
+        .as_object()
+        .map(|object| object.contains_key("secret_ref") && object.contains_key("secret_version"))
+        .unwrap_or(false)
 }
 
 #[async_trait]
@@ -403,8 +452,26 @@ impl DataSourceRepository for PgControlPlaneStore {
     async fn rotate_secret(
         &self,
         input: &RotateDataSourceSecretInput,
-    ) -> Result<domain::DataSourceSecretRecord> {
-        let row = sqlx::query(
+    ) -> Result<RotateDataSourceSecretOutput> {
+        let mut transaction = self.pool().begin().await?;
+
+        let instance_row = sqlx::query(
+            r#"
+            select config_json
+            from data_source_instances
+            where workspace_id = $1
+              and id = $2
+            for update
+            "#,
+        )
+        .bind(input.workspace_id)
+        .bind(input.data_source_instance_id)
+        .fetch_optional(&mut *transaction)
+        .await?
+        .ok_or(ControlPlaneError::NotFound("data_source_instance"))?;
+        let config_json: serde_json::Value = instance_row.get("config_json");
+
+        let secret_row = sqlx::query(
             r#"
             insert into data_source_secrets (
                 data_source_instance_id,
@@ -427,10 +494,69 @@ impl DataSourceRepository for PgControlPlaneStore {
         )
         .bind(input.data_source_instance_id)
         .bind(&input.secret_json)
-        .fetch_one(self.pool())
+        .fetch_one(&mut *transaction)
         .await?;
+        let secret = map_secret(secret_row)?;
 
-        map_secret(row)
+        let config_json = refresh_secret_reference_versions(
+            &config_json,
+            &input.secret_ref,
+            secret.secret_version,
+        );
+        let updated_row = sqlx::query(
+            r#"
+            with updated as (
+                update data_source_instances
+                set
+                    config_json = $3,
+                    updated_at = now()
+                where workspace_id = $1
+                  and id = $2
+                returning
+                    id,
+                    workspace_id,
+                    installation_id,
+                    source_code,
+                    display_name,
+                    status,
+                    config_json,
+                    metadata_json,
+                    default_data_model_status,
+                    default_api_exposure_status,
+                    created_by,
+                    created_at,
+                    updated_at
+            )
+            select
+                updated.id,
+                updated.workspace_id,
+                updated.installation_id,
+                updated.source_code,
+                updated.display_name,
+                updated.status,
+                updated.config_json,
+                updated.metadata_json,
+                updated.default_data_model_status,
+                updated.default_api_exposure_status,
+                updated.created_by,
+                updated.created_at,
+                updated.updated_at,
+                secrets.secret_version
+            from updated
+            left join data_source_secrets secrets
+              on secrets.data_source_instance_id = updated.id
+            "#,
+        )
+        .bind(input.workspace_id)
+        .bind(input.data_source_instance_id)
+        .bind(&config_json)
+        .fetch_one(&mut *transaction)
+        .await?;
+        let instance = map_instance(updated_row)?;
+
+        transaction.commit().await?;
+
+        Ok(RotateDataSourceSecretOutput { secret, instance })
     }
 
     async fn get_secret_record(

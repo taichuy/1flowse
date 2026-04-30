@@ -20,12 +20,12 @@ use crate::{
     ports::{
         AuthRepository, CreateDataSourceInstanceInput, CreateDataSourcePreviewSessionInput,
         CreatePluginAssignmentInput, CreatePluginTaskInput, DataSourceRepository,
-        DataSourceRuntimePort, RotateDataSourceSecretInput, UpdateDataSourceDefaultsInput,
-        UpdateDataSourceInstanceConfigInput, UpdateDataSourceInstanceStatusInput,
-        UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
-        UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
-        UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
-        UpsertPluginInstallationInput,
+        DataSourceRuntimePort, RotateDataSourceSecretInput, RotateDataSourceSecretOutput,
+        UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceConfigInput,
+        UpdateDataSourceInstanceStatusInput, UpdatePluginArtifactSnapshotInput,
+        UpdatePluginDesiredStateInput, UpdatePluginRuntimeSnapshotInput,
+        UpdatePluginTaskStatusInput, UpdateProfileInput, UpsertDataSourceCatalogCacheInput,
+        UpsertDataSourceSecretInput, UpsertPluginInstallationInput,
     },
 };
 use domain::{
@@ -436,7 +436,7 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
     async fn rotate_secret(
         &self,
         input: &RotateDataSourceSecretInput,
-    ) -> Result<DataSourceSecretRecord> {
+    ) -> Result<RotateDataSourceSecretOutput> {
         let mut secret_records = self.secret_records.write().await;
         let secret_version = secret_records
             .get(&input.data_source_instance_id)
@@ -454,16 +454,22 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
             .await
             .insert(input.data_source_instance_id, input.secret_json.clone());
         secret_records.insert(input.data_source_instance_id, record.clone());
-        if let Some(instance) = self
-            .instances
-            .write()
-            .await
+        let mut instances = self.instances.write().await;
+        let instance = instances
             .get_mut(&input.data_source_instance_id)
-        {
-            instance.secret_ref = Some(record.secret_ref.clone());
-            instance.secret_version = Some(record.secret_version);
-        }
-        Ok(record)
+            .expect("instance should exist for test");
+        instance.secret_ref = Some(record.secret_ref.clone());
+        instance.secret_version = Some(record.secret_version);
+        instance.config_json = refresh_test_secret_reference_versions(
+            &instance.config_json,
+            &record.secret_ref,
+            record.secret_version,
+        );
+        instance.updated_at = OffsetDateTime::now_utc();
+        Ok(RotateDataSourceSecretOutput {
+            secret: record,
+            instance: instance.clone(),
+        })
     }
 
     async fn get_secret_record(&self, instance_id: Uuid) -> Result<Option<DataSourceSecretRecord>> {
@@ -513,6 +519,54 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
             .insert(record.id, record.clone());
         Ok(record)
     }
+}
+
+fn refresh_test_secret_reference_versions(
+    value: &Value,
+    secret_ref: &str,
+    secret_version: i32,
+) -> Value {
+    match value {
+        Value::Object(object) if is_test_secret_reference_marker(value) => {
+            let mut updated = object.clone();
+            if updated
+                .get("secret_ref")
+                .and_then(Value::as_str)
+                .map(|value| value == secret_ref)
+                .unwrap_or(false)
+            {
+                updated.insert("secret_version".to_string(), json!(secret_version));
+            }
+            Value::Object(updated)
+        }
+        Value::Object(object) => Value::Object(
+            object
+                .iter()
+                .map(|(key, child)| {
+                    (
+                        key.clone(),
+                        refresh_test_secret_reference_versions(child, secret_ref, secret_version),
+                    )
+                })
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| {
+                    refresh_test_secret_reference_versions(item, secret_ref, secret_version)
+                })
+                .collect(),
+        ),
+        _ => value.clone(),
+    }
+}
+
+fn is_test_secret_reference_marker(value: &Value) -> bool {
+    value
+        .as_object()
+        .map(|object| object.contains_key("secret_ref") && object.contains_key("secret_version"))
+        .unwrap_or(false)
 }
 
 #[derive(Clone)]
@@ -903,9 +957,15 @@ async fn sequential_secret_rotation_increments_versions_without_read_write_race_
 
     assert_eq!(rotated_once.instance.secret_version, Some(2));
     assert_eq!(rotated_twice.instance.secret_version, Some(3));
+    let secret_record = repository
+        .get_secret_record(created.instance.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(secret_record.secret_version, 3);
     assert_eq!(
         rotated_twice.instance.config_json["access_token"]["secret_version"],
-        json!(3)
+        json!(secret_record.secret_version)
     );
 }
 
@@ -952,22 +1012,22 @@ async fn validate_and_preview_redact_runtime_echoed_secret_values() {
 
     let validate_text = validated.output.to_string();
     let preview_text = serde_json::to_string(&preview.output.rows).unwrap();
+    let preview_session = repository
+        .preview_sessions
+        .read()
+        .await
+        .values()
+        .next()
+        .unwrap()
+        .clone();
     assert!(!validate_text.contains(plaintext));
     assert!(!preview_text.contains(plaintext));
+    assert!(!preview_session.config_fingerprint.contains(plaintext));
     assert!(validate_text.contains("***"));
     assert!(preview_text.contains("***"));
-    assert!(!serde_json::to_string(
-        &repository
-            .preview_sessions
-            .read()
-            .await
-            .values()
-            .next()
-            .unwrap()
-            .preview_json
-    )
-    .unwrap()
-    .contains(plaintext));
+    assert!(!serde_json::to_string(&preview_session.preview_json)
+        .unwrap()
+        .contains(plaintext));
 }
 
 #[tokio::test]
