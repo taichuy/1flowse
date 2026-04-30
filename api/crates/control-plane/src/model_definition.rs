@@ -24,6 +24,7 @@ pub struct CreateModelDefinitionCommand {
     pub actor_user_id: Uuid,
     pub scope_kind: DataModelScopeKind,
     pub data_source_instance_id: Option<Uuid>,
+    pub external_resource_key: Option<String>,
     pub code: String,
     pub title: String,
     pub status: Option<domain::DataModelStatus>,
@@ -52,6 +53,7 @@ pub struct AddModelFieldCommand {
     pub model_id: Uuid,
     pub code: String,
     pub title: String,
+    pub external_field_key: Option<String>,
     pub field_kind: domain::ModelFieldKind,
     pub is_required: bool,
     pub is_unique: bool,
@@ -246,6 +248,13 @@ where
             DataModelScopeKind::Workspace => actor.current_workspace_id,
             DataModelScopeKind::System => domain::SYSTEM_SCOPE_ID,
         };
+        let source_kind = if command.data_source_instance_id.is_some() {
+            domain::DataModelSourceKind::ExternalSource
+        } else {
+            domain::DataModelSourceKind::MainSource
+        };
+        let external_resource_key =
+            normalize_external_resource_key(source_kind, command.external_resource_key.as_deref())?;
         let defaults = match command.data_source_instance_id {
             Some(data_source_instance_id) => {
                 self.repository
@@ -257,11 +266,6 @@ where
         let status = command.status.unwrap_or(defaults.data_model_status);
         let api_exposure_status =
             normalize_api_exposure_for_status(status, defaults.api_exposure_status)?;
-        let source_kind = if command.data_source_instance_id.is_some() {
-            domain::DataModelSourceKind::ExternalSource
-        } else {
-            domain::DataModelSourceKind::MainSource
-        };
 
         let model = self
             .repository
@@ -271,7 +275,7 @@ where
                 scope_id: domain::SYSTEM_SCOPE_ID,
                 data_source_instance_id: command.data_source_instance_id,
                 source_kind,
-                external_resource_key: None,
+                external_resource_key,
                 code: command.code,
                 title: command.title,
                 status,
@@ -446,6 +450,13 @@ where
             .load_actor_context_for_user(command.actor_user_id)
             .await?;
         ensure_state_model_permission(&actor, "manage")?;
+        let model = self
+            .repository
+            .get_model_definition(actor.current_workspace_id, command.model_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        let external_field_key =
+            normalize_external_field_key(model.source_kind, command.external_field_key.as_deref())?;
 
         let field = self
             .repository
@@ -454,7 +465,7 @@ where
                 model_id: command.model_id,
                 code: command.code,
                 title: command.title,
-                external_field_key: None,
+                external_field_key,
                 field_kind: command.field_kind,
                 is_required: command.is_required,
                 is_unique: command.is_unique,
@@ -878,6 +889,46 @@ fn api_key_runtime_can_use_grant_profile(
     match permission_profile {
         ScopeDataModelPermissionProfile::Owner | ScopeDataModelPermissionProfile::ScopeAll => true,
         ScopeDataModelPermissionProfile::SystemAll => false,
+    }
+}
+
+fn normalize_external_resource_key(
+    source_kind: domain::DataModelSourceKind,
+    value: Option<&str>,
+) -> Result<Option<String>, ControlPlaneError> {
+    match source_kind {
+        domain::DataModelSourceKind::ExternalSource => value
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| Ok(Some(value.to_string())))
+            .unwrap_or_else(|| Err(ControlPlaneError::InvalidInput("external_resource_key"))),
+        domain::DataModelSourceKind::MainSource => {
+            if value.map(str::trim).is_some_and(|value| !value.is_empty()) {
+                Err(ControlPlaneError::InvalidInput("external_resource_key"))
+            } else {
+                Ok(None)
+            }
+        }
+    }
+}
+
+fn normalize_external_field_key(
+    source_kind: domain::DataModelSourceKind,
+    value: Option<&str>,
+) -> Result<Option<String>, ControlPlaneError> {
+    match source_kind {
+        domain::DataModelSourceKind::ExternalSource => value
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| Ok(Some(value.to_string())))
+            .unwrap_or_else(|| Err(ControlPlaneError::InvalidInput("external_field_key"))),
+        domain::DataModelSourceKind::MainSource => {
+            if value.map(str::trim).is_some_and(|value| !value.is_empty()) {
+                Err(ControlPlaneError::InvalidInput("external_field_key"))
+            } else {
+                Ok(None)
+            }
+        }
     }
 }
 

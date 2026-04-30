@@ -29,6 +29,8 @@ use crate::{
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateModelDefinitionBody {
     pub scope_kind: String,
+    pub data_source_instance_id: Option<String>,
+    pub external_resource_key: Option<String>,
     pub code: String,
     pub title: String,
     pub status: Option<String>,
@@ -44,6 +46,7 @@ pub struct UpdateModelDefinitionBody {
 pub struct CreateModelFieldBody {
     pub code: String,
     pub title: String,
+    pub external_field_key: Option<String>,
     pub field_kind: String,
     #[serde(default)]
     pub is_required: bool,
@@ -99,6 +102,7 @@ pub struct ModelFieldResponse {
     pub code: String,
     pub title: String,
     pub physical_column_name: String,
+    pub external_field_key: Option<String>,
     pub field_kind: String,
     pub is_required: bool,
     pub is_unique: bool,
@@ -123,6 +127,9 @@ pub struct ModelDefinitionResponse {
     pub status: String,
     pub api_exposure_status: String,
     pub runtime_availability: String,
+    pub data_source_instance_id: Option<String>,
+    pub source_kind: String,
+    pub external_resource_key: Option<String>,
     pub physical_table_name: String,
     pub acl_namespace: String,
     pub audit_namespace: String,
@@ -177,6 +184,7 @@ fn to_model_field_response(field: domain::ModelFieldRecord) -> ModelFieldRespons
         code: field.code,
         title: field.title,
         physical_column_name: field.physical_column_name,
+        external_field_key: field.external_field_key,
         field_kind: field.field_kind.as_str().to_string(),
         is_required: field.is_required,
         is_unique: field.is_unique,
@@ -199,6 +207,9 @@ fn to_model_definition_response(model: domain::ModelDefinitionRecord) -> ModelDe
         status: model.status.as_str().to_string(),
         api_exposure_status: model.api_exposure_status.as_str().to_string(),
         runtime_availability: runtime_availability_for_status(model.status).to_string(),
+        data_source_instance_id: model.data_source_instance_id.map(|id| id.to_string()),
+        source_kind: model.source_kind.as_str().to_string(),
+        external_resource_key: model.external_resource_key,
         physical_table_name: model.physical_table_name,
         acl_namespace: model.acl_namespace,
         audit_namespace: model.audit_namespace,
@@ -325,7 +336,12 @@ pub async fn create_model(
         .create_model(CreateModelDefinitionCommand {
             actor_user_id: context.user.id,
             scope_kind,
-            data_source_instance_id: None,
+            data_source_instance_id: body
+                .data_source_instance_id
+                .as_deref()
+                .map(|value| parse_uuid(value, "data_source_instance_id"))
+                .transpose()?,
+            external_resource_key: body.external_resource_key,
             code: body.code,
             title: body.title,
             status: requested_status,
@@ -460,6 +476,7 @@ pub async fn create_field(
             model_id: parse_uuid(&model_id, "model_id")?,
             code: body.code,
             title: body.title,
+            external_field_key: body.external_field_key,
             field_kind: parse_field_kind(&body.field_kind)?,
             is_required: body.is_required,
             is_unique: body.is_unique,

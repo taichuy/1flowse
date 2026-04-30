@@ -480,6 +480,93 @@ async fn model_definition_routes_manage_models_and_fields_without_publish() {
 }
 
 #[tokio::test]
+async fn model_definition_routes_reject_main_source_external_mapping_keys() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let create_with_external_resource_key = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/models")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "scope_kind": "workspace",
+                        "external_resource_key": "contacts",
+                        "code": "main_source_with_external_key",
+                        "title": "Main Source With External Key"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        create_with_external_resource_key.status(),
+        StatusCode::BAD_REQUEST
+    );
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/models")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "scope_kind": "workspace",
+                        "code": "main_source_field_external_key",
+                        "title": "Main Source Field External Key"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+    let created: serde_json::Value = serde_json::from_slice(
+        &to_bytes(create_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let model_id = created["data"]["id"].as_str().unwrap();
+
+    let field_with_external_key = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/console/models/{model_id}/fields"))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "code": "email",
+                        "title": "Email",
+                        "external_field_key": "properties.email",
+                        "field_kind": "string"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(field_with_external_key.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn create_model_route_persists_draft_status_atomically_without_manage_permission() {
     let app = test_app().await;
     let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;

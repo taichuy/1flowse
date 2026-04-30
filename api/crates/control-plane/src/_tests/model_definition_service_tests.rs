@@ -405,6 +405,7 @@ async fn add_field_returns_immediately_usable_metadata_without_publish_step() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             data_source_instance_id: None,
+            external_resource_key: None,
             code: "orders".into(),
             title: "Orders".into(),
             status: None,
@@ -418,6 +419,7 @@ async fn add_field_returns_immediately_usable_metadata_without_publish_step() {
             model_id: created.id,
             code: "status".into(),
             title: "Status".into(),
+            external_field_key: None,
             field_kind: ModelFieldKind::Enum,
             is_required: true,
             is_unique: false,
@@ -444,6 +446,7 @@ async fn delete_model_requires_explicit_confirmation() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             data_source_instance_id: None,
+            external_resource_key: None,
             code: "orders".into(),
             title: "Orders".into(),
             status: None,
@@ -472,6 +475,7 @@ async fn create_system_model_uses_fixed_system_scope_id() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::System,
             data_source_instance_id: None,
+            external_resource_key: None,
             code: "system_orders".into(),
             title: "System Orders".into(),
             status: None,
@@ -492,6 +496,7 @@ async fn create_workspace_model_creates_system_model_and_workspace_grant() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             data_source_instance_id: None,
+            external_resource_key: None,
             code: "workspace_orders".into(),
             title: "Workspace Orders".into(),
             status: None,
@@ -527,6 +532,7 @@ async fn create_model_defaults_to_main_source_published_not_exposed() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             data_source_instance_id: None,
+            external_resource_key: None,
             code: "main_source_orders".into(),
             title: "Main Source Orders".into(),
             status: None,
@@ -551,6 +557,7 @@ async fn api_key_readiness_treats_system_all_as_not_ready_for_non_root_runtime_a
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::System,
             data_source_instance_id: None,
+            external_resource_key: None,
             code: "system_all_api_key_orders".into(),
             title: "System All API Key Orders".into(),
             status: None,
@@ -593,6 +600,7 @@ async fn create_model_persists_explicit_draft_status_in_initial_create_path() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             data_source_instance_id: None,
+            external_resource_key: None,
             code: "explicit_draft_orders".into(),
             title: "Explicit Draft Orders".into(),
             status: Some(DataModelStatus::Draft),
@@ -621,6 +629,7 @@ async fn create_model_inherits_data_source_defaults_when_instance_is_selected() 
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             data_source_instance_id: Some(data_source_instance_id),
+            external_resource_key: Some("contacts".into()),
             code: "external_contacts".into(),
             title: "External Contacts".into(),
             status: None,
@@ -634,6 +643,126 @@ async fn create_model_inherits_data_source_defaults_when_instance_is_selected() 
     );
     assert_eq!(created.status, DataModelStatus::Draft);
     assert_eq!(created.api_exposure_status, ApiExposureStatus::Draft);
+}
+
+#[tokio::test]
+async fn external_create_requires_external_resource_key_and_main_source_rejects_it() {
+    let data_source_instance_id = Uuid::now_v7();
+    let repository = InMemoryModelDefinitionRepository::with_data_source_defaults(
+        data_source_instance_id,
+        DataSourceDefaults::default(),
+    );
+    let service = ModelDefinitionService::new(repository);
+
+    let missing_external_key = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: Some(data_source_instance_id),
+            external_resource_key: None,
+            code: "external_missing_key".into(),
+            title: "External Missing Key".into(),
+            status: None,
+        })
+        .await
+        .unwrap_err();
+    assert!(missing_external_key
+        .to_string()
+        .contains("external_resource_key"));
+
+    let main_source_external_key = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
+            external_resource_key: Some("contacts".into()),
+            code: "main_source_external_key".into(),
+            title: "Main Source External Key".into(),
+            status: None,
+        })
+        .await
+        .unwrap_err();
+    assert!(main_source_external_key
+        .to_string()
+        .contains("external_resource_key"));
+}
+
+#[tokio::test]
+async fn external_add_field_requires_external_field_key_and_main_source_rejects_it() {
+    let data_source_instance_id = Uuid::now_v7();
+    let repository = InMemoryModelDefinitionRepository::with_data_source_defaults(
+        data_source_instance_id,
+        DataSourceDefaults::default(),
+    );
+    let service = ModelDefinitionService::new(repository);
+    let external_model = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: Some(data_source_instance_id),
+            external_resource_key: Some("contacts".into()),
+            code: "external_contacts_fields".into(),
+            title: "External Contacts Fields".into(),
+            status: None,
+        })
+        .await
+        .unwrap();
+
+    let missing_external_field_key = service
+        .add_field(AddModelFieldCommand {
+            actor_user_id: Uuid::nil(),
+            model_id: external_model.id,
+            code: "email".into(),
+            title: "Email".into(),
+            external_field_key: None,
+            field_kind: ModelFieldKind::String,
+            is_required: false,
+            is_unique: false,
+            default_value: None,
+            display_interface: None,
+            display_options: json!({}),
+            relation_target_model_id: None,
+            relation_options: json!({}),
+        })
+        .await
+        .unwrap_err();
+    assert!(missing_external_field_key
+        .to_string()
+        .contains("external_field_key"));
+
+    let main_model = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
+            external_resource_key: None,
+            code: "main_source_fields".into(),
+            title: "Main Source Fields".into(),
+            status: None,
+        })
+        .await
+        .unwrap();
+    let main_source_external_field_key = service
+        .add_field(AddModelFieldCommand {
+            actor_user_id: Uuid::nil(),
+            model_id: main_model.id,
+            code: "email".into(),
+            title: "Email".into(),
+            external_field_key: Some("properties.email".into()),
+            field_kind: ModelFieldKind::String,
+            is_required: false,
+            is_unique: false,
+            default_value: None,
+            display_interface: None,
+            display_options: json!({}),
+            relation_target_model_id: None,
+            relation_options: json!({}),
+        })
+        .await
+        .unwrap_err();
+    assert!(main_source_external_field_key
+        .to_string()
+        .contains("external_field_key"));
 }
 
 #[tokio::test]
@@ -659,6 +788,7 @@ async fn create_model_rejects_data_source_defaults_outside_actor_workspace() {
             actor_user_id,
             scope_kind: DataModelScopeKind::Workspace,
             data_source_instance_id: Some(data_source_instance_id),
+            external_resource_key: Some("contacts".into()),
             code: "external_contacts".into(),
             title: "External Contacts".into(),
             status: None,
@@ -677,6 +807,7 @@ async fn update_model_status_forces_draft_exposure_and_downgrades_direct_ready()
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             data_source_instance_id: None,
+            external_resource_key: None,
             code: "status_orders".into(),
             title: "Status Orders".into(),
             status: None,
@@ -720,6 +851,7 @@ async fn update_model_status_downgrades_raw_ready_without_readiness_facts() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             data_source_instance_id: None,
+            external_resource_key: None,
             code: "raw_ready_orders".into(),
             title: "Raw Ready Orders".into(),
             status: None,
@@ -779,6 +911,7 @@ async fn get_model_computes_ready_from_api_key_scope_grant_and_audit_facts() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             data_source_instance_id: None,
+            external_resource_key: None,
             code: "ready_orders".into(),
             title: "Ready Orders".into(),
             status: None,
@@ -815,6 +948,7 @@ async fn update_model_status_keeps_disabled_effective_exposure_not_ready() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             data_source_instance_id: None,
+            external_resource_key: None,
             code: "disabled_ready_orders".into(),
             title: "Disabled Ready Orders".into(),
             status: None,
@@ -848,6 +982,7 @@ async fn update_model_status_audits_effective_api_exposure_transition() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             data_source_instance_id: None,
+            external_resource_key: None,
             code: "transition_audit_orders".into(),
             title: "Transition Audit Orders".into(),
             status: Some(DataModelStatus::Draft),
@@ -892,6 +1027,7 @@ async fn update_scope_grant_records_audit_event() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             data_source_instance_id: None,
+            external_resource_key: None,
             code: "scope_grant_audit_orders".into(),
             title: "Scope Grant Audit Orders".into(),
             status: None,
@@ -1145,6 +1281,7 @@ async fn delete_scope_grant_records_audit_event() {
             actor_user_id: Uuid::nil(),
             scope_kind: DataModelScopeKind::Workspace,
             data_source_instance_id: None,
+            external_resource_key: None,
             code: "delete_scope_grant_audit_orders".into(),
             title: "Delete Scope Grant Audit Orders".into(),
             status: None,

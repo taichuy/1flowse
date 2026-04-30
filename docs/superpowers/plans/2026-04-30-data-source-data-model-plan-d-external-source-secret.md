@@ -233,6 +233,18 @@ Task 3a validation record, 2026-04-30:
 - Scope note: Task 3a only completes the repository/storage metadata mapping slice. `source_kind`, `external_resource_key`, and `external_field_key` are persisted and reloaded, and external-source Data Model create/add/delete storage paths skip local runtime table/column/relation DDL. It also documents `supports_transactions` / `transaction_id` semantics and adds get/create/update data-source DTO JSON shape tests.
 - Remaining Task 3 scope: service/API/catalog mapping is still incomplete, including `CreateModelDefinitionCommand.external_resource_key`, `AddModelFieldCommand.external_field_key`, console route/data-source catalog mapping, plugin capability snapshot persistence, `unsafe_external_source` readiness, `system_all` explicit confirmation, runtime CRUD dispatch through `RuntimeRecordBackend`, and REST connector fixture behavior. This Task 3a record must not be read as complete Task 3 external Data Model mapping.
 
+Task 3a-2a validation record, 2026-04-30:
+
+- Red evidence:
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane external_` failed before implementation because `CreateModelDefinitionCommand.external_resource_key` and `AddModelFieldCommand.external_field_key` did not exist.
+- Green evidence:
+  - `cargo fmt --manifest-path api/Cargo.toml --all`
+  - `cargo test --manifest-path api/Cargo.toml -p control-plane model_definition_service_tests`
+  - `cargo test --manifest-path api/Cargo.toml -p api-server model_definition_routes`
+  - `cargo check --manifest-path api/Cargo.toml -p api-server`
+  - `git diff --check`
+- Scope note: Task 3a-2a only completes service/API external mapping input and validation. Console model create accepts `data_source_instance_id` and `external_resource_key`; console field create accepts `external_field_key`; model/field responses expose source and external mapping keys. External-source model create requires a non-empty `external_resource_key`, external-source field create requires a non-empty `external_field_key`, and main-source model/field create reject external keys. Task 3a-2b still owns data-source catalog/describe-resource mapping, plugin capability snapshot persistence, `unsafe_external_source` readiness, and explicit `system_all` confirmation. Runtime CRUD dispatch remains Task 3b; REST fixture remains Task 4.
+
 ### Task 4: REST API Connector Rules
 
 **Files:**
