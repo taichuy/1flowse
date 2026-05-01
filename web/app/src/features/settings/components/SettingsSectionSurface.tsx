@@ -9,6 +9,7 @@ export function SettingsSectionSurface({
   description,
   children,
   titleLevel = 3,
+  hideHeader = false,
   headerActions,
   toolbar,
   status
@@ -17,6 +18,7 @@ export function SettingsSectionSurface({
   description?: ReactNode;
   children: ReactNode;
   titleLevel?: 2 | 3 | 4 | 5;
+  hideHeader?: boolean;
   headerActions?: ReactNode;
   toolbar?: ReactNode;
   status?: ReactNode;
@@ -26,27 +28,29 @@ export function SettingsSectionSurface({
       className="settings-section-surface"
       data-testid="settings-section-surface"
     >
-      <header className="settings-section-surface__hero">
-        <div className="settings-section-surface__hero-copy">
-          <Typography.Title
-            level={titleLevel}
-            className="settings-section-surface__title"
-          >
-            {title}
-          </Typography.Title>
-          {description ? (
-            <Typography.Paragraph className="settings-section-surface__description">
-              {description}
-            </Typography.Paragraph>
-          ) : null}
-        </div>
-
-        {headerActions ? (
-          <div className="settings-section-surface__hero-actions">
-            {headerActions}
+      {!hideHeader ? (
+        <header className="settings-section-surface__hero">
+          <div className="settings-section-surface__hero-copy">
+            <Typography.Title
+              level={titleLevel}
+              className="settings-section-surface__title"
+            >
+              {title}
+            </Typography.Title>
+            {description ? (
+              <Typography.Paragraph className="settings-section-surface__description">
+                {description}
+              </Typography.Paragraph>
+            ) : null}
           </div>
-        ) : null}
-      </header>
+
+          {headerActions ? (
+            <div className="settings-section-surface__hero-actions">
+              {headerActions}
+            </div>
+          ) : null}
+        </header>
+      ) : null}
 
       {toolbar ? (
         <div className="settings-section-surface__toolbar">{toolbar}</div>

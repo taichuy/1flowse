@@ -384,6 +384,7 @@ export function SettingsDataModelsSection({
     <SettingsSectionSurface
       title="数据源"
       description="管理内建主数据源和外部数据源的默认建模状态、API 暴露策略与 Data Model 访问面。"
+      hideHeader={Boolean(selectedSource)}
       status={
         errorMessage ? (
           <Alert type="error" showIcon message={errorMessage} />
@@ -437,7 +438,7 @@ export function SettingsDataModelsSection({
                     {selectedSource.source_code}
                   </Typography.Text>
                 </Space>
-                <Button onClick={closeSourceManager}>返回数据源列表</Button>
+                <Button onClick={closeSourceManager}>返回</Button>
               </Flex>
 
               <div className="data-model-panel__source-detail">

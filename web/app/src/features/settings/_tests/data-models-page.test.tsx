@@ -476,6 +476,12 @@ describe('Settings data models page', () => {
       within(hubSpotRow as HTMLElement).getByRole('button', { name: '配置' })
     );
     expect(await screen.findByText('数据源管理')).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        '管理内建主数据源和外部数据源的默认建模状态、API 暴露策略与 Data Model 访问面。'
+      )
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /返\s*回/ })).toBeInTheDocument();
     expect(screen.getByLabelText('默认 Data Model 状态')).toBeInTheDocument();
     expect(screen.getByLabelText('默认 API 暴露状态')).toBeInTheDocument();
     expect(await screen.findByText('Contacts')).toBeInTheDocument();
