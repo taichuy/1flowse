@@ -60,6 +60,13 @@ describe('DebugAssistantMessage', () => {
     const table = screen.getByRole('table');
     expect(within(table).getByText('退款')).toBeInTheDocument();
     expect(within(table).getByText('已确认')).toBeInTheDocument();
+    const actionRow = screen.getByRole('group', { name: '输出动作' });
+    expect(within(actionRow).getByRole('button', { name: /复制输出/ })).toBeInTheDocument();
+    expect(within(actionRow).getByRole('button', { name: /查看 Trace/ })).toBeInTheDocument();
+    expect(within(actionRow).getByRole('button', { name: /查看 Raw Output/ })).toBeInTheDocument();
+    expect(
+      table.compareDocumentPosition(actionRow) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
     expect(screen.getByRole('group', { name: '工作流' })).toBeInTheDocument();
     expect(screen.queryByText('Assistant')).not.toBeInTheDocument();
     expect(screen.getAllByText('LLM').length).toBeGreaterThan(0);

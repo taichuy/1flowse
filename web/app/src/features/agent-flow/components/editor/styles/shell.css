@@ -432,9 +432,16 @@
   padding-inline: 0.25rem;
 }
 
+.agent-flow-editor__debug-message-action-row {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  border-top: 1px solid #eef2f6;
+  padding-top: clamp(0.5rem, 2cqw, 0.625rem);
+}
+
 .agent-flow-editor__debug-message-actions {
-  align-self: flex-end;
-  margin-top: -0.125rem;
+  justify-content: flex-end;
 }
 
 .agent-flow-editor__debug-message-actions .ant-btn {
