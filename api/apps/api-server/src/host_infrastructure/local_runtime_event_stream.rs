@@ -96,12 +96,13 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
         event: RuntimeEventPayload,
     ) -> Result<RuntimeEventEnvelope> {
         let run = self.run(run_id)?;
-        if run.closed.load(Ordering::SeqCst) {
-            return Err(anyhow!("runtime event stream is closed"));
-        }
 
         let envelope = {
             let mut ring = run.ring.lock().expect("runtime event ring lock poisoned");
+            if run.closed.load(Ordering::SeqCst) {
+                return Err(anyhow!("runtime event stream is closed"));
+            }
+
             let sequence = run.next_sequence.fetch_add(1, Ordering::SeqCst);
             let envelope = RuntimeEventEnvelope::new(run_id, sequence, event);
             ring.push_back(envelope.clone());
@@ -160,7 +161,9 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
     }
 
     async fn close_run(&self, run_id: Uuid, _reason: RuntimeEventCloseReason) -> Result<()> {
-        self.run(run_id)?.closed.store(true, Ordering::SeqCst);
+        let run = self.run(run_id)?;
+        let _ring = run.ring.lock().expect("runtime event ring lock poisoned");
+        run.closed.store(true, Ordering::SeqCst);
         Ok(())
     }
 
