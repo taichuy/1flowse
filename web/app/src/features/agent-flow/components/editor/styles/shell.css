@@ -134,6 +134,7 @@
 
 .agent-flow-editor__debug-console {
   display: flex;
+  container-type: inline-size;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
@@ -269,14 +270,14 @@
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  gap: 10px;
+  gap: clamp(0.5rem, 2cqw, 0.75rem);
   overflow: auto;
-  padding: 16px 18px 14px;
+  padding: clamp(0.75rem, 3.6cqw, 1rem);
 }
 
 .agent-flow-editor__debug-message {
   display: flex;
-  gap: 10px;
+  gap: 0.625rem;
   width: 100%;
   max-width: 100%;
 }
@@ -315,15 +316,15 @@
   display: flex;
   width: 100%;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 18px;
+  gap: clamp(0.625rem, 2.5cqw, 0.875rem);
+  padding: clamp(0.75rem, 3.2cqw, 1rem);
+  border-radius: clamp(0.875rem, 3.5cqw, 1.125rem);
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
 }
 
 .agent-flow-editor__debug-message--user .agent-flow-editor__debug-message-main {
-  max-width: min(320px, 82%);
+  max-width: min(20rem, 82%);
 }
 
 .agent-flow-editor__debug-message-header {
@@ -353,8 +354,8 @@
 }
 
 .agent-flow-editor__debug-message--user .agent-flow-editor__debug-message-content.ant-typography {
-  padding: 10px 14px;
-  border-radius: 16px;
+  padding: clamp(0.5rem, 2.5cqw, 0.625rem) clamp(0.75rem, 3cqw, 0.875rem);
+  border-radius: 1rem;
   background: #dbeafe;
   color: #111827;
   font-size: 14px;
@@ -363,20 +364,20 @@
 
 .agent-flow-editor__debug-composer {
   flex: 0 0 auto;
-  padding: 0 18px 14px;
+  padding: 0 clamp(0.75rem, 3.6cqw, 1rem) clamp(0.75rem, 3cqw, 0.875rem);
   background: #f8fafd;
 }
 
 .agent-flow-editor__debug-composer-box {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 40px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   width: 100%;
-  gap: 10px;
+  gap: clamp(0.5rem, 2cqw, 0.625rem);
   border: 1px solid #dfe4ed;
-  border-radius: 14px;
+  border-radius: 0.875rem;
   background: #ffffff;
-  padding: 10px 10px 10px 14px;
+  padding: clamp(0.5rem, 2.2cqw, 0.625rem) clamp(0.5rem, 2.2cqw, 0.625rem) clamp(0.5rem, 2.2cqw, 0.625rem) clamp(0.75rem, 3cqw, 0.875rem);
   box-shadow: 0 12px 30px rgb(15 23 42 / 8%);
 }
 
@@ -394,21 +395,21 @@
 }
 
 .agent-flow-editor__debug-composer-submit {
-  min-width: 38px;
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
+  min-inline-size: clamp(2.125rem, 8.5cqw, 2.375rem);
+  inline-size: clamp(2.125rem, 8.5cqw, 2.375rem);
+  block-size: clamp(2.125rem, 8.5cqw, 2.375rem);
+  border-radius: 0.7rem;
 }
 
 .agent-flow-editor__debug-feature-bar {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   width: 100%;
-  min-height: 44px;
-  margin-top: 8px;
-  gap: 8px;
-  padding: 7px 10px;
+  min-height: 2.75rem;
+  margin-top: 0.5rem;
+  gap: clamp(0.45rem, 1.8cqw, 0.625rem);
+  padding: clamp(0.4rem, 1.8cqw, 0.5rem) clamp(0.5rem, 2.2cqw, 0.625rem);
   border: 1px solid #cddcf4;
   border-radius: 12px;
   background: #eef5ff;
@@ -416,18 +417,18 @@
 
 .agent-flow-editor__debug-feature-icon {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
+  inline-size: clamp(1.5rem, 6cqw, 1.75rem);
+  block-size: clamp(1.5rem, 6cqw, 1.75rem);
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 0.625rem;
   background: #f59e0b;
   color: #ffffff;
 }
 
 .agent-flow-editor__debug-feature-manage {
   justify-self: end;
-  padding-inline: 4px;
+  padding-inline: 0.25rem;
 }
 
 .agent-flow-editor__debug-message-actions {
@@ -436,7 +437,7 @@
 }
 
 .agent-flow-editor__debug-message-actions .ant-btn {
-  padding-inline: 8px;
+  padding-inline: 0.5rem;
 }
 
 .agent-flow-editor__debug-trace-summary {

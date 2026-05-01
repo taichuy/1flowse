@@ -55,12 +55,12 @@
 .agent-flow-editor__debug-workflow-process {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: clamp(0.4rem, 1.6cqw, 0.5rem);
   width: 100%;
-  margin-bottom: 4px;
-  padding: 10px;
+  margin-bottom: 0.25rem;
+  padding: clamp(0.5rem, 2.2cqw, 0.75rem);
   border: 1px solid #c8efd9;
-  border-radius: 14px;
+  border-radius: 0.875rem;
   background: #eafbf2;
   text-align: left;
 }
@@ -69,14 +69,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 0.75rem;
   color: #334155;
 }
 
 .agent-flow-editor__debug-workflow-title {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .agent-flow-editor__debug-workflow-title > .anticon {
@@ -85,25 +85,25 @@
 
 .agent-flow-editor__debug-workflow-collapse {
   color: #64748b;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .agent-flow-editor__debug-workflow-list {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: clamp(0.35rem, 1.4cqw, 0.5rem);
 }
 
 .agent-flow-editor__debug-workflow-row {
   display: grid;
-  grid-template-columns: 12px 26px minmax(0, 1fr) 18px;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 7px;
+  gap: clamp(0.35rem, 1.6cqw, 0.5rem);
   width: 100%;
-  min-height: 42px;
-  padding: 7px 8px;
+  min-height: 2.625rem;
+  padding: clamp(0.4rem, 1.8cqw, 0.5rem);
   border: 1px solid #dbe7e4;
-  border-radius: 12px;
+  border-radius: 0.75rem;
   background: #ffffff;
   color: #1f2937;
   text-align: left;
@@ -113,14 +113,14 @@
 
 .agent-flow-editor__debug-workflow-row-caret {
   color: #64748b;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .agent-flow-editor__debug-workflow-node-icon {
   display: inline-flex;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
+  inline-size: clamp(1.4rem, 6.5cqw, 1.625rem);
+  block-size: clamp(1.4rem, 6.5cqw, 1.625rem);
+  border-radius: 0.5rem;
   background: #5b6ee1;
 }
 
