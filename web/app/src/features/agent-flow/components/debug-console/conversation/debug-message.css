@@ -149,7 +149,7 @@
 .agent-flow-editor__debug-workflow-node-main {
   display: grid;
   min-width: 0;
-  gap: 2px;
+  gap: 0.125rem;
 }
 
 .agent-flow-editor__debug-workflow-node-main > .ant-typography-strong {

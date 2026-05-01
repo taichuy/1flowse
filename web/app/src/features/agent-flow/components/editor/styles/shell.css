@@ -140,7 +140,7 @@
   min-height: 0;
   overflow: hidden;
   border: 1px solid #e8edf5;
-  border-radius: 18px;
+  border-radius: 1.125rem;
   background: #f8fafd;
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.12);
 }
@@ -168,9 +168,9 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  min-height: 56px;
-  padding: 14px 18px 8px;
+  gap: clamp(0.5rem, 2cqw, 0.75rem);
+  min-height: auto;
+  padding: clamp(0.75rem, 3.5cqw, 0.875rem) clamp(0.875rem, 4cqw, 1.125rem) clamp(0.5rem, 2cqw, 0.625rem);
   background: #f8fafd;
 }
 
@@ -178,7 +178,7 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .agent-flow-editor__debug-console-title .ant-typography {
@@ -294,16 +294,16 @@
 
 .agent-flow-editor__debug-message-avatar {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   border: 1px solid #e6eaf1;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   background: #ffffff;
   color: #64748b;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
 }
 
@@ -330,8 +330,8 @@
 .agent-flow-editor__debug-message-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
 }
 
 .agent-flow-editor__debug-message--user .agent-flow-editor__debug-message-header {
@@ -339,7 +339,7 @@
 }
 
 .agent-flow-editor__debug-message-content.ant-typography {
-  margin: 0 0 10px;
+  margin: 0 0 0.625rem;
   color: #1f2937;
   line-height: 1.7;
   white-space: pre-wrap;
@@ -358,7 +358,7 @@
   border-radius: 1rem;
   background: #dbeafe;
   color: #111827;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
@@ -411,7 +411,7 @@
   gap: clamp(0.45rem, 1.8cqw, 0.625rem);
   padding: clamp(0.4rem, 1.8cqw, 0.5rem) clamp(0.5rem, 2.2cqw, 0.625rem);
   border: 1px solid #cddcf4;
-  border-radius: 12px;
+  border-radius: 0.75rem;
   background: #eef5ff;
 }
 
@@ -433,7 +433,7 @@
 
 .agent-flow-editor__debug-message-actions {
   align-self: flex-end;
-  margin-top: -2px;
+  margin-top: -0.125rem;
 }
 
 .agent-flow-editor__debug-message-actions .ant-btn {

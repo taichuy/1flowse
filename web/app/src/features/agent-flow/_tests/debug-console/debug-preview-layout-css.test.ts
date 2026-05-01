@@ -26,6 +26,45 @@ function cssBlock(css: string, selector: string) {
 }
 
 describe('debug preview responsive layout CSS', () => {
+  const layoutPropertiesWithPixelValues =
+    /(?:gap|padding(?:-[a-z]+)?|margin(?:-[a-z]+)?|width|height|min-width|min-height|max-width|max-height|inline-size|block-size|min-inline-size|min-block-size|border-radius|grid-template-columns):[^;]*\d+px/;
+
+  test('keeps preview internals free of fixed pixel layout values', () => {
+    [
+      '.agent-flow-editor__debug-console',
+      '.agent-flow-editor__debug-console-header',
+      '.agent-flow-editor__debug-messages',
+      '.agent-flow-editor__debug-message',
+      '.agent-flow-editor__debug-message-main',
+      '.agent-flow-editor__debug-message--assistant .agent-flow-editor__debug-message-main',
+      '.agent-flow-editor__debug-message--user .agent-flow-editor__debug-message-main',
+      '.agent-flow-editor__debug-message--user .agent-flow-editor__debug-message-content.ant-typography',
+      '.agent-flow-editor__debug-composer',
+      '.agent-flow-editor__debug-composer-box',
+      '.agent-flow-editor__debug-composer-submit',
+      '.agent-flow-editor__debug-feature-bar',
+      '.agent-flow-editor__debug-feature-icon'
+    ].forEach((selector) => {
+      expect(cssBlock(shellCss, selector), selector).not.toMatch(
+        layoutPropertiesWithPixelValues
+      );
+    });
+
+    [
+      '.agent-flow-editor__debug-workflow-process',
+      '.agent-flow-editor__debug-workflow-header',
+      '.agent-flow-editor__debug-workflow-title',
+      '.agent-flow-editor__debug-workflow-list',
+      '.agent-flow-editor__debug-workflow-row',
+      '.agent-flow-editor__debug-workflow-node-icon',
+      '.agent-flow-editor__debug-workflow-node-main'
+    ].forEach((selector) => {
+      expect(cssBlock(debugMessageCss, selector), selector).not.toMatch(
+        layoutPropertiesWithPixelValues
+      );
+    });
+  });
+
   test('does not lock preview rows or composer controls to fixed pixel columns', () => {
     expect(
       cssBlock(debugMessageCss, '.agent-flow-editor__debug-workflow-row')
