@@ -852,7 +852,7 @@ git commit -m "feat: register runtime event stream infrastructure"
 - Modify: `api/crates/control-plane/src/_tests/orchestration_runtime/support/repository.rs`
 - Modify: `web/packages/api-client/src/console-application-runtime.ts`
 
-- [ ] **Step 1: Add repository tests for shell and plan attachment**
+- [x] **Step 1: Add repository tests for shell and plan attachment**
 
 In `api/crates/storage-durable/postgres/src/_tests/orchestration_runtime_repository_tests.rs`, add a test beside the existing flow run tests:
 
@@ -917,7 +917,7 @@ async fn creates_flow_run_shell_and_attaches_compiled_plan() {
 
 Extend the existing import list in the same file with `AttachCompiledPlanToFlowRunInput` and `CreateFlowRunShellInput`.
 
-- [ ] **Step 2: Run the failing repository test**
+- [x] **Step 2: Run the failing repository test**
 
 Run:
 
@@ -927,7 +927,7 @@ cargo test -p storage-postgres creates_flow_run_shell_and_attaches_compiled_plan
 
 Expected: FAIL because shell inputs and repository methods do not exist.
 
-- [ ] **Step 3: Add the migration**
+- [x] **Step 3: Add the migration**
 
 Create `api/crates/storage-durable/postgres/migrations/20260502090000_allow_flow_run_shell_compiled_plan.sql`:
 
@@ -936,7 +936,7 @@ alter table flow_runs
     alter column compiled_plan_id drop not null;
 ```
 
-- [ ] **Step 4: Update domain and port types**
+- [x] **Step 4: Update domain and port types**
 
 In `api/crates/domain/src/orchestration.rs`, change:
 
@@ -988,7 +988,7 @@ async fn attach_compiled_plan_to_flow_run(
 ) -> anyhow::Result<domain::FlowRunRecord>;
 ```
 
-- [ ] **Step 5: Update storage mapper and repository**
+- [x] **Step 5: Update storage mapper and repository**
 
 In `api/crates/storage-durable/postgres/src/mappers/orchestration_runtime_mapper.rs`, change stored row and mapper fields:
 
@@ -1029,7 +1029,7 @@ returning
     created_at
 ```
 
-- [ ] **Step 6: Update in-memory test repository**
+- [x] **Step 6: Update in-memory test repository**
 
 In `api/crates/control-plane/src/_tests/orchestration_runtime/support/repository.rs`:
 
@@ -1038,7 +1038,7 @@ In `api/crates/control-plane/src/_tests/orchestration_runtime/support/repository
 3. Implement `attach_compiled_plan_to_flow_run`.
 4. Keep existing `create_flow_run` behavior by wrapping `input.compiled_plan_id` with `Some(...)`.
 
-- [ ] **Step 7: Update DTOs for nullable compiled plan**
+- [x] **Step 7: Update DTOs for nullable compiled plan**
 
 In `api/apps/api-server/src/routes/applications/application_runtime.rs`, change response DTO:
 
@@ -1060,7 +1060,7 @@ compiled_plan_id: string | null;
 
 Existing frontend tests can keep using string values.
 
-- [ ] **Step 8: Update runtime compiled-plan reads**
+- [x] **Step 8: Update runtime compiled-plan reads**
 
 For every runtime path that reads a compiled plan from a flow run, unwrap with a domain error:
 
@@ -1079,7 +1079,7 @@ Apply this in:
 - `api/crates/control-plane/src/orchestration_runtime.rs`
 - `api/crates/control-plane/src/orchestration_runtime/live_debug_run.rs`
 
-- [ ] **Step 9: Run targeted tests**
+- [x] **Step 9: Run targeted tests**
 
 Run:
 
@@ -1091,7 +1091,7 @@ cargo test -p api-server application_runtime
 
 Expected: PASS.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add api/crates/storage-durable/postgres/migrations/20260502090000_allow_flow_run_shell_compiled_plan.sql \
