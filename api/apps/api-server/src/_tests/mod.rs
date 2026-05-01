@@ -20,6 +20,7 @@ mod openapi_alignment;
 mod openapi_docs_tests;
 mod plugin_routes;
 mod role_routes;
+mod runtime_event_stream_tests;
 mod session_routes;
 mod support;
 mod system_routes;

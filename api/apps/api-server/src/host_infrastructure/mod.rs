@@ -1,5 +1,6 @@
 mod contracts;
 mod local;
+mod local_runtime_event_stream;
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -11,6 +12,7 @@ pub use contracts::{
     TaskQueue,
 };
 pub use local::build_local_host_infrastructure;
+pub use local_runtime_event_stream::LocalRuntimeEventStream;
 
 pub const SESSION_STORE_NAMESPACE: &str = "flowbase:console:session";
 
