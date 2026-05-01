@@ -135,6 +135,7 @@
 .agent-flow-editor__debug-console {
   display: flex;
   container-type: inline-size;
+  flex: 1;
   flex-direction: column;
   min-width: 0;
   min-height: 0;

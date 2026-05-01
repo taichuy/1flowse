@@ -65,6 +65,12 @@ describe('debug preview responsive layout CSS', () => {
     });
   });
 
+  test('lets the preview shell expand inside the shared dock container', () => {
+    expect(
+      cssBlock(shellCss, '.agent-flow-editor__debug-console')
+    ).toMatch(/flex:\s*1\b/);
+  });
+
   test('does not lock preview rows or composer controls to fixed pixel columns', () => {
     expect(
       cssBlock(debugMessageCss, '.agent-flow-editor__debug-workflow-row')
