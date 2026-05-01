@@ -88,48 +88,54 @@
   font-size: 0.75rem;
 }
 
-.agent-flow-editor__debug-workflow-list {
-  display: flex;
-  flex-direction: column;
+.agent-flow-editor__debug-workflow-collapse-list {
+  display: grid;
   gap: clamp(0.35rem, 1.4cqw, 0.5rem);
+  background: transparent;
+}
+
+.agent-flow-editor__debug-workflow-collapse-list > .ant-collapse-item {
+  border: 1px solid #dbe7e4;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+}
+
+.agent-flow-editor__debug-workflow-collapse-list > .ant-collapse-item > .ant-collapse-header {
+  align-items: center;
+  min-height: 2.625rem;
+  padding: clamp(0.4rem, 1.8cqw, 0.5rem);
+}
+
+.agent-flow-editor__debug-workflow-collapse-list .ant-collapse-content {
+  border-top: 1px solid #eef2f6;
+}
+
+.agent-flow-editor__debug-workflow-collapse-list .ant-collapse-content-box {
+  padding: clamp(0.5rem, 2cqw, 0.625rem);
 }
 
 .agent-flow-editor__debug-workflow-row {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: clamp(0.35rem, 1.6cqw, 0.5rem);
   width: 100%;
-  min-height: 2.625rem;
-  padding: clamp(0.4rem, 1.8cqw, 0.5rem);
-  border: 1px solid #dbe7e4;
-  border-radius: 0.75rem;
-  background: #ffffff;
+  min-width: 0;
   color: #1f2937;
   text-align: left;
-  cursor: pointer;
-  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
-}
-
-.agent-flow-editor__debug-workflow-row-caret {
-  color: #64748b;
-  font-size: 0.75rem;
 }
 
 .agent-flow-editor__debug-workflow-node-icon {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   inline-size: clamp(1.4rem, 6.5cqw, 1.625rem);
   block-size: clamp(1.4rem, 6.5cqw, 1.625rem);
   border-radius: 0.5rem;
-  background: #5b6ee1;
-}
-
-.agent-flow-editor__debug-workflow-node-icon--start {
-  background: #2563eb;
-}
-
-.agent-flow-editor__debug-workflow-node-icon--answer {
-  background: #f59e0b;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 0.875rem;
 }
 
 .agent-flow-editor__debug-workflow-metric {
@@ -141,7 +147,6 @@
 }
 
 .agent-flow-editor__debug-workflow-status-icon {
-  grid-column: 4 / 5;
   justify-self: end;
   color: #2563eb;
 }
@@ -169,4 +174,41 @@
 
 .agent-flow-editor__debug-workflow-status-icon--warning {
   color: #d97706;
+}
+
+.agent-flow-editor__debug-workflow-node-type {
+  margin-inline-end: 0;
+  max-width: clamp(4rem, 22cqw, 7rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-flow-editor__debug-workflow-node-detail {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.agent-flow-editor__debug-workflow-payload {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.agent-flow-editor__debug-workflow-payload-title {
+  color: #334155;
+  font-size: 0.75rem;
+}
+
+.agent-flow-editor__debug-workflow-payload-value {
+  max-height: 9rem;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  padding: 0.5rem;
+  color: #334155;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

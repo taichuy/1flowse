@@ -15,8 +15,7 @@ export function DebugConversationPane({
   messages,
   onChangeQuery,
   onSubmitPrompt,
-  onViewTrace,
-  onSelectTraceNode
+  onViewTrace
 }: {
   status: AgentFlowDebugSessionStatus;
   runContext: AgentFlowRunContext;
@@ -24,7 +23,6 @@ export function DebugConversationPane({
   onChangeQuery: (value: string) => void;
   onSubmitPrompt: () => void;
   onViewTrace: () => void;
-  onSelectTraceNode: (nodeId: string) => void;
 }) {
   const queryField = getQueryField(runContext);
   const composerDisabled =
@@ -47,7 +45,6 @@ export function DebugConversationPane({
               <DebugAssistantMessage
                 key={message.id}
                 message={message}
-                onSelectTraceNode={onSelectTraceNode}
                 onViewTrace={onViewTrace}
               />
             ) : (

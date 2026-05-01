@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { DebugAssistantMessage } from '../../components/debug-console/conversation/DebugAssistantMessage';
@@ -49,10 +49,9 @@ describe('DebugAssistantMessage', () => {
       ]
     };
 
-    render(
+    const { container } = render(
       <DebugAssistantMessage
         message={message}
-        onSelectTraceNode={vi.fn()}
         onViewTrace={vi.fn()}
       />
     );
@@ -64,6 +63,13 @@ describe('DebugAssistantMessage', () => {
     expect(screen.getByRole('group', { name: '工作流' })).toBeInTheDocument();
     expect(screen.queryByText('Assistant')).not.toBeInTheDocument();
     expect(screen.getAllByText('LLM').length).toBeGreaterThan(0);
+    expect(container.querySelector('.anticon-thunderbolt')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /LLM/ }));
+
+    expect(screen.getByText('输入')).toBeInTheDocument();
+    expect(screen.getByText('输出')).toBeInTheDocument();
+    expect(screen.getByText(/user_prompt/)).toBeInTheDocument();
   });
 
 
@@ -82,7 +88,6 @@ describe('DebugAssistantMessage', () => {
     const { container, rerender } = render(
       <DebugAssistantMessage
         message={baseMessage}
-        onSelectTraceNode={vi.fn()}
         onViewTrace={vi.fn()}
       />
     );
@@ -90,7 +95,6 @@ describe('DebugAssistantMessage', () => {
     rerender(
       <DebugAssistantMessage
         message={{ ...baseMessage, content: 'abcdef' }}
-        onSelectTraceNode={vi.fn()}
         onViewTrace={vi.fn()}
       />
     );

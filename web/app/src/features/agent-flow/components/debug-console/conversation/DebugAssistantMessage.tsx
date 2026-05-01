@@ -77,12 +77,10 @@ function useProgressiveText(target: string) {
 
 export function DebugAssistantMessage({
   message,
-  onViewTrace,
-  onSelectTraceNode
+  onViewTrace
 }: {
   message: AgentFlowDebugMessage;
   onViewTrace: () => void;
-  onSelectTraceNode: (nodeId: string) => void;
 }) {
   const [showRawOutput, setShowRawOutput] = useState(false);
   const visibleContent = useProgressiveText(message.content);
@@ -100,10 +98,6 @@ export function DebugAssistantMessage({
       <div className="agent-flow-editor__debug-message-main">
         <DebugWorkflowProcess
           items={message.traceSummary}
-          onSelectNode={(nodeId) => {
-            onViewTrace();
-            onSelectTraceNode(nodeId);
-          }}
         />
         <DebugMarkdownContent
           className="agent-flow-editor__debug-message-content"

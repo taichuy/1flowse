@@ -85,10 +85,6 @@ export function AgentFlowDebugConsole({
 
             onChangeRunContextValue(queryField.nodeId, queryField.key, value);
           }}
-          onSelectTraceNode={(nodeId) => {
-            onChangeTab('trace');
-            onLocateTraceNode(nodeId);
-          }}
           onSubmitPrompt={onSubmitPrompt}
           onViewTrace={() => onChangeTab('trace')}
         />
