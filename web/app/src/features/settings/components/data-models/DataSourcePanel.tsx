@@ -1,52 +1,42 @@
-import { Descriptions, Form, Select, Space, Table, Tag, Typography } from 'antd';
+import { Button, Grid, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import type { SettingsDataSourceInstance } from '../../api/data-models';
 
-const dataModelStatusOptions = ['draft', 'published', 'disabled', 'broken'].map(
-  (value) => ({ label: `默认 ${value}`, value })
-);
-
-const apiExposureOptions = [
-  'draft',
-  'published_not_exposed',
-  'api_exposed_no_permission'
-].map((value) => ({ label: `默认 ${value}`, value }));
-
 export function DataSourcePanel({
   sources,
-  selectedSourceId,
   loading,
-  saving,
-  onSelectSource,
-  onUpdateDefaults
+  onOpenSource
 }: {
   sources: SettingsDataSourceInstance[];
-  selectedSourceId: string | null;
   loading: boolean;
-  saving: boolean;
-  onSelectSource: (sourceId: string) => void;
-  onUpdateDefaults: (
-    source: SettingsDataSourceInstance,
-    patch: Pick<
-      SettingsDataSourceInstance,
-      'default_data_model_status' | 'default_api_exposure_status'
-    >
-  ) => void;
+  onOpenSource: (sourceId: string) => void;
 }) {
-  const selectedSource =
-    sources.find((source) => source.id === selectedSourceId) ?? sources[0] ?? null;
-
+  const screens = Grid.useBreakpoint();
+  const useMobileList = Boolean(screens.xs && !screens.md);
   const columns: ColumnsType<SettingsDataSourceInstance> = [
     {
-      title: '数据源',
+      title: '数据源标识',
+      dataIndex: 'source_code',
+      key: 'source_code',
+      width: 220,
+      render: (value: string) => <Typography.Text>{value}</Typography.Text>
+    },
+    {
+      title: '数据源名称',
       dataIndex: 'display_name',
       key: 'display_name',
       render: (_, source) => (
-        <Space direction="vertical" size={2}>
-          <Typography.Text strong>{source.display_name}</Typography.Text>
-          <Typography.Text type="secondary">{source.source_code}</Typography.Text>
-        </Space>
+        <Button
+          type="link"
+          className="data-model-panel__source-link"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenSource(source.id);
+          }}
+        >
+          {source.display_name}
+        </Button>
       )
     },
     {
@@ -59,90 +49,81 @@ export function DataSourcePanel({
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      render: (value: string) => <Tag color={value === 'ready' ? 'green' : 'default'}>{value}</Tag>
+      render: (value: string) => (
+        <Tag color={value === 'ready' ? 'green' : 'default'}>{value}</Tag>
+      )
+    },
+    {
+      title: '启用',
+      key: 'enabled',
+      width: 120,
+      render: (_, source) => (
+        <Typography.Text
+          type={source.status === 'ready' ? 'success' : 'secondary'}
+        >
+          {source.status === 'ready' ? '是' : '-'}
+        </Typography.Text>
+      )
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 160,
+      render: (_, source) => (
+        <Button
+          type="link"
+          size="small"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenSource(source.id);
+          }}
+        >
+          表管理
+        </Button>
+      )
     }
   ];
 
   return (
     <div className="data-model-panel__sources">
-      <Table
-        rowKey="id"
-        size="middle"
-        loading={loading}
-        columns={columns}
-        dataSource={sources}
-        pagination={false}
-        rowSelection={{
-          type: 'radio',
-          selectedRowKeys: selectedSourceId ? [selectedSourceId] : [],
-          onChange: ([sourceId]) => onSelectSource(String(sourceId))
-        }}
-        onRow={(source) => ({
-          onClick: () => onSelectSource(source.id)
-        })}
-      />
-
-      {selectedSource ? (
-        <div className="data-model-panel__source-detail">
-          <Descriptions
-            size="small"
-            column={{ xs: 1, sm: 2, lg: 3 }}
-            items={[
-              {
-                key: 'id',
-                label: 'ID',
-                children: selectedSource.id
-              },
-              {
-                key: 'source_kind',
-                label: '来源类型',
-                children: selectedSource.source_kind
-              },
-              {
-                key: 'catalog',
-                label: 'Catalog',
-                children: selectedSource.catalog_refresh_status ?? '-'
-              }
-            ]}
-          />
-          <Form layout="inline" className="data-model-panel__defaults">
-            <Form.Item
-              label="默认 Data Model 状态"
-              htmlFor="data-source-default-model-status"
+      {!useMobileList ? (
+        <Table
+          rowKey="id"
+          size="middle"
+          loading={loading}
+          columns={columns}
+          dataSource={sources}
+          pagination={false}
+          scroll={{ x: 760 }}
+          onRow={(source) => ({
+            onClick: () => onOpenSource(source.id)
+          })}
+        />
+      ) : null}
+      {useMobileList ? (
+        <div className="data-model-panel__mobile-list">
+          {sources.map((source) => (
+            <button
+              key={source.id}
+              type="button"
+              className="data-model-panel__mobile-item"
+              onClick={() => onOpenSource(source.id)}
             >
-              <Select
-                id="data-source-default-model-status"
-                value={selectedSource.default_data_model_status}
-                options={dataModelStatusOptions}
-                disabled={selectedSource.source_kind === 'main_source' || saving}
-                onChange={(value) =>
-                  onUpdateDefaults(selectedSource, {
-                    default_data_model_status: value,
-                    default_api_exposure_status:
-                      selectedSource.default_api_exposure_status
-                  })
-                }
-              />
-            </Form.Item>
-            <Form.Item
-              label="默认 API 暴露状态"
-              htmlFor="data-source-default-api-status"
-            >
-              <Select
-                id="data-source-default-api-status"
-                value={selectedSource.default_api_exposure_status}
-                options={apiExposureOptions}
-                disabled={selectedSource.source_kind === 'main_source' || saving}
-                onChange={(value) =>
-                  onUpdateDefaults(selectedSource, {
-                    default_data_model_status:
-                      selectedSource.default_data_model_status,
-                    default_api_exposure_status: value
-                  })
-                }
-              />
-            </Form.Item>
-          </Form>
+              <span>
+                <Typography.Text strong>{source.display_name}</Typography.Text>
+                <Typography.Text type="secondary">
+                  {source.source_code}
+                </Typography.Text>
+              </span>
+              <span>
+                <Tag>{source.source_kind}</Tag>
+                <Tag color={source.status === 'ready' ? 'green' : 'default'}>
+                  {source.status}
+                </Tag>
+              </span>
+              <Typography.Text type="success">表管理</Typography.Text>
+            </button>
+          ))}
         </div>
       ) : null}
     </div>

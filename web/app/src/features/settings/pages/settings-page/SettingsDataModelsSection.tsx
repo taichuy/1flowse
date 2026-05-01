@@ -1,7 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Flex, message } from 'antd';
+import {
+  Alert,
+  Breadcrumb,
+  Button,
+  Descriptions,
+  Flex,
+  Form,
+  Select,
+  Space,
+  Tag,
+  Typography,
+  message
+} from 'antd';
 
 import { useAuthStore } from '../../../../state/auth-store';
 import {
@@ -47,6 +59,35 @@ function getErrorMessage(error: unknown) {
 const emptySources: SettingsDataSourceInstance[] = [];
 const emptyModels: SettingsDataModel[] = [];
 
+const dataModelStatusOptions = ['draft', 'published', 'disabled', 'broken'].map(
+  (value) => ({ label: `默认 ${value}`, value })
+);
+
+const apiExposureOptions = [
+  'draft',
+  'published_not_exposed',
+  'api_exposed_no_permission'
+].map((value) => ({ label: `默认 ${value}`, value }));
+
+function readSourceIdFromLocation() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  return new URLSearchParams(window.location.search).get('source');
+}
+
+function writeSourceIdToLocation(sourceId: string | null) {
+  const url = new URL(window.location.href);
+  if (sourceId) {
+    url.searchParams.set('source', sourceId);
+  } else {
+    url.searchParams.delete('source');
+  }
+
+  window.history.pushState({}, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
 export function SettingsDataModelsSection({
   canManage
 }: {
@@ -55,7 +96,9 @@ export function SettingsDataModelsSection({
   const queryClient = useQueryClient();
   const [messageApi, contextHolder] = message.useMessage();
   const csrfToken = useAuthStore((state) => state.csrfToken);
-  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(
+    readSourceIdFromLocation
+  );
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
 
   const sourcesQuery = useQuery({
@@ -64,13 +107,11 @@ export function SettingsDataModelsSection({
   });
 
   const sources = sourcesQuery.data ?? emptySources;
-  const effectiveSourceId = selectedSourceId ?? sources[0]?.id ?? null;
-
-  useEffect(() => {
-    if (!selectedSourceId && sources[0]) {
-      setSelectedSourceId(sources[0].id);
-    }
-  }, [selectedSourceId, sources]);
+  const selectedSource = useMemo(
+    () => sources.find((source) => source.id === selectedSourceId) ?? null,
+    [selectedSourceId, sources]
+  );
+  const effectiveSourceId = selectedSource?.id ?? null;
 
   const modelsQuery = useQuery({
     queryKey: settingsDataModelsQueryKey(effectiveSourceId ?? ''),
@@ -83,17 +124,40 @@ export function SettingsDataModelsSection({
     () => models.find((model) => model.id === selectedModelId) ?? null,
     [models, selectedModelId]
   );
-  const selectedSource = useMemo(
-    () =>
-      sources.find((source) => source.id === effectiveSourceId) ??
-      sources[0] ??
-      null,
-    [effectiveSourceId, sources]
-  );
-
   useEffect(() => {
     setSelectedModelId(null);
   }, [effectiveSourceId]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setSelectedSourceId(readSourceIdFromLocation());
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (
+      selectedSourceId &&
+      sources.length > 0 &&
+      !sources.some((source) => source.id === selectedSourceId)
+    ) {
+      setSelectedSourceId(null);
+      writeSourceIdToLocation(null);
+    }
+  }, [selectedSourceId, sources]);
+
+  const openSourceManager = (sourceId: string) => {
+    setSelectedSourceId(sourceId);
+    writeSourceIdToLocation(sourceId);
+  };
+
+  const closeSourceManager = () => {
+    setSelectedSourceId(null);
+    setSelectedModelId(null);
+    writeSourceIdToLocation(null);
+  };
 
   const scopeGrantsQuery = useQuery({
     queryKey: settingsDataModelScopeGrantsQueryKey(selectedModel?.id ?? ''),
@@ -103,13 +167,15 @@ export function SettingsDataModelsSection({
 
   const advisorQuery = useQuery({
     queryKey: settingsDataModelAdvisorFindingsQueryKey(selectedModel?.id ?? ''),
-    queryFn: () => fetchSettingsDataModelAdvisorFindings(selectedModel?.id ?? ''),
+    queryFn: () =>
+      fetchSettingsDataModelAdvisorFindings(selectedModel?.id ?? ''),
     enabled: Boolean(selectedModel)
   });
 
   const recordPreviewQuery = useQuery({
     queryKey: settingsDataModelRecordPreviewQueryKey(selectedModel?.code ?? ''),
-    queryFn: () => fetchSettingsDataModelRecordPreview(selectedModel?.code ?? ''),
+    queryFn: () =>
+      fetchSettingsDataModelRecordPreview(selectedModel?.code ?? ''),
     enabled: Boolean(selectedModel)
   });
 
@@ -131,7 +197,9 @@ export function SettingsDataModelsSection({
     },
     onSuccess: async () => {
       messageApi.success('默认状态已保存');
-      await queryClient.invalidateQueries({ queryKey: settingsDataSourcesQueryKey });
+      await queryClient.invalidateQueries({
+        queryKey: settingsDataSourcesQueryKey
+      });
     }
   });
 
@@ -317,92 +385,209 @@ export function SettingsDataModelsSection({
       title="数据源"
       description="管理内建主数据源和外部数据源的默认建模状态、API 暴露策略与 Data Model 访问面。"
       status={
-        errorMessage ? <Alert type="error" showIcon message={errorMessage} /> : null
+        errorMessage ? (
+          <Alert type="error" showIcon message={errorMessage} />
+        ) : null
       }
     >
       {contextHolder}
       <div className="data-model-panel">
-        <DataSourcePanel
-          sources={sources}
-          selectedSourceId={effectiveSourceId}
-          loading={sourcesQuery.isLoading}
-          saving={updateDefaultsMutation.isPending}
-          onSelectSource={setSelectedSourceId}
-          onUpdateDefaults={(source, patch) =>
-            updateDefaultsMutation.mutate({ source, patch })
-          }
-        />
+        {selectedSource ? (
+          <Flex vertical gap={16} className="data-model-panel__models">
+            <div className="data-model-panel__manager-head">
+              <Breadcrumb
+                items={[
+                  {
+                    title: (
+                      <Button
+                        type="link"
+                        className="data-model-panel__breadcrumb-link"
+                        onClick={closeSourceManager}
+                      >
+                        数据源管理
+                      </Button>
+                    )
+                  },
+                  { title: selectedSource.display_name }
+                ]}
+              />
+              <Flex
+                justify="space-between"
+                align="flex-start"
+                gap={16}
+                wrap="wrap"
+              >
+                <Space direction="vertical" size={4}>
+                  <Space size={8} wrap>
+                    <Typography.Title
+                      level={4}
+                      className="data-model-panel__section-title"
+                    >
+                      {selectedSource.display_name}
+                    </Typography.Title>
+                    <Tag
+                      color={
+                        selectedSource.status === 'ready' ? 'green' : 'default'
+                      }
+                    >
+                      {selectedSource.status}
+                    </Tag>
+                  </Space>
+                  <Typography.Text type="secondary">
+                    {selectedSource.source_code}
+                  </Typography.Text>
+                </Space>
+                <Button onClick={closeSourceManager}>返回数据源列表</Button>
+              </Flex>
 
-        <Flex vertical gap={16} className="data-model-panel__models">
-          <DataModelTable
-            models={models}
-            selectedSource={selectedSource}
-            selectedModelId={selectedModelId}
-            loading={modelsQuery.isLoading}
-            saving={createModelMutation.isPending || updateModelMutation.isPending}
-            canManage={canManage}
-            onSelectModel={(model) => setSelectedModelId(model.id)}
-            onCreateModel={(input) => createModelMutation.mutate(input)}
-            onUpdateModel={(model, input) =>
-              updateModelMutation.mutate({ model, input })
-            }
-          />
-
-          {selectedModel ? (
-            <DataModelDetail
-              model={selectedModel}
-              allModels={models}
+              <div className="data-model-panel__source-detail">
+                <Descriptions
+                  size="small"
+                  column={{ xs: 1, sm: 2, lg: 3 }}
+                  items={[
+                    { key: 'id', label: 'ID', children: selectedSource.id },
+                    {
+                      key: 'source_kind',
+                      label: '来源类型',
+                      children: selectedSource.source_kind
+                    },
+                    {
+                      key: 'catalog',
+                      label: 'Catalog',
+                      children: selectedSource.catalog_refresh_status ?? '-'
+                    }
+                  ]}
+                />
+                <Form layout="inline" className="data-model-panel__defaults">
+                  <Form.Item
+                    label="默认 Data Model 状态"
+                    htmlFor="data-source-default-model-status"
+                  >
+                    <Select
+                      id="data-source-default-model-status"
+                      value={selectedSource.default_data_model_status}
+                      options={dataModelStatusOptions}
+                      disabled={
+                        selectedSource.source_kind === 'main_source' ||
+                        updateDefaultsMutation.isPending
+                      }
+                      onChange={(value) =>
+                        updateDefaultsMutation.mutate({
+                          source: selectedSource,
+                          patch: {
+                            default_data_model_status: value,
+                            default_api_exposure_status:
+                              selectedSource.default_api_exposure_status
+                          }
+                        })
+                      }
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    label="默认 API 暴露状态"
+                    htmlFor="data-source-default-api-status"
+                  >
+                    <Select
+                      id="data-source-default-api-status"
+                      value={selectedSource.default_api_exposure_status}
+                      options={apiExposureOptions}
+                      disabled={
+                        selectedSource.source_kind === 'main_source' ||
+                        updateDefaultsMutation.isPending
+                      }
+                      onChange={(value) =>
+                        updateDefaultsMutation.mutate({
+                          source: selectedSource,
+                          patch: {
+                            default_data_model_status:
+                              selectedSource.default_data_model_status,
+                            default_api_exposure_status: value
+                          }
+                        })
+                      }
+                    />
+                  </Form.Item>
+                </Form>
+              </div>
+            </div>
+            <DataModelTable
+              models={models}
+              selectedSource={selectedSource}
+              selectedModelId={selectedModelId}
+              loading={modelsQuery.isLoading}
+              saving={
+                createModelMutation.isPending || updateModelMutation.isPending
+              }
               canManage={canManage}
-              grants={scopeGrantsQuery.data ?? []}
-              grantsLoading={scopeGrantsQuery.isLoading}
-              grantsSaving={saveGrantMutation.isPending}
-              advisorFindings={advisorQuery.data ?? []}
-              advisorLoading={advisorQuery.isLoading}
-              recordPreview={recordPreviewQuery.data}
-              recordPreviewLoading={recordPreviewQuery.isLoading}
-              modelSaving={
-                updateModelMutation.isPending ||
-                updateApiExposureMutation.isPending
-              }
-              fieldSaving={
-                createFieldMutation.isPending ||
-                updateFieldMutation.isPending ||
-                deleteFieldMutation.isPending
-              }
-              onUpdateModelStatus={(status) =>
-                updateModelMutation.mutate({
-                  model: selectedModel,
-                  input: { status }
-                })
-              }
-              onUpdateModel={(input) =>
-                updateModelMutation.mutate({ model: selectedModel, input })
-              }
-              onCreateField={(input) =>
-                createFieldMutation.mutate({ model: selectedModel, input })
-              }
-              onUpdateField={(field, input) =>
-                updateFieldMutation.mutate({
-                  model: selectedModel,
-                  field,
-                  input
-                })
-              }
-              onDeleteField={(field) =>
-                deleteFieldMutation.mutate({ model: selectedModel, field })
-              }
-              onUpdateApiExposure={(input) =>
-                updateApiExposureMutation.mutate({
-                  model: selectedModel,
-                  input
-                })
-              }
-              onSaveGrant={(grant, input) =>
-                saveGrantMutation.mutate({ grant, input })
+              onSelectModel={(model) => setSelectedModelId(model.id)}
+              onCreateModel={(input) => createModelMutation.mutate(input)}
+              onUpdateModel={(model, input) =>
+                updateModelMutation.mutate({ model, input })
               }
             />
-          ) : null}
-        </Flex>
+
+            {selectedModel ? (
+              <DataModelDetail
+                model={selectedModel}
+                allModels={models}
+                canManage={canManage}
+                grants={scopeGrantsQuery.data ?? []}
+                grantsLoading={scopeGrantsQuery.isLoading}
+                grantsSaving={saveGrantMutation.isPending}
+                advisorFindings={advisorQuery.data ?? []}
+                advisorLoading={advisorQuery.isLoading}
+                recordPreview={recordPreviewQuery.data}
+                recordPreviewLoading={recordPreviewQuery.isLoading}
+                modelSaving={
+                  updateModelMutation.isPending ||
+                  updateApiExposureMutation.isPending
+                }
+                fieldSaving={
+                  createFieldMutation.isPending ||
+                  updateFieldMutation.isPending ||
+                  deleteFieldMutation.isPending
+                }
+                onUpdateModelStatus={(status) =>
+                  updateModelMutation.mutate({
+                    model: selectedModel,
+                    input: { status }
+                  })
+                }
+                onUpdateModel={(input) =>
+                  updateModelMutation.mutate({ model: selectedModel, input })
+                }
+                onCreateField={(input) =>
+                  createFieldMutation.mutate({ model: selectedModel, input })
+                }
+                onUpdateField={(field, input) =>
+                  updateFieldMutation.mutate({
+                    model: selectedModel,
+                    field,
+                    input
+                  })
+                }
+                onDeleteField={(field) =>
+                  deleteFieldMutation.mutate({ model: selectedModel, field })
+                }
+                onUpdateApiExposure={(input) =>
+                  updateApiExposureMutation.mutate({
+                    model: selectedModel,
+                    input
+                  })
+                }
+                onSaveGrant={(grant, input) =>
+                  saveGrantMutation.mutate({ grant, input })
+                }
+              />
+            ) : null}
+          </Flex>
+        ) : (
+          <DataSourcePanel
+            sources={sources}
+            loading={sourcesQuery.isLoading}
+            onOpenSource={openSourceManager}
+          />
+        )}
       </div>
     </SettingsSectionSurface>
   );
