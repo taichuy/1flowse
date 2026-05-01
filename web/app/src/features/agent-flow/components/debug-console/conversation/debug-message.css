@@ -197,28 +197,3 @@
   display: grid;
   gap: 0.5rem;
 }
-
-.agent-flow-editor__debug-workflow-payload {
-  display: grid;
-  gap: 0.25rem;
-}
-
-.agent-flow-editor__debug-workflow-payload-title {
-  color: #334155;
-  font-size: 0.75rem;
-}
-
-.agent-flow-editor__debug-workflow-payload-value {
-  max-height: 9rem;
-  margin: 0;
-  overflow: auto;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  background: #f8fafc;
-  padding: 0.5rem;
-  color: #334155;
-  font-size: 0.75rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-}

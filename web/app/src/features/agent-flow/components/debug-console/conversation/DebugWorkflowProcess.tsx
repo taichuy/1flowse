@@ -9,6 +9,7 @@ import {
 import { Collapse, Tag, Typography } from 'antd';
 
 import type { AgentFlowTraceItem } from '../../../api/runtime';
+import { NodeRunJsonBlock } from '../../detail/last-run/NodeRunIOCard';
 import { getAgentFlowNodeTypeIcon } from '../../../lib/node-type-icons';
 
 function statusTone(status: string) {
@@ -110,33 +111,6 @@ function StatusIcon({ status }: { status: string }) {
   );
 }
 
-function hasPayload(payload: Record<string, unknown> | null) {
-  return Boolean(payload && Object.keys(payload).length > 0);
-}
-
-function PayloadBlock({
-  payload,
-  title
-}: {
-  payload: Record<string, unknown> | null;
-  title: string;
-}) {
-  return (
-    <section className="agent-flow-editor__debug-workflow-payload">
-      <Typography.Text className="agent-flow-editor__debug-workflow-payload-title" strong>
-        {title}
-      </Typography.Text>
-      {hasPayload(payload) ? (
-        <pre className="agent-flow-editor__debug-workflow-payload-value">
-          {JSON.stringify(payload, null, 2)}
-        </pre>
-      ) : (
-        <Typography.Text type="secondary">无数据</Typography.Text>
-      )}
-    </section>
-  );
-}
-
 function NodeTypeIcon({ nodeType }: { nodeType: string }) {
   return (
     <span
@@ -206,10 +180,10 @@ export function DebugWorkflowProcess({
             ),
             children: (
               <div className="agent-flow-editor__debug-workflow-node-detail">
-                <PayloadBlock payload={item.inputPayload} title="输入" />
-                <PayloadBlock payload={item.outputPayload} title="输出" />
-                <PayloadBlock payload={item.errorPayload} title="错误" />
-                <PayloadBlock payload={item.metricsPayload} title="指标" />
+                <NodeRunJsonBlock payload={item.inputPayload} title="输入" />
+                <NodeRunJsonBlock payload={item.outputPayload} title="输出" />
+                <NodeRunJsonBlock payload={item.errorPayload ?? {}} title="错误" />
+                <NodeRunJsonBlock payload={item.metricsPayload} title="指标" />
               </div>
             )
           }))}

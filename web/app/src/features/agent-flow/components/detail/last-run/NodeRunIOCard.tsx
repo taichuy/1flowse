@@ -93,7 +93,7 @@ function JsonEditor({ height, value }: { height: string; value: string }) {
   );
 }
 
-function JsonBlock({
+export function NodeRunJsonBlock({
   title,
   payload
 }: {
@@ -167,8 +167,8 @@ export function NodeRunIOCard({
   return (
     <Card title="节点输入输出">
       <div className="agent-flow-node-run-json-list">
-        <JsonBlock payload={lastRun.node_run.input_payload} title="输入" />
-        <JsonBlock payload={getOutputPayload(lastRun)} title="输出" />
+        <NodeRunJsonBlock payload={lastRun.node_run.input_payload} title="输入" />
+        <NodeRunJsonBlock payload={getOutputPayload(lastRun)} title="输出" />
       </div>
     </Card>
   );
