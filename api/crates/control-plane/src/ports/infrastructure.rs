@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
+use uuid::Uuid;
 
 #[async_trait]
 pub trait CacheStore: Send + Sync {
@@ -86,4 +88,133 @@ pub trait RateLimitStore: Send + Sync {
     ) -> anyhow::Result<RateLimitDecision>;
 
     async fn reset(&self, key: &str) -> anyhow::Result<()>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeEventSource {
+    Runtime,
+    Provider,
+    Persister,
+    System,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeEventDurability {
+    Ephemeral,
+    DurableRequired,
+    AuditRequired,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RuntimeEventPayload {
+    pub event_type: String,
+    pub source: RuntimeEventSource,
+    pub durability: RuntimeEventDurability,
+    pub persist_required: bool,
+    pub trace_visible: bool,
+    pub payload: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RuntimeEventEnvelope {
+    pub run_id: Uuid,
+    pub sequence: i64,
+    pub event_id: String,
+    pub event_type: String,
+    pub occurred_at: time::OffsetDateTime,
+    pub source: RuntimeEventSource,
+    pub durability: RuntimeEventDurability,
+    pub persist_required: bool,
+    pub trace_visible: bool,
+    pub payload: serde_json::Value,
+}
+
+impl RuntimeEventEnvelope {
+    pub fn new(run_id: Uuid, sequence: i64, event: RuntimeEventPayload) -> Self {
+        Self {
+            run_id,
+            sequence,
+            event_id: format!("{run_id}:{sequence}"),
+            event_type: event.event_type,
+            occurred_at: time::OffsetDateTime::now_utc(),
+            source: event.source,
+            durability: event.durability,
+            persist_required: event.persist_required,
+            trace_visible: event.trace_visible,
+            payload: event.payload,
+        }
+    }
+}
+
+pub struct RuntimeEventSubscription {
+    pub replay: Vec<RuntimeEventEnvelope>,
+    pub live_events: mpsc::UnboundedReceiver<RuntimeEventEnvelope>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeEventOverflowBehavior {
+    DropOldEphemeralKeepRequired,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RuntimeEventStreamPolicy {
+    pub ttl: time::Duration,
+    pub max_events: usize,
+    pub max_bytes: usize,
+    pub overflow_behavior: RuntimeEventOverflowBehavior,
+}
+
+impl RuntimeEventStreamPolicy {
+    pub fn debug_default() -> Self {
+        Self {
+            ttl: time::Duration::minutes(30),
+            max_events: 20_000,
+            max_bytes: 16 * 1024 * 1024,
+            overflow_behavior: RuntimeEventOverflowBehavior::DropOldEphemeralKeepRequired,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeEventCloseReason {
+    Finished,
+    Failed,
+    Cancelled,
+    Expired,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RuntimeEventTrimPolicy {
+    pub before_sequence: Option<i64>,
+    pub keep_required: bool,
+}
+
+#[async_trait]
+pub trait RuntimeEventStream: Send + Sync {
+    async fn open_run(&self, run_id: Uuid, policy: RuntimeEventStreamPolicy) -> anyhow::Result<()>;
+
+    async fn append(
+        &self,
+        run_id: Uuid,
+        event: RuntimeEventPayload,
+    ) -> anyhow::Result<RuntimeEventEnvelope>;
+
+    async fn subscribe(
+        &self,
+        run_id: Uuid,
+        from_sequence: Option<i64>,
+    ) -> anyhow::Result<RuntimeEventSubscription>;
+
+    async fn replay(
+        &self,
+        run_id: Uuid,
+        from_sequence: Option<i64>,
+        limit: usize,
+    ) -> anyhow::Result<Vec<RuntimeEventEnvelope>>;
+
+    async fn close_run(&self, run_id: Uuid, reason: RuntimeEventCloseReason) -> anyhow::Result<()>;
+
+    async fn trim(&self, run_id: Uuid, policy: RuntimeEventTrimPolicy) -> anyhow::Result<()>;
 }

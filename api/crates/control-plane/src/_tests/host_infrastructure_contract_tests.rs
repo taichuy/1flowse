@@ -3,10 +3,14 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use control_plane::ports::{
     CacheStore, ClaimedTask, DistributedLock, EventBus, RateLimitDecision, RateLimitStore,
+    RuntimeEventCloseReason, RuntimeEventEnvelope, RuntimeEventPayload, RuntimeEventSource,
+    RuntimeEventStream, RuntimeEventStreamPolicy, RuntimeEventSubscription, RuntimeEventTrimPolicy,
     TaskQueue,
 };
 use serde_json::json;
 use time::{Duration, OffsetDateTime};
+use tokio::sync::mpsc;
+use uuid::Uuid;
 
 #[derive(Default)]
 struct FakeInfrastructure;
@@ -122,6 +126,59 @@ impl RateLimitStore for FakeInfrastructure {
     }
 }
 
+#[async_trait]
+impl RuntimeEventStream for FakeInfrastructure {
+    async fn open_run(
+        &self,
+        _run_id: Uuid,
+        _policy: RuntimeEventStreamPolicy,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn append(
+        &self,
+        run_id: Uuid,
+        event: RuntimeEventPayload,
+    ) -> anyhow::Result<RuntimeEventEnvelope> {
+        Ok(RuntimeEventEnvelope::new(run_id, 1, event))
+    }
+
+    async fn subscribe(
+        &self,
+        _run_id: Uuid,
+        _from_sequence: Option<i64>,
+    ) -> anyhow::Result<RuntimeEventSubscription> {
+        let (_sender, receiver) = mpsc::unbounded_channel();
+
+        Ok(RuntimeEventSubscription {
+            replay: vec![],
+            live_events: receiver,
+        })
+    }
+
+    async fn replay(
+        &self,
+        _run_id: Uuid,
+        _from_sequence: Option<i64>,
+        _limit: usize,
+    ) -> anyhow::Result<Vec<RuntimeEventEnvelope>> {
+        Ok(vec![])
+    }
+
+    async fn close_run(
+        &self,
+        _run_id: Uuid,
+        _reason: RuntimeEventCloseReason,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn trim(&self, _run_id: Uuid, _policy: RuntimeEventTrimPolicy) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
 #[tokio::test]
 async fn infrastructure_contracts_are_object_safe_and_async() {
     let cache: Arc<dyn CacheStore> = Arc::new(FakeInfrastructure);
@@ -129,6 +186,7 @@ async fn infrastructure_contracts_are_object_safe_and_async() {
     let events: Arc<dyn EventBus> = Arc::new(FakeInfrastructure);
     let queue: Arc<dyn TaskQueue> = Arc::new(FakeInfrastructure);
     let rate_limit: Arc<dyn RateLimitStore> = Arc::new(FakeInfrastructure);
+    let runtime_events: Arc<dyn RuntimeEventStream> = Arc::new(FakeInfrastructure);
 
     assert_eq!(
         cache.get_json("key").await.unwrap(),
@@ -158,4 +216,25 @@ async fn infrastructure_contracts_are_object_safe_and_async() {
             .unwrap()
             .allowed
     );
+
+    let run_id = Uuid::now_v7();
+    runtime_events
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    let envelope = runtime_events
+        .append(
+            run_id,
+            RuntimeEventPayload {
+                event_type: "heartbeat".to_string(),
+                source: RuntimeEventSource::System,
+                durability: control_plane::ports::RuntimeEventDurability::Ephemeral,
+                persist_required: false,
+                trace_visible: false,
+                payload: json!({ "type": "heartbeat" }),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(envelope.sequence, 1);
 }
