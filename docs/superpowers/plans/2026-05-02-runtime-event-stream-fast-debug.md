@@ -354,7 +354,7 @@ git commit -m "feat: add runtime event stream host contract"
 - Create: `api/apps/api-server/src/_tests/runtime_event_stream_tests.rs`
 - Modify: `api/apps/api-server/src/_tests/mod.rs`
 
-- [ ] **Step 1: Register the test module**
+- [x] **Step 1: Register the test module**
 
 Add this line to `api/apps/api-server/src/_tests/mod.rs`:
 
@@ -362,7 +362,7 @@ Add this line to `api/apps/api-server/src/_tests/mod.rs`:
 mod runtime_event_stream_tests;
 ```
 
-- [ ] **Step 2: Write local stream tests**
+- [x] **Step 2: Write local stream tests**
 
 Create `api/apps/api-server/src/_tests/runtime_event_stream_tests.rs`:
 
@@ -467,7 +467,7 @@ async fn local_runtime_event_stream_rejects_append_after_close() {
 }
 ```
 
-- [ ] **Step 3: Run the failing local stream tests**
+- [x] **Step 3: Run the failing local stream tests**
 
 Run:
 
@@ -477,7 +477,7 @@ cargo test -p api-server runtime_event_stream_tests
 
 Expected: FAIL because `LocalRuntimeEventStream` does not exist.
 
-- [ ] **Step 4: Implement the local stream**
+- [x] **Step 4: Implement the local stream**
 
 Create `api/apps/api-server/src/host_infrastructure/local_runtime_event_stream.rs`:
 
@@ -678,7 +678,7 @@ fn replay_from_ring(
 
 This implementation uses `Mutex<HashMap<Uuid, Arc<LocalRunEventStream>>>`; do not add a new concurrent map dependency for this task.
 
-- [ ] **Step 5: Run the local stream tests**
+- [x] **Step 5: Run the local stream tests**
 
 Run:
 
@@ -688,7 +688,7 @@ cargo test -p api-server runtime_event_stream_tests
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/apps/api-server/src/host_infrastructure/local_runtime_event_stream.rs \
