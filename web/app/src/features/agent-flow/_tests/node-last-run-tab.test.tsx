@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AppProviders } from '../../../app/AppProviders';
@@ -99,6 +99,14 @@ describe('NodeLastRunTab', () => {
     expect(screen.queryByText('执行人')).not.toBeInTheDocument();
     expect(screen.queryByText('Compiled Plan')).not.toBeInTheDocument();
     expect(screen.queryByText('输出契约数')).not.toBeInTheDocument();
+
+    const inputToggle = screen.getByRole('button', { name: '输入' });
+    expect(inputToggle).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(inputToggle);
+
+    expect(inputToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: '放大查看输入 JSON' })).toBeDisabled();
   });
 
   test('renders warning state when runtime payload is malformed', async () => {

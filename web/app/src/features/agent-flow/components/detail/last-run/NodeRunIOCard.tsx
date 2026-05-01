@@ -1,6 +1,7 @@
 import {
   CheckOutlined,
   CopyOutlined,
+  DownOutlined,
   FullscreenOutlined
 } from '@ant-design/icons';
 import { Button, Card, Modal, Tooltip, message } from 'antd';
@@ -100,6 +101,7 @@ export function NodeRunJsonBlock({
   title: string;
   payload: Record<string, unknown>;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const value = useMemo(() => formatJson(payload), [payload]);
@@ -117,7 +119,16 @@ export function NodeRunJsonBlock({
         {value}
       </pre>
       <div className="agent-flow-node-run-json-viewer__header">
-        <span className="agent-flow-node-run-json-viewer__title">{title}</span>
+        <button
+          aria-label={title}
+          aria-expanded={!collapsed}
+          className="agent-flow-node-run-json-viewer__toggle"
+          onClick={() => setCollapsed((current) => !current)}
+          type="button"
+        >
+          <DownOutlined className="agent-flow-node-run-json-viewer__toggle-icon" />
+          <span className="agent-flow-node-run-json-viewer__title">{title}</span>
+        </button>
         <div className="agent-flow-node-run-json-viewer__actions">
           <Tooltip title="复制 JSON">
             <Button
@@ -131,6 +142,7 @@ export function NodeRunJsonBlock({
           <Tooltip title="放大查看">
             <Button
               aria-label={`放大查看${title} JSON`}
+              disabled={collapsed}
               icon={<FullscreenOutlined />}
               onClick={() => setExpanded(true)}
               size="small"
@@ -139,9 +151,11 @@ export function NodeRunJsonBlock({
           </Tooltip>
         </div>
       </div>
-      <div className="agent-flow-node-run-json-viewer__editor">
-        <JsonEditor height="220px" value={value} />
-      </div>
+      {!collapsed ? (
+        <div className="agent-flow-node-run-json-viewer__editor">
+          <JsonEditor height="220px" value={value} />
+        </div>
+      ) : null}
       <Modal
         centered
         className="agent-flow-node-run-json-modal"

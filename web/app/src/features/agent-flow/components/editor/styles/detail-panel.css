@@ -692,6 +692,28 @@
   padding: 4px 8px 4px 12px;
 }
 
+.agent-flow-node-run-json-viewer__toggle {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.agent-flow-node-run-json-viewer__toggle-icon {
+  color: var(--ant-color-text-tertiary);
+  font-size: 10px;
+  transition: transform 120ms ease;
+}
+
+.agent-flow-node-run-json-viewer__toggle[aria-expanded='false'] .agent-flow-node-run-json-viewer__toggle-icon {
+  transform: rotate(-90deg);
+}
+
 .agent-flow-node-run-json-viewer__title {
   color: var(--ant-color-text-heading);
   font-size: 12px;

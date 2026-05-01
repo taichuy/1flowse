@@ -87,9 +87,14 @@ describe('DebugAssistantMessage', () => {
     expect(workflowToggle).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(screen.getByRole('button', { name: /LLM/ }));
 
-    expect(screen.getByText('输入')).toBeInTheDocument();
+    const inputToggle = screen.getByRole('button', { name: '输入' });
+    expect(inputToggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('输出')).toBeInTheDocument();
     expect(screen.getByText(/user_prompt/)).toBeInTheDocument();
+
+    fireEvent.click(inputToggle);
+
+    expect(inputToggle).toHaveAttribute('aria-expanded', 'false');
   });
 
 
