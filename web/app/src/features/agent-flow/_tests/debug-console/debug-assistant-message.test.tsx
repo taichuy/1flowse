@@ -49,7 +49,7 @@ describe('DebugAssistantMessage', () => {
       ]
     };
 
-    const { container } = render(
+    render(
       <DebugAssistantMessage
         message={message}
         onViewTrace={vi.fn()}
@@ -63,8 +63,19 @@ describe('DebugAssistantMessage', () => {
     expect(screen.getByRole('group', { name: '工作流' })).toBeInTheDocument();
     expect(screen.queryByText('Assistant')).not.toBeInTheDocument();
     expect(screen.getAllByText('LLM').length).toBeGreaterThan(0);
-    expect(container.querySelector('.anticon-thunderbolt')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'llm 节点类型' })).toBeInTheDocument();
 
+    const workflowToggle = screen.getByRole('button', { name: /工作流/ });
+    expect(workflowToggle).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(workflowToggle);
+
+    expect(workflowToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: /LLM/ })).not.toBeInTheDocument();
+
+    fireEvent.click(workflowToggle);
+
+    expect(workflowToggle).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(screen.getByRole('button', { name: /LLM/ }));
 
     expect(screen.getByText('输入')).toBeInTheDocument();

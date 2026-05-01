@@ -3,10 +3,8 @@ import type { NodeChange } from '@xyflow/react';
 import { moveNodes } from '../../lib/document/transforms/node';
 import { setViewport } from '../../lib/document/transforms/viewport';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
-import { selectWorkingDocument } from '../../store/editor/selectors';
 
 export function useCanvasInteractions() {
-  const document = useAgentFlowEditorStore(selectWorkingDocument);
   const setWorkingDocument = useAgentFlowEditorStore(
     (state) => state.setWorkingDocument
   );
@@ -34,11 +32,11 @@ export function useCanvasInteractions() {
         return;
       }
 
-      setWorkingDocument(moveNodes(document, positions));
+      setWorkingDocument((currentDocument) => moveNodes(currentDocument, positions));
     },
     onViewportChange(viewport: { x: number; y: number; zoom: number }) {
-      setWorkingDocument(
-        setViewport(document, {
+      setWorkingDocument((currentDocument) =>
+        setViewport(currentDocument, {
           x: viewport.x,
           y: viewport.y,
           zoom: viewport.zoom

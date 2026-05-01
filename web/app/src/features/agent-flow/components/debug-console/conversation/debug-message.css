@@ -70,7 +70,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
   color: #334155;
+  cursor: pointer;
+  text-align: left;
 }
 
 .agent-flow-editor__debug-workflow-title {
@@ -81,6 +87,10 @@
 
 .agent-flow-editor__debug-workflow-title > .anticon {
   color: #039855;
+}
+
+.agent-flow-editor__debug-workflow-header:hover .agent-flow-editor__debug-workflow-title {
+  color: #0f172a;
 }
 
 .agent-flow-editor__debug-workflow-collapse {

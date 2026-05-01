@@ -29,6 +29,12 @@ type MockReactFlowProps = {
   children?: ReactNode;
   nodes?: Array<{
     id: string;
+    height?: number;
+    measured?: {
+      height?: number;
+      width?: number;
+    };
+    width?: number;
     data?: {
       onSelectNode?: (nodeId: string) => void;
     };
@@ -238,6 +244,21 @@ describe('AgentFlowCanvas interactions', () => {
         expect.objectContaining({
           id: 'node-llm',
           position: { x: 520, y: 260 }
+        })
+      ])
+    );
+  });
+
+  test('projects stable measured dimensions for controlled React Flow nodes', () => {
+    renderCanvas();
+
+    expect(latestReactFlowProps?.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'node-llm',
+          height: 96,
+          measured: { height: 96, width: 196 },
+          width: 196
         })
       ])
     );

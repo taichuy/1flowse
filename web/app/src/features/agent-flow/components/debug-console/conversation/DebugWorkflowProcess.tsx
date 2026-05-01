@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import {
   CheckCircleFilled,
   DownOutlined,
   LoadingOutlined,
+  RightOutlined,
   WarningFilled
 } from '@ant-design/icons';
 import { Collapse, Tag, Typography } from 'antd';
@@ -105,7 +107,11 @@ function PayloadBlock({
 
 function NodeTypeIcon({ nodeType }: { nodeType: string }) {
   return (
-    <span className="agent-flow-editor__debug-workflow-node-icon">
+    <span
+      aria-label={`${nodeType} 节点类型`}
+      className="agent-flow-editor__debug-workflow-node-icon"
+      role="img"
+    >
       {getAgentFlowNodeTypeIcon(nodeType)}
     </span>
   );
@@ -116,6 +122,8 @@ export function DebugWorkflowProcess({
 }: {
   items: AgentFlowTraceItem[];
 }) {
+  const [expanded, setExpanded] = useState(true);
+
   if (items.length === 0) {
     return null;
   }
@@ -126,42 +134,53 @@ export function DebugWorkflowProcess({
       className="agent-flow-editor__debug-workflow-process"
       role="group"
     >
-      <div className="agent-flow-editor__debug-workflow-header">
+      <button
+        aria-expanded={expanded}
+        className="agent-flow-editor__debug-workflow-header"
+        onClick={() => setExpanded((current) => !current)}
+        type="button"
+      >
         <span className="agent-flow-editor__debug-workflow-title">
           <CheckCircleFilled />
           <Typography.Text>工作流</Typography.Text>
         </span>
-        <DownOutlined className="agent-flow-editor__debug-workflow-collapse" />
-      </div>
-      <Collapse
-        bordered={false}
-        className="agent-flow-editor__debug-workflow-collapse-list"
-        expandIconPosition="end"
-        items={items.map((item) => ({
-          key: item.nodeId,
-          label: (
-            <span className="agent-flow-editor__debug-workflow-row">
-              <NodeTypeIcon nodeType={item.nodeType} />
-              <span className="agent-flow-editor__debug-workflow-node-main">
-                <Typography.Text strong>{nodeDisplayName(item)}</Typography.Text>
-                <Typography.Text className="agent-flow-editor__debug-workflow-metric" type="secondary">
-                  {metricText(item)}
-                </Typography.Text>
+        {expanded ? (
+          <DownOutlined className="agent-flow-editor__debug-workflow-collapse" />
+        ) : (
+          <RightOutlined className="agent-flow-editor__debug-workflow-collapse" />
+        )}
+      </button>
+      {expanded ? (
+        <Collapse
+          bordered={false}
+          className="agent-flow-editor__debug-workflow-collapse-list"
+          expandIconPosition="end"
+          items={items.map((item) => ({
+            key: item.nodeId,
+            label: (
+              <span className="agent-flow-editor__debug-workflow-row">
+                <NodeTypeIcon nodeType={item.nodeType} />
+                <span className="agent-flow-editor__debug-workflow-node-main">
+                  <Typography.Text strong>{nodeDisplayName(item)}</Typography.Text>
+                  <Typography.Text className="agent-flow-editor__debug-workflow-metric" type="secondary">
+                    {metricText(item)}
+                  </Typography.Text>
+                </span>
+                <Tag className="agent-flow-editor__debug-workflow-node-type">{item.nodeType}</Tag>
+                <StatusIcon status={item.status} />
               </span>
-              <Tag className="agent-flow-editor__debug-workflow-node-type">{item.nodeType}</Tag>
-              <StatusIcon status={item.status} />
-            </span>
-          ),
-          children: (
-            <div className="agent-flow-editor__debug-workflow-node-detail">
-              <PayloadBlock payload={item.inputPayload} title="输入" />
-              <PayloadBlock payload={item.outputPayload} title="输出" />
-              <PayloadBlock payload={item.errorPayload} title="错误" />
-              <PayloadBlock payload={item.metricsPayload} title="指标" />
-            </div>
-          )
-        }))}
-      />
+            ),
+            children: (
+              <div className="agent-flow-editor__debug-workflow-node-detail">
+                <PayloadBlock payload={item.inputPayload} title="输入" />
+                <PayloadBlock payload={item.outputPayload} title="输出" />
+                <PayloadBlock payload={item.errorPayload} title="错误" />
+                <PayloadBlock payload={item.metricsPayload} title="指标" />
+              </div>
+            )
+          }))}
+        />
+      ) : null}
     </div>
   );
 }
