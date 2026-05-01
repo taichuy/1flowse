@@ -29,7 +29,8 @@ import {
   buildRunContextFromDocument,
   getRunContextValues,
   mapRunContextToVariableGroups,
-  mapRunDetailToVariableGroups
+  mapRunDetailToVariableGroups,
+  mapVariableCacheToVariableGroup
 } from '../../lib/debug-console/variable-groups';
 
 const DEBUG_SESSION_STORAGE_VERSION = 1;
@@ -236,6 +237,109 @@ function shouldPollRun(detail: FlowDebugRunDetail) {
   return detail.flow_run.status === 'running';
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function mergeVariablePayload(
+  currentCache: NodeDebugPreviewVariableCache,
+  nodeId: string,
+  payload: Record<string, unknown>
+) {
+  return {
+    ...currentCache,
+    [nodeId]: {
+      ...(currentCache[nodeId] ?? {}),
+      ...payload
+    }
+  };
+}
+
+function mergeVariableCache(
+  currentCache: NodeDebugPreviewVariableCache,
+  nextCache: NodeDebugPreviewVariableCache
+) {
+  let mergedCache = currentCache;
+
+  for (const [nodeId, payload] of Object.entries(nextCache)) {
+    mergedCache = mergeVariablePayload(mergedCache, nodeId, payload);
+  }
+
+  return mergedCache;
+}
+
+function buildVariableCacheFromTraceItems(
+  traceItems: AgentFlowTraceItem[]
+): NodeDebugPreviewVariableCache {
+  let cache: NodeDebugPreviewVariableCache = {};
+
+  for (const item of traceItems) {
+    if (isRecord(item.inputPayload)) {
+      cache = mergeVariablePayload(cache, item.nodeId, item.inputPayload);
+    }
+
+    if (isRecord(item.outputPayload)) {
+      cache = mergeVariablePayload(cache, item.nodeId, item.outputPayload);
+    }
+  }
+
+  return cache;
+}
+
+function buildVariableCacheFromRunDetail(
+  detail: FlowDebugRunDetail
+): NodeDebugPreviewVariableCache {
+  let cache: NodeDebugPreviewVariableCache = {};
+
+  for (const [nodeId, payload] of Object.entries(detail.flow_run.input_payload)) {
+    if (isRecord(payload)) {
+      cache = mergeVariablePayload(cache, nodeId, payload);
+    }
+  }
+
+  for (const nodeRun of detail.node_runs) {
+    if (isRecord(nodeRun.input_payload)) {
+      cache = mergeVariablePayload(cache, nodeRun.node_id, nodeRun.input_payload);
+    }
+
+    if (isRecord(nodeRun.output_payload)) {
+      cache = mergeVariablePayload(cache, nodeRun.node_id, nodeRun.output_payload);
+    }
+  }
+
+  return cache;
+}
+
+function isSameVariableValue(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function buildDisplayVariableCache(
+  variableCache: NodeDebugPreviewVariableCache,
+  runContext: AgentFlowRunContext
+) {
+  let displayCache: NodeDebugPreviewVariableCache = {};
+
+  for (const [nodeId, payload] of Object.entries(variableCache)) {
+    for (const [key, value] of Object.entries(payload)) {
+      const sameRunContextField = runContext.fields.find(
+        (field) =>
+          field.nodeId === nodeId &&
+          field.key === key &&
+          isSameVariableValue(field.value, value)
+      );
+
+      if (sameRunContextField) {
+        continue;
+      }
+
+      displayCache = mergeVariablePayload(displayCache, nodeId, { [key]: value });
+    }
+  }
+
+  return displayCache;
+}
+
 export function useAgentFlowDebugSession({
   applicationId,
   draftId,
@@ -302,18 +406,26 @@ export function useAgentFlowDebugSession({
     [activeNodeFilter, rawTraceItems]
   );
   const variableGroups = useMemo<AgentFlowVariableGroup[]>(
-    () =>
-      lastDetail
-        ? mapRunDetailToVariableGroups(lastDetail, {
-            applicationId,
-            draftId,
-            runContext
-          })
-        : mapRunContextToVariableGroups(runContext, {
-            applicationId,
-            draftId
-          }),
-    [applicationId, draftId, lastDetail, runContext]
+    () => {
+      if (lastDetail) {
+        return mapRunDetailToVariableGroups(lastDetail, {
+          applicationId,
+          draftId,
+          runContext
+        });
+      }
+
+      const groups = mapRunContextToVariableGroups(runContext, {
+        applicationId,
+        draftId
+      });
+      const cacheGroup = mapVariableCacheToVariableGroup(
+        buildDisplayVariableCache(nodePreviewVariableCache, runContext)
+      );
+
+      return cacheGroup ? [cacheGroup, ...groups] : groups;
+    },
+    [applicationId, draftId, lastDetail, nodePreviewVariableCache, runContext]
   );
 
   function clearPollTimer() {
@@ -338,6 +450,9 @@ export function useAgentFlowDebugSession({
     const assistantMessage = mapRunDetailToConversation(detail);
 
     setLastDetail(detail);
+    setNodePreviewVariableCache((currentCache) =>
+      mergeVariableCache(currentCache, buildVariableCacheFromRunDetail(detail))
+    );
     setStatus(assistantMessage.status);
     setMessages((currentMessages) =>
       replaceAssistantMessage(
@@ -463,6 +578,12 @@ export function useAgentFlowDebugSession({
           }
 
           setStreamTraceItems(streamTraceItemsSnapshot);
+          setNodePreviewVariableCache((currentCache) =>
+            mergeVariableCache(
+              currentCache,
+              buildVariableCacheFromTraceItems(streamTraceItemsSnapshot)
+            )
+          );
           setStatus(streamAssistantMessage.status);
           setMessages((currentMessages) =>
             replaceAssistantMessage(
@@ -629,30 +750,8 @@ export function useAgentFlowDebugSession({
     inputPayload: NodeDebugPreviewVariableCache
   ) {
     setNodePreviewVariableCache((currentCache) => {
-      const nextCache: NodeDebugPreviewVariableCache = { ...currentCache };
-
-      for (const [nodeId, payload] of Object.entries(inputPayload)) {
-        nextCache[nodeId] = {
-          ...(nextCache[nodeId] ?? {}),
-          ...payload
-        };
-      }
-
-      return nextCache;
+      return mergeVariableCache(currentCache, inputPayload);
     });
-
-    setRunContext((currentRunContext) => ({
-      ...currentRunContext,
-      remembered: false,
-      fields: currentRunContext.fields.map((field) =>
-        Object.prototype.hasOwnProperty.call(
-          inputPayload[field.nodeId] ?? {},
-          field.key
-        )
-          ? { ...field, value: inputPayload[field.nodeId]?.[field.key] }
-          : field
-      )
-    }));
   }
 
   function selectTraceNode(nodeId: string | null) {

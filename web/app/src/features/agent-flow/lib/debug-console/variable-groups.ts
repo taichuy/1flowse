@@ -5,7 +5,8 @@ import {
   type AgentFlowRunContext,
   type AgentFlowVariableGroup,
   type AgentFlowVariableItem,
-  type FlowDebugRunDetail
+  type FlowDebugRunDetail,
+  type NodeDebugPreviewVariableCache
 } from '../../api/runtime';
 import { getNodeVariableOutputs } from '../start-node-variables';
 
@@ -121,6 +122,23 @@ export function mapRunContextToVariableGroups(
       ]
     }
   ];
+}
+
+export function mapVariableCacheToVariableGroup(
+  variableCache: NodeDebugPreviewVariableCache
+): AgentFlowVariableGroup | null {
+  const items = Object.entries(variableCache).flatMap(([nodeId, value]) =>
+    flattenValue(nodeId, value)
+  );
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  return {
+    title: 'Variable Cache',
+    items
+  };
 }
 
 export function mapRunDetailToVariableGroups(

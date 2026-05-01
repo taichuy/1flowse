@@ -303,6 +303,16 @@ describe('useAgentFlowDebugSession', () => {
         'Environment'
       ])
     );
+    expect(result.current.getNodePreviewVariableCache()).toEqual(
+      expect.objectContaining({
+        'node-start': expect.objectContaining({
+          query: '请总结退款政策'
+        }),
+        'node-llm': expect.objectContaining({
+          text: '退款政策摘要'
+        })
+      })
+    );
     expect(
       JSON.parse(
         window.localStorage.getItem(

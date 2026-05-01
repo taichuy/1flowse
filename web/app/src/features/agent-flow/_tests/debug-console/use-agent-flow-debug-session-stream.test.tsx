@@ -241,6 +241,48 @@ describe('useAgentFlowDebugSession streaming', () => {
         })
       ])
     );
+    expect(result.current.getNodePreviewVariableCache()).toEqual(
+      expect.objectContaining({
+        'node-start': expect.objectContaining({
+          query: '请总结退款政策'
+        }),
+        'node-llm': expect.objectContaining({
+          text: '退款政策摘要'
+        })
+      })
+    );
+    expect(
+      runtimeApi.buildNodeDebugPreviewPlan(
+        document,
+        'node-answer',
+        result.current.getNodePreviewVariableCache()
+      )
+    ).toEqual({
+      input_payload: {
+        'node-llm': {
+          text: '退款政策摘要'
+        }
+      },
+      missing_fields: []
+    });
+
+    await act(async () => {
+      await result.current.submitPrompt();
+    });
+
+    expect(startFlowDebugRunStreamSpy).toHaveBeenLastCalledWith(
+      'app-1',
+      {
+        document,
+        input_payload: {
+          'node-start': { files: undefined, query: '' }
+        }
+      },
+      'csrf-123',
+      expect.objectContaining({
+        onEvent: expect.any(Function)
+      })
+    );
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: ['applications', 'app-1', 'runtime']
     });

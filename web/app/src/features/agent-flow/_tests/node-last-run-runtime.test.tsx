@@ -203,7 +203,6 @@ describe('node last run runtime', () => {
       'agent-flow-editor-variable-cache-sidebar'
     );
     expect(within(variableSidebar).getByText('node-start.query')).toBeInTheDocument();
-    expect(screen.getByText('总结退款政策')).toBeInTheDocument();
   }, 30_000);
 
   test('asks for referenced variables before running when cache is empty', async () => {
