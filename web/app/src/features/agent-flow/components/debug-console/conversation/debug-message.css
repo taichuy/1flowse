@@ -59,9 +59,9 @@
   width: 100%;
   margin-bottom: 0.25rem;
   padding: clamp(0.5rem, 2.2cqw, 0.75rem);
-  border: 1px solid #c8efd9;
+  border: 1px solid #e5e7eb;
   border-radius: 0.875rem;
-  background: #eafbf2;
+  background: #ffffff;
   text-align: left;
 }
 
