@@ -1,4 +1,4 @@
-import { Button, Grid, Table, Tag, Typography } from 'antd';
+import { Button, Checkbox, Grid, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import type { SettingsDataSourceInstance } from '../../api/data-models';
@@ -26,18 +26,7 @@ export function DataSourcePanel({
       title: '数据源名称',
       dataIndex: 'display_name',
       key: 'display_name',
-      render: (_, source) => (
-        <Button
-          type="link"
-          className="data-model-panel__source-link"
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpenSource(source.id);
-          }}
-        >
-          {source.display_name}
-        </Button>
-      )
+      render: (value: string) => <Typography.Text>{value}</Typography.Text>
     },
     {
       title: '类型',
@@ -58,11 +47,11 @@ export function DataSourcePanel({
       key: 'enabled',
       width: 120,
       render: (_, source) => (
-        <Typography.Text
-          type={source.status === 'ready' ? 'success' : 'secondary'}
-        >
-          {source.status === 'ready' ? '是' : '-'}
-        </Typography.Text>
+        <Checkbox
+          aria-label={`${source.display_name} 启用`}
+          checked={source.status === 'ready'}
+          disabled
+        />
       )
     },
     {
@@ -78,7 +67,7 @@ export function DataSourcePanel({
             onOpenSource(source.id);
           }}
         >
-          表管理
+          配置
         </Button>
       )
     }
@@ -95,20 +84,12 @@ export function DataSourcePanel({
           dataSource={sources}
           pagination={false}
           scroll={{ x: 760 }}
-          onRow={(source) => ({
-            onClick: () => onOpenSource(source.id)
-          })}
         />
       ) : null}
       {useMobileList ? (
         <div className="data-model-panel__mobile-list">
           {sources.map((source) => (
-            <button
-              key={source.id}
-              type="button"
-              className="data-model-panel__mobile-item"
-              onClick={() => onOpenSource(source.id)}
-            >
+            <div key={source.id} className="data-model-panel__mobile-item">
               <span>
                 <Typography.Text strong>{source.display_name}</Typography.Text>
                 <Typography.Text type="secondary">
@@ -120,9 +101,20 @@ export function DataSourcePanel({
                 <Tag color={source.status === 'ready' ? 'green' : 'default'}>
                   {source.status}
                 </Tag>
+                <Checkbox
+                  aria-label={`${source.display_name} 启用`}
+                  checked={source.status === 'ready'}
+                  disabled
+                />
               </span>
-              <Typography.Text type="success">表管理</Typography.Text>
-            </button>
+              <Button
+                type="link"
+                size="small"
+                onClick={() => onOpenSource(source.id)}
+              >
+                配置
+              </Button>
+            </div>
           ))}
         </div>
       ) : null}

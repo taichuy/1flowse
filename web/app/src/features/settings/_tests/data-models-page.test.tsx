@@ -465,7 +465,16 @@ describe('Settings data models page', () => {
     expect(await findDataModelsNavigation()).toBeInTheDocument();
     expect(await screen.findByText('主数据源')).toBeInTheDocument();
     expect(await screen.findByText('HubSpot')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('HubSpot'));
+    const hubSpotRow = screen
+      .getAllByRole('row')
+      .find((row) => within(row).queryByText('HubSpot'));
+    expect(hubSpotRow).toBeDefined();
+    expect(
+      within(hubSpotRow as HTMLElement).getByLabelText('HubSpot 启用')
+    ).toBeChecked();
+    fireEvent.click(
+      within(hubSpotRow as HTMLElement).getByRole('button', { name: '配置' })
+    );
     expect(await screen.findByText('数据源管理')).toBeInTheDocument();
     expect(screen.getByLabelText('默认 Data Model 状态')).toBeInTheDocument();
     expect(screen.getByLabelText('默认 API 暴露状态')).toBeInTheDocument();
