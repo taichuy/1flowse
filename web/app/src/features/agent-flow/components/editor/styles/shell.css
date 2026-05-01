@@ -168,8 +168,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 72px;
-  padding: 18px 22px 10px;
+  min-height: 56px;
+  padding: 14px 18px 8px;
   background: #f8fafd;
 }
 
@@ -269,16 +269,16 @@
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  gap: 12px;
+  gap: 10px;
   overflow: auto;
-  padding: 24px 24px 16px;
+  padding: 16px 18px 14px;
 }
 
 .agent-flow-editor__debug-message {
   display: flex;
   gap: 10px;
   width: 100%;
-  max-width: 760px;
+  max-width: 100%;
 }
 
 .agent-flow-editor__debug-message--assistant {
@@ -308,21 +308,22 @@
 
 .agent-flow-editor__debug-message-main {
   min-width: 0;
-  max-width: min(680px, 100%);
+  max-width: 100%;
 }
 
 .agent-flow-editor__debug-message--assistant .agent-flow-editor__debug-message-main {
   display: flex;
+  width: 100%;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px 20px;
-  border-radius: 24px;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
 }
 
 .agent-flow-editor__debug-message--user .agent-flow-editor__debug-message-main {
-  max-width: min(620px, 82%);
+  max-width: min(320px, 82%);
 }
 
 .agent-flow-editor__debug-message-header {
@@ -352,31 +353,30 @@
 }
 
 .agent-flow-editor__debug-message--user .agent-flow-editor__debug-message-content.ant-typography {
-  padding: 16px 22px;
-  border-radius: 22px;
+  padding: 10px 14px;
+  border-radius: 16px;
   background: #dbeafe;
   color: #111827;
-  font-size: 18px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .agent-flow-editor__debug-composer {
   flex: 0 0 auto;
-  padding: 0 22px 18px;
+  padding: 0 18px 14px;
   background: #f8fafd;
 }
 
 .agent-flow-editor__debug-composer-box {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 48px;
+  grid-template-columns: minmax(0, 1fr) 40px;
   align-items: center;
-  max-width: 760px;
-  margin: 0 auto;
-  gap: 12px;
+  width: 100%;
+  gap: 10px;
   border: 1px solid #dfe4ed;
-  border-radius: 16px;
+  border-radius: 14px;
   background: #ffffff;
-  padding: 14px 14px 14px 20px;
+  padding: 10px 10px 10px 14px;
   box-shadow: 0 12px 30px rgb(15 23 42 / 8%);
 }
 
@@ -394,30 +394,30 @@
 }
 
 .agent-flow-editor__debug-composer-submit {
-  min-width: 44px;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  min-width: 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
 }
 
 .agent-flow-editor__debug-feature-bar {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
-  max-width: 760px;
-  min-height: 52px;
-  margin: 12px auto 0;
-  gap: 10px;
-  padding: 8px 12px;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  gap: 8px;
+  padding: 7px 10px;
   border: 1px solid #cddcf4;
-  border-radius: 0 0 14px 14px;
+  border-radius: 12px;
   background: #eef5ff;
 }
 
 .agent-flow-editor__debug-feature-icon {
   display: inline-flex;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   align-items: center;
   justify-content: center;
   border-radius: 10px;
@@ -433,6 +433,10 @@
 .agent-flow-editor__debug-message-actions {
   align-self: flex-end;
   margin-top: -2px;
+}
+
+.agent-flow-editor__debug-message-actions .ant-btn {
+  padding-inline: 8px;
 }
 
 .agent-flow-editor__debug-trace-summary {

@@ -115,10 +115,12 @@ export function DebugWorkflowProcess({
             <span
               className={`agent-flow-editor__debug-workflow-node-icon agent-flow-editor__debug-workflow-node-icon--${nodeIconTone(item)}`}
             />
-            <Typography.Text strong>{nodeDisplayName(item)}</Typography.Text>
-            <Typography.Text className="agent-flow-editor__debug-workflow-metric" type="secondary">
-              {metricText(item)}
-            </Typography.Text>
+            <span className="agent-flow-editor__debug-workflow-node-main">
+              <Typography.Text strong>{nodeDisplayName(item)}</Typography.Text>
+              <Typography.Text className="agent-flow-editor__debug-workflow-metric" type="secondary">
+                {metricText(item)}
+              </Typography.Text>
+            </span>
             <StatusIcon status={item.status} />
           </button>
         ))}
