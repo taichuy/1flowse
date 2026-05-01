@@ -705,7 +705,7 @@ git commit -m "feat: add local runtime event stream"
 - Modify: `api/apps/api-server/src/host_infrastructure/mod.rs`
 - Modify: `api/apps/api-server/src/_tests/host_infrastructure_tests.rs`
 
-- [ ] **Step 1: Extend host infrastructure tests**
+- [x] **Step 1: Extend host infrastructure tests**
 
 In `api/apps/api-server/src/_tests/host_infrastructure_tests.rs`, update `local_infra_host_provides_required_defaults`:
 
@@ -746,7 +746,7 @@ let envelope = runtime_events
 assert_eq!(envelope.sequence, 1);
 ```
 
-- [ ] **Step 2: Run the failing registry test**
+- [x] **Step 2: Run the failing registry test**
 
 Run:
 
@@ -756,7 +756,7 @@ cargo test -p api-server host_infrastructure_tests
 
 Expected: FAIL because the registry does not expose `runtime_event_stream`.
 
-- [ ] **Step 3: Export the contract**
+- [x] **Step 3: Export the contract**
 
 Update `api/apps/api-server/src/host_infrastructure/contracts.rs`:
 
@@ -767,7 +767,7 @@ pub use control_plane::ports::{
 };
 ```
 
-- [ ] **Step 4: Register the local provider**
+- [x] **Step 4: Register the local provider**
 
 Update `api/apps/api-server/src/host_infrastructure/mod.rs`:
 
@@ -820,7 +820,7 @@ registry.set_runtime_event_stream(
 );
 ```
 
-- [ ] **Step 5: Run the registry tests**
+- [x] **Step 5: Run the registry tests**
 
 Run:
 
@@ -830,7 +830,7 @@ cargo test -p api-server host_infrastructure_tests
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/apps/api-server/src/host_infrastructure/contracts.rs \
