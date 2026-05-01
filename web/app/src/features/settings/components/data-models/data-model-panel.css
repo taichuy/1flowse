@@ -31,6 +31,23 @@
   overflow-wrap: anywhere;
 }
 
+.data-model-panel__enabled-check .ant-checkbox-disabled .ant-checkbox-inner {
+  background: var(--bg-surface);
+}
+
+.data-model-panel__enabled-check
+  .ant-checkbox-disabled.ant-checkbox-checked
+  .ant-checkbox-inner {
+  background: var(--bg-surface);
+  border-color: var(--color-primary);
+}
+
+.data-model-panel__enabled-check
+  .ant-checkbox-disabled.ant-checkbox-checked
+  .ant-checkbox-inner::after {
+  border-color: var(--color-primary);
+}
+
 .data-model-panel__defaults {
   margin-top: 12px;
   row-gap: 12px;

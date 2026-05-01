@@ -50,6 +50,7 @@ export function DataSourcePanel({
         <Checkbox
           aria-label={`${source.display_name} 启用`}
           checked={source.status === 'ready'}
+          className="data-model-panel__enabled-check"
           disabled
         />
       )
@@ -104,6 +105,7 @@ export function DataSourcePanel({
                 <Checkbox
                   aria-label={`${source.display_name} 启用`}
                   checked={source.status === 'ready'}
+                  className="data-model-panel__enabled-check"
                   disabled
                 />
               </span>
