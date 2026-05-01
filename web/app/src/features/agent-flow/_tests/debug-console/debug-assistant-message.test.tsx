@@ -42,9 +42,9 @@ describe('DebugAssistantMessage', () => {
           finishedAt: null,
           durationMs: null,
           inputPayload: { user_prompt: '退款' },
-          outputPayload: {},
-          errorPayload: null,
-          metricsPayload: {}
+          outputPayload: { text: '退款处理中' },
+          errorPayload: { code: 'still_running' },
+          metricsPayload: { total_tokens: 128 }
         }
       ]
     };
@@ -90,7 +90,13 @@ describe('DebugAssistantMessage', () => {
     const inputToggle = screen.getByRole('button', { name: '输入' });
     expect(inputToggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('输出')).toBeInTheDocument();
+    expect(screen.queryByText('错误')).not.toBeInTheDocument();
+    expect(screen.queryByText('指标')).not.toBeInTheDocument();
     expect(screen.getByText(/user_prompt/)).toBeInTheDocument();
+    const outputJson = screen.getByLabelText('输出 JSON');
+    expect(outputJson).toHaveTextContent('退款处理中');
+    expect(outputJson).toHaveTextContent('still_running');
+    expect(outputJson).toHaveTextContent('total_tokens');
 
     fireEvent.click(inputToggle);
 

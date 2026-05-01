@@ -123,6 +123,14 @@ function NodeTypeIcon({ nodeType }: { nodeType: string }) {
   );
 }
 
+function buildNodeOutputPayload(item: AgentFlowTraceItem) {
+  return {
+    ...item.outputPayload,
+    error: item.errorPayload ?? null,
+    metrics: item.metricsPayload
+  };
+}
+
 export function DebugWorkflowProcess({
   items
 }: {
@@ -181,9 +189,7 @@ export function DebugWorkflowProcess({
             children: (
               <div className="agent-flow-editor__debug-workflow-node-detail">
                 <NodeRunJsonBlock payload={item.inputPayload} title="输入" />
-                <NodeRunJsonBlock payload={item.outputPayload} title="输出" />
-                <NodeRunJsonBlock payload={item.errorPayload ?? {}} title="错误" />
-                <NodeRunJsonBlock payload={item.metricsPayload} title="指标" />
+                <NodeRunJsonBlock payload={buildNodeOutputPayload(item)} title="输出" />
               </div>
             )
           }))}
