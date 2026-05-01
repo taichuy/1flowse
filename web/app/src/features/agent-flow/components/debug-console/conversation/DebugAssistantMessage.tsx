@@ -103,45 +103,45 @@ export function DebugAssistantMessage({
           className="agent-flow-editor__debug-message-content"
           content={message.content ? visibleContent : fallbackContent(message)}
         />
-        <div
-          aria-label="输出动作"
-          className="agent-flow-editor__debug-message-action-row"
-          role="group"
-        >
-          <Space className="agent-flow-editor__debug-message-actions" size={8} wrap>
-            <Button
-              disabled={!message.content}
-              icon={<CopyOutlined />}
-              size="small"
-              onClick={() => {
-                void handleCopyOutput();
-              }}
-            >
-              复制输出
-            </Button>
-            <Button
-              disabled={message.traceSummary.length === 0}
-              icon={<PartitionOutlined />}
-              size="small"
-              onClick={onViewTrace}
-            >
-              查看 Trace
-            </Button>
-            <Button
-              disabled={!message.rawOutput}
-              icon={<EyeOutlined />}
-              size="small"
-              onClick={() => setShowRawOutput((current) => !current)}
-            >
-              查看 Raw Output
-            </Button>
-          </Space>
-        </div>
         {showRawOutput && message.rawOutput ? (
           <pre className="agent-flow-editor__debug-raw-output">
             {JSON.stringify(message.rawOutput, null, 2)}
           </pre>
         ) : null}
+      </div>
+      <div
+        aria-label="输出动作"
+        className="agent-flow-editor__debug-message-action-row"
+        role="group"
+      >
+        <Space className="agent-flow-editor__debug-message-actions" size={8} wrap>
+          <Button
+            disabled={!message.content}
+            icon={<CopyOutlined />}
+            size="small"
+            onClick={() => {
+              void handleCopyOutput();
+            }}
+          >
+            复制输出
+          </Button>
+          <Button
+            disabled={message.traceSummary.length === 0}
+            icon={<PartitionOutlined />}
+            size="small"
+            onClick={onViewTrace}
+          >
+            查看 Trace
+          </Button>
+          <Button
+            disabled={!message.rawOutput}
+            icon={<EyeOutlined />}
+            size="small"
+            onClick={() => setShowRawOutput((current) => !current)}
+          >
+            查看 Raw Output
+          </Button>
+        </Space>
       </div>
     </article>
   );

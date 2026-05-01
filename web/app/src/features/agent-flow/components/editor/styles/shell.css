@@ -284,7 +284,7 @@
 }
 
 .agent-flow-editor__debug-message--assistant {
-  flex-direction: row;
+  flex-direction: column;
   margin-right: auto;
 }
 
@@ -436,8 +436,18 @@
   display: flex;
   justify-content: flex-end;
   width: 100%;
-  border-top: 1px solid #eef2f6;
-  padding-top: clamp(0.5rem, 2cqw, 0.625rem);
+  min-height: 1.625rem;
+  margin-top: -0.25rem;
+  padding: 0 clamp(0.25rem, 1.5cqw, 0.5rem);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.agent-flow-editor__debug-message--assistant:hover .agent-flow-editor__debug-message-action-row,
+.agent-flow-editor__debug-message--assistant:focus-within .agent-flow-editor__debug-message-action-row {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .agent-flow-editor__debug-message-actions {
