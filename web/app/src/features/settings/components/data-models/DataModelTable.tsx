@@ -19,6 +19,7 @@ export function DataModelTable({
   saving,
   canManage,
   onSelectModel,
+  onEditModel,
   onCreateModel,
   onUpdateModel
 }: {
@@ -29,6 +30,7 @@ export function DataModelTable({
   saving: boolean;
   canManage: boolean;
   onSelectModel: (model: SettingsDataModel) => void;
+  onEditModel: (model: SettingsDataModel) => void;
   onCreateModel: (input: CreateSettingsDataModelInput) => void;
   onUpdateModel: (
     model: SettingsDataModel,
@@ -40,7 +42,6 @@ export function DataModelTable({
   const [drawerState, setDrawerState] = useState<
     | { open: false; mode: 'create'; model: null }
     | { open: true; mode: 'create'; model: null }
-    | { open: true; mode: 'edit'; model: SettingsDataModel }
   >({ open: false, mode: 'create', model: null });
 
   const columns: ColumnsType<SettingsDataModel> = [
@@ -87,7 +88,7 @@ export function DataModelTable({
           disabled={!canManage}
           onClick={(event) => {
             event.stopPropagation();
-            setDrawerState({ open: true, mode: 'edit', model });
+            onEditModel(model);
           }}
         >
           编辑
@@ -169,7 +170,7 @@ export function DataModelTable({
                     size="small"
                     onClick={(event) => {
                       event.stopPropagation();
-                      setDrawerState({ open: true, mode: 'edit', model });
+                      onEditModel(model);
                     }}
                   >
                     编辑

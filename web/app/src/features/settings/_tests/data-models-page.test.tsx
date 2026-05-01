@@ -229,6 +229,20 @@ function findDataModelsNavigation() {
   return screen.findByRole('link', { name: '数据源' }, { timeout: 5000 });
 }
 
+async function openContactsDataModelEditor() {
+  await screen.findByText('Contacts');
+  const contactsRow = screen
+    .getAllByRole('row')
+    .find((row) => within(row).queryByText('Contacts'));
+  expect(contactsRow).toBeDefined();
+
+  fireEvent.click(
+    within(contactsRow as HTMLElement).getByRole('button', { name: '编辑' })
+  );
+
+  return screen.findByRole('dialog', { name: '编辑 Contacts' });
+}
+
 describe('Settings data models page', () => {
   beforeEach(() => {
     consoleWarnSpy = vi
@@ -491,7 +505,7 @@ describe('Settings data models page', () => {
   test('selects a Data Model and exposes detail tabs with safe status controls', async () => {
     renderApp('/settings/data-models?source=source-1');
 
-    fireEvent.click(await screen.findByText('Contacts'));
+    await openContactsDataModelEditor();
     expect(
       await screen.findByRole('tab', { name: '字段' })
     ).toBeInTheDocument();
@@ -520,7 +534,7 @@ describe('Settings data models page', () => {
   test('shows editable grants, record preview, and Advisor severities', async () => {
     renderApp('/settings/data-models?source=source-1');
 
-    fireEvent.click(await screen.findByText('Contacts'));
+    await openContactsDataModelEditor();
     fireEvent.click(screen.getByRole('tab', { name: '权限' }));
     expect(await screen.findByText('owner')).toBeInTheDocument();
     expect(screen.getByText('scope_all')).toBeInTheDocument();
@@ -583,10 +597,20 @@ describe('Settings data models page', () => {
     fireEvent.click(
       within(contactsRow as HTMLElement).getByRole('button', { name: '编辑' })
     );
+    const editorDialog = await screen.findByRole('dialog', {
+      name: '编辑 Contacts'
+    });
+    expect(
+      within(editorDialog).getByRole('tab', { name: '字段' })
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(editorDialog).getByRole('button', { name: '编辑 Data Model' })
+    );
     const editModelDialog = await screen.findByRole('dialog', {
       name: '编辑 Data Model'
     });
-    fireEvent.change(within(editModelDialog).getByLabelText('标题'), {
+    fireEvent.change(within(editModelDialog).getByDisplayValue('Contacts'), {
       target: { value: 'Customer Contacts' }
     });
     fireEvent.click(
@@ -608,7 +632,7 @@ describe('Settings data models page', () => {
   test('manages Data Model fields through the field drawer with delete confirmation', async () => {
     renderApp('/settings/data-models?source=source-1');
 
-    fireEvent.click(await screen.findByText('Contacts'));
+    await openContactsDataModelEditor();
     fireEvent.click(screen.getByRole('button', { name: '新增字段' }));
     expect(
       await screen.findByRole('dialog', { name: '新增字段' })
@@ -681,7 +705,7 @@ describe('Settings data models page', () => {
   test('requests and closes API exposure without raw ready or unsafe selectors', async () => {
     renderApp('/settings/data-models?source=source-1');
 
-    fireEvent.click(await screen.findByText('Contacts'));
+    await openContactsDataModelEditor();
     fireEvent.click(screen.getByRole('tab', { name: 'API' }));
     expect(
       await screen.findByText('published_not_exposed')
@@ -728,7 +752,7 @@ describe('Settings data models page', () => {
 
     renderApp('/settings/data-models?source=source-1');
 
-    fireEvent.click(await screen.findByText('Contacts'));
+    await openContactsDataModelEditor();
     fireEvent.click(screen.getByRole('tab', { name: 'API' }));
     expect(
       await screen.findByText('api_exposed_no_permission')

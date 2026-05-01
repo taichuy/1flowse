@@ -6,6 +6,7 @@ import {
   Breadcrumb,
   Button,
   Descriptions,
+  Drawer,
   Flex,
   Form,
   Select,
@@ -100,6 +101,7 @@ export function SettingsDataModelsSection({
     readSourceIdFromLocation
   );
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [editingModelId, setEditingModelId] = useState<string | null>(null);
 
   const sourcesQuery = useQuery({
     queryKey: settingsDataSourcesQueryKey,
@@ -120,12 +122,13 @@ export function SettingsDataModelsSection({
   });
 
   const models = modelsQuery.data ?? emptyModels;
-  const selectedModel = useMemo(
-    () => models.find((model) => model.id === selectedModelId) ?? null,
-    [models, selectedModelId]
+  const editingModel = useMemo(
+    () => models.find((model) => model.id === editingModelId) ?? null,
+    [editingModelId, models]
   );
   useEffect(() => {
     setSelectedModelId(null);
+    setEditingModelId(null);
   }, [effectiveSourceId]);
 
   useEffect(() => {
@@ -156,27 +159,28 @@ export function SettingsDataModelsSection({
   const closeSourceManager = () => {
     setSelectedSourceId(null);
     setSelectedModelId(null);
+    setEditingModelId(null);
     writeSourceIdToLocation(null);
   };
 
   const scopeGrantsQuery = useQuery({
-    queryKey: settingsDataModelScopeGrantsQueryKey(selectedModel?.id ?? ''),
-    queryFn: () => fetchSettingsDataModelScopeGrants(selectedModel?.id ?? ''),
-    enabled: Boolean(selectedModel)
+    queryKey: settingsDataModelScopeGrantsQueryKey(editingModel?.id ?? ''),
+    queryFn: () => fetchSettingsDataModelScopeGrants(editingModel?.id ?? ''),
+    enabled: Boolean(editingModel)
   });
 
   const advisorQuery = useQuery({
-    queryKey: settingsDataModelAdvisorFindingsQueryKey(selectedModel?.id ?? ''),
+    queryKey: settingsDataModelAdvisorFindingsQueryKey(editingModel?.id ?? ''),
     queryFn: () =>
-      fetchSettingsDataModelAdvisorFindings(selectedModel?.id ?? ''),
-    enabled: Boolean(selectedModel)
+      fetchSettingsDataModelAdvisorFindings(editingModel?.id ?? ''),
+    enabled: Boolean(editingModel)
   });
 
   const recordPreviewQuery = useQuery({
-    queryKey: settingsDataModelRecordPreviewQueryKey(selectedModel?.code ?? ''),
+    queryKey: settingsDataModelRecordPreviewQueryKey(editingModel?.code ?? ''),
     queryFn: () =>
-      fetchSettingsDataModelRecordPreview(selectedModel?.code ?? ''),
-    enabled: Boolean(selectedModel)
+      fetchSettingsDataModelRecordPreview(editingModel?.code ?? ''),
+    enabled: Boolean(editingModel)
   });
 
   const updateDefaultsMutation = useMutation({
@@ -521,66 +525,80 @@ export function SettingsDataModelsSection({
               }
               canManage={canManage}
               onSelectModel={(model) => setSelectedModelId(model.id)}
+              onEditModel={(model) => {
+                setSelectedModelId(model.id);
+                setEditingModelId(model.id);
+              }}
               onCreateModel={(input) => createModelMutation.mutate(input)}
               onUpdateModel={(model, input) =>
                 updateModelMutation.mutate({ model, input })
               }
             />
 
-            {selectedModel ? (
-              <DataModelDetail
-                model={selectedModel}
-                allModels={models}
-                canManage={canManage}
-                grants={scopeGrantsQuery.data ?? []}
-                grantsLoading={scopeGrantsQuery.isLoading}
-                grantsSaving={saveGrantMutation.isPending}
-                advisorFindings={advisorQuery.data ?? []}
-                advisorLoading={advisorQuery.isLoading}
-                recordPreview={recordPreviewQuery.data}
-                recordPreviewLoading={recordPreviewQuery.isLoading}
-                modelSaving={
-                  updateModelMutation.isPending ||
-                  updateApiExposureMutation.isPending
-                }
-                fieldSaving={
-                  createFieldMutation.isPending ||
-                  updateFieldMutation.isPending ||
-                  deleteFieldMutation.isPending
-                }
-                onUpdateModelStatus={(status) =>
-                  updateModelMutation.mutate({
-                    model: selectedModel,
-                    input: { status }
-                  })
-                }
-                onUpdateModel={(input) =>
-                  updateModelMutation.mutate({ model: selectedModel, input })
-                }
-                onCreateField={(input) =>
-                  createFieldMutation.mutate({ model: selectedModel, input })
-                }
-                onUpdateField={(field, input) =>
-                  updateFieldMutation.mutate({
-                    model: selectedModel,
-                    field,
-                    input
-                  })
-                }
-                onDeleteField={(field) =>
-                  deleteFieldMutation.mutate({ model: selectedModel, field })
-                }
-                onUpdateApiExposure={(input) =>
-                  updateApiExposureMutation.mutate({
-                    model: selectedModel,
-                    input
-                  })
-                }
-                onSaveGrant={(grant, input) =>
-                  saveGrantMutation.mutate({ grant, input })
-                }
-              />
-            ) : null}
+            <Drawer
+              title={
+                editingModel ? `编辑 ${editingModel.title}` : '编辑 Data Model'
+              }
+              open={Boolean(editingModel)}
+              width={980}
+              destroyOnHidden
+              onClose={() => setEditingModelId(null)}
+            >
+              {editingModel ? (
+                <DataModelDetail
+                  model={editingModel}
+                  allModels={models}
+                  canManage={canManage}
+                  grants={scopeGrantsQuery.data ?? []}
+                  grantsLoading={scopeGrantsQuery.isLoading}
+                  grantsSaving={saveGrantMutation.isPending}
+                  advisorFindings={advisorQuery.data ?? []}
+                  advisorLoading={advisorQuery.isLoading}
+                  recordPreview={recordPreviewQuery.data}
+                  recordPreviewLoading={recordPreviewQuery.isLoading}
+                  modelSaving={
+                    updateModelMutation.isPending ||
+                    updateApiExposureMutation.isPending
+                  }
+                  fieldSaving={
+                    createFieldMutation.isPending ||
+                    updateFieldMutation.isPending ||
+                    deleteFieldMutation.isPending
+                  }
+                  onUpdateModelStatus={(status) =>
+                    updateModelMutation.mutate({
+                      model: editingModel,
+                      input: { status }
+                    })
+                  }
+                  onUpdateModel={(input) =>
+                    updateModelMutation.mutate({ model: editingModel, input })
+                  }
+                  onCreateField={(input) =>
+                    createFieldMutation.mutate({ model: editingModel, input })
+                  }
+                  onUpdateField={(field, input) =>
+                    updateFieldMutation.mutate({
+                      model: editingModel,
+                      field,
+                      input
+                    })
+                  }
+                  onDeleteField={(field) =>
+                    deleteFieldMutation.mutate({ model: editingModel, field })
+                  }
+                  onUpdateApiExposure={(input) =>
+                    updateApiExposureMutation.mutate({
+                      model: editingModel,
+                      input
+                    })
+                  }
+                  onSaveGrant={(grant, input) =>
+                    saveGrantMutation.mutate({ grant, input })
+                  }
+                />
+              ) : null}
+            </Drawer>
           </Flex>
         ) : (
           <DataSourcePanel
