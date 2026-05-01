@@ -218,6 +218,9 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
             "attachments",
         )
         .await?;
+    control_plane::system_metadata::SystemMetadataBootstrapService::new(store.clone())
+        .ensure_builtin_user_and_role_models(bootstrap_result.root_user_id)
+        .await?;
     let provider_runtime = Arc::new(ApiRuntimeServices::new(
         Arc::new(RwLock::new(
             plugin_runner::provider_host::ProviderHost::default(),

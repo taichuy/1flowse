@@ -598,6 +598,13 @@ async fn model_definition_routes_manage_models_and_fields_without_publish() {
     )
     .unwrap();
     let models = list_main_source_payload["data"].as_array().unwrap();
+    let model_codes = models
+        .iter()
+        .filter_map(|model| model["code"].as_str())
+        .collect::<Vec<_>>();
+    assert!(model_codes.contains(&"attachments"));
+    assert!(model_codes.contains(&"users"));
+    assert!(model_codes.contains(&"roles"));
     assert!(models.iter().any(|model| {
         model["id"].as_str() == Some(&model_id)
             && model["source_kind"].as_str() == Some("main_source")

@@ -243,6 +243,167 @@ async function openContactsDataModelEditor() {
   return screen.findByRole('dialog', { name: '编辑 Contacts' });
 }
 
+function settingsDataModelField(
+  id: string,
+  code: string,
+  title: string,
+  fieldKind = 'string',
+  overrides: Record<string, unknown> = {}
+) {
+  return {
+    id,
+    code,
+    title,
+    physical_column_name: code,
+    external_field_key: null,
+    field_kind: fieldKind,
+    is_required: false,
+    is_unique: false,
+    default_value: null,
+    display_interface: 'input',
+    display_options: {},
+    relation_target_model_id: null,
+    relation_options: {},
+    sort_order: 0,
+    ...overrides
+  };
+}
+
+function settingsDataModel(
+  id: string,
+  code: string,
+  title: string,
+  fields: ReturnType<typeof settingsDataModelField>[],
+  overrides: Record<string, unknown> = {}
+) {
+  return {
+    id,
+    scope_kind: 'system',
+    scope_id: '00000000-0000-0000-0000-000000000000',
+    code,
+    title,
+    status: 'published',
+    api_exposure_status: 'published_not_exposed',
+    runtime_availability: 'available',
+    data_source_instance_id: 'main_source',
+    source_kind: 'main_source',
+    external_resource_key: null,
+    physical_table_name: `dm_${code}`,
+    acl_namespace: `data_model.${code}`,
+    audit_namespace: `data_model.${code}`,
+    fields,
+    ...overrides
+  };
+}
+
+const contactsModel = settingsDataModel(
+  'model-1',
+  'contacts',
+  'Contacts',
+  [
+    settingsDataModelField('field-1', 'email', 'Email', 'string', {
+      external_field_key: 'email',
+      is_required: true,
+      is_unique: true
+    })
+  ],
+  {
+    scope_kind: 'workspace',
+    scope_id: 'workspace-1',
+    data_source_instance_id: 'source-1',
+    source_kind: 'external_source',
+    external_resource_key: 'contacts',
+    physical_table_name: 'dm_contacts'
+  }
+);
+
+const mainSourceModels = [
+  settingsDataModel('model-attachments', 'attachments', 'Attachments', [
+    settingsDataModelField('attachment-name', 'name', '文件名'),
+    settingsDataModelField('attachment-size', 'size', '文件大小', 'integer')
+  ]),
+  settingsDataModel('model-users', 'users', '用户', [
+    settingsDataModelField('user-username', 'username', '用户名', 'string', {
+      is_required: true,
+      is_unique: true
+    }),
+    settingsDataModelField(
+      'user-display-name',
+      'display_name',
+      '显示名称',
+      'string',
+      {
+        is_required: true
+      }
+    ),
+    settingsDataModelField('user-email', 'email', '邮箱', 'string', {
+      is_unique: true
+    }),
+    settingsDataModelField('user-status', 'status', '状态', 'string', {
+      is_required: true
+    }),
+    settingsDataModelField('user-role-codes', 'role_codes', '角色', 'json'),
+    settingsDataModelField(
+      'user-created-at',
+      'created_time',
+      '创建时间',
+      'datetime',
+      {
+        is_required: true
+      }
+    ),
+    settingsDataModelField(
+      'user-last-login-at',
+      'last_login_at',
+      '最后登录时间',
+      'datetime'
+    )
+  ]),
+  settingsDataModel('model-roles', 'roles', '角色', [
+    settingsDataModelField('role-code', 'code', '角色标识', 'string', {
+      is_required: true,
+      is_unique: true
+    }),
+    settingsDataModelField('role-name', 'name', '角色名称', 'string', {
+      is_required: true
+    }),
+    settingsDataModelField(
+      'role-scope-kind',
+      'scope_kind',
+      '作用域',
+      'string',
+      {
+        is_required: true
+      }
+    ),
+    settingsDataModelField(
+      'role-builtin',
+      'is_builtin',
+      '内置角色',
+      'boolean',
+      {
+        is_required: true
+      }
+    ),
+    settingsDataModelField(
+      'role-default-member',
+      'is_default_member_role',
+      '默认成员角色',
+      'boolean',
+      { is_required: true }
+    ),
+    settingsDataModelField(
+      'role-created-at',
+      'created_time',
+      '创建时间',
+      'datetime',
+      {
+        is_required: true
+      }
+    )
+  ])
+];
+
 describe('Settings data models page', () => {
   beforeEach(() => {
     consoleWarnSpy = vi
@@ -333,42 +494,12 @@ describe('Settings data models page', () => {
         catalog_refreshed_at: '2026-04-30T08:00:00Z'
       }
     ]);
-    dataModelsApi.fetchSettingsDataModels.mockResolvedValue([
-      {
-        id: 'model-1',
-        scope_kind: 'workspace',
-        scope_id: 'workspace-1',
-        code: 'contacts',
-        title: 'Contacts',
-        status: 'published',
-        api_exposure_status: 'published_not_exposed',
-        runtime_availability: 'available',
-        data_source_instance_id: 'source-1',
-        source_kind: 'external_source',
-        external_resource_key: 'contacts',
-        physical_table_name: 'dm_contacts',
-        acl_namespace: 'data_model.contacts',
-        audit_namespace: 'data_model.contacts',
-        fields: [
-          {
-            id: 'field-1',
-            code: 'email',
-            title: 'Email',
-            physical_column_name: 'email',
-            external_field_key: 'email',
-            field_kind: 'string',
-            is_required: true,
-            is_unique: true,
-            default_value: null,
-            display_interface: 'input',
-            display_options: {},
-            relation_target_model_id: null,
-            relation_options: {},
-            sort_order: 0
-          }
-        ]
-      }
-    ]);
+    dataModelsApi.fetchSettingsDataModels.mockImplementation(
+      (sourceId: string) =>
+        Promise.resolve(
+          sourceId === 'main_source' ? mainSourceModels : [contactsModel]
+        )
+    );
     dataModelsApi.fetchSettingsDataModelScopeGrants.mockResolvedValue([
       {
         id: 'grant-owner',
@@ -501,6 +632,56 @@ describe('Settings data models page', () => {
     expect(await screen.findByText('Contacts')).toBeInTheDocument();
     expect(screen.getByText('contacts')).toBeInTheDocument();
   });
+
+  test(
+    'shows built-in user and role metadata in the main data source editor',
+    async () => {
+      renderApp('/settings/data-models');
+
+      expect(await findDataModelsNavigation()).toBeInTheDocument();
+      expect(await screen.findByText('主数据源')).toBeInTheDocument();
+      const mainSourceRow = screen
+        .getAllByRole('row')
+        .find((row) => within(row).queryByText('主数据源'));
+      expect(mainSourceRow).toBeDefined();
+      fireEvent.click(
+        within(mainSourceRow as HTMLElement).getByRole('button', {
+          name: '配置'
+        })
+      );
+
+      expect(await screen.findByText('Attachments')).toBeInTheDocument();
+      const usersRow = screen
+        .getAllByRole('row')
+        .find((row) => within(row).queryByText('users'));
+      const rolesRow = screen
+        .getAllByRole('row')
+        .find((row) => within(row).queryByText('roles'));
+      expect(usersRow).toBeDefined();
+      expect(rolesRow).toBeDefined();
+      expect(
+        within(usersRow as HTMLElement).getByText('用户')
+      ).toBeInTheDocument();
+      expect(within(usersRow as HTMLElement).getByText('7')).toBeInTheDocument();
+      expect(
+        within(rolesRow as HTMLElement).getByText('角色')
+      ).toBeInTheDocument();
+      expect(within(rolesRow as HTMLElement).getByText('6')).toBeInTheDocument();
+
+      fireEvent.click(
+        within(rolesRow as HTMLElement).getByRole('button', { name: '编辑' })
+      );
+      const editorDialog = await screen.findByRole('dialog', {
+        name: '编辑 角色'
+      });
+      expect(
+        within(editorDialog).getByRole('tab', { name: '字段' })
+      ).toBeInTheDocument();
+      expect(within(editorDialog).getByText('角色标识')).toBeInTheDocument();
+      expect(within(editorDialog).getByText('默认成员角色')).toBeInTheDocument();
+    },
+    10_000
+  );
 
   test('selects a Data Model and exposes detail tabs with safe status controls', async () => {
     renderApp('/settings/data-models?source=source-1');

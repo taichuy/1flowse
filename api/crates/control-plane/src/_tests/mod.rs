@@ -30,6 +30,7 @@ mod session_security;
 mod state_transition_tests;
 mod support;
 mod system_agent_tests;
+mod system_metadata_tests;
 mod system_runtime;
 mod workspace;
 mod workspace_session;

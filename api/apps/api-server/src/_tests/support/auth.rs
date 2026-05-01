@@ -143,6 +143,10 @@ async fn test_state_with_runtime_profile_state(
         .ensure_builtin_attachments(bootstrap.root_user_id, default_storage.id, "attachments")
         .await
         .unwrap();
+    control_plane::system_metadata::SystemMetadataBootstrapService::new(store.clone())
+        .ensure_builtin_user_and_role_models(bootstrap.root_user_id)
+        .await
+        .unwrap();
     let provider_runtime = Arc::new(ApiRuntimeServices::new(
         Arc::new(RwLock::new(
             plugin_runner::provider_host::ProviderHost::default(),
