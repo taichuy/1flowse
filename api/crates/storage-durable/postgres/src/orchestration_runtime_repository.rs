@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use control_plane::ports::{
     AppendBillingSessionInput, AppendCapabilityInvocationInput, AppendContextProjectionInput,
@@ -214,30 +214,37 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
             update flow_runs
             set compiled_plan_id = $2,
                 status = $3
-            where id = $1
+            from flow_compiled_plans compiled
+            where flow_runs.id = $1
+              and compiled.id = $2
+              and flow_runs.status = 'queued'
+              and flow_runs.compiled_plan_id is null
+              and compiled.flow_id = flow_runs.flow_id
+              and compiled.flow_draft_id = flow_runs.flow_draft_id
             returning
-                id,
-                application_id,
-                flow_id,
-                flow_draft_id,
-                compiled_plan_id,
-                run_mode,
-                target_node_id,
-                status,
-                input_payload,
-                output_payload,
-                error_payload,
-                created_by,
-                started_at,
-                finished_at,
-                created_at
+                flow_runs.id,
+                flow_runs.application_id,
+                flow_runs.flow_id,
+                flow_runs.flow_draft_id,
+                flow_runs.compiled_plan_id,
+                flow_runs.run_mode,
+                flow_runs.target_node_id,
+                flow_runs.status,
+                flow_runs.input_payload,
+                flow_runs.output_payload,
+                flow_runs.error_payload,
+                flow_runs.created_by,
+                flow_runs.started_at,
+                flow_runs.finished_at,
+                flow_runs.created_at
             "#,
         )
         .bind(input.flow_run_id)
         .bind(input.compiled_plan_id)
         .bind(input.status.as_str())
-        .fetch_one(self.pool())
-        .await?;
+        .fetch_optional(self.pool())
+        .await?
+        .ok_or_else(|| anyhow!("flow run compiled plan cannot be attached"))?;
 
         map_flow_run_record(row)
     }

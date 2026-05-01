@@ -1659,9 +1659,24 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         input: &crate::ports::AttachCompiledPlanToFlowRunInput,
     ) -> Result<domain::FlowRunRecord> {
         let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let Some(compiled) = inner
+            .compiled_plans_by_draft_id
+            .values()
+            .find(|record| record.id == input.compiled_plan_id)
+            .cloned()
+        else {
+            return Err(anyhow::anyhow!("flow run compiled plan cannot be attached"));
+        };
         let Some(record) = inner.flow_runs_by_id.get_mut(&input.flow_run_id) else {
             return Err(ControlPlaneError::NotFound("flow_run").into());
         };
+        if record.status != domain::FlowRunStatus::Queued
+            || record.compiled_plan_id.is_some()
+            || compiled.flow_id != record.flow_id
+            || compiled.draft_id != record.draft_id
+        {
+            return Err(anyhow::anyhow!("flow run compiled plan cannot be attached"));
+        }
         record.compiled_plan_id = Some(input.compiled_plan_id);
         record.status = input.status;
         Ok(record.clone())
