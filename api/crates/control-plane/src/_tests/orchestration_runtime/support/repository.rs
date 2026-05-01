@@ -1612,7 +1612,7 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
             application_id: input.application_id,
             flow_id: input.flow_id,
             draft_id: input.flow_draft_id,
-            compiled_plan_id: input.compiled_plan_id,
+            compiled_plan_id: Some(input.compiled_plan_id),
             run_mode: input.run_mode,
             target_node_id: input.target_node_id.clone(),
             status: input.status,
@@ -1626,6 +1626,45 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         };
         inner.flow_runs_by_id.insert(record.id, record.clone());
         Ok(record)
+    }
+
+    async fn create_flow_run_shell(
+        &self,
+        input: &crate::ports::CreateFlowRunShellInput,
+    ) -> Result<domain::FlowRunRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let record = domain::FlowRunRecord {
+            id: Uuid::now_v7(),
+            application_id: input.application_id,
+            flow_id: input.flow_id,
+            draft_id: input.flow_draft_id,
+            compiled_plan_id: None,
+            run_mode: input.run_mode,
+            target_node_id: input.target_node_id.clone(),
+            status: input.status,
+            input_payload: input.input_payload.clone(),
+            output_payload: json!({}),
+            error_payload: None,
+            created_by: input.actor_user_id,
+            started_at: input.started_at,
+            finished_at: None,
+            created_at: input.started_at,
+        };
+        inner.flow_runs_by_id.insert(record.id, record.clone());
+        Ok(record)
+    }
+
+    async fn attach_compiled_plan_to_flow_run(
+        &self,
+        input: &crate::ports::AttachCompiledPlanToFlowRunInput,
+    ) -> Result<domain::FlowRunRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let Some(record) = inner.flow_runs_by_id.get_mut(&input.flow_run_id) else {
+            return Err(ControlPlaneError::NotFound("flow_run").into());
+        };
+        record.compiled_plan_id = Some(input.compiled_plan_id);
+        record.status = input.status;
+        Ok(record.clone())
     }
 
     async fn get_flow_run(

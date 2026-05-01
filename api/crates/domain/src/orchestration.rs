@@ -117,7 +117,7 @@ pub struct FlowRunRecord {
     pub application_id: Uuid,
     pub flow_id: Uuid,
     pub draft_id: Uuid,
-    pub compiled_plan_id: Uuid,
+    pub compiled_plan_id: Option<Uuid>,
     pub run_mode: FlowRunMode,
     pub target_node_id: Option<String>,
     pub status: FlowRunStatus,

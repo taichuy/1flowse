@@ -1,9 +1,10 @@
 use control_plane::ports::{
     AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput, AppendRunEventInput,
     AppendRuntimeEventInput, AppendRuntimeSpanInput, AppendUsageLedgerInput, ApplicationRepository,
-    CreateApplicationInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
-    CreateNodeRunInput, FlowRepository, LinkUsageLedgerToModelFailoverAttemptInput,
-    OrchestrationRuntimeRepository, UpdateNodeRunInput, UpsertCompiledPlanInput,
+    AttachCompiledPlanToFlowRunInput, CreateApplicationInput, CreateCallbackTaskInput,
+    CreateCheckpointInput, CreateFlowRunInput, CreateFlowRunShellInput, CreateNodeRunInput,
+    FlowRepository, LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
+    UpdateNodeRunInput, UpsertCompiledPlanInput,
 };
 use domain::{ApplicationType, CallbackTaskStatus, FlowRunMode, FlowRunStatus, NodeRunStatus};
 use serde_json::json;
@@ -236,6 +237,63 @@ async fn seed_node_run_for(
     )
     .await
     .unwrap()
+}
+
+#[tokio::test]
+async fn creates_flow_run_shell_and_attaches_compiled_plan() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+
+    let shell = <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run_shell(
+        &store,
+        &CreateFlowRunShellInput {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            run_mode: FlowRunMode::DebugFlowRun,
+            target_node_id: None,
+            status: FlowRunStatus::Queued,
+            input_payload: json!({ "node-start": { "query": "hello" } }),
+            started_at: OffsetDateTime::now_utc(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(shell.compiled_plan_id, None);
+    assert_eq!(shell.status, domain::FlowRunStatus::Queued);
+
+    let compiled = <PgControlPlaneStore as OrchestrationRuntimeRepository>::upsert_compiled_plan(
+        &store,
+        &UpsertCompiledPlanInput {
+            actor_user_id: seeded.actor_user_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            schema_version: "1flowbase.flow/v1".to_string(),
+            document_updated_at: seeded.draft_updated_at,
+            plan: json!({ "nodes": {}, "topological_order": [] }),
+        },
+    )
+    .await
+    .unwrap();
+
+    let attached =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::attach_compiled_plan_to_flow_run(
+            &store,
+            &AttachCompiledPlanToFlowRunInput {
+                flow_run_id: shell.id,
+                compiled_plan_id: compiled.id,
+                status: FlowRunStatus::Running,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(attached.compiled_plan_id, Some(compiled.id));
+    assert_eq!(attached.status, FlowRunStatus::Running);
 }
 
 async fn append_event(

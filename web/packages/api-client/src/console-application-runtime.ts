@@ -19,7 +19,7 @@ export interface ConsoleFlowRunDetail {
   application_id: string;
   flow_id: string;
   draft_id: string;
-  compiled_plan_id: string;
+  compiled_plan_id: string | null;
   run_mode: ConsoleFlowRunMode;
   status: string;
   target_node_id: string | null;

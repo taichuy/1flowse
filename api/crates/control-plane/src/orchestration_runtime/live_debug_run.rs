@@ -487,9 +487,12 @@ where
         .get_application(command.workspace_id, command.application_id)
         .await?
         .ok_or(ControlPlaneError::NotFound("application"))?;
+    let compiled_plan_id = flow_run
+        .compiled_plan_id
+        .ok_or_else(|| anyhow!("flow run compiled plan is not attached"))?;
     let compiled_record = service
         .repository
-        .get_compiled_plan(flow_run.compiled_plan_id)
+        .get_compiled_plan(compiled_plan_id)
         .await?
         .ok_or_else(|| anyhow!("compiled plan not found"))?;
     let compiled_plan: orchestration_runtime::compiled_plan::CompiledPlan =

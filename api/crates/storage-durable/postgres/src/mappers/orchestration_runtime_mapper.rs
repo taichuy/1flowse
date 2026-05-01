@@ -21,7 +21,7 @@ pub struct StoredFlowRunRow {
     pub application_id: Uuid,
     pub flow_id: Uuid,
     pub flow_draft_id: Uuid,
-    pub compiled_plan_id: Uuid,
+    pub compiled_plan_id: Option<Uuid>,
     pub run_mode: String,
     pub target_node_id: Option<String>,
     pub status: String,

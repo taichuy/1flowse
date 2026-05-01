@@ -4,8 +4,9 @@ use control_plane::ports::{
     AppendBillingSessionInput, AppendCapabilityInvocationInput, AppendContextProjectionInput,
     AppendCostLedgerInput, AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput,
     AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeItemInput, AppendRuntimeSpanInput,
-    AppendUsageLedgerInput, CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput,
-    CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
+    AppendUsageLedgerInput, AttachCompiledPlanToFlowRunInput, CompleteCallbackTaskInput,
+    CompleteFlowRunInput, CompleteNodeRunInput, CreateCallbackTaskInput, CreateCheckpointInput,
+    CreateFlowRunInput, CreateFlowRunShellInput, CreateNodeRunInput,
     LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
     UpdateNodeRunInput, UpsertCompiledPlanInput,
 };
@@ -145,6 +146,96 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         .bind(&input.input_payload)
         .bind(input.actor_user_id)
         .bind(input.started_at)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_flow_run_record(row)
+    }
+
+    async fn create_flow_run_shell(
+        &self,
+        input: &CreateFlowRunShellInput,
+    ) -> Result<domain::FlowRunRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into flow_runs (
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                run_mode,
+                target_node_id,
+                status,
+                input_payload,
+                created_by,
+                started_at
+            ) values ($1, $2, $3, $4, null, $5, $6, $7, $8, $9, $10)
+            returning
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                run_mode,
+                target_node_id,
+                status,
+                input_payload,
+                output_payload,
+                error_payload,
+                created_by,
+                started_at,
+                finished_at,
+                created_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.application_id)
+        .bind(input.flow_id)
+        .bind(input.flow_draft_id)
+        .bind(input.run_mode.as_str())
+        .bind(input.target_node_id.as_deref())
+        .bind(input.status.as_str())
+        .bind(&input.input_payload)
+        .bind(input.actor_user_id)
+        .bind(input.started_at)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_flow_run_record(row)
+    }
+
+    async fn attach_compiled_plan_to_flow_run(
+        &self,
+        input: &AttachCompiledPlanToFlowRunInput,
+    ) -> Result<domain::FlowRunRecord> {
+        let row = sqlx::query(
+            r#"
+            update flow_runs
+            set compiled_plan_id = $2,
+                status = $3
+            where id = $1
+            returning
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                run_mode,
+                target_node_id,
+                status,
+                input_payload,
+                output_payload,
+                error_payload,
+                created_by,
+                started_at,
+                finished_at,
+                created_at
+            "#,
+        )
+        .bind(input.flow_run_id)
+        .bind(input.compiled_plan_id)
+        .bind(input.status.as_str())
         .fetch_one(self.pool())
         .await?;
 
@@ -2040,7 +2131,7 @@ fn map_flow_run_record(row: PgRow) -> Result<domain::FlowRunRecord> {
         application_id: row.get("application_id"),
         flow_id: row.get("flow_id"),
         flow_draft_id: row.get("flow_draft_id"),
-        compiled_plan_id: row.get("compiled_plan_id"),
+        compiled_plan_id: row.get::<Option<Uuid>, _>("compiled_plan_id"),
         run_mode: row.get("run_mode"),
         target_node_id: row.get("target_node_id"),
         status: row.get("status"),

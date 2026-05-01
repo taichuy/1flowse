@@ -34,6 +34,26 @@ pub struct CreateFlowRunInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct CreateFlowRunShellInput {
+    pub actor_user_id: Uuid,
+    pub application_id: Uuid,
+    pub flow_id: Uuid,
+    pub flow_draft_id: Uuid,
+    pub run_mode: domain::FlowRunMode,
+    pub target_node_id: Option<String>,
+    pub status: domain::FlowRunStatus,
+    pub input_payload: serde_json::Value,
+    pub started_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct AttachCompiledPlanToFlowRunInput {
+    pub flow_run_id: Uuid,
+    pub compiled_plan_id: Uuid,
+    pub status: domain::FlowRunStatus,
+}
+
+#[derive(Debug, Clone)]
 pub struct CreateNodeRunInput {
     pub flow_run_id: Uuid,
     pub node_id: String,
@@ -322,6 +342,14 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
     async fn create_flow_run(
         &self,
         input: &CreateFlowRunInput,
+    ) -> anyhow::Result<domain::FlowRunRecord>;
+    async fn create_flow_run_shell(
+        &self,
+        input: &CreateFlowRunShellInput,
+    ) -> anyhow::Result<domain::FlowRunRecord>;
+    async fn attach_compiled_plan_to_flow_run(
+        &self,
+        input: &AttachCompiledPlanToFlowRunInput,
     ) -> anyhow::Result<domain::FlowRunRecord>;
     async fn get_flow_run(
         &self,
