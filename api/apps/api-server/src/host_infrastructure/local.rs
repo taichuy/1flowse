@@ -7,8 +7,8 @@ use storage_ephemeral::{
 };
 
 use super::{
-    CacheStore, DistributedLock, EventBus, HostInfrastructureRegistry, RateLimitStore, TaskQueue,
-    SESSION_STORE_NAMESPACE,
+    CacheStore, DistributedLock, EventBus, HostInfrastructureRegistry, LocalRuntimeEventStream,
+    RateLimitStore, RuntimeEventStream, TaskQueue, SESSION_STORE_NAMESPACE,
 };
 
 const LOCAL_PROVIDER_CODE: &str = "local";
@@ -51,6 +51,13 @@ pub fn build_local_host_infrastructure() -> HostInfrastructureRegistry {
             LOCAL_PROVIDER_SOURCE,
         )
         .expect("local rate-limit-store provider registration should be unique");
+    registry
+        .register_default_provider(
+            "runtime-event-stream",
+            LOCAL_PROVIDER_CODE,
+            LOCAL_PROVIDER_SOURCE,
+        )
+        .expect("local runtime-event-stream provider registration should be unique");
 
     registry.set_session_store(Arc::new(MokaSessionStore::new(
         SESSION_STORE_NAMESPACE,
@@ -70,6 +77,9 @@ pub fn build_local_host_infrastructure() -> HostInfrastructureRegistry {
         RATE_LIMIT_STORE_NAMESPACE,
         LOCAL_CACHE_MAX_CAPACITY,
     )) as Arc<dyn RateLimitStore>);
+    registry.set_runtime_event_stream(
+        Arc::new(LocalRuntimeEventStream::new()) as Arc<dyn RuntimeEventStream>
+    );
 
     registry
 }

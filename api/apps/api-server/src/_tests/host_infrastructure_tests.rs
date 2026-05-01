@@ -8,7 +8,12 @@ fn local_infra_host_provides_required_defaults() {
     );
     assert_eq!(registry.default_provider("cache-store").unwrap(), "local");
     assert_eq!(registry.default_provider("event-bus").unwrap(), "local");
+    assert_eq!(
+        registry.default_provider("runtime-event-stream").unwrap(),
+        "local"
+    );
     assert!(registry.session_store().is_some());
+    assert!(registry.runtime_event_stream().is_some());
 }
 
 #[test]
@@ -85,4 +90,29 @@ async fn local_infra_host_exposes_operation_contracts() {
         .await
         .unwrap();
     assert_eq!(first, second);
+
+    let runtime_events = registry.runtime_event_stream().unwrap();
+    let run_id = uuid::Uuid::now_v7();
+    runtime_events
+        .open_run(
+            run_id,
+            control_plane::ports::RuntimeEventStreamPolicy::debug_default(),
+        )
+        .await
+        .unwrap();
+    let envelope = runtime_events
+        .append(
+            run_id,
+            control_plane::ports::RuntimeEventPayload {
+                event_type: "heartbeat".to_string(),
+                source: control_plane::ports::RuntimeEventSource::System,
+                durability: control_plane::ports::RuntimeEventDurability::Ephemeral,
+                persist_required: false,
+                trace_visible: false,
+                payload: serde_json::json!({ "type": "heartbeat" }),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(envelope.sequence, 1);
 }

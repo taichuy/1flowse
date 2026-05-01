@@ -9,7 +9,7 @@ use control_plane::ports::SessionStore;
 
 pub use contracts::{
     CacheStore, ClaimedTask, DistributedLock, EventBus, RateLimitDecision, RateLimitStore,
-    TaskQueue,
+    RuntimeEventStream, TaskQueue,
 };
 pub use local::build_local_host_infrastructure;
 pub use local_runtime_event_stream::LocalRuntimeEventStream;
@@ -32,6 +32,7 @@ pub struct HostInfrastructureRegistry {
     event_bus: Option<Arc<dyn EventBus>>,
     task_queue: Option<Arc<dyn TaskQueue>>,
     rate_limit_store: Option<Arc<dyn RateLimitStore>>,
+    runtime_event_stream: Option<Arc<dyn RuntimeEventStream>>,
 }
 
 impl HostInfrastructureRegistry {
@@ -120,5 +121,13 @@ impl HostInfrastructureRegistry {
         self.rate_limit_store
             .clone()
             .expect("rate-limit-store provider must be registered before use")
+    }
+
+    pub fn set_runtime_event_stream(&mut self, stream: Arc<dyn RuntimeEventStream>) {
+        self.runtime_event_stream = Some(stream);
+    }
+
+    pub fn runtime_event_stream(&self) -> Option<Arc<dyn RuntimeEventStream>> {
+        self.runtime_event_stream.clone()
     }
 }
