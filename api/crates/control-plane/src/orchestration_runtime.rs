@@ -28,6 +28,7 @@ use crate::{
 
 mod compile_context;
 mod data_model_runtime;
+pub mod debug_stream_events;
 mod inputs;
 mod live_debug_run;
 mod persistence;
@@ -56,6 +57,14 @@ pub struct StartNodeDebugPreviewCommand {
 pub struct StartFlowDebugRunCommand {
     pub actor_user_id: Uuid,
     pub application_id: Uuid,
+    pub input_payload: serde_json::Value,
+    pub document_snapshot: Option<serde_json::Value>,
+}
+
+pub struct PrepareFlowDebugRunCommand {
+    pub actor_user_id: Uuid,
+    pub application_id: Uuid,
+    pub flow_run_id: Uuid,
     pub input_payload: serde_json::Value,
     pub document_snapshot: Option<serde_json::Value>,
 }
@@ -302,6 +311,20 @@ where
         command: StartFlowDebugRunCommand,
     ) -> Result<domain::ApplicationRunDetail> {
         live_debug_run::start_flow_debug_run(self, command).await
+    }
+
+    pub async fn open_flow_debug_run_shell(
+        &self,
+        command: StartFlowDebugRunCommand,
+    ) -> Result<domain::FlowRunRecord> {
+        live_debug_run::open_flow_debug_run_shell(self, command).await
+    }
+
+    pub async fn prepare_flow_debug_run_from_shell(
+        &self,
+        command: PrepareFlowDebugRunCommand,
+    ) -> Result<domain::ApplicationRunDetail> {
+        live_debug_run::prepare_flow_debug_run_from_shell(self, command).await
     }
 
     pub async fn continue_flow_debug_run(

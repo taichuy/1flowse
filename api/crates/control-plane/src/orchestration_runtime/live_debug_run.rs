@@ -15,10 +15,10 @@ use crate::{
     ports::{
         AppendBillingSessionInput, AppendCapabilityInvocationInput, AppendContextProjectionInput,
         AppendCostLedgerInput, AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput,
-        AppendRunEventInput, AppendUsageLedgerInput, CreateCallbackTaskInput,
-        CreateCheckpointInput, CreateFlowRunInput, CreateNodeRunInput,
-        LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
-        UpdateFlowRunInput, UpdateNodeRunInput,
+        AppendRunEventInput, AppendUsageLedgerInput, AttachCompiledPlanToFlowRunInput,
+        CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunShellInput,
+        CreateNodeRunInput, LinkUsageLedgerToModelFailoverAttemptInput,
+        OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateNodeRunInput,
     },
     runtime_observability::{
         append_host_event, append_host_span, append_provider_stream_events_raw,
@@ -32,12 +32,97 @@ use crate::{
 use super::{
     compile_context::ensure_compiled_plan_runnable, inputs::build_compiled_plan_input,
     CancelFlowRunCommand, ContinueFlowDebugRunCommand, LiveProviderStreamEventSender,
-    OrchestrationRuntimeService, StartFlowDebugRunCommand,
+    OrchestrationRuntimeService, PrepareFlowDebugRunCommand, StartFlowDebugRunCommand,
 };
 
 pub(super) async fn start_flow_debug_run<R, H>(
     service: &OrchestrationRuntimeService<R, H>,
     command: StartFlowDebugRunCommand,
+) -> Result<domain::ApplicationRunDetail>
+where
+    R: crate::ports::ApplicationRepository
+        + crate::ports::FlowRepository
+        + OrchestrationRuntimeRepository
+        + crate::ports::ModelDefinitionRepository
+        + crate::ports::ModelProviderRepository
+        + crate::ports::NodeContributionRepository
+        + crate::ports::PluginRepository
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    H: crate::ports::ProviderRuntimePort
+        + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
+        + Clone,
+{
+    let actor_user_id = command.actor_user_id;
+    let application_id = command.application_id;
+    let input_payload = command.input_payload.clone();
+    let document_snapshot = command.document_snapshot.clone();
+    let shell = open_flow_debug_run_shell(service, command).await?;
+
+    prepare_flow_debug_run_from_shell(
+        service,
+        PrepareFlowDebugRunCommand {
+            actor_user_id,
+            application_id,
+            flow_run_id: shell.id,
+            input_payload,
+            document_snapshot,
+        },
+    )
+    .await
+}
+
+pub(super) async fn open_flow_debug_run_shell<R, H>(
+    service: &OrchestrationRuntimeService<R, H>,
+    command: StartFlowDebugRunCommand,
+) -> Result<domain::FlowRunRecord>
+where
+    R: crate::ports::ApplicationRepository
+        + crate::ports::FlowRepository
+        + OrchestrationRuntimeRepository
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    H: crate::ports::ProviderRuntimePort
+        + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
+        + Clone,
+{
+    let actor = crate::ports::ApplicationRepository::load_actor_context_for_user(
+        &service.repository,
+        command.actor_user_id,
+    )
+    .await?;
+    let editor_state = FlowService::new(service.repository.clone())
+        .get_or_create_editor_state(command.actor_user_id, command.application_id)
+        .await?;
+    service
+        .repository
+        .get_application(actor.current_workspace_id, command.application_id)
+        .await?
+        .ok_or(ControlPlaneError::NotFound("application"))?;
+
+    service
+        .repository
+        .create_flow_run_shell(&CreateFlowRunShellInput {
+            actor_user_id: command.actor_user_id,
+            application_id: command.application_id,
+            flow_id: editor_state.flow.id,
+            flow_draft_id: editor_state.draft.id,
+            run_mode: domain::FlowRunMode::DebugFlowRun,
+            target_node_id: None,
+            status: domain::FlowRunStatus::Queued,
+            input_payload: command.input_payload,
+            started_at: OffsetDateTime::now_utc(),
+        })
+        .await
+}
+
+pub(super) async fn prepare_flow_debug_run_from_shell<R, H>(
+    service: &OrchestrationRuntimeService<R, H>,
+    command: PrepareFlowDebugRunCommand,
 ) -> Result<domain::ApplicationRunDetail>
 where
     R: crate::ports::ApplicationRepository
@@ -94,17 +179,10 @@ where
         .await?;
     let flow_run = service
         .repository
-        .create_flow_run(&CreateFlowRunInput {
-            actor_user_id: command.actor_user_id,
-            application_id: command.application_id,
-            flow_id: editor_state.flow.id,
-            flow_draft_id: editor_state.draft.id,
+        .attach_compiled_plan_to_flow_run(&AttachCompiledPlanToFlowRunInput {
+            flow_run_id: command.flow_run_id,
             compiled_plan_id: compiled_record.id,
-            run_mode: domain::FlowRunMode::DebugFlowRun,
-            target_node_id: None,
             status: domain::FlowRunStatus::Running,
-            input_payload: command.input_payload.clone(),
-            started_at: OffsetDateTime::now_utc(),
         })
         .await?;
 

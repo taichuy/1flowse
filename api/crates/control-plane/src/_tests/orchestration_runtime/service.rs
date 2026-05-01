@@ -204,6 +204,25 @@ async fn start_flow_debug_run_returns_running_detail_before_background_continuat
 }
 
 #[tokio::test]
+async fn opens_flow_debug_run_shell_without_compiling_plan() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+
+    let shell = service
+        .open_flow_debug_run_shell(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
+            document_snapshot: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(shell.status, domain::FlowRunStatus::Queued);
+    assert_eq!(shell.compiled_plan_id, None);
+}
+
+#[tokio::test]
 async fn start_flow_debug_run_records_gateway_billing_audit_trace() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service
