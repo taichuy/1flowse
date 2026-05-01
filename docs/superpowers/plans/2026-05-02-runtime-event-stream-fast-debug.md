@@ -71,7 +71,7 @@ Not included in this plan:
 - Modify: `api/crates/control-plane/src/ports/infrastructure.rs`
 - Modify: `api/crates/control-plane/src/_tests/host_infrastructure_contract_tests.rs`
 
-- [ ] **Step 1: Extend the object-safety contract test**
+- [x] **Step 1: Extend the object-safety contract test**
 
 In `api/crates/control-plane/src/_tests/host_infrastructure_contract_tests.rs`, extend the imports:
 
@@ -173,7 +173,7 @@ let envelope = runtime_events
 assert_eq!(envelope.sequence, 1);
 ```
 
-- [ ] **Step 2: Run the failing contract test**
+- [x] **Step 2: Run the failing contract test**
 
 Run:
 
@@ -183,7 +183,7 @@ cargo test -p control-plane infrastructure_contracts_are_object_safe_and_async
 
 Expected: FAIL because `RuntimeEventStream` and related types do not exist.
 
-- [ ] **Step 3: Add the contract types**
+- [x] **Step 3: Add the contract types**
 
 Append this section to `api/crates/control-plane/src/ports/infrastructure.rs`:
 
@@ -329,7 +329,7 @@ pub trait RuntimeEventStream: Send + Sync {
 }
 ```
 
-- [ ] **Step 4: Run the contract test**
+- [x] **Step 4: Run the contract test**
 
 Run:
 
@@ -339,7 +339,7 @@ cargo test -p control-plane infrastructure_contracts_are_object_safe_and_async
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/crates/control-plane/src/ports/infrastructure.rs \
