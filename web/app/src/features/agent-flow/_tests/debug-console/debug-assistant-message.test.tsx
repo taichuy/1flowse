@@ -67,6 +67,8 @@ describe('DebugAssistantMessage', () => {
 
     const workflowToggle = screen.getByRole('button', { name: /工作流/ });
     expect(workflowToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(within(workflowToggle).getByLabelText('running 状态')).toBeInTheDocument();
+    expect(within(workflowToggle).queryByLabelText('succeeded 状态')).not.toBeInTheDocument();
 
     fireEvent.click(workflowToggle);
 

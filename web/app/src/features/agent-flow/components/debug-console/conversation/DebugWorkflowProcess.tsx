@@ -25,6 +25,30 @@ function statusTone(status: string) {
   }
 }
 
+function workflowStatus(items: AgentFlowTraceItem[]) {
+  if (items.some((item) => item.status === 'failed')) {
+    return 'failed';
+  }
+
+  if (items.some((item) => item.status === 'waiting_human')) {
+    return 'waiting_human';
+  }
+
+  if (items.some((item) => item.status === 'waiting_callback')) {
+    return 'waiting_callback';
+  }
+
+  if (items.some((item) => item.status === 'running')) {
+    return 'running';
+  }
+
+  if (items.every((item) => item.status === 'succeeded')) {
+    return 'succeeded';
+  }
+
+  return 'running';
+}
+
 function nodeDisplayName(item: AgentFlowTraceItem) {
   if (item.nodeType === 'start') {
     return '用户输入';
@@ -60,12 +84,19 @@ function StatusIcon({ status }: { status: string }) {
   const tone = statusTone(status);
 
   if (tone === 'running') {
-    return <LoadingOutlined className="agent-flow-editor__debug-workflow-status-icon" spin />;
+    return (
+      <LoadingOutlined
+        aria-label={`${status} 状态`}
+        className="agent-flow-editor__debug-workflow-status-icon"
+        spin
+      />
+    );
   }
 
   if (tone === 'error' || tone === 'warning') {
     return (
       <WarningFilled
+        aria-label={`${status} 状态`}
         className={`agent-flow-editor__debug-workflow-status-icon agent-flow-editor__debug-workflow-status-icon--${tone}`}
       />
     );
@@ -73,6 +104,7 @@ function StatusIcon({ status }: { status: string }) {
 
   return (
     <CheckCircleFilled
+      aria-label={`${status} 状态`}
       className={`agent-flow-editor__debug-workflow-status-icon agent-flow-editor__debug-workflow-status-icon--${tone}`}
     />
   );
@@ -128,6 +160,8 @@ export function DebugWorkflowProcess({
     return null;
   }
 
+  const status = workflowStatus(items);
+
   return (
     <div
       aria-label="工作流"
@@ -141,7 +175,7 @@ export function DebugWorkflowProcess({
         type="button"
       >
         <span className="agent-flow-editor__debug-workflow-title">
-          <CheckCircleFilled />
+          <StatusIcon status={status} />
           <Typography.Text>工作流</Typography.Text>
         </span>
         {expanded ? (

@@ -85,7 +85,7 @@
   gap: 0.5rem;
 }
 
-.agent-flow-editor__debug-workflow-title > .anticon {
+.agent-flow-editor__debug-workflow-title > .anticon:not(.agent-flow-editor__debug-workflow-status-icon) {
   color: #039855;
 }
 
