@@ -843,7 +843,7 @@ export function AgentFlowCanvasFrame({
             style={{ width: `${boundedDebugConsoleWidth}px` }}
           >
             <div
-              aria-label="调整调试控制台宽度"
+              aria-label="调整预览宽度"
               aria-orientation="vertical"
               className="agent-flow-editor__debug-console-resize-handle"
               onMouseDown={handleDebugConsoleResizeStart}
@@ -863,12 +863,6 @@ export function AgentFlowCanvasFrame({
               onClearSession={debugSession.clearSession}
               onClose={() => setPanelState({ debugConsoleOpen: false })}
               onLocateTraceNode={handleLocateTraceNode}
-              onRerunLast={() => {
-                void debugSession.rerunLast();
-              }}
-              onStopRun={() => {
-                void debugSession.stopRun();
-              }}
               onSubmitPrompt={() => {
                 void debugSession.submitPrompt();
               }}

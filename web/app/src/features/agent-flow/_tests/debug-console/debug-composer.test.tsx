@@ -18,7 +18,8 @@ describe('DebugComposer', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: '发送调试消息' }));
-    fireEvent.keyDown(screen.getByPlaceholderText('输入内容...'), {
+    expect(screen.getByText('功能已开启')).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByPlaceholderText('和 Bot 聊天'), {
       key: 'Enter',
       code: 'Enter'
     });

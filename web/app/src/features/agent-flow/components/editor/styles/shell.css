@@ -138,10 +138,10 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid #e6eaf1;
-  border-radius: 16px;
-  background: #f5f7fb;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+  border: 1px solid #e8edf5;
+  border-radius: 18px;
+  background: #f8fafd;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.12);
 }
 
 .agent-flow-editor__debug-console-body {
@@ -149,6 +149,16 @@
   flex-direction: column;
   min-height: 0;
   flex: 1;
+  background: #f8fafd;
+}
+
+.agent-flow-editor__debug-trace-detail {
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  flex: 1;
+  flex-direction: column;
+  padding: 16px;
   background: #f5f7fb;
 }
 
@@ -158,9 +168,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid #edf0f5;
-  background: #ffffff;
+  min-height: 72px;
+  padding: 18px 22px 10px;
+  background: #f8fafd;
 }
 
 .agent-flow-editor__debug-console-title {
@@ -251,7 +261,7 @@
 .agent-flow-editor__debug-conversation-pane {
   height: 100%;
   gap: 0;
-  background: #f5f7fb;
+  background: #f8fafd;
 }
 
 .agent-flow-editor__debug-messages {
@@ -259,9 +269,9 @@
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  gap: 0;
+  gap: 12px;
   overflow: auto;
-  padding: 28px 24px 24px;
+  padding: 24px 24px 16px;
 }
 
 .agent-flow-editor__debug-message {
@@ -269,7 +279,6 @@
   gap: 10px;
   width: 100%;
   max-width: 760px;
-  margin-bottom: 20px;
 }
 
 .agent-flow-editor__debug-message--assistant {
@@ -302,8 +311,18 @@
   max-width: min(680px, 100%);
 }
 
+.agent-flow-editor__debug-message--assistant .agent-flow-editor__debug-message-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+}
+
 .agent-flow-editor__debug-message--user .agent-flow-editor__debug-message-main {
-  max-width: min(620px, 78%);
+  max-width: min(620px, 82%);
 }
 
 .agent-flow-editor__debug-message-header {
@@ -325,37 +344,40 @@
 }
 
 .agent-flow-editor__debug-message--assistant .agent-flow-editor__debug-message-content.ant-typography {
-  padding: 14px 16px;
-  border: 1px solid #e6eaf1;
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 4px 16px rgb(15 23 42 / 4%);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .agent-flow-editor__debug-message--user .agent-flow-editor__debug-message-content.ant-typography {
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: #eff6ff;
-  color: #1d4ed8;
+  padding: 16px 22px;
+  border-radius: 22px;
+  background: #dbeafe;
+  color: #111827;
+  font-size: 18px;
+  line-height: 1.45;
 }
 
 .agent-flow-editor__debug-composer {
   flex: 0 0 auto;
-  padding: 0 24px 24px;
-  background: #f5f7fb;
+  padding: 0 22px 18px;
+  background: #f8fafd;
 }
 
 .agent-flow-editor__debug-composer-box {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  align-items: center;
   max-width: 760px;
   margin: 0 auto;
-  flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   border: 1px solid #dfe4ed;
-  border-radius: 14px;
+  border-radius: 16px;
   background: #ffffff;
-  padding: 12px;
-  box-shadow: 0 10px 28px rgb(15 23 42 / 8%);
+  padding: 14px 14px 14px 20px;
+  box-shadow: 0 12px 30px rgb(15 23 42 / 8%);
 }
 
 .agent-flow-editor__debug-composer-box .ant-input {
@@ -372,7 +394,45 @@
 }
 
 .agent-flow-editor__debug-composer-submit {
-  min-width: 40px;
+  min-width: 44px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+
+.agent-flow-editor__debug-feature-bar {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  max-width: 760px;
+  min-height: 52px;
+  margin: 12px auto 0;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid #cddcf4;
+  border-radius: 0 0 14px 14px;
+  background: #eef5ff;
+}
+
+.agent-flow-editor__debug-feature-icon {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #f59e0b;
+  color: #ffffff;
+}
+
+.agent-flow-editor__debug-feature-manage {
+  justify-self: end;
+  padding-inline: 4px;
+}
+
+.agent-flow-editor__debug-message-actions {
+  align-self: flex-end;
+  margin-top: -2px;
 }
 
 .agent-flow-editor__debug-trace-summary {
@@ -800,4 +860,3 @@
   flex-direction: column;
   min-height: 0;
 }
-

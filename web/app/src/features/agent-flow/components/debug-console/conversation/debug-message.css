@@ -1,12 +1,12 @@
 .agent-flow-editor__debug-message--assistant .agent-flow-editor__debug-message-content {
-  margin: 0 0 10px;
-  padding: 14px 16px;
-  border: 1px solid #e6eaf1;
-  border-radius: 12px;
-  background: #ffffff;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #1f2937;
   line-height: 1.7;
-  box-shadow: 0 4px 16px rgb(15 23 42 / 4%);
+  box-shadow: none;
 }
 
 .agent-flow-editor__debug-message-content > :first-child {
@@ -54,15 +54,102 @@
 
 .agent-flow-editor__debug-workflow-process {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 12px 14px;
+  border: 1px solid #c8efd9;
+  border-radius: 16px;
+  background: #eafbf2;
+  text-align: left;
+}
+
+.agent-flow-editor__debug-workflow-header {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  color: #334155;
+}
+
+.agent-flow-editor__debug-workflow-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-flow-editor__debug-workflow-title > .anticon {
+  color: #039855;
+}
+
+.agent-flow-editor__debug-workflow-collapse {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.agent-flow-editor__debug-workflow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-flow-editor__debug-workflow-row {
+  display: grid;
+  grid-template-columns: 14px 28px minmax(80px, 1fr) auto 18px;
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  margin-bottom: 10px;
-  padding: 9px 10px;
-  border: 1px solid #dfe7f3;
-  border-radius: 8px;
-  background: #f8fafc;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 1px solid #dbe7e4;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #1f2937;
   text-align: left;
   cursor: pointer;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+}
+
+.agent-flow-editor__debug-workflow-row-caret {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.agent-flow-editor__debug-workflow-node-icon {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #5b6ee1;
+}
+
+.agent-flow-editor__debug-workflow-node-icon--start {
+  background: #2563eb;
+}
+
+.agent-flow-editor__debug-workflow-node-icon--answer {
+  background: #f59e0b;
+}
+
+.agent-flow-editor__debug-workflow-metric {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.agent-flow-editor__debug-workflow-status-icon {
+  justify-self: end;
+  color: #2563eb;
+}
+
+.agent-flow-editor__debug-workflow-status-icon--success {
+  color: #039855;
+}
+
+.agent-flow-editor__debug-workflow-status-icon--error {
+  color: #dc2626;
+}
+
+.agent-flow-editor__debug-workflow-status-icon--warning {
+  color: #d97706;
 }

@@ -1,28 +1,81 @@
-import { LoadingOutlined } from '@ant-design/icons';
-import { Space, Tag, Typography } from 'antd';
+import {
+  CheckCircleFilled,
+  DownOutlined,
+  LoadingOutlined,
+  RightOutlined
+} from '@ant-design/icons';
+import { Typography } from 'antd';
 
 import type { AgentFlowTraceItem } from '../../../api/runtime';
 
-function statusColor(status: string) {
+function statusTone(status: string) {
   switch (status) {
     case 'succeeded':
-      return 'green';
+      return 'success';
     case 'failed':
-      return 'red';
+      return 'error';
     case 'waiting_human':
-      return 'gold';
     case 'waiting_callback':
-      return 'cyan';
+      return 'warning';
     default:
-      return 'blue';
+      return 'running';
   }
 }
 
-function resolveCurrentTraceItem(items: AgentFlowTraceItem[]) {
+function nodeDisplayName(item: AgentFlowTraceItem) {
+  if (item.nodeType === 'start') {
+    return '用户输入';
+  }
+
+  if (item.nodeType === 'answer') {
+    return '直接回复';
+  }
+
+  return item.nodeAlias;
+}
+
+function nodeIconTone(item: AgentFlowTraceItem) {
+  if (item.nodeType === 'start') {
+    return 'start';
+  }
+
+  if (item.nodeType === 'answer') {
+    return 'answer';
+  }
+
+  return 'default';
+}
+
+function metricText(item: AgentFlowTraceItem) {
+  const tokens = item.metricsPayload.total_tokens;
+  const duration = item.durationMs == null ? null : `${item.durationMs} ms`;
+
+  if (typeof tokens === 'number' && duration) {
+    return `${tokens} tokens · ${duration}`;
+  }
+
+  if (typeof tokens === 'number') {
+    return `${tokens} tokens`;
+  }
+
+  if (duration) {
+    return duration;
+  }
+
+  return '进行中';
+}
+
+function StatusIcon({ status }: { status: string }) {
+  const tone = statusTone(status);
+
+  if (tone === 'running') {
+    return <LoadingOutlined className="agent-flow-editor__debug-workflow-status-icon" spin />;
+  }
+
   return (
-    items.find((item) =>
-      ['running', 'waiting_human', 'waiting_callback'].includes(item.status)
-    ) ?? items.at(-1) ?? null
+    <CheckCircleFilled
+      className={`agent-flow-editor__debug-workflow-status-icon agent-flow-editor__debug-workflow-status-icon--${tone}`}
+    />
   );
 }
 
@@ -33,28 +86,43 @@ export function DebugWorkflowProcess({
   items: AgentFlowTraceItem[];
   onSelectNode: (nodeId: string) => void;
 }) {
-  const currentItem = resolveCurrentTraceItem(items);
-
-  if (!currentItem) {
+  if (items.length === 0) {
     return null;
   }
 
   return (
-    <button
+    <div
+      aria-label="工作流"
       className="agent-flow-editor__debug-workflow-process"
-      type="button"
-      onClick={() => onSelectNode(currentItem.nodeId)}
+      role="group"
     >
-      <Space size={8} wrap>
-        {currentItem.status === 'running' ? <LoadingOutlined spin /> : null}
-        <Typography.Text type="secondary">当前节点</Typography.Text>
-        <Typography.Text strong>{currentItem.nodeAlias}</Typography.Text>
-        <Tag>{currentItem.nodeType}</Tag>
-        <Tag color={statusColor(currentItem.status)}>{currentItem.status}</Tag>
-      </Space>
-      <Typography.Text type="secondary">
-        {items.length} 个节点
-      </Typography.Text>
-    </button>
+      <div className="agent-flow-editor__debug-workflow-header">
+        <span className="agent-flow-editor__debug-workflow-title">
+          <CheckCircleFilled />
+          <Typography.Text>工作流</Typography.Text>
+        </span>
+        <DownOutlined className="agent-flow-editor__debug-workflow-collapse" />
+      </div>
+      <div className="agent-flow-editor__debug-workflow-list">
+        {items.map((item) => (
+          <button
+            key={item.nodeId}
+            className="agent-flow-editor__debug-workflow-row"
+            type="button"
+            onClick={() => onSelectNode(item.nodeId)}
+          >
+            <RightOutlined className="agent-flow-editor__debug-workflow-row-caret" />
+            <span
+              className={`agent-flow-editor__debug-workflow-node-icon agent-flow-editor__debug-workflow-node-icon--${nodeIconTone(item)}`}
+            />
+            <Typography.Text strong>{nodeDisplayName(item)}</Typography.Text>
+            <Typography.Text className="agent-flow-editor__debug-workflow-metric" type="secondary">
+              {metricText(item)}
+            </Typography.Text>
+            <StatusIcon status={item.status} />
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

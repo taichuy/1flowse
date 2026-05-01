@@ -107,7 +107,7 @@ describe('debug console shell', () => {
     });
   });
 
-  test('opens a docked debug console from overlay and keeps inspector separate', async () => {
+  test('opens a docked chat preview from overlay and keeps inspector separate', async () => {
     renderShell(
       <AgentFlowEditorShell
         applicationId="app-1"
@@ -120,9 +120,13 @@ describe('debug console shell', () => {
 
     expect(runtimeApi.startFlowDebugRun).not.toHaveBeenCalled();
     expect(
-      screen.getByRole('complementary', { name: '调试控制台' })
+      screen.getByRole('complementary', { name: '预览' })
     ).toBeInTheDocument();
-    expect(screen.getByText('Input')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('和 Bot 聊天')).toBeInTheDocument();
+    expect(screen.getByText('功能已开启')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '管理功能' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Input' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Trace' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: '设置' })).not.toBeInTheDocument();
   }, 20_000);
 });

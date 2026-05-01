@@ -3,48 +3,13 @@ import {
   EyeOutlined,
   PartitionOutlined
 } from '@ant-design/icons';
-import { Button, Space, Tag, Typography } from 'antd';
+import { Button, Space } from 'antd';
 import { useEffect, useState } from 'react';
 
 import type { AgentFlowDebugMessage } from '../../../api/runtime';
 import { DebugMarkdownContent } from './DebugMarkdownContent';
-import { DebugTraceSummary } from './DebugTraceSummary';
 import { DebugWorkflowProcess } from './DebugWorkflowProcess';
 import './debug-message.css';
-
-function statusColor(status: AgentFlowDebugMessage['status']) {
-  switch (status) {
-    case 'completed':
-      return 'green';
-    case 'failed':
-      return 'red';
-    case 'cancelled':
-      return 'default';
-    case 'waiting_callback':
-      return 'cyan';
-    case 'waiting_human':
-      return 'gold';
-    default:
-      return 'blue';
-  }
-}
-
-function statusLabel(status: AgentFlowDebugMessage['status']) {
-  switch (status) {
-    case 'completed':
-      return '已完成';
-    case 'failed':
-      return '失败';
-    case 'cancelled':
-      return '已停止';
-    case 'waiting_callback':
-      return '等待回调';
-    case 'waiting_human':
-      return '等待人工';
-    default:
-      return '运行中';
-  }
-}
 
 function fallbackContent(message: AgentFlowDebugMessage) {
   if (message.status === 'running') {
@@ -132,20 +97,8 @@ export function DebugAssistantMessage({
 
   return (
     <article className="agent-flow-editor__debug-message agent-flow-editor__debug-message--assistant">
-      <div className="agent-flow-editor__debug-message-avatar">AI</div>
       <div className="agent-flow-editor__debug-message-main">
-        <div className="agent-flow-editor__debug-message-header">
-          <Typography.Text strong>Assistant</Typography.Text>
-          <Tag color={statusColor(message.status)}>{statusLabel(message.status)}</Tag>
-        </div>
         <DebugWorkflowProcess
-          items={message.traceSummary}
-          onSelectNode={(nodeId) => {
-            onViewTrace();
-            onSelectTraceNode(nodeId);
-          }}
-        />
-        <DebugTraceSummary
           items={message.traceSummary}
           onSelectNode={(nodeId) => {
             onViewTrace();
@@ -156,7 +109,7 @@ export function DebugAssistantMessage({
           className="agent-flow-editor__debug-message-content"
           content={message.content ? visibleContent : fallbackContent(message)}
         />
-        <Space size={8} wrap>
+        <Space className="agent-flow-editor__debug-message-actions" size={8} wrap>
           <Button
             disabled={!message.content}
             icon={<CopyOutlined />}

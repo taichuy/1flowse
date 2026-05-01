@@ -61,7 +61,8 @@ describe('DebugAssistantMessage', () => {
     const table = screen.getByRole('table');
     expect(within(table).getByText('退款')).toBeInTheDocument();
     expect(within(table).getByText('已确认')).toBeInTheDocument();
-    expect(screen.getByText('当前节点')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '工作流' })).toBeInTheDocument();
+    expect(screen.queryByText('Assistant')).not.toBeInTheDocument();
     expect(screen.getAllByText('LLM').length).toBeGreaterThan(0);
   });
 

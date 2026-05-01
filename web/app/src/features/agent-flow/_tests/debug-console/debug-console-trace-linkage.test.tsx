@@ -173,7 +173,7 @@ function renderEditor(ui: ReactNode) {
 
 async function openConsoleAndRun() {
   fireEvent.click(await screen.findByRole('button', { name: '调试整流' }));
-  fireEvent.change(screen.getByPlaceholderText('输入内容...'), {
+  fireEvent.change(screen.getByPlaceholderText('和 Bot 聊天'), {
     target: { value: '请总结退款政策' }
   });
   fireEvent.click(screen.getByRole('button', { name: '发送调试消息' }));
@@ -198,7 +198,8 @@ async function openConsoleAndRun() {
   expect(
     screen.queryByRole('tab', { name: 'Variables' })
   ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('tab', { name: 'Trace' }));
+  expect(screen.queryByRole('tab', { name: 'Trace' })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole('button', { name: /查看 Trace/ }));
 }
 
 beforeEach(() => {
@@ -226,6 +227,9 @@ beforeEach(() => {
     }
   });
   vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue(null);
+  vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockRejectedValue(
+    new Error('stream unavailable in this test')
+  );
   vi.spyOn(runtimeApi, 'startFlowDebugRun').mockResolvedValue(
     createSucceededRunDetail()
   );
@@ -276,7 +280,7 @@ describe('debug console trace linkage', () => {
 
     await openConsoleAndRun();
 
-    const tracePanel = screen.getByRole('tabpanel', { name: 'Trace' });
+    const tracePanel = screen.getByRole('region', { name: 'Trace 详情' });
 
     fireEvent.click(screen.getByRole('button', { name: '选择 LLM' }));
 

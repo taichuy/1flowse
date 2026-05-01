@@ -261,7 +261,7 @@ describe('AgentFlowEditorShell', () => {
     expect(screen.getByRole('button', { name: '发布配置' })).toBeInTheDocument();
   }, 20_000);
 
-  test('opens debug console from overlay action and starts the run from composer', async () => {
+  test('opens preview from overlay action and starts the run from composer', async () => {
     const initialState = createInitialState();
 
     renderShell(
@@ -276,10 +276,10 @@ describe('AgentFlowEditorShell', () => {
 
     expect(runtimeApi.startFlowDebugRun).not.toHaveBeenCalled();
     expect(
-      screen.getByRole('complementary', { name: '调试控制台' })
+      screen.getByRole('complementary', { name: '预览' })
     ).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('输入内容...'), {
+    fireEvent.change(screen.getByPlaceholderText('和 Bot 聊天'), {
       target: { value: '请总结退款政策' }
     });
     fireEvent.click(screen.getByRole('button', { name: '发送调试消息' }));

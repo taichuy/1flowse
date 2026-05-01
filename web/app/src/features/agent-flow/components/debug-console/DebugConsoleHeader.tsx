@@ -1,88 +1,50 @@
-import { CloseOutlined, PauseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Button, Space, Tag, Typography } from 'antd';
-
-import type { AgentFlowDebugSessionStatus } from '../../hooks/runtime/useAgentFlowDebugSession';
-
-function statusMeta(status: AgentFlowDebugSessionStatus) {
-  switch (status) {
-    case 'completed':
-      return { color: 'green', label: '已完成' };
-    case 'failed':
-      return { color: 'red', label: '失败' };
-    case 'cancelled':
-      return { color: 'default', label: '已停止' };
-    case 'waiting_callback':
-      return { color: 'cyan', label: '等待回调' };
-    case 'waiting_human':
-      return { color: 'gold', label: '等待人工' };
-    case 'running':
-      return { color: 'blue', label: '运行中' };
-    default:
-      return { color: 'default', label: '空闲' };
-  }
-}
+import {
+  ArrowLeftOutlined,
+  CloseOutlined,
+  ReloadOutlined
+} from '@ant-design/icons';
+import { Button, Space, Typography } from 'antd';
 
 export function DebugConsoleHeader({
-  status,
+  mode,
   clearDisabled,
-  rerunDisabled,
-  stopDisabled,
+  onBackToPreview,
   onClear,
-  onClose,
-  onRerun,
-  onStop
+  onClose
 }: {
-  status: AgentFlowDebugSessionStatus;
+  mode: 'preview' | 'trace';
   clearDisabled: boolean;
-  rerunDisabled: boolean;
-  stopDisabled: boolean;
+  onBackToPreview: () => void;
   onClear: () => void;
   onClose: () => void;
-  onRerun: () => void;
-  onStop: () => void;
 }) {
-  const resolvedStatus = statusMeta(status);
-
   return (
     <div className="agent-flow-editor__debug-console-header">
-      <Space direction="vertical" size={2}>
-        <Space size={8} wrap>
-          <Typography.Text strong>调试控制台</Typography.Text>
-          <Tag color={resolvedStatus.color}>{resolvedStatus.label}</Tag>
+      <div className="agent-flow-editor__debug-console-title">
+        <Space size={8}>
+          {mode === 'trace' ? (
+            <Button
+              aria-label="返回预览"
+              icon={<ArrowLeftOutlined />}
+              size="small"
+              type="text"
+              onClick={onBackToPreview}
+            />
+          ) : null}
+          <Typography.Text strong>{mode === 'trace' ? 'Trace 详情' : '预览'}</Typography.Text>
         </Space>
-        <Typography.Text type="secondary">
-          在当前编排页内查看整流输入、运行结果和执行轨迹。
-        </Typography.Text>
-      </Space>
+      </div>
       <Space size={4} wrap>
         <Button
+          aria-label="清空预览"
           disabled={clearDisabled}
-          size="small"
-          type="text"
-          onClick={onClear}
-        >
-          清空
-        </Button>
-        <Button
-          disabled={rerunDisabled}
           icon={<ReloadOutlined />}
           size="small"
           type="text"
-          onClick={onRerun}
-        >
-          重新运行
-        </Button>
+          onClick={onClear}
+        />
         <Button
-          disabled={stopDisabled}
-          icon={<PauseCircleOutlined />}
-          size="small"
-          type="text"
-          onClick={onStop}
-        >
-          停止运行
-        </Button>
-        <Button
-          aria-label="关闭调试控制台"
+          aria-label="关闭预览"
           icon={<CloseOutlined />}
           size="small"
           type="text"
