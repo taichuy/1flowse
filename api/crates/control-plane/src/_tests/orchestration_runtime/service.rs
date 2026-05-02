@@ -261,6 +261,57 @@ async fn prepare_flow_debug_run_rejects_shell_input_mismatch() {
 }
 
 #[tokio::test]
+async fn concurrent_prepare_flow_debug_run_does_not_fail_attached_shell() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+
+    let input_payload = serde_json::json!({ "node-start": { "query": "hello" } });
+    let shell = service
+        .open_flow_debug_run_shell(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: input_payload.clone(),
+            document_snapshot: None,
+        })
+        .await
+        .unwrap();
+
+    let first_command = PrepareFlowDebugRunCommand {
+        actor_user_id: seeded.actor_user_id,
+        application_id: seeded.application_id,
+        flow_run_id: shell.id,
+        input_payload: input_payload.clone(),
+        document_snapshot: None,
+    };
+    let second_command = PrepareFlowDebugRunCommand {
+        actor_user_id: seeded.actor_user_id,
+        application_id: seeded.application_id,
+        flow_run_id: shell.id,
+        input_payload,
+        document_snapshot: None,
+    };
+
+    let (first, second) = tokio::join!(
+        service.prepare_flow_debug_run_from_shell(first_command),
+        service.prepare_flow_debug_run_from_shell(second_command),
+    );
+
+    assert_eq!(
+        [first.is_ok(), second.is_ok()]
+            .into_iter()
+            .filter(|succeeded| *succeeded)
+            .count(),
+        1
+    );
+
+    let detail = service
+        .application_run_detail(seeded.application_id, shell.id)
+        .await;
+    assert_eq!(detail.flow_run.status, domain::FlowRunStatus::Running);
+    assert!(detail.flow_run.compiled_plan_id.is_some());
+}
+
+#[tokio::test]
 async fn start_flow_debug_run_marks_shell_failed_when_preparation_fails() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service.seed_application_with_flow("Support Agent").await;

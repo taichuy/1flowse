@@ -183,7 +183,7 @@ where
         .get_application(actor.current_workspace_id, command.application_id)
         .await?
         .ok_or(ControlPlaneError::NotFound("application"))?;
-    let prepare_result = async {
+    let pre_attach_result = async {
         let compile_context = service
             .build_compile_context(application.workspace_id)
             .await?;
@@ -208,15 +208,42 @@ where
                 &compiled_plan,
             )?)
             .await?;
-        let flow_run = service
-            .repository
-            .attach_compiled_plan_to_flow_run(&AttachCompiledPlanToFlowRunInput {
-                flow_run_id: command.flow_run_id,
-                compiled_plan_id: compiled_record.id,
-                status: domain::FlowRunStatus::Running,
-            })
-            .await?;
 
+        Result::<_>::Ok((compiled_plan, compiled_record))
+    }
+    .await;
+
+    let (compiled_plan, compiled_record) = match pre_attach_result {
+        Ok(result) => result,
+        Err(error) => {
+            fail_flow_run(service, command.application_id, command.flow_run_id, &error).await?;
+            return Err(error);
+        }
+    };
+
+    let flow_run = match service
+        .repository
+        .attach_compiled_plan_to_flow_run(&AttachCompiledPlanToFlowRunInput {
+            flow_run_id: command.flow_run_id,
+            compiled_plan_id: compiled_record.id,
+            status: domain::FlowRunStatus::Running,
+        })
+        .await
+    {
+        Ok(flow_run) => flow_run,
+        Err(error) => {
+            fail_flow_run_if_still_queued_shell(
+                service,
+                command.application_id,
+                command.flow_run_id,
+                &error,
+            )
+            .await;
+            return Err(error);
+        }
+    };
+
+    let post_attach_result = async {
         service
             .repository
             .append_run_event(&AppendRunEventInput {
@@ -244,12 +271,46 @@ where
     }
     .await;
 
-    if let Err(error) = prepare_result {
+    if let Err(error) = post_attach_result {
         fail_flow_run(service, command.application_id, command.flow_run_id, &error).await?;
         return Err(error);
     }
 
-    prepare_result
+    post_attach_result
+}
+
+async fn fail_flow_run_if_still_queued_shell<R, H>(
+    service: &OrchestrationRuntimeService<R, H>,
+    application_id: Uuid,
+    flow_run_id: Uuid,
+    error: &anyhow::Error,
+) where
+    R: crate::ports::ApplicationRepository
+        + crate::ports::FlowRepository
+        + OrchestrationRuntimeRepository
+        + crate::ports::ModelDefinitionRepository
+        + crate::ports::ModelProviderRepository
+        + crate::ports::NodeContributionRepository
+        + crate::ports::PluginRepository
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    H: crate::ports::ProviderRuntimePort
+        + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
+        + Clone,
+{
+    let Ok(Some(flow_run)) = service
+        .repository
+        .get_flow_run(application_id, flow_run_id)
+        .await
+    else {
+        return;
+    };
+
+    if flow_run.status == domain::FlowRunStatus::Queued && flow_run.compiled_plan_id.is_none() {
+        let _ = fail_flow_run(service, application_id, flow_run_id, error).await;
+    }
 }
 
 async fn record_gateway_billing_audit<R>(
