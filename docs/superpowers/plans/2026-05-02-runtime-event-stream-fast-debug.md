@@ -1775,7 +1775,7 @@ git commit -m "feat: emit debug runtime events directly"
 - Modify: `api/crates/control-plane/src/orchestration_runtime.rs`
 - Modify: `api/crates/control-plane/src/orchestration_runtime/live_debug_run.rs`
 
-- [ ] **Step 1: Add persister tests**
+- [x] **Step 1: Add persister tests**
 
 In `api/crates/control-plane/src/_tests/orchestration_runtime/service.rs`, add:
 
@@ -1830,7 +1830,7 @@ fn runtime_text_delta(
 }
 ```
 
-- [ ] **Step 2: Run the failing persister test**
+- [x] **Step 2: Run the failing persister test**
 
 Run:
 
@@ -1840,7 +1840,7 @@ cargo test -p control-plane debug_event_persister_coalesces_text_delta_run_event
 
 Expected: FAIL because `debug_event_persister` does not exist.
 
-- [ ] **Step 3: Implement persister module**
+- [x] **Step 3: Implement persister module**
 
 Create `api/crates/control-plane/src/orchestration_runtime/debug_event_persister.rs`:
 
@@ -1927,7 +1927,7 @@ Register the module in `orchestration_runtime.rs`:
 mod debug_event_persister;
 ```
 
-- [ ] **Step 4: Wire persister subscription in background task**
+- [x] **Step 4: Wire persister subscription in background task**
 
 After `open_run`, spawn a persister consumer in the stream route background setup:
 
@@ -1974,7 +1974,7 @@ where
 }
 ```
 
-- [ ] **Step 5: Run persister tests**
+- [x] **Step 5: Run persister tests**
 
 Run:
 
@@ -1984,7 +1984,7 @@ cargo test -p control-plane debug_event_persister_coalesces_text_delta_run_event
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/crates/control-plane/src/orchestration_runtime/debug_event_persister.rs \
