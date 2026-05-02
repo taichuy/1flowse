@@ -96,6 +96,57 @@ async fn fail_runtime_event_stream_if_missing_terminal(
     }
 }
 
+async fn persist_runtime_terminal_event_if_missing<R>(
+    repository: &R,
+    application_id: Uuid,
+    run_id: Uuid,
+    terminal_event: control_plane::ports::RuntimeEventPayload,
+) where
+    R: OrchestrationRuntimeRepository,
+{
+    match repository
+        .get_application_run_detail(application_id, run_id)
+        .await
+    {
+        Ok(Some(detail))
+            if detail
+                .events
+                .iter()
+                .any(|event| is_terminal_runtime_event(&event.event_type)) =>
+        {
+            return;
+        }
+        Ok(_) => {}
+        Err(error) => {
+            warn!(
+                application_id = %application_id,
+                flow_run_id = %run_id,
+                error = %error,
+                "failed to check persisted runtime terminal event"
+            );
+            return;
+        }
+    }
+
+    if let Err(error) = control_plane::orchestration_runtime::persist_debug_stream_events(
+        repository,
+        vec![control_plane::ports::RuntimeEventEnvelope::new(
+            run_id,
+            0,
+            terminal_event,
+        )],
+    )
+    .await
+    {
+        warn!(
+            application_id = %application_id,
+            flow_run_id = %run_id,
+            error = %error,
+            "failed to persist missing runtime terminal event"
+        );
+    }
+}
+
 fn spawn_debug_event_persister<R>(
     repository: R,
     stream: Arc<dyn RuntimeEventStream>,
@@ -113,9 +164,11 @@ where
             return;
         };
 
-        let mut batch = subscription.replay;
-        if flush_debug_event_batch(&repository, &mut batch, run_id).await {
-            return;
+        let mut batch = Vec::new();
+        for event in subscription.replay {
+            if push_debug_event_for_persistence(&repository, &mut batch, run_id, event).await {
+                return;
+            }
         }
 
         loop {
@@ -124,16 +177,29 @@ where
                 return;
             };
 
-            let is_terminal = is_terminal_runtime_event(&event.event_type);
-            let is_text_delta = event.event_type == "text_delta";
-            batch.push(event);
-            if is_terminal || !is_text_delta {
-                if flush_debug_event_batch(&repository, &mut batch, run_id).await || is_terminal {
-                    return;
-                }
+            if push_debug_event_for_persistence(&repository, &mut batch, run_id, event).await {
+                return;
             }
         }
     })
+}
+
+async fn push_debug_event_for_persistence<R>(
+    repository: &R,
+    batch: &mut Vec<control_plane::ports::RuntimeEventEnvelope>,
+    run_id: Uuid,
+    event: control_plane::ports::RuntimeEventEnvelope,
+) -> bool
+where
+    R: OrchestrationRuntimeRepository,
+{
+    let is_terminal = is_terminal_runtime_event(&event.event_type);
+    let is_text_delta = event.event_type == "text_delta";
+    batch.push(event);
+    if is_terminal || !is_text_delta {
+        return flush_debug_event_batch(repository, batch, run_id).await || is_terminal;
+    }
+    false
 }
 
 async fn flush_debug_event_batch<R>(
@@ -670,19 +736,40 @@ pub async fn start_flow_debug_run_stream(
             Err(error) => Err(error),
         };
 
-        if let Err(error) = result {
-            fail_runtime_event_stream_if_missing_terminal(
-                background_state.runtime_event_stream.clone(),
-                run_id,
-                &error,
-            )
-            .await;
-            error!(
-                application_id = %id,
-                flow_run_id = %run_id,
-                error = %error,
-                "failed to prepare and continue streamed flow debug run"
-            );
+        match result {
+            Ok(detail) => {
+                persist_runtime_terminal_event_if_missing(
+                    &background_state.store,
+                    id,
+                    run_id,
+                    debug_stream_events::flow_finished(run_id, detail.flow_run.output_payload),
+                )
+                .await;
+            }
+            Err(error) => {
+                fail_runtime_event_stream_if_missing_terminal(
+                    background_state.runtime_event_stream.clone(),
+                    run_id,
+                    &error,
+                )
+                .await;
+                persist_runtime_terminal_event_if_missing(
+                    &background_state.store,
+                    id,
+                    run_id,
+                    debug_stream_events::flow_failed(
+                        run_id,
+                        serde_json::json!({ "message": error.to_string() }),
+                    ),
+                )
+                .await;
+                error!(
+                    application_id = %id,
+                    flow_run_id = %run_id,
+                    error = %error,
+                    "failed to prepare and continue streamed flow debug run"
+                );
+            }
         }
     });
 

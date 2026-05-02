@@ -558,7 +558,7 @@ async fn wait_for_persisted_text_delta_events(
     application_id: &str,
     run_id: &str,
 ) -> Vec<Value> {
-    let terminal_detail = wait_for_run_detail(
+    wait_for_run_detail(
         app,
         cookie,
         application_id,
@@ -566,7 +566,8 @@ async fn wait_for_persisted_text_delta_events(
         &["succeeded", "failed", "cancelled"],
     )
     .await;
-    for _ in 0..50 {
+    let mut last_event_types = Vec::new();
+    for _ in 0..200 {
         let detail = app
             .clone()
             .oneshot(
@@ -584,26 +585,33 @@ async fn wait_for_persisted_text_delta_events(
         let body = to_bytes(detail.into_body(), usize::MAX).await.unwrap();
         let payload: Value = serde_json::from_slice(&body).unwrap();
         let detail = payload["data"].clone();
-        let text_delta_events = detail["events"]
-            .as_array()
-            .unwrap()
+        let events = detail["events"].as_array().unwrap();
+        last_event_types = events
             .iter()
-            .filter(|event| event["event_type"].as_str() == Some("text_delta"))
-            .cloned()
-            .collect::<Vec<_>>();
-        if !text_delta_events.is_empty() {
-            return text_delta_events;
+            .filter_map(|event| event["event_type"].as_str().map(ToString::to_string))
+            .collect();
+        let has_terminal_stream_event = events.iter().any(|event| {
+            matches!(
+                event["event_type"].as_str(),
+                Some("flow_finished" | "flow_failed" | "flow_cancelled")
+            )
+        });
+        if has_terminal_stream_event {
+            let text_delta_events = events
+                .iter()
+                .filter(|event| event["event_type"].as_str() == Some("text_delta"))
+                .cloned()
+                .collect::<Vec<_>>();
+            if !text_delta_events.is_empty() {
+                return text_delta_events;
+            }
         }
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
 
-    terminal_detail["events"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|event| event["event_type"].as_str() == Some("text_delta"))
-        .cloned()
-        .collect()
+    panic!(
+        "timed out waiting for persisted runtime stream terminal event, last event types: {last_event_types:?}"
+    );
 }
 
 fn sse_data_payload(frame: &str) -> Value {
