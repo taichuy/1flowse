@@ -511,7 +511,8 @@ pub async fn start_flow_debug_run_stream(
             ApiProviderRuntime::new(background_state.provider_runtime.clone()),
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
-        );
+        )
+        .with_runtime_event_stream(background_state.runtime_event_stream.clone());
         let prepare_result = background_service
             .prepare_flow_debug_run_from_shell(PrepareFlowDebugRunCommand {
                 actor_user_id,

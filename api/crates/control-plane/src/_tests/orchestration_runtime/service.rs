@@ -204,6 +204,39 @@ async fn start_flow_debug_run_returns_running_detail_before_background_continuat
 }
 
 #[tokio::test]
+async fn live_provider_delta_is_appended_to_runtime_event_stream() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+    let stream =
+        std::sync::Arc::new(crate::_tests::support::RecordingRuntimeEventStream::default());
+    let service = service.with_runtime_event_stream(stream.clone());
+
+    let detail = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
+            document_snapshot: None,
+        })
+        .await
+        .unwrap();
+
+    service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: detail.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    assert!(stream
+        .events()
+        .iter()
+        .any(|event| event.event_type == "text_delta"));
+}
+
+#[tokio::test]
 async fn opens_flow_debug_run_shell_without_compiling_plan() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service.seed_application_with_flow("Support Agent").await;

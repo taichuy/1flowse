@@ -31,9 +31,10 @@ use crate::{
 };
 
 use super::{
-    compile_context::ensure_compiled_plan_runnable, inputs::build_compiled_plan_input,
-    CancelFlowRunCommand, ContinueFlowDebugRunCommand, LiveProviderStreamEventSender,
-    OrchestrationRuntimeService, PrepareFlowDebugRunCommand, StartFlowDebugRunCommand,
+    compile_context::ensure_compiled_plan_runnable, debug_stream_events,
+    inputs::build_compiled_plan_input, CancelFlowRunCommand, ContinueFlowDebugRunCommand,
+    LiveProviderStreamEventSender, OrchestrationRuntimeService, PrepareFlowDebugRunCommand,
+    StartFlowDebugRunCommand,
 };
 
 pub(super) async fn start_flow_debug_run<R, H>(
@@ -650,6 +651,34 @@ where
     load_run_detail(&service.repository, command.application_id, flow_run.id).await
 }
 
+async fn append_runtime_event<R, H>(
+    service: &OrchestrationRuntimeService<R, H>,
+    flow_run_id: Uuid,
+    event: crate::ports::RuntimeEventPayload,
+) {
+    if let Some(stream) = &service.runtime_event_stream {
+        let _ = stream.append(flow_run_id, event).await;
+    }
+}
+
+async fn update_node_run_and_emit<R, H>(
+    service: &OrchestrationRuntimeService<R, H>,
+    flow_run_id: Uuid,
+    input: &UpdateNodeRunInput,
+) -> Result<domain::NodeRunRecord>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    let node_run = service.repository.update_node_run(input).await?;
+    append_runtime_event(
+        service,
+        flow_run_id,
+        debug_stream_events::node_finished(&node_run),
+    )
+    .await;
+    Ok(node_run)
+}
+
 async fn continue_flow_debug_run_inner<R, H>(
     service: &OrchestrationRuntimeService<R, H>,
     command: &ContinueFlowDebugRunCommand,
@@ -706,7 +735,8 @@ where
         )
     } else {
         service.runtime_invoker(application.workspace_id)
-    };
+    }
+    .for_flow_run(flow_run.id);
     let mut variable_pool = flow_run
         .input_payload
         .as_object()
@@ -759,6 +789,12 @@ where
                 started_at: node_started_at,
             })
             .await?;
+        append_runtime_event(
+            service,
+            flow_run.id,
+            debug_stream_events::node_started(&node_run),
+        )
+        .await;
         let node_span = append_host_span(
             &service.repository,
             AppendHostSpanInput {
@@ -787,17 +823,19 @@ where
                     .cloned()
                     .unwrap_or_else(|| json!({}));
                 last_output_payload = output_payload.clone();
-                service
-                    .repository
-                    .update_node_run(&UpdateNodeRunInput {
+                update_node_run_and_emit(
+                    service,
+                    flow_run.id,
+                    &UpdateNodeRunInput {
                         node_run_id: node_run.id,
                         status: domain::NodeRunStatus::Succeeded,
                         output_payload,
                         error_payload: None,
                         metrics_payload: json!({ "preview_mode": true }),
                         finished_at: Some(OffsetDateTime::now_utc()),
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
             }
             "llm" => {
                 let (persist_sender, persist_receiver) = mpsc::unbounded_channel();
@@ -837,17 +875,19 @@ where
                     node_status,
                     "continue_flow_debug_run",
                 )?;
-                service
-                    .repository
-                    .update_node_run(&UpdateNodeRunInput {
+                update_node_run_and_emit(
+                    service,
+                    flow_run.id,
+                    &UpdateNodeRunInput {
                         node_run_id: node_run.id,
                         status: node_status,
                         output_payload: execution.output_payload.clone(),
                         error_payload: execution.error_payload.clone(),
                         metrics_payload: execution.metrics_payload.clone(),
                         finished_at: Some(OffsetDateTime::now_utc()),
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
                 persist_llm_context_observability(
                     &service.repository,
                     flow_run.id,
@@ -925,17 +965,19 @@ where
                     node_status,
                     "continue_flow_debug_run",
                 )?;
-                service
-                    .repository
-                    .update_node_run(&UpdateNodeRunInput {
+                update_node_run_and_emit(
+                    service,
+                    flow_run.id,
+                    &UpdateNodeRunInput {
                         node_run_id: node_run.id,
                         status: node_status,
                         output_payload: execution.output_payload.clone(),
                         error_payload: execution.error_payload.clone(),
                         metrics_payload: execution.metrics_payload.clone(),
                         finished_at: Some(OffsetDateTime::now_utc()),
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
 
                 if is_run_cancelled(&service.repository, command.application_id, flow_run.id)
                     .await?
@@ -1003,17 +1045,19 @@ where
                     node_status,
                     "continue_flow_debug_run",
                 )?;
-                service
-                    .repository
-                    .update_node_run(&UpdateNodeRunInput {
+                update_node_run_and_emit(
+                    service,
+                    flow_run.id,
+                    &UpdateNodeRunInput {
                         node_run_id: node_run.id,
                         status: node_status,
                         output_payload: execution.output_payload.clone(),
                         error_payload: execution.error_payload.clone(),
                         metrics_payload: execution.metrics_payload.clone(),
                         finished_at: Some(OffsetDateTime::now_utc()),
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
 
                 if let Some(error_payload) = execution.error_payload {
                     ensure_flow_run_transition(
@@ -1067,30 +1111,34 @@ where
                 let output_payload = json!({ output_key: output_value });
                 last_output_payload = output_payload.clone();
                 variable_pool.insert(node.node_id.clone(), output_payload.clone());
-                service
-                    .repository
-                    .update_node_run(&UpdateNodeRunInput {
+                update_node_run_and_emit(
+                    service,
+                    flow_run.id,
+                    &UpdateNodeRunInput {
                         node_run_id: node_run.id,
                         status: domain::NodeRunStatus::Succeeded,
                         output_payload,
                         error_payload: None,
                         metrics_payload: json!({ "preview_mode": true }),
                         finished_at: Some(OffsetDateTime::now_utc()),
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
             }
             "human_input" => {
-                service
-                    .repository
-                    .update_node_run(&UpdateNodeRunInput {
+                update_node_run_and_emit(
+                    service,
+                    flow_run.id,
+                    &UpdateNodeRunInput {
                         node_run_id: node_run.id,
                         status: domain::NodeRunStatus::WaitingHuman,
                         output_payload: json!({}),
                         error_payload: None,
                         metrics_payload: json!({ "preview_mode": true, "waiting": "human_input" }),
                         finished_at: None,
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
 
                 if is_run_cancelled(&service.repository, command.application_id, flow_run.id)
                     .await?
@@ -1142,17 +1190,19 @@ where
             }
             "tool" | "http_request" => {
                 let request_payload = Value::Object(resolved_inputs.clone());
-                service
-                    .repository
-                    .update_node_run(&UpdateNodeRunInput {
+                update_node_run_and_emit(
+                    service,
+                    flow_run.id,
+                    &UpdateNodeRunInput {
                         node_run_id: node_run.id,
                         status: domain::NodeRunStatus::WaitingCallback,
                         output_payload: json!({}),
                         error_payload: None,
                         metrics_payload: json!({ "preview_mode": true, "waiting": node.node_type }),
                         finished_at: None,
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
 
                 if is_run_cancelled(&service.repository, command.application_id, flow_run.id)
                     .await?

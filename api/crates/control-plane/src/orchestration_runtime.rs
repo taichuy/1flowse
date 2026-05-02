@@ -21,7 +21,7 @@ use crate::{
     ports::{
         ApplicationRepository, CompleteCallbackTaskInput, FlowRepository,
         ModelDefinitionRepository, ModelProviderRepository, NodeContributionRepository,
-        OrchestrationRuntimeRepository, PluginRepository, ProviderRuntimePort,
+        OrchestrationRuntimeRepository, PluginRepository, ProviderRuntimePort, RuntimeEventStream,
     },
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
@@ -113,6 +113,8 @@ struct RuntimeProviderInvoker<R, H> {
     provider_secret_master_key: String,
     live_provider_events: Option<LiveProviderStreamEventSender>,
     persist_events: Option<mpsc::UnboundedSender<ProviderStreamEvent>>,
+    runtime_event_stream: Option<Arc<dyn RuntimeEventStream>>,
+    flow_run_id: Option<Uuid>,
     active_node_id: Option<String>,
     active_node_run_id: Option<Uuid>,
 }
@@ -122,6 +124,7 @@ pub struct OrchestrationRuntimeService<R, H> {
     runtime: H,
     runtime_engine: Arc<runtime_core::runtime_engine::RuntimeEngine>,
     provider_secret_master_key: String,
+    runtime_event_stream: Option<Arc<dyn RuntimeEventStream>>,
 }
 
 impl<R, H> OrchestrationRuntimeService<R, H>
@@ -150,7 +153,13 @@ where
             runtime,
             runtime_engine,
             provider_secret_master_key: provider_secret_master_key.into(),
+            runtime_event_stream: None,
         }
+    }
+
+    pub fn with_runtime_event_stream(mut self, stream: Arc<dyn RuntimeEventStream>) -> Self {
+        self.runtime_event_stream = Some(stream);
+        self
     }
 
     fn runtime_invoker(&self, workspace_id: Uuid) -> RuntimeProviderInvoker<R, H> {
@@ -161,6 +170,8 @@ where
             provider_secret_master_key: self.provider_secret_master_key.clone(),
             live_provider_events: None,
             persist_events: None,
+            runtime_event_stream: self.runtime_event_stream.clone(),
+            flow_run_id: None,
             active_node_id: None,
             active_node_run_id: None,
         }
@@ -178,6 +189,8 @@ where
             provider_secret_master_key: self.provider_secret_master_key.clone(),
             live_provider_events: Some(live_provider_events),
             persist_events: None,
+            runtime_event_stream: self.runtime_event_stream.clone(),
+            flow_run_id: None,
             active_node_id: None,
             active_node_run_id: None,
         }
@@ -572,28 +585,51 @@ where
         )
         .await?;
 
-        let live_provider_events = if let (Some(sender), Some(node_id), Some(node_run_id)) = (
-            self.live_provider_events.clone(),
-            self.active_node_id.clone(),
-            self.active_node_run_id,
-        ) {
-            let live_sender = sender.clone();
+        let live_provider_events = if let (Some(node_id), Some(node_run_id)) =
+            (self.active_node_id.clone(), self.active_node_run_id)
+        {
+            let live_sender = self.live_provider_events.clone();
             let persist_sender = self.persist_events.clone();
+            let runtime_event_stream = self.runtime_event_stream.clone();
+            let flow_run_id = self.flow_run_id;
             let (provider_sender, mut provider_receiver) =
                 mpsc::unbounded_channel::<ProviderStreamEvent>();
-            tokio::spawn(async move {
-                while let Some(event) = provider_receiver.recv().await {
-                    let _ = live_sender.send(LiveProviderStreamEvent {
-                        node_id: node_id.clone(),
-                        node_run_id,
-                        event: event.clone(),
-                    });
-                    if let Some(persist) = &persist_sender {
-                        let _ = persist.send(event);
+            if live_sender.is_some() || runtime_event_stream.is_some() || persist_sender.is_some() {
+                tokio::spawn(async move {
+                    while let Some(event) = provider_receiver.recv().await {
+                        if let Some(sender) = &live_sender {
+                            let _ = sender.send(LiveProviderStreamEvent {
+                                node_id: node_id.clone(),
+                                node_run_id,
+                                event: event.clone(),
+                            });
+                        }
+                        if let (
+                            Some(stream),
+                            Some(flow_run_id),
+                            ProviderStreamEvent::TextDelta { delta },
+                        ) = (&runtime_event_stream, flow_run_id, &event)
+                        {
+                            let _ = stream
+                                .append(
+                                    flow_run_id,
+                                    debug_stream_events::text_delta(
+                                        &node_id,
+                                        node_run_id,
+                                        delta.clone(),
+                                    ),
+                                )
+                                .await;
+                        }
+                        if let Some(persist) = &persist_sender {
+                            let _ = persist.send(event);
+                        }
                     }
-                }
-            });
-            Some(provider_sender)
+                });
+                Some(provider_sender)
+            } else {
+                None
+            }
         } else {
             None
         };
@@ -625,6 +661,21 @@ where
     R: ModelProviderRepository + PluginRepository + Clone + Send + Sync,
     H: ProviderRuntimePort + Clone + Send + Sync,
 {
+    pub(super) fn for_flow_run(&self, flow_run_id: Uuid) -> Self {
+        Self {
+            repository: self.repository.clone(),
+            runtime: self.runtime.clone(),
+            workspace_id: self.workspace_id,
+            provider_secret_master_key: self.provider_secret_master_key.clone(),
+            live_provider_events: self.live_provider_events.clone(),
+            persist_events: self.persist_events.clone(),
+            runtime_event_stream: self.runtime_event_stream.clone(),
+            flow_run_id: Some(flow_run_id),
+            active_node_id: self.active_node_id.clone(),
+            active_node_run_id: self.active_node_run_id,
+        }
+    }
+
     fn for_live_llm_node_with_persist(
         &self,
         node_id: String,
@@ -638,6 +689,8 @@ where
             provider_secret_master_key: self.provider_secret_master_key.clone(),
             live_provider_events: self.live_provider_events.clone(),
             persist_events: Some(persist_events),
+            runtime_event_stream: self.runtime_event_stream.clone(),
+            flow_run_id: self.flow_run_id,
             active_node_id: Some(node_id),
             active_node_run_id: Some(node_run_id),
         }
@@ -918,6 +971,8 @@ mod tests {
             provider_secret_master_key: "test-master-key".to_string(),
             live_provider_events: None,
             persist_events: None,
+            runtime_event_stream: None,
+            flow_run_id: None,
             active_node_id: None,
             active_node_run_id: None,
         };
@@ -957,6 +1012,8 @@ mod tests {
             provider_secret_master_key: "test-master-key".to_string(),
             live_provider_events: None,
             persist_events: None,
+            runtime_event_stream: None,
+            flow_run_id: None,
             active_node_id: None,
             active_node_run_id: None,
         };
@@ -992,6 +1049,8 @@ mod tests {
             provider_secret_master_key: "test-master-key".to_string(),
             live_provider_events: None,
             persist_events: None,
+            runtime_event_stream: None,
+            flow_run_id: None,
             active_node_id: None,
             active_node_run_id: None,
         };
@@ -1037,6 +1096,8 @@ mod tests {
             provider_secret_master_key: "test-master-key".to_string(),
             live_provider_events: None,
             persist_events: None,
+            runtime_event_stream: None,
+            flow_run_id: None,
             active_node_id: None,
             active_node_run_id: None,
         };
