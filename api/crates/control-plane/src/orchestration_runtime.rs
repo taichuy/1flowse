@@ -567,9 +567,20 @@ where
         runtime: &orchestration_runtime::compiled_plan::CompiledLlmRuntime,
         mut input: ProviderInvocationInput,
     ) -> Result<orchestration_runtime::execution_engine::ProviderInvocationOutput> {
+        let provider_resolve_started = std::time::Instant::now();
         let instance = self.resolve_llm_instance(runtime).await?;
+        tracing::debug!(
+            provider_resolve_ms = provider_resolve_started.elapsed().as_millis() as u64,
+            "provider resolve finished"
+        );
+
+        let installation_reconcile_started = std::time::Instant::now();
         let installation =
             reconcile_installation_snapshot(&self.repository, instance.installation_id).await?;
+        tracing::debug!(
+            installation_reconcile_ms = installation_reconcile_started.elapsed().as_millis() as u64,
+            "installation reconcile finished"
+        );
         let assigned = self
             .repository
             .list_assignments(self.workspace_id)
@@ -588,7 +599,14 @@ where
             return Err(ControlPlaneError::Conflict("plugin_installation_unavailable").into());
         }
 
+        let package_load_started = std::time::Instant::now();
         let package = load_provider_package(&installation.installed_path)?;
+        tracing::debug!(
+            package_load_ms = package_load_started.elapsed().as_millis() as u64,
+            "package load finished"
+        );
+
+        let runtime_config_started = std::time::Instant::now();
         input.provider_config = build_provider_runtime_config(
             &self.repository,
             &self.provider_secret_master_key,
@@ -596,6 +614,10 @@ where
             &instance,
         )
         .await?;
+        tracing::debug!(
+            runtime_config_ms = runtime_config_started.elapsed().as_millis() as u64,
+            "runtime config finished"
+        );
 
         let mut live_forward_handle = None;
         let live_provider_events = if let (Some(node_id), Some(node_run_id)) =
@@ -664,10 +686,15 @@ where
         };
 
         let has_live_provider_events = live_provider_events.is_some();
+        let provider_invoke_started = std::time::Instant::now();
         let invocation_result = self
             .runtime
             .invoke_stream_with_live_events(&installation, input, live_provider_events)
             .await;
+        tracing::debug!(
+            provider_invoke_ms = provider_invoke_started.elapsed().as_millis() as u64,
+            "provider invoke finished"
+        );
         if let Some(handle) = live_forward_handle {
             if let Err(error) = handle.await {
                 tracing::warn!(

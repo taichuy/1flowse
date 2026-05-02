@@ -1198,6 +1198,7 @@ async fn stream_debug_run_returns_flow_accepted_before_background_compile_finish
     assert_eq!(response.status(), axum::http::StatusCode::OK);
     let body = crate::_tests::support::read_first_sse_frame(response).await;
     assert!(body.contains("\"type\":\"flow_accepted\""), "{body}");
+    assert!(!body.contains("\"type\":\"flow_started\""), "{body}");
 }
 
 #[tokio::test]

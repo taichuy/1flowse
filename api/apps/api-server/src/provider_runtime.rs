@@ -147,14 +147,7 @@ impl ProviderRuntimePort for ApiProviderRuntime {
         &self,
         installation: &domain::PluginInstallationRecord,
     ) -> anyhow::Result<()> {
-        let mut host = self.services.provider_host.write().await;
-        match host.reload(&installation.plugin_id) {
-            Ok(_) => Ok(()),
-            Err(_) => host
-                .load(&installation.installed_path)
-                .map(|_| ())
-                .map_err(|error| map_framework_error(error, "provider_runtime")),
-        }
+        self.ensure_provider_loaded(installation).await
     }
 
     async fn validate_provider(
@@ -557,14 +550,22 @@ impl ApiProviderRuntime {
         &self,
         installation: &domain::PluginInstallationRecord,
     ) -> anyhow::Result<()> {
+        let ensure_loaded_started = std::time::Instant::now();
         let mut host = self.services.provider_host.write().await;
-        match host.reload(&installation.plugin_id) {
-            Ok(_) => Ok(()),
-            Err(_) => host
-                .load(&installation.installed_path)
-                .map(|_| ())
-                .map_err(|error| map_framework_error(error, "provider_runtime")),
-        }
+        let source_identity = provider_source_identity(installation);
+        let result = host
+            .load_if_needed(
+                &installation.plugin_id,
+                &installation.installed_path,
+                Some(source_identity.as_str()),
+            )
+            .map_err(|error| map_framework_error(error, "provider_runtime"));
+        tracing::debug!(
+            plugin_id = %installation.plugin_id,
+            provider_ensure_loaded_ms = ensure_loaded_started.elapsed().as_millis() as u64,
+            "provider ensure_loaded finished"
+        );
+        result
     }
 
     async fn ensure_capability_loaded(
@@ -590,6 +591,16 @@ impl ApiProviderRuntime {
                 .map_err(|error| map_framework_error(error, "data_source_runtime")),
         }
     }
+}
+
+fn provider_source_identity(installation: &domain::PluginInstallationRecord) -> String {
+    format!(
+        "installation_id={};checksum={};manifest_fingerprint={};updated_at={}",
+        installation.id,
+        installation.checksum.as_deref().unwrap_or(""),
+        installation.manifest_fingerprint.as_deref().unwrap_or(""),
+        installation.updated_at.unix_timestamp_nanos()
+    )
 }
 
 fn map_provider_framework_error(error: PluginFrameworkError) -> anyhow::Error {

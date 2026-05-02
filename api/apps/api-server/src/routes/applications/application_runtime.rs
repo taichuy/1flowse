@@ -632,6 +632,7 @@ pub async fn start_flow_debug_run_stream(
     Path(id): Path<Uuid>,
     Json(body): Json<StartFlowDebugRunBody>,
 ) -> Result<Sse<debug_run_stream::DebugRunSseStream>, ApiError> {
+    let request_received_at = std::time::Instant::now();
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
@@ -729,6 +730,13 @@ pub async fn start_flow_debug_run_stream(
         }
         wait_for_debug_event_persister(persister_handle, id, run_id).await;
     });
+
+    tracing::info!(
+        application_id = %id,
+        flow_run_id = %run_id,
+        http_to_sse_open_ms = request_received_at.elapsed().as_millis() as u64,
+        "flow debug stream opened"
+    );
 
     Ok(Sse::new(debug_run_stream::DebugRunSseStream::new(receiver))
         .keep_alive(KeepAlive::default()))
