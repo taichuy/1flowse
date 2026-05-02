@@ -2105,7 +2105,7 @@ git commit -m "perf: add debug stream and provider timing"
 - Modify: `web/app/src/features/agent-flow/hooks/runtime/useAgentFlowDebugSession.ts`
 - Modify: `web/app/src/features/agent-flow/_tests/debug-console/use-agent-flow-debug-session-stream.test.tsx`
 
-- [ ] **Step 1: Extend frontend stream tests**
+- [x] **Step 1: Extend frontend stream tests**
 
 In `web/app/src/features/agent-flow/_tests/debug-console/use-agent-flow-debug-session-stream.test.tsx`, add a test:
 
@@ -2151,7 +2151,7 @@ test('handles flow accepted and batches text deltas without rebuilding variable 
 });
 ```
 
-- [ ] **Step 2: Run the failing frontend test**
+- [x] **Step 2: Run the failing frontend test**
 
 Run:
 
@@ -2161,7 +2161,7 @@ pnpm --dir web/app test -- --run src/features/agent-flow/_tests/debug-console/us
 
 Expected: FAIL because `flow_accepted` is not part of the type union and text batching is not implemented.
 
-- [ ] **Step 3: Extend API client event types**
+- [x] **Step 3: Extend API client event types**
 
 In `web/packages/api-client/src/console-application-runtime.ts`, add:
 
@@ -2178,7 +2178,7 @@ In `web/packages/api-client/src/console-application-runtime.ts`, add:
 
 Keep `heartbeat` as an ignored event.
 
-- [ ] **Step 4: Update stream event reducers**
+- [x] **Step 4: Update stream event reducers**
 
 In `web/app/src/features/agent-flow/lib/debug-console/stream-events.ts`, handle `flow_accepted`:
 
@@ -2213,7 +2213,7 @@ case 'replay_expired':
   };
 ```
 
-- [ ] **Step 5: Batch message updates in the hook**
+- [x] **Step 5: Batch message updates in the hook**
 
 In `web/app/src/features/agent-flow/hooks/runtime/useAgentFlowDebugSession.ts`, add refs:
 
@@ -2264,7 +2264,7 @@ const isTerminalEvent =
   event.type === 'replay_expired';
 ```
 
-- [ ] **Step 6: Clear animation frame on unmount**
+- [x] **Step 6: Clear animation frame on unmount**
 
 In the cleanup effect:
 
@@ -2276,7 +2276,7 @@ if (flushStreamMessageFrameRef.current !== null) {
 pendingAssistantMessageRef.current = null;
 ```
 
-- [ ] **Step 7: Run frontend tests**
+- [x] **Step 7: Run frontend tests**
 
 Run:
 
@@ -2286,7 +2286,7 @@ pnpm --dir web/app test -- --run src/features/agent-flow/_tests/debug-console/us
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add web/packages/api-client/src/console-application-runtime.ts \
