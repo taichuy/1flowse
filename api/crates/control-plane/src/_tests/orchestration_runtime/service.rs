@@ -424,6 +424,44 @@ async fn start_flow_debug_run_marks_shell_failed_when_preparation_fails() {
 }
 
 #[tokio::test]
+async fn failed_prepare_emits_flow_failed_lifecycle_and_closes_runtime_stream() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+    let stream =
+        std::sync::Arc::new(crate::_tests::support::RecordingRuntimeEventStream::default());
+    let service = service.with_runtime_event_stream(stream.clone());
+
+    let error = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
+            document_snapshot: Some(serde_json::json!({})),
+        })
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("schemaVersion missing"));
+
+    let runs = service.application_runs(seeded.application_id).await;
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].status, domain::FlowRunStatus::Failed);
+
+    let event_types = stream
+        .events()
+        .into_iter()
+        .map(|event| event.event_type)
+        .collect::<Vec<_>>();
+    assert!(event_types
+        .iter()
+        .any(|event_type| event_type == "flow_failed"));
+    assert_eq!(
+        stream.close_calls(),
+        vec![(runs[0].id, crate::ports::RuntimeEventCloseReason::Failed)]
+    );
+}
+
+#[tokio::test]
 async fn start_flow_debug_run_records_gateway_billing_audit_trace() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service

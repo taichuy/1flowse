@@ -431,6 +431,50 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         map_flow_run_record(row)
     }
 
+    async fn update_flow_run_if_status(
+        &self,
+        input: &UpdateFlowRunInput,
+        expected_status: domain::FlowRunStatus,
+    ) -> Result<Option<domain::FlowRunRecord>> {
+        let row = sqlx::query(
+            r#"
+            update flow_runs
+            set status = $2,
+                output_payload = $3,
+                error_payload = $4,
+                finished_at = $5
+            where id = $1
+              and status = $6
+            returning
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                run_mode,
+                target_node_id,
+                status,
+                input_payload,
+                output_payload,
+                error_payload,
+                created_by,
+                started_at,
+                finished_at,
+                created_at
+            "#,
+        )
+        .bind(input.flow_run_id)
+        .bind(input.status.as_str())
+        .bind(&input.output_payload)
+        .bind(&input.error_payload)
+        .bind(input.finished_at)
+        .bind(expected_status.as_str())
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_flow_run_record).transpose()
+    }
+
     async fn complete_flow_run(
         &self,
         input: &CompleteFlowRunInput,

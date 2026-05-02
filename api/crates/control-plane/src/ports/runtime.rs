@@ -384,6 +384,11 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         &self,
         input: &UpdateFlowRunInput,
     ) -> anyhow::Result<domain::FlowRunRecord>;
+    async fn update_flow_run_if_status(
+        &self,
+        input: &UpdateFlowRunInput,
+        expected_status: domain::FlowRunStatus,
+    ) -> anyhow::Result<Option<domain::FlowRunRecord>>;
     async fn complete_flow_run(
         &self,
         input: &CompleteFlowRunInput,

@@ -4,7 +4,7 @@ use control_plane::ports::{
     AttachCompiledPlanToFlowRunInput, CreateApplicationInput, CreateCallbackTaskInput,
     CreateCheckpointInput, CreateFlowRunInput, CreateFlowRunShellInput, CreateNodeRunInput,
     FlowRepository, LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
-    UpdateNodeRunInput, UpsertCompiledPlanInput,
+    UpdateFlowRunInput, UpdateNodeRunInput, UpsertCompiledPlanInput,
 };
 use domain::{ApplicationType, CallbackTaskStatus, FlowRunMode, FlowRunStatus, NodeRunStatus};
 use serde_json::json;
@@ -417,6 +417,65 @@ async fn creates_flow_run_shell_and_attaches_compiled_plan_rejects_mismatched_co
     .unwrap();
     assert_eq!(stored.compiled_plan_id, None);
     assert_eq!(stored.status, FlowRunStatus::Queued);
+}
+
+#[tokio::test]
+async fn update_flow_run_if_status_does_not_overwrite_cancelled_run() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        OffsetDateTime::now_utc(),
+        FlowRunMode::DebugFlowRun,
+        None,
+    )
+    .await;
+
+    let cancelled = <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: run.id,
+            status: FlowRunStatus::Cancelled,
+            output_payload: json!({}),
+            error_payload: None,
+            finished_at: Some(OffsetDateTime::now_utc()),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(cancelled.status, FlowRunStatus::Cancelled);
+
+    let updated =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run_if_status(
+            &store,
+            &UpdateFlowRunInput {
+                flow_run_id: run.id,
+                status: FlowRunStatus::Succeeded,
+                output_payload: json!({ "answer": "done" }),
+                error_payload: None,
+                finished_at: Some(OffsetDateTime::now_utc()),
+            },
+            FlowRunStatus::Running,
+        )
+        .await
+        .unwrap();
+
+    assert!(updated.is_none());
+    let stored = <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_flow_run(
+        &store,
+        seeded.application_id,
+        run.id,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(stored.status, FlowRunStatus::Cancelled);
+    assert_eq!(stored.output_payload, json!({}));
 }
 
 async fn append_event(

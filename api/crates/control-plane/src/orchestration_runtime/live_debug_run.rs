@@ -674,13 +674,23 @@ async fn append_runtime_event<R, H>(
         let event_type = event.event_type.clone();
         let source = event.source;
         if let Err(error) = stream.append(flow_run_id, event).await {
-            tracing::warn!(
-                flow_run_id = %flow_run_id,
-                event_type = %event_type,
-                source = ?source,
-                error = %error,
-                "failed to append runtime event"
-            );
+            if is_expected_runtime_event_stream_closed_error(&error) {
+                tracing::debug!(
+                    flow_run_id = %flow_run_id,
+                    event_type = %event_type,
+                    source = ?source,
+                    error = %error,
+                    "runtime event append skipped because stream is already closed"
+                );
+            } else {
+                tracing::warn!(
+                    flow_run_id = %flow_run_id,
+                    event_type = %event_type,
+                    source = ?source,
+                    error = %error,
+                    "failed to append runtime event"
+                );
+            }
         }
     }
 }
@@ -692,14 +702,29 @@ async fn close_runtime_event_stream<R, H>(
 ) {
     if let Some(stream) = &service.runtime_event_stream {
         if let Err(error) = stream.close_run(flow_run_id, reason).await {
-            tracing::warn!(
-                flow_run_id = %flow_run_id,
-                reason = ?reason,
-                error = %error,
-                "failed to close runtime event stream"
-            );
+            if is_expected_runtime_event_stream_closed_error(&error) {
+                tracing::debug!(
+                    flow_run_id = %flow_run_id,
+                    reason = ?reason,
+                    error = %error,
+                    "runtime event stream close skipped because stream is not open"
+                );
+            } else {
+                tracing::warn!(
+                    flow_run_id = %flow_run_id,
+                    reason = ?reason,
+                    error = %error,
+                    "failed to close runtime event stream"
+                );
+            }
         }
     }
+}
+
+fn is_expected_runtime_event_stream_closed_error(error: &anyhow::Error) -> bool {
+    let message = error.to_string();
+    message.contains("runtime event stream is closed")
+        || message.contains("runtime event stream is not open")
 }
 
 async fn emit_flow_failed_and_close<R, H>(
@@ -1344,16 +1369,22 @@ where
         domain::FlowRunStatus::Succeeded,
         "continue_flow_debug_run",
     )?;
-    service
+    let updated = service
         .repository
-        .update_flow_run(&UpdateFlowRunInput {
-            flow_run_id: flow_run.id,
-            status: domain::FlowRunStatus::Succeeded,
-            output_payload: last_output_payload.clone(),
-            error_payload: None,
-            finished_at: Some(OffsetDateTime::now_utc()),
-        })
+        .update_flow_run_if_status(
+            &UpdateFlowRunInput {
+                flow_run_id: flow_run.id,
+                status: domain::FlowRunStatus::Succeeded,
+                output_payload: last_output_payload.clone(),
+                error_payload: None,
+                finished_at: Some(OffsetDateTime::now_utc()),
+            },
+            domain::FlowRunStatus::Running,
+        )
         .await?;
+    if updated.is_none() {
+        return load_run_detail(&service.repository, command.application_id, flow_run.id).await;
+    }
     append_runtime_event(
         service,
         flow_run.id,

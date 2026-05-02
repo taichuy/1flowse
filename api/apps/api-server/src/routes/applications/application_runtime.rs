@@ -96,6 +96,13 @@ async fn fail_runtime_event_stream_if_missing_terminal(
     }
 }
 
+async fn runtime_event_stream_has_open_run(
+    stream: Arc<dyn RuntimeEventStream>,
+    run_id: Uuid,
+) -> bool {
+    stream.replay(run_id, Some(i64::MAX), 0).await.is_ok()
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct StartNodeDebugPreviewBody {
     pub input_payload: serde_json::Value,
@@ -639,19 +646,26 @@ pub async fn cancel_flow_run(
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    let detail = OrchestrationRuntimeService::new(
+    let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
         ApiProviderRuntime::new(state.provider_runtime.clone()),
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
-    )
-    .with_runtime_event_stream(state.runtime_event_stream.clone())
-    .cancel_flow_run(CancelFlowRunCommand {
-        actor_user_id: context.user.id,
-        application_id: id,
-        flow_run_id: run_id,
-    })
-    .await?;
+    );
+    let runtime_service =
+        if runtime_event_stream_has_open_run(state.runtime_event_stream.clone(), run_id).await {
+            runtime_service.with_runtime_event_stream(state.runtime_event_stream.clone())
+        } else {
+            runtime_service
+        };
+
+    let detail = runtime_service
+        .cancel_flow_run(CancelFlowRunCommand {
+            actor_user_id: context.user.id,
+            application_id: id,
+            flow_run_id: run_id,
+        })
+        .await?;
 
     Ok(Json(ApiSuccess::new(to_application_run_detail_response(
         detail,
@@ -703,6 +717,27 @@ pub async fn resume_flow_run(
     Ok(Json(ApiSuccess::new(to_application_run_detail_response(
         detail,
     ))))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::host_infrastructure::LocalRuntimeEventStream;
+
+    #[tokio::test]
+    async fn runtime_event_stream_has_open_run_only_for_opened_runs() {
+        let stream = Arc::new(LocalRuntimeEventStream::new());
+        let unopened_run_id = Uuid::now_v7();
+        let opened_run_id = Uuid::now_v7();
+
+        stream
+            .open_run(opened_run_id, RuntimeEventStreamPolicy::debug_default())
+            .await
+            .unwrap();
+
+        assert!(!runtime_event_stream_has_open_run(stream.clone(), unopened_run_id).await);
+        assert!(runtime_event_stream_has_open_run(stream, opened_run_id).await);
+    }
 }
 
 #[utoipa::path(
