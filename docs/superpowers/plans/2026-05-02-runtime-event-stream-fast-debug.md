@@ -1574,7 +1574,7 @@ git commit -m "feat: fast start flow debug stream"
 - Modify: `api/crates/control-plane/src/orchestration_runtime/debug_stream_events.rs`
 - Modify: `api/apps/api-server/src/routes/applications/application_runtime.rs`
 
-- [ ] **Step 1: Add control-plane test for direct text_delta emission**
+- [x] **Step 1: Add control-plane test for direct text_delta emission**
 
 In `api/crates/control-plane/src/_tests/orchestration_runtime/service.rs`, add a test using the in-memory repository and fake runtime:
 
@@ -1613,7 +1613,7 @@ async fn live_provider_delta_is_appended_to_runtime_event_stream() {
 
 Add `RecordingRuntimeEventStream` to `api/crates/control-plane/src/_tests/support.rs` for this test.
 
-- [ ] **Step 2: Run the failing emission test**
+- [x] **Step 2: Run the failing emission test**
 
 Run:
 
@@ -1623,7 +1623,7 @@ cargo test -p control-plane live_provider_delta_is_appended_to_runtime_event_str
 
 Expected: FAIL because runtime execution only sends provider deltas to the old live provider channel.
 
-- [ ] **Step 3: Extend event helper module**
+- [x] **Step 3: Extend event helper module**
 
 Add to `debug_stream_events.rs`:
 
@@ -1685,7 +1685,7 @@ pub fn text_delta(node_id: &str, node_run_id: Uuid, text: String) -> RuntimeEven
 }
 ```
 
-- [ ] **Step 4: Append node lifecycle events from runtime**
+- [x] **Step 4: Append node lifecycle events from runtime**
 
 In `continue_flow_debug_run_inner`, after `create_node_run`, append:
 
@@ -1711,7 +1711,7 @@ if let Some(stream) = &service.runtime_event_stream {
 }
 ```
 
-- [ ] **Step 5: Append provider deltas to the event stream**
+- [x] **Step 5: Append provider deltas to the event stream**
 
 Update `RuntimeProviderInvoker` to carry:
 
@@ -1735,7 +1735,7 @@ if let Some(stream) = &runtime_event_stream {
 
 Keep the existing `persist_events` channel during this task; the async persister in Task 8 will take over durable stream-event writes.
 
-- [ ] **Step 6: Remove DB polling from SSE stream path**
+- [x] **Step 6: Remove DB polling from SSE stream path**
 
 In `api/apps/api-server/src/routes/applications/application_runtime.rs`, stop using `send_debug_run_stream_events` for the stream route. Keep non-stream run detail polling behavior unchanged.
 
@@ -1747,7 +1747,7 @@ Delete or leave unused only after `cargo check` confirms no references:
 
 Keep `stream_live_provider_event_payload` only if the non-event-stream route still needs it; otherwise remove it in the same commit.
 
-- [ ] **Step 7: Run targeted tests**
+- [x] **Step 7: Run targeted tests**
 
 Run:
 
@@ -1758,7 +1758,7 @@ cargo test -p api-server stream_debug_run_returns_flow_accepted_before_backgroun
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add api/crates/control-plane/src/orchestration_runtime.rs \
