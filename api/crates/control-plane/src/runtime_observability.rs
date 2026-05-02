@@ -240,6 +240,29 @@ pub async fn append_provider_stream_events_raw<R>(
 where
     R: OrchestrationRuntimeRepository,
 {
+    append_provider_stream_events_raw_filtered(
+        repository,
+        flow_run_id,
+        node_run_id,
+        span_id,
+        events,
+        |_| true,
+    )
+    .await
+}
+
+pub async fn append_provider_stream_events_raw_filtered<R, F>(
+    repository: &R,
+    flow_run_id: Uuid,
+    node_run_id: Option<Uuid>,
+    span_id: Option<Uuid>,
+    events: &[ProviderStreamEvent],
+    should_append_run_event: F,
+) -> Result<Vec<domain::RunEventRecord>>
+where
+    R: OrchestrationRuntimeRepository,
+    F: Fn(&ProviderStreamEvent) -> bool,
+{
     if events.is_empty() {
         return Ok(Vec::new());
     }
@@ -250,12 +273,14 @@ where
     for event in events {
         let event_type = provider_stream_event_type(event);
         let payload = serde_json::to_value(event)?;
-        run_inputs.push(AppendRunEventInput {
-            flow_run_id,
-            node_run_id,
-            event_type: event_type.to_string(),
-            payload: payload.clone(),
-        });
+        if should_append_run_event(event) {
+            run_inputs.push(AppendRunEventInput {
+                flow_run_id,
+                node_run_id,
+                event_type: event_type.to_string(),
+                payload: payload.clone(),
+            });
+        }
         runtime_inputs.push(AppendRuntimeEventInput {
             flow_run_id,
             node_run_id,
@@ -273,7 +298,11 @@ where
         });
     }
 
-    let records = repository.append_run_events(&run_inputs).await?;
+    let records = if run_inputs.is_empty() {
+        Vec::new()
+    } else {
+        repository.append_run_events(&run_inputs).await?
+    };
     let runtime_records = repository.append_runtime_events(&runtime_inputs).await?;
     for runtime_record in runtime_records {
         if let Some(kind) = item_kind_for_event(&runtime_record.event_type) {

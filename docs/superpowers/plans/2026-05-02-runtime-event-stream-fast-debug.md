@@ -2379,6 +2379,12 @@ git commit -m "fix: stabilize runtime event stream debug flow"
 
 If no fixes were needed, do not create an empty commit.
 
+Final review follow-up completed:
+
+- [x] Preserve durable-required runtime stream events under overflow and broadcast lag.
+- [x] Keep provider raw runtime observability and capability intent persistence active for fast-stream runs while avoiding duplicate legacy `text_delta` run events.
+- [x] Abort and generation-guard active frontend SSE handlers when the debug session is cleared, reset, stopped, or superseded.
+
 ## Plan Self-Review
 
 Coverage mapping:

@@ -23,6 +23,7 @@ use crate::{
     },
     runtime_observability::{
         append_host_event, append_host_span, append_provider_stream_events_raw,
+        append_provider_stream_events_raw_filtered,
         projection::{estimate_tokens_for_text, model_input_hash},
         AppendHostSpanInput, LiveEventCoalescer, PROVIDER_DELTA_COALESCE_MAX_BYTES,
         PROVIDER_DELTA_COALESCE_MAX_DELAY_MS,
@@ -939,29 +940,21 @@ where
                 .await?;
             }
             "llm" => {
-                let (llm_invoker, persist_handle) = if service.runtime_event_stream.is_none() {
-                    let (persist_sender, persist_receiver) = mpsc::unbounded_channel();
-                    let persist_handle = tokio::spawn(run_live_event_persister(
-                        service.repository.clone(),
-                        flow_run.id,
-                        node_run.id,
-                        node_span.id,
-                        persist_receiver,
-                    ));
-                    (
-                        invoker.for_live_llm_node_with_persist(
-                            node.node_id.clone(),
-                            node_run.id,
-                            persist_sender,
-                        ),
-                        Some(persist_handle),
-                    )
-                } else {
-                    (
-                        invoker.for_live_llm_node(node.node_id.clone(), node_run.id),
-                        None,
-                    )
-                };
+                let persist_text_run_events = service.runtime_event_stream.is_none();
+                let (persist_sender, persist_receiver) = mpsc::unbounded_channel();
+                let persist_handle = tokio::spawn(run_live_event_persister(
+                    service.repository.clone(),
+                    flow_run.id,
+                    node_run.id,
+                    node_span.id,
+                    persist_text_run_events,
+                    persist_receiver,
+                ));
+                let llm_invoker = invoker.for_live_llm_node_with_persist(
+                    node.node_id.clone(),
+                    node_run.id,
+                    persist_sender,
+                );
                 let execution_result = orchestration_runtime::execution_engine::execute_llm_node(
                     node,
                     &resolved_inputs,
@@ -970,11 +963,9 @@ where
                 )
                 .await;
                 drop(llm_invoker);
-                if let Some(persist_handle) = persist_handle {
-                    persist_handle
-                        .await
-                        .map_err(|e| anyhow!("persist task panicked: {e}"))??;
-                }
+                persist_handle
+                    .await
+                    .map_err(|e| anyhow!("persist task panicked: {e}"))??;
                 let execution = execution_result?;
 
                 last_output_payload = execution.output_payload.clone();
@@ -1524,6 +1515,7 @@ async fn run_live_event_persister<R>(
     flow_run_id: Uuid,
     node_run_id: Uuid,
     span_id: Uuid,
+    persist_text_run_events: bool,
     mut receiver: mpsc::UnboundedReceiver<ProviderStreamEvent>,
 ) -> Result<()>
 where
@@ -1545,6 +1537,7 @@ where
                     flow_run_id,
                     Some(node_run_id),
                     Some(span_id),
+                    persist_text_run_events,
                     &coalescer.push(event),
                 )
                 .await?;
@@ -1555,6 +1548,7 @@ where
                     flow_run_id,
                     Some(node_run_id),
                     Some(span_id),
+                    persist_text_run_events,
                     &coalescer.flush_buffered(),
                 )
                 .await?;
@@ -1567,6 +1561,7 @@ where
         flow_run_id,
         Some(node_run_id),
         Some(span_id),
+        persist_text_run_events,
         &coalescer.finish(),
     )
     .await?;
@@ -1579,6 +1574,7 @@ async fn write_provider_event_batch<R>(
     flow_run_id: Uuid,
     node_run_id: Option<Uuid>,
     span_id: Option<Uuid>,
+    persist_text_run_events: bool,
     events: &[ProviderStreamEvent],
 ) -> Result<()>
 where
@@ -1588,8 +1584,20 @@ where
         return Ok(());
     }
 
-    append_provider_stream_events_raw(repository, flow_run_id, node_run_id, span_id, events)
+    if persist_text_run_events {
+        append_provider_stream_events_raw(repository, flow_run_id, node_run_id, span_id, events)
+            .await?;
+    } else {
+        append_provider_stream_events_raw_filtered(
+            repository,
+            flow_run_id,
+            node_run_id,
+            span_id,
+            events,
+            |event| !matches!(event, ProviderStreamEvent::TextDelta { .. }),
+        )
         .await?;
+    }
     for event in events {
         append_provider_capability_intent(repository, flow_run_id, node_run_id, span_id, event)
             .await?;

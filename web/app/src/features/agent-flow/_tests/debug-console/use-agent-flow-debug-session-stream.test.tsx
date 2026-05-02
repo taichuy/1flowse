@@ -279,6 +279,60 @@ describe('useAgentFlowDebugSession streaming', () => {
     }
   });
 
+  test('aborts and ignores active stream events after clearing the session', async () => {
+    const queryClient = createQueryClient();
+    const abortController = new AbortController();
+    const abortSpy = vi.spyOn(abortController, 'abort');
+    let handlers: runtimeApi.FlowDebugRunStreamHandlers | null = null;
+    let resolveStream: (() => void) | null = null;
+    const streamSettled = new Promise<void>((resolve) => {
+      resolveStream = resolve;
+    });
+
+    vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockImplementation(
+      async (_applicationId, _input, _csrfToken, nextHandlers) => {
+        handlers = nextHandlers;
+        nextHandlers.getAbortController?.(abortController);
+        await streamSettled;
+      }
+    );
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const { result } = renderHook(
+      () =>
+        useAgentFlowDebugSession({
+          applicationId: 'app-1',
+          draftId: 'draft-1',
+          document
+        }),
+      { wrapper: createWrapper(queryClient) }
+    );
+
+    let submitPromise: Promise<unknown> | null = null;
+    await act(async () => {
+      submitPromise = result.current.submitPrompt('请总结退款政策');
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      result.current.clearSession();
+    });
+
+    expect(abortSpy).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      handlers?.onEvent({
+        type: 'flow_started',
+        run_id: 'flow-run-stale',
+        status: 'running'
+      });
+      resolveStream?.();
+      await submitPromise;
+    });
+
+    expect(result.current.status).toBe('idle');
+    expect(result.current.messages).toEqual([]);
+  });
+
   test('does not return to running when resetting variables with a pending text delta', async () => {
     vi.useFakeTimers();
 
@@ -319,6 +373,63 @@ describe('useAgentFlowDebugSession streaming', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  test('aborts and ignores active stream events after resetting variables', async () => {
+    const queryClient = createQueryClient();
+    const abortController = new AbortController();
+    const abortSpy = vi.spyOn(abortController, 'abort');
+    let handlers: runtimeApi.FlowDebugRunStreamHandlers | null = null;
+    let resolveStream: (() => void) | null = null;
+    const streamSettled = new Promise<void>((resolve) => {
+      resolveStream = resolve;
+    });
+
+    vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockImplementation(
+      async (_applicationId, _input, _csrfToken, nextHandlers) => {
+        handlers = nextHandlers;
+        nextHandlers.getAbortController?.(abortController);
+        await streamSettled;
+      }
+    );
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const { result } = renderHook(
+      () =>
+        useAgentFlowDebugSession({
+          applicationId: 'app-1',
+          draftId: 'draft-1',
+          document
+        }),
+      { wrapper: createWrapper(queryClient) }
+    );
+
+    let submitPromise: Promise<unknown> | null = null;
+    await act(async () => {
+      submitPromise = result.current.submitPrompt('请总结退款政策');
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      result.current.resetVariableCache();
+    });
+
+    expect(abortSpy).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      handlers?.onEvent({
+        type: 'node_started',
+        node_run_id: 'node-run-stale',
+        node_id: 'node-llm',
+        node_type: 'llm',
+        title: 'LLM',
+        input_payload: {}
+      });
+      resolveStream?.();
+      await submitPromise;
+    });
+
+    expect(result.current.status).toBe('idle');
+    expect(result.current.traceItems).toEqual([]);
   });
 
   test('submits even when crypto.randomUUID is unavailable', async () => {

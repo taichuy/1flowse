@@ -280,6 +280,99 @@ async fn live_provider_delta_is_appended_to_runtime_event_stream() {
 }
 
 #[tokio::test]
+async fn fast_stream_provider_events_are_durably_persisted_to_runtime_observability() {
+    use plugin_framework::provider_contract::{
+        ProviderFinishReason, ProviderStreamEvent, ProviderToolCall, ProviderUsage,
+    };
+
+    let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
+        ProviderStreamEvent::TextDelta {
+            delta: "hello".to_string(),
+        },
+        ProviderStreamEvent::ToolCallCommit {
+            call: ProviderToolCall {
+                id: "call-1".to_string(),
+                name: "lookup_policy".to_string(),
+                arguments: json!({ "query": "refund" }),
+            },
+        },
+        ProviderStreamEvent::UsageSnapshot {
+            usage: ProviderUsage {
+                input_tokens: Some(10),
+                output_tokens: Some(5),
+                reasoning_tokens: None,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                total_tokens: Some(15),
+            },
+        },
+        ProviderStreamEvent::Finish {
+            reason: ProviderFinishReason::Stop,
+        },
+    ]);
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+    let stream =
+        std::sync::Arc::new(crate::_tests::support::RecordingRuntimeEventStream::default());
+    let service = service.with_runtime_event_stream(stream);
+
+    let detail = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
+            document_snapshot: None,
+        })
+        .await
+        .unwrap();
+
+    service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: detail.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let runtime_event_types = service
+        .list_runtime_events(detail.flow_run.id, 0)
+        .await
+        .into_iter()
+        .map(|event| event.event_type)
+        .collect::<Vec<_>>();
+    assert!(
+        runtime_event_types.iter().any(|event_type| event_type == "text_delta"),
+        "provider text deltas should still be written to durable runtime_events: {runtime_event_types:?}"
+    );
+    assert!(
+        runtime_event_types
+            .iter()
+            .any(|event_type| event_type == "tool_call_commit"),
+        "provider tool commits should still be written to durable runtime_events: {runtime_event_types:?}"
+    );
+    assert!(
+        runtime_event_types
+            .iter()
+            .any(|event_type| event_type == "usage_snapshot"),
+        "provider usage snapshots should still be written to durable runtime_events: {runtime_event_types:?}"
+    );
+    assert!(
+        runtime_event_types.iter().any(|event_type| event_type == "finish"),
+        "provider finish events should still be written to durable runtime_events: {runtime_event_types:?}"
+    );
+
+    let capability_invocations = service
+        .list_capability_invocations(detail.flow_run.id)
+        .await;
+    assert!(
+        capability_invocations
+            .iter()
+            .any(|invocation| invocation.capability_id.contains("lookup_policy")),
+        "provider tool commits should still create capability intent records: {capability_invocations:?}"
+    );
+}
+
+#[tokio::test]
 async fn provider_error_after_live_delta_drains_runtime_event_stream_forwarding() {
     let service = OrchestrationRuntimeService::for_tests_with_live_events_then_error(vec![
         plugin_framework::provider_contract::ProviderStreamEvent::TextDelta {

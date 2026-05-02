@@ -767,21 +767,6 @@ where
         }
     }
 
-    fn for_live_llm_node(&self, node_id: String, node_run_id: Uuid) -> Self {
-        Self {
-            repository: self.repository.clone(),
-            runtime: self.runtime.clone(),
-            workspace_id: self.workspace_id,
-            provider_secret_master_key: self.provider_secret_master_key.clone(),
-            live_provider_events: self.live_provider_events.clone(),
-            persist_events: None,
-            runtime_event_stream: self.runtime_event_stream.clone(),
-            flow_run_id: self.flow_run_id,
-            active_node_id: Some(node_id),
-            active_node_run_id: Some(node_run_id),
-        }
-    }
-
     async fn resolve_llm_instance(
         &self,
         runtime: &orchestration_runtime::compiled_plan::CompiledLlmRuntime,

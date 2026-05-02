@@ -375,6 +375,8 @@ export function useAgentFlowDebugSession({
   const pollTimerRef = useRef<number | null>(null);
   const pendingAssistantMessageRef = useRef<AgentFlowDebugMessage | null>(null);
   const flushStreamMessageFrameRef = useRef<number | null>(null);
+  const streamAbortControllerRef = useRef<AbortController | null>(null);
+  const streamGenerationRef = useRef(0);
 
   useEffect(() => {
     setRunContext((currentRunContext) => {
@@ -440,6 +442,26 @@ export function useAgentFlowDebugSession({
   function stopPolling() {
     clearPollTimer();
     activeRunIdRef.current = null;
+  }
+
+  function abortActiveDebugStream() {
+    streamAbortControllerRef.current?.abort();
+    streamAbortControllerRef.current = null;
+  }
+
+  function startDebugStreamGeneration() {
+    abortActiveDebugStream();
+    streamGenerationRef.current += 1;
+    return streamGenerationRef.current;
+  }
+
+  function cancelActiveDebugStream() {
+    streamGenerationRef.current += 1;
+    abortActiveDebugStream();
+  }
+
+  function isActiveDebugStreamGeneration(generation: number) {
+    return streamGenerationRef.current === generation;
   }
 
   function scheduleAssistantMessageFlush(
@@ -570,6 +592,7 @@ export function useAgentFlowDebugSession({
     clearPollTimer();
     activeRunIdRef.current = null;
     clearScheduledAssistantMessageFlush();
+    cancelActiveDebugStream();
   }, []);
 
   async function submitPrompt(prompt?: string) {
@@ -579,6 +602,7 @@ export function useAgentFlowDebugSession({
     const runningMessage = createRunningAssistantMessage();
 
     stopPolling();
+    const streamGeneration = startDebugStreamGeneration();
     clearScheduledAssistantMessageFlush();
     setRunContext(clearRunContextQuery(nextRunContext));
     setStatus('running');
@@ -612,7 +636,19 @@ export function useAgentFlowDebugSession({
       let streamTraceItemsSnapshot: AgentFlowTraceItem[] = [];
 
       await startFlowDebugRunStream(applicationId, runInput, csrfToken, {
+        getAbortController: (abortController) => {
+          if (!isActiveDebugStreamGeneration(streamGeneration)) {
+            abortController.abort();
+            return;
+          }
+
+          streamAbortControllerRef.current = abortController;
+        },
         onEvent: (event) => {
+          if (!isActiveDebugStreamGeneration(streamGeneration)) {
+            return;
+          }
+
           const isTraceEvent =
             event.type === 'node_started' || event.type === 'node_finished';
           const isTerminalEvent =
@@ -679,6 +715,12 @@ export function useAgentFlowDebugSession({
         }
       });
 
+      if (!isActiveDebugStreamGeneration(streamGeneration)) {
+        return null;
+      }
+
+      streamAbortControllerRef.current = null;
+
       lastSubmittedPromptRef.current = resolvedPrompt;
       writePersistedInputValues(storageKey, clearPersistedQueryValue(inputValues));
       stopPolling();
@@ -688,6 +730,11 @@ export function useAgentFlowDebugSession({
 
       return null;
     } catch (error) {
+      if (!isActiveDebugStreamGeneration(streamGeneration)) {
+        return null;
+      }
+
+      streamAbortControllerRef.current = null;
       if (activeRunIdRef.current) {
         const errorMessage =
           error instanceof Error ? error.message : '调试流式连接中断';
@@ -764,6 +811,7 @@ export function useAgentFlowDebugSession({
         runId,
         csrfToken
       );
+      cancelActiveDebugStream();
       stopPolling();
       clearScheduledAssistantMessageFlush();
       await applyRunDetail(detail, { invalidateRuntime: true });
@@ -774,6 +822,7 @@ export function useAgentFlowDebugSession({
   }
 
   function clearSession() {
+    cancelActiveDebugStream();
     stopPolling();
     clearScheduledAssistantMessageFlush();
     setStatus('idle');
@@ -850,6 +899,7 @@ export function useAgentFlowDebugSession({
   }, []);
 
   function resetVariableCache() {
+    cancelActiveDebugStream();
     stopPolling();
     clearScheduledAssistantMessageFlush();
     setStatus('idle');
