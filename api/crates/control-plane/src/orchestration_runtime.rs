@@ -618,13 +618,23 @@ where
                             let event_type = runtime_event.event_type.clone();
                             let source = runtime_event.source;
                             if let Err(error) = stream.append(flow_run_id, runtime_event).await {
-                                tracing::warn!(
-                                    flow_run_id = %flow_run_id,
-                                    event_type = %event_type,
-                                    source = ?source,
-                                    error = %error,
-                                    "failed to append provider runtime event"
-                                );
+                                if is_expected_runtime_event_stream_closed_error(&error) {
+                                    tracing::debug!(
+                                        flow_run_id = %flow_run_id,
+                                        event_type = %event_type,
+                                        source = ?source,
+                                        error = %error,
+                                        "provider runtime event append skipped because stream is already closed"
+                                    );
+                                } else {
+                                    tracing::warn!(
+                                        flow_run_id = %flow_run_id,
+                                        event_type = %event_type,
+                                        source = ?source,
+                                        error = %error,
+                                        "failed to append provider runtime event"
+                                    );
+                                }
                             }
                         }
                         if let Some(persist) = &persist_sender {
@@ -660,6 +670,12 @@ where
             },
         )
     }
+}
+
+fn is_expected_runtime_event_stream_closed_error(error: &anyhow::Error) -> bool {
+    let message = error.to_string();
+    message.contains("runtime event stream is closed")
+        || message.contains("runtime event stream is not open")
 }
 
 impl<R, H> RuntimeProviderInvoker<R, H>

@@ -1,14 +1,18 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use control_plane::ports::{
-    AppendBillingSessionInput, AppendCapabilityInvocationInput, AppendContextProjectionInput,
-    AppendCostLedgerInput, AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput,
-    AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeItemInput, AppendRuntimeSpanInput,
-    AppendUsageLedgerInput, AttachCompiledPlanToFlowRunInput, CompleteCallbackTaskInput,
-    CompleteFlowRunInput, CompleteNodeRunInput, CreateCallbackTaskInput, CreateCheckpointInput,
-    CreateFlowRunInput, CreateFlowRunShellInput, CreateNodeRunInput, FailQueuedFlowRunShellInput,
-    LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
-    UpdateNodeRunInput, UpsertCompiledPlanInput,
+use control_plane::{
+    errors::ControlPlaneError,
+    ports::{
+        AppendBillingSessionInput, AppendCapabilityInvocationInput, AppendContextProjectionInput,
+        AppendCostLedgerInput, AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput,
+        AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeItemInput,
+        AppendRuntimeSpanInput, AppendUsageLedgerInput, AttachCompiledPlanToFlowRunInput,
+        CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput,
+        CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
+        CreateFlowRunShellInput, CreateNodeRunInput, FailQueuedFlowRunShellInput,
+        LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
+        UpdateFlowRunInput, UpdateNodeRunInput, UpsertCompiledPlanInput,
+    },
 };
 use sqlx::{postgres::PgRow, Postgres, QueryBuilder, Row, Transaction};
 use uuid::Uuid;
@@ -472,7 +476,23 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         .fetch_optional(self.pool())
         .await?;
 
-        row.map(map_flow_run_record).transpose()
+        if let Some(row) = row {
+            return map_flow_run_record(row).map(Some);
+        }
+
+        let exists = sqlx::query_scalar::<_, bool>(
+            r#"
+            select exists(select 1 from flow_runs where id = $1)
+            "#,
+        )
+        .bind(input.flow_run_id)
+        .fetch_one(self.pool())
+        .await?;
+        if !exists {
+            return Err(ControlPlaneError::NotFound("flow_run").into());
+        }
+
+        Ok(None)
     }
 
     async fn complete_flow_run(

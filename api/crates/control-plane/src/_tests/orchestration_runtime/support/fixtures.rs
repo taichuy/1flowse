@@ -542,6 +542,15 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         self.repository.force_flow_run_status(flow_run_id, status);
     }
 
+    pub async fn force_flow_run_status_after_next_get(
+        &self,
+        flow_run_id: Uuid,
+        status: domain::FlowRunStatus,
+    ) {
+        self.repository
+            .force_flow_run_status_after_next_get(flow_run_id, status);
+    }
+
     pub async fn mark_external_opaque_boundary(
         &self,
         flow_run_id: Uuid,

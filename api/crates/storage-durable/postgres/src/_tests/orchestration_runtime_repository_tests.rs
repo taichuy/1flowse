@@ -1,10 +1,14 @@
-use control_plane::ports::{
-    AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput, AppendRunEventInput,
-    AppendRuntimeEventInput, AppendRuntimeSpanInput, AppendUsageLedgerInput, ApplicationRepository,
-    AttachCompiledPlanToFlowRunInput, CreateApplicationInput, CreateCallbackTaskInput,
-    CreateCheckpointInput, CreateFlowRunInput, CreateFlowRunShellInput, CreateNodeRunInput,
-    FlowRepository, LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
-    UpdateFlowRunInput, UpdateNodeRunInput, UpsertCompiledPlanInput,
+use control_plane::{
+    errors::ControlPlaneError,
+    ports::{
+        AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput, AppendRunEventInput,
+        AppendRuntimeEventInput, AppendRuntimeSpanInput, AppendUsageLedgerInput,
+        ApplicationRepository, AttachCompiledPlanToFlowRunInput, CreateApplicationInput,
+        CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
+        CreateFlowRunShellInput, CreateNodeRunInput, FlowRepository,
+        LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
+        UpdateFlowRunInput, UpdateNodeRunInput, UpsertCompiledPlanInput,
+    },
 };
 use domain::{ApplicationType, CallbackTaskStatus, FlowRunMode, FlowRunStatus, NodeRunStatus};
 use serde_json::json;
@@ -476,6 +480,32 @@ async fn update_flow_run_if_status_does_not_overwrite_cancelled_run() {
     .unwrap();
     assert_eq!(stored.status, FlowRunStatus::Cancelled);
     assert_eq!(stored.output_payload, json!({}));
+}
+
+#[tokio::test]
+async fn update_flow_run_if_status_returns_not_found_for_missing_run() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+
+    let error = <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run_if_status(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: Uuid::now_v7(),
+            status: FlowRunStatus::Succeeded,
+            output_payload: json!({ "answer": "done" }),
+            error_payload: None,
+            finished_at: Some(OffsetDateTime::now_utc()),
+        },
+        FlowRunStatus::Running,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::NotFound("flow_run"))
+    ));
 }
 
 async fn append_event(

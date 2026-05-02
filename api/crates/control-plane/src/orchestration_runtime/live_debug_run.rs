@@ -633,16 +633,22 @@ where
         domain::FlowRunStatus::Cancelled,
         "cancel_flow_run",
     )?;
-    service
+    let updated = service
         .repository
-        .update_flow_run(&UpdateFlowRunInput {
-            flow_run_id: flow_run.id,
-            status: domain::FlowRunStatus::Cancelled,
-            output_payload: flow_run.output_payload,
-            error_payload: flow_run.error_payload,
-            finished_at: Some(OffsetDateTime::now_utc()),
-        })
+        .update_flow_run_if_status(
+            &UpdateFlowRunInput {
+                flow_run_id: flow_run.id,
+                status: domain::FlowRunStatus::Cancelled,
+                output_payload: flow_run.output_payload.clone(),
+                error_payload: flow_run.error_payload.clone(),
+                finished_at: Some(OffsetDateTime::now_utc()),
+            },
+            flow_run.status,
+        )
         .await?;
+    let Some(flow_run) = updated else {
+        return load_run_detail(&service.repository, command.application_id, flow_run.id).await;
+    };
     append_runtime_event(
         service,
         flow_run.id,

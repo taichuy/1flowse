@@ -30,6 +30,7 @@ struct InMemoryOrchestrationRuntimeState {
     secret_json_by_instance_id: HashMap<Uuid, Value>,
     main_instances_by_provider: HashMap<(Uuid, String), domain::ModelProviderMainInstanceRecord>,
     scope_data_model_grants: Vec<domain::ScopeDataModelGrantRecord>,
+    status_after_next_get: Option<(Uuid, domain::FlowRunStatus)>,
 }
 
 #[derive(Clone)]
@@ -669,6 +670,17 @@ impl InMemoryOrchestrationRuntimeRepository {
             .expect("flow run should exist for test");
         flow_run.status = status;
     }
+
+    pub(super) fn force_flow_run_status_after_next_get(
+        &self,
+        flow_run_id: Uuid,
+        status: domain::FlowRunStatus,
+    ) {
+        self.inner
+            .lock()
+            .expect("runtime repo mutex poisoned")
+            .status_after_next_get = Some((flow_run_id, status));
+    }
 }
 
 #[tokio::test]
@@ -762,6 +774,33 @@ async fn update_flow_run_if_status_does_not_overwrite_cancelled_run() {
         .unwrap();
     assert_eq!(unchanged.status, domain::FlowRunStatus::Cancelled);
     assert_eq!(unchanged.output_payload, json!({}));
+}
+
+#[tokio::test]
+async fn update_flow_run_if_status_returns_not_found_for_missing_run() {
+    let repository = InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
+        "application.view.all",
+        "application.create.all",
+    ]);
+
+    let error = repository
+        .update_flow_run_if_status(
+            &UpdateFlowRunInput {
+                flow_run_id: Uuid::now_v7(),
+                status: domain::FlowRunStatus::Succeeded,
+                output_payload: json!({ "answer": "done" }),
+                error_payload: None,
+                finished_at: Some(OffsetDateTime::now_utc()),
+            },
+            domain::FlowRunStatus::Running,
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::NotFound("flow_run"))
+    ));
 }
 
 fn test_data_model_definition() -> domain::ModelDefinitionRecord {
@@ -1798,12 +1837,22 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         application_id: Uuid,
         flow_run_id: Uuid,
     ) -> Result<Option<domain::FlowRunRecord>> {
-        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
-        Ok(inner
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let record = inner
             .flow_runs_by_id
             .get(&flow_run_id)
             .filter(|record| record.application_id == application_id)
-            .cloned())
+            .cloned();
+        if let Some((race_flow_run_id, status)) = inner.status_after_next_get.take() {
+            if race_flow_run_id == flow_run_id {
+                if let Some(stored) = inner.flow_runs_by_id.get_mut(&flow_run_id) {
+                    stored.status = status;
+                }
+            } else {
+                inner.status_after_next_get = Some((race_flow_run_id, status));
+            }
+        }
+        Ok(record)
     }
 
     async fn create_node_run(&self, input: &CreateNodeRunInput) -> Result<domain::NodeRunRecord> {
