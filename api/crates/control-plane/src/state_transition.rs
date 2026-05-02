@@ -94,6 +94,10 @@ pub fn ensure_flow_run_transition(
     to: domain::FlowRunStatus,
     action: &'static str,
 ) -> Result<(), ControlPlaneError> {
+    if from == domain::FlowRunStatus::Queued && to == domain::FlowRunStatus::Failed {
+        return Ok(());
+    }
+
     let allowed = matches!(
         (from, to),
         (

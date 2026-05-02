@@ -71,6 +71,16 @@ fn plugin_task_rejects_restarting_terminal_status() {
 }
 
 #[test]
+fn flow_run_allows_queued_shell_to_fail_during_preparation() {
+    assert!(ensure_flow_run_transition(
+        FlowRunStatus::Queued,
+        FlowRunStatus::Failed,
+        "fail_flow_run",
+    )
+    .is_ok());
+}
+
+#[test]
 fn flow_run_rejects_terminal_resume() {
     let error = ensure_flow_run_transition(
         FlowRunStatus::Succeeded,

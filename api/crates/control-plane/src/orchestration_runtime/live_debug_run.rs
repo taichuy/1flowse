@@ -74,6 +74,30 @@ where
     .await
 }
 
+fn shell_mismatch_error() -> anyhow::Error {
+    anyhow!("flow debug run shell does not match prepare command")
+}
+
+fn validate_flow_debug_run_shell(
+    flow_run: &domain::FlowRunRecord,
+    command: &PrepareFlowDebugRunCommand,
+    editor_state: &domain::FlowEditorState,
+) -> Result<()> {
+    if flow_run.created_by != command.actor_user_id
+        || flow_run.run_mode != domain::FlowRunMode::DebugFlowRun
+        || flow_run.target_node_id.is_some()
+        || flow_run.status != domain::FlowRunStatus::Queued
+        || flow_run.compiled_plan_id.is_some()
+        || flow_run.input_payload != command.input_payload
+        || flow_run.flow_id != editor_state.flow.id
+        || flow_run.draft_id != editor_state.draft.id
+    {
+        return Err(shell_mismatch_error());
+    }
+
+    Ok(())
+}
+
 pub(super) async fn open_flow_debug_run_shell<R, H>(
     service: &OrchestrationRuntimeService<R, H>,
     command: StartFlowDebugRunCommand,
@@ -145,71 +169,87 @@ where
         command.actor_user_id,
     )
     .await?;
+    let flow_run = service
+        .repository
+        .get_flow_run(command.application_id, command.flow_run_id)
+        .await?
+        .ok_or_else(shell_mismatch_error)?;
     let editor_state = FlowService::new(service.repository.clone())
         .get_or_create_editor_state(command.actor_user_id, command.application_id)
         .await?;
+    validate_flow_debug_run_shell(&flow_run, &command, &editor_state)?;
     let application = service
         .repository
         .get_application(actor.current_workspace_id, command.application_id)
         .await?
         .ok_or(ControlPlaneError::NotFound("application"))?;
-    let compile_context = service
-        .build_compile_context(application.workspace_id)
-        .await?;
-    let debug_document = command
-        .document_snapshot
-        .as_ref()
-        .unwrap_or(&editor_state.draft.document);
+    let prepare_result = async {
+        let compile_context = service
+            .build_compile_context(application.workspace_id)
+            .await?;
+        let debug_document = command
+            .document_snapshot
+            .as_ref()
+            .unwrap_or(&editor_state.draft.document);
 
-    let mut compiled_plan = orchestration_runtime::compiler::FlowCompiler::compile(
-        editor_state.flow.id,
-        &editor_state.draft.id.to_string(),
-        debug_document,
-        &compile_context,
-    )?;
-    super::freeze_failover_queue_routes(&service.repository, &mut compiled_plan).await?;
-    ensure_compiled_plan_runnable(&compiled_plan)?;
-    let compiled_record = service
-        .repository
-        .upsert_compiled_plan(&build_compiled_plan_input(
+        let mut compiled_plan = orchestration_runtime::compiler::FlowCompiler::compile(
+            editor_state.flow.id,
+            &editor_state.draft.id.to_string(),
+            debug_document,
+            &compile_context,
+        )?;
+        super::freeze_failover_queue_routes(&service.repository, &mut compiled_plan).await?;
+        ensure_compiled_plan_runnable(&compiled_plan)?;
+        let compiled_record = service
+            .repository
+            .upsert_compiled_plan(&build_compiled_plan_input(
+                command.actor_user_id,
+                &editor_state,
+                &compiled_plan,
+            )?)
+            .await?;
+        let flow_run = service
+            .repository
+            .attach_compiled_plan_to_flow_run(&AttachCompiledPlanToFlowRunInput {
+                flow_run_id: command.flow_run_id,
+                compiled_plan_id: compiled_record.id,
+                status: domain::FlowRunStatus::Running,
+            })
+            .await?;
+
+        service
+            .repository
+            .append_run_event(&AppendRunEventInput {
+                flow_run_id: flow_run.id,
+                node_run_id: None,
+                event_type: "flow_run_started".to_string(),
+                payload: json!({
+                    "run_mode": domain::FlowRunMode::DebugFlowRun.as_str(),
+                    "input_payload": command.input_payload.clone(),
+                }),
+            })
+            .await?;
+
+        record_gateway_billing_audit(
+            &service.repository,
+            &flow_run,
             command.actor_user_id,
-            &editor_state,
+            command.application_id,
+            application.workspace_id,
             &compiled_plan,
-        )?)
-        .await?;
-    let flow_run = service
-        .repository
-        .attach_compiled_plan_to_flow_run(&AttachCompiledPlanToFlowRunInput {
-            flow_run_id: command.flow_run_id,
-            compiled_plan_id: compiled_record.id,
-            status: domain::FlowRunStatus::Running,
-        })
+        )
         .await?;
 
-    service
-        .repository
-        .append_run_event(&AppendRunEventInput {
-            flow_run_id: flow_run.id,
-            node_run_id: None,
-            event_type: "flow_run_started".to_string(),
-            payload: json!({
-                "run_mode": domain::FlowRunMode::DebugFlowRun.as_str(),
-                "input_payload": command.input_payload.clone(),
-            }),
-        })
-        .await?;
+        load_run_detail(&service.repository, command.application_id, flow_run.id).await
+    }
+    .await;
 
-    record_gateway_billing_audit(
-        &service.repository,
-        &flow_run,
-        command.actor_user_id,
-        command.application_id,
-        application.workspace_id,
-        &compiled_plan,
-    )
-    .await?;
+    if let Err(error) = prepare_result {
+        fail_flow_run(service, command.application_id, command.flow_run_id, &error).await?;
+        return Err(error);
+    }
 
-    load_run_detail(&service.repository, command.application_id, flow_run.id).await
+    prepare_result
 }
 
 async fn record_gateway_billing_audit<R>(

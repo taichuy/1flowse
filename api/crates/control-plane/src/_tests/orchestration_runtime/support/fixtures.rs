@@ -653,6 +653,30 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
 
         seeded
     }
+
+    pub async fn application_runs(
+        &self,
+        application_id: Uuid,
+    ) -> Vec<domain::ApplicationRunSummary> {
+        OrchestrationRuntimeRepository::list_application_runs(&self.repository, application_id)
+            .await
+            .expect("application run list should load")
+    }
+
+    pub async fn application_run_detail(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> domain::ApplicationRunDetail {
+        OrchestrationRuntimeRepository::get_application_run_detail(
+            &self.repository,
+            application_id,
+            flow_run_id,
+        )
+        .await
+        .expect("application run detail query should succeed")
+        .expect("application run detail should exist")
+    }
 }
 
 fn build_ready_provider_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> Value {
