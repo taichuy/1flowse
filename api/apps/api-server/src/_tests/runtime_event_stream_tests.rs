@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use control_plane::ports::{
     RuntimeEventCloseReason, RuntimeEventDurability, RuntimeEventPayload, RuntimeEventSource,
     RuntimeEventStream, RuntimeEventStreamPolicy, RuntimeEventTrimPolicy,
@@ -15,6 +17,17 @@ fn heartbeat() -> RuntimeEventPayload {
         persist_required: false,
         trace_visible: false,
         payload: json!({ "type": "heartbeat" }),
+    }
+}
+
+fn required_text_delta(index: usize) -> RuntimeEventPayload {
+    RuntimeEventPayload {
+        event_type: "text_delta".to_string(),
+        source: RuntimeEventSource::Provider,
+        durability: RuntimeEventDurability::DurableRequired,
+        persist_required: true,
+        trace_visible: true,
+        payload: json!({ "index": index }),
     }
 }
 
@@ -80,6 +93,95 @@ async fn local_runtime_event_stream_reports_replay_expired_after_trim() {
         Err(err) => err,
     };
     assert!(err.to_string().contains("runtime event replay expired"));
+}
+
+#[tokio::test]
+async fn local_runtime_event_stream_overflow_preserves_required_events() {
+    let stream = LocalRuntimeEventStream::new();
+    let run_id = Uuid::now_v7();
+    let policy = RuntimeEventStreamPolicy {
+        max_events: 3,
+        ..RuntimeEventStreamPolicy::debug_default()
+    };
+
+    stream.open_run(run_id, policy).await.unwrap();
+    stream.append(run_id, heartbeat()).await.unwrap();
+    stream.append(run_id, required_text_delta(1)).await.unwrap();
+    stream.append(run_id, heartbeat()).await.unwrap();
+    stream.append(run_id, required_text_delta(2)).await.unwrap();
+    stream.append(run_id, heartbeat()).await.unwrap();
+
+    let replay = stream.replay(run_id, Some(1), 10).await.unwrap();
+    let sequences = replay
+        .iter()
+        .map(|event| event.sequence)
+        .collect::<Vec<_>>();
+
+    assert!(sequences.contains(&2));
+    assert!(sequences.contains(&4));
+    assert!(!sequences.contains(&3));
+}
+
+#[tokio::test]
+async fn local_runtime_event_stream_trim_keep_required_preserves_required_events() {
+    let stream = LocalRuntimeEventStream::new();
+    let run_id = Uuid::now_v7();
+
+    stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    stream.append(run_id, heartbeat()).await.unwrap();
+    stream.append(run_id, required_text_delta(1)).await.unwrap();
+    stream.append(run_id, heartbeat()).await.unwrap();
+
+    stream
+        .trim(
+            run_id,
+            RuntimeEventTrimPolicy {
+                before_sequence: Some(4),
+                keep_required: true,
+            },
+        )
+        .await
+        .unwrap();
+
+    let replay = stream.replay(run_id, Some(1), 10).await.unwrap();
+    assert_eq!(replay.len(), 1);
+    assert_eq!(replay[0].sequence, 2);
+    assert!(replay[0].persist_required);
+}
+
+#[tokio::test]
+async fn local_runtime_event_stream_backfills_retained_events_after_live_lag() {
+    let stream = LocalRuntimeEventStream::with_broadcast_capacity_for_tests(1);
+    let run_id = Uuid::now_v7();
+    let policy = RuntimeEventStreamPolicy {
+        max_events: 10,
+        ..RuntimeEventStreamPolicy::debug_default()
+    };
+
+    stream.open_run(run_id, policy).await.unwrap();
+    let mut subscription = stream.subscribe(run_id, Some(0)).await.unwrap();
+    assert!(subscription.replay.is_empty());
+
+    for index in 0..5 {
+        stream
+            .append(run_id, required_text_delta(index))
+            .await
+            .unwrap();
+    }
+
+    let mut sequences = Vec::new();
+    for _ in 0..5 {
+        let event = tokio::time::timeout(Duration::from_secs(1), subscription.live_events.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        sequences.push(event.sequence);
+    }
+
+    assert_eq!(sequences, vec![1, 2, 3, 4, 5]);
 }
 
 #[tokio::test]

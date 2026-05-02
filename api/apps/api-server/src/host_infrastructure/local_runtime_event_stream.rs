@@ -8,15 +8,19 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use control_plane::ports::{
-    RuntimeEventCloseReason, RuntimeEventEnvelope, RuntimeEventPayload, RuntimeEventStream,
+    RuntimeEventCloseReason, RuntimeEventDurability, RuntimeEventEnvelope,
+    RuntimeEventOverflowBehavior, RuntimeEventPayload, RuntimeEventStream,
     RuntimeEventStreamPolicy, RuntimeEventSubscription, RuntimeEventTrimPolicy,
 };
 use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
 
-#[derive(Clone, Default)]
+const DEFAULT_BROADCAST_CAPACITY: usize = 1024;
+
+#[derive(Clone)]
 pub struct LocalRuntimeEventStream {
     runs: Arc<Mutex<HashMap<Uuid, Arc<LocalRunEventStream>>>>,
+    broadcast_capacity: usize,
 }
 
 struct LocalRunEventStream {
@@ -27,9 +31,26 @@ struct LocalRunEventStream {
     closed: AtomicBool,
 }
 
+impl Default for LocalRuntimeEventStream {
+    fn default() -> Self {
+        Self {
+            runs: Arc::new(Mutex::new(HashMap::new())),
+            broadcast_capacity: DEFAULT_BROADCAST_CAPACITY,
+        }
+    }
+}
+
 impl LocalRuntimeEventStream {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_broadcast_capacity_for_tests(broadcast_capacity: usize) -> Self {
+        Self {
+            runs: Arc::new(Mutex::new(HashMap::new())),
+            broadcast_capacity: broadcast_capacity.max(1),
+        }
     }
 
     fn run(&self, run_id: Uuid) -> Result<Arc<LocalRunEventStream>> {
@@ -43,8 +64,8 @@ impl LocalRuntimeEventStream {
 }
 
 impl LocalRunEventStream {
-    fn new(policy: RuntimeEventStreamPolicy) -> Self {
-        let (broadcaster, _) = broadcast::channel(1024);
+    fn new(policy: RuntimeEventStreamPolicy, broadcast_capacity: usize) -> Self {
+        let (broadcaster, _) = broadcast::channel(broadcast_capacity);
         Self {
             next_sequence: AtomicI64::new(1),
             ring: Mutex::new(VecDeque::new()),
@@ -77,6 +98,52 @@ impl LocalRunEventStream {
             .cloned()
             .collect())
     }
+
+    fn events_after_sequence(&self, sequence: i64, limit: usize) -> Vec<RuntimeEventEnvelope> {
+        let ring = self.ring.lock().expect("runtime event ring lock poisoned");
+        ring.iter()
+            .filter(|event| event.sequence > sequence)
+            .take(limit)
+            .cloned()
+            .collect()
+    }
+
+    fn trim_overflow(&self, ring: &mut VecDeque<RuntimeEventEnvelope>) {
+        match self.policy.overflow_behavior {
+            RuntimeEventOverflowBehavior::DropOldEphemeralKeepRequired => {
+                while ring.len() > self.policy.max_events {
+                    if let Some(index) = ring.iter().position(|event| !is_required_event(event)) {
+                        ring.remove(index);
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn is_required_event(event: &RuntimeEventEnvelope) -> bool {
+    event.persist_required
+        || matches!(
+            event.durability,
+            RuntimeEventDurability::DurableRequired | RuntimeEventDurability::AuditRequired
+        )
+}
+
+fn send_retained_after_sequence(
+    run: &LocalRunEventStream,
+    sender: &mpsc::UnboundedSender<RuntimeEventEnvelope>,
+    last_sent_sequence: &mut i64,
+) -> bool {
+    for event in run.events_after_sequence(*last_sent_sequence, usize::MAX) {
+        let sequence = event.sequence;
+        if sender.send(event).is_err() {
+            return false;
+        }
+        *last_sent_sequence = sequence;
+    }
+    true
 }
 
 #[async_trait::async_trait]
@@ -86,7 +153,7 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
             .lock()
             .expect("runtime event stream runs lock poisoned")
             .entry(run_id)
-            .or_insert_with(|| Arc::new(LocalRunEventStream::new(policy)));
+            .or_insert_with(|| Arc::new(LocalRunEventStream::new(policy, self.broadcast_capacity)));
         Ok(())
     }
 
@@ -106,9 +173,7 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
             let sequence = run.next_sequence.fetch_add(1, Ordering::SeqCst);
             let envelope = RuntimeEventEnvelope::new(run_id, sequence, event);
             ring.push_back(envelope.clone());
-            while ring.len() > run.policy.max_events {
-                ring.pop_front();
-            }
+            run.trim_overflow(&mut ring);
             envelope
         };
 
@@ -124,22 +189,43 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
         let run = self.run(run_id)?;
         let mut live_receiver = run.broadcaster.subscribe();
         let replay = run.replay_from_ring(from_sequence, usize::MAX)?;
-        let last_replay_sequence = replay
+        let mut last_sent_sequence = replay
             .last()
             .map(|event| event.sequence)
             .unwrap_or_else(|| from_sequence.unwrap_or(0));
         let (sender, live_events) = mpsc::unbounded_channel();
+        let live_run = Arc::clone(&run);
 
         tokio::spawn(async move {
             loop {
                 match live_receiver.recv().await {
-                    Ok(event) if event.sequence <= last_replay_sequence => {}
+                    Ok(event) if event.sequence <= last_sent_sequence => {}
                     Ok(event) => {
+                        if !send_retained_after_sequence(
+                            &live_run,
+                            &sender,
+                            &mut last_sent_sequence,
+                        ) {
+                            break;
+                        }
+                        if event.sequence <= last_sent_sequence {
+                            continue;
+                        }
+                        let sequence = event.sequence;
                         if sender.send(event).is_err() {
                             break;
                         }
+                        last_sent_sequence = sequence;
                     }
-                    Err(broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(broadcast::error::RecvError::Lagged(_)) => {
+                        if !send_retained_after_sequence(
+                            &live_run,
+                            &sender,
+                            &mut last_sent_sequence,
+                        ) {
+                            break;
+                        }
+                    }
                     Err(broadcast::error::RecvError::Closed) => break,
                 }
             }
@@ -171,11 +257,12 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
         let run = self.run(run_id)?;
         if let Some(before_sequence) = policy.before_sequence {
             let mut ring = run.ring.lock().expect("runtime event ring lock poisoned");
-            while ring
-                .front()
-                .is_some_and(|event| event.sequence < before_sequence)
-            {
-                ring.pop_front();
+            ring.retain(|event| {
+                event.sequence >= before_sequence
+                    || (policy.keep_required && is_required_event(event))
+            });
+            if ring.len() > run.policy.max_events {
+                run.trim_overflow(&mut ring);
             }
         }
         Ok(())
