@@ -2302,7 +2302,7 @@ git commit -m "feat: batch debug stream frontend updates"
 **Files:**
 - Modify only if verification exposes a defect in files changed by Tasks 1-10.
 
-- [ ] **Step 1: Run backend focused checks**
+- [x] **Step 1: Run backend focused checks**
 
 Run:
 
@@ -2316,7 +2316,7 @@ cargo test -p storage-postgres creates_flow_run_shell_and_attaches_compiled_plan
 
 Expected: all PASS.
 
-- [ ] **Step 2: Run frontend focused checks**
+- [x] **Step 2: Run frontend focused checks**
 
 Run:
 
@@ -2326,7 +2326,7 @@ pnpm --dir web/app test -- --run src/features/agent-flow/_tests/debug-console/us
 
 Expected: PASS.
 
-- [ ] **Step 3: Run compile checks**
+- [x] **Step 3: Run compile checks**
 
 Run:
 
@@ -2337,7 +2337,7 @@ cargo check -p api-server
 
 Expected: both PASS.
 
-- [ ] **Step 4: Collect first-token timing evidence**
+- [x] **Step 4: Collect first-token timing evidence**
 
 Start the API server and run one streamed debug run from the Debug Console. Capture logs containing:
 
@@ -2357,7 +2357,7 @@ Save any warning or coverage output under:
 tmp/test-governance/
 ```
 
-- [ ] **Step 5: QA self-review using qa-evaluation**
+- [x] **Step 5: QA self-review using qa-evaluation**
 
 Use `qa-evaluation` in task mode and verify:
 
@@ -2368,7 +2368,7 @@ Use `qa-evaluation` in task mode and verify:
 5. Durable run detail converges after `flow_finished`.
 6. Frontend text delta does not rebuild variable cache per token.
 
-- [ ] **Step 6: Commit verification fixes only if needed**
+- [x] **Step 6: Commit verification fixes only if needed**
 
 If verification required fixes, commit them:
 
