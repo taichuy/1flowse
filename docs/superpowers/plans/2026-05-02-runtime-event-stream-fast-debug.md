@@ -2001,7 +2001,7 @@ git commit -m "feat: persist debug stream events asynchronously"
 - Modify: `api/apps/api-server/src/provider_runtime.rs`
 - Modify: `api/crates/control-plane/src/orchestration_runtime.rs`
 
-- [ ] **Step 1: Add timing assertions to route test logs**
+- [x] **Step 1: Add timing assertions to route test logs**
 
 Extend `stream_debug_run_returns_flow_accepted_before_background_compile_finishes` to assert that the first frame is `flow_accepted` and not `flow_started`.
 
@@ -2010,7 +2010,7 @@ assert!(body.contains("\"type\":\"flow_accepted\""));
 assert!(!body.contains("\"type\":\"flow_started\""));
 ```
 
-- [ ] **Step 2: Add route timing spans**
+- [x] **Step 2: Add route timing spans**
 
 In `start_flow_debug_run_stream`, record:
 
@@ -2029,7 +2029,7 @@ tracing::info!(
 );
 ```
 
-- [ ] **Step 3: Add provider timing spans**
+- [x] **Step 3: Add provider timing spans**
 
 In `RuntimeProviderInvoker::invoke_llm`, wrap provider phases:
 
@@ -2060,7 +2060,7 @@ tracing::debug!(
 );
 ```
 
-- [ ] **Step 4: Avoid provider reload when already loaded**
+- [x] **Step 4: Avoid provider reload when already loaded**
 
 Change `ProviderRuntimePort for ApiProviderRuntime::ensure_loaded` to call a new host helper that checks whether a plugin is loaded before `reload`. Add the helper in `plugin-runner` if missing:
 
@@ -2075,7 +2075,7 @@ host.load(&installation.installed_path)
 
 Add a test in `api/apps/api-server/src/_tests/host_infrastructure_tests.rs` or a provider runtime test that invokes `ensure_loaded` twice and asserts the second call does not reload. If `ProviderHost` does not expose counters, add a small unit test around `ProviderHost::is_loaded`.
 
-- [ ] **Step 5: Run targeted tests**
+- [x] **Step 5: Run targeted tests**
 
 Run:
 
@@ -2086,7 +2086,7 @@ cargo test -p plugin-runner provider_host
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/apps/api-server/src/routes/applications/application_runtime.rs \
