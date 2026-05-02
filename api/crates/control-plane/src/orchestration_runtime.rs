@@ -664,10 +664,10 @@ where
         };
 
         let has_live_provider_events = live_provider_events.is_some();
-        let invocation_output = self
+        let invocation_result = self
             .runtime
             .invoke_stream_with_live_events(&installation, input, live_provider_events)
-            .await?;
+            .await;
         if let Some(handle) = live_forward_handle {
             if let Err(error) = handle.await {
                 tracing::warn!(
@@ -676,6 +676,7 @@ where
                 );
             }
         }
+        let invocation_output = invocation_result?;
         if let Some(persist) = &self.persist_events {
             if !has_live_provider_events {
                 for event in invocation_output.events.iter().cloned() {

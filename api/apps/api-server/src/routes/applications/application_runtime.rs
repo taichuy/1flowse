@@ -127,7 +127,7 @@ where
             let is_terminal = is_terminal_runtime_event(&event.event_type);
             let is_text_delta = event.event_type == "text_delta";
             batch.push(event);
-            if batch.len() >= 64 || is_terminal || !is_text_delta {
+            if is_terminal || !is_text_delta {
                 if flush_debug_event_batch(&repository, &mut batch, run_id).await || is_terminal {
                     return;
                 }

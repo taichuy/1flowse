@@ -280,6 +280,62 @@ async fn live_provider_delta_is_appended_to_runtime_event_stream() {
 }
 
 #[tokio::test]
+async fn provider_error_after_live_delta_drains_runtime_event_stream_forwarding() {
+    let service = OrchestrationRuntimeService::for_tests_with_live_events_then_error(vec![
+        plugin_framework::provider_contract::ProviderStreamEvent::TextDelta {
+            delta: "partial before error".to_string(),
+        },
+    ]);
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+    let stream =
+        std::sync::Arc::new(crate::_tests::support::RecordingRuntimeEventStream::default());
+    let service = service.with_runtime_event_stream(stream.clone());
+
+    let detail = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
+            document_snapshot: None,
+        })
+        .await
+        .unwrap();
+
+    let failed_detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: detail.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(failed_detail.flow_run.status, domain::FlowRunStatus::Failed);
+    assert!(failed_detail.flow_run.error_payload.is_some_and(|payload| {
+        payload["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("provider failed after live events"))
+    }));
+    let event_types = stream
+        .events()
+        .into_iter()
+        .map(|event| event.event_type)
+        .collect::<Vec<_>>();
+    let text_delta_index = event_types
+        .iter()
+        .position(|event_type| event_type == "text_delta")
+        .expect("text_delta should be appended before provider error returns");
+    let flow_failed_index = event_types
+        .iter()
+        .position(|event_type| event_type == "flow_failed")
+        .expect("failed run should append flow_failed");
+    assert!(
+        text_delta_index < flow_failed_index,
+        "text_delta should be drained before flow_failed: {event_types:?}"
+    );
+}
+
+#[tokio::test]
 async fn successful_live_debug_run_emits_flow_lifecycle_and_closes_runtime_stream() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service.seed_application_with_flow("Support Agent").await;

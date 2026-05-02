@@ -2,7 +2,6 @@ use std::{fs, path::Path};
 
 use crate::_tests::support::{
     login_and_capture_cookie, test_app, test_app_with_database_url, write_provider_manifest_v2,
-    write_provider_runtime_script,
 };
 use axum::{
     body::{to_bytes, Body},
@@ -47,11 +46,65 @@ config_schema:
 "#,
     )
     .unwrap();
-    write_provider_runtime_script(
-        &root.join("bin/fixture_provider-provider"),
-        "fixture_chat",
-        "Fixture Chat",
-    );
+    fs::write(
+        root.join("bin/fixture_provider-provider"),
+        r#"#!/usr/bin/env node
+const fs = require('node:fs');
+
+const request = JSON.parse(fs.readFileSync(0, 'utf8') || '{}');
+
+let result = {};
+switch (request.method) {
+  case 'validate':
+    result = { sanitized: { api_key: request.input?.api_key ? "***" : null } };
+    break;
+  case 'list_models':
+    result = [{
+      model_id: "fixture_chat",
+      display_name: "Fixture Chat",
+      source: "dynamic",
+      supports_streaming: true,
+      supports_tool_call: false,
+      supports_multimodal: false,
+      provider_metadata: {}
+    }];
+    break;
+  case 'invoke': {
+    const query = request.input?.messages?.[0]?.content ?? "";
+    const text = "reply:" + query;
+    const lines = [
+      ...Array.from(text.padEnd(70, "."), (delta) => ({ type: "text_delta", delta })),
+      { type: "usage_snapshot", usage: { input_tokens: 5, output_tokens: 7, total_tokens: 12 } },
+      { type: "finish", reason: "stop" },
+      {
+        type: "result",
+        result: {
+          final_content: text,
+          usage: { input_tokens: 5, output_tokens: 7, total_tokens: 12 },
+          finish_reason: "stop"
+        }
+      }
+    ];
+    process.stdout.write(lines.map((line) => JSON.stringify(line)).join("\n") + "\n");
+    process.exit(0);
+  }
+  default:
+    result = {};
+}
+
+process.stdout.write(JSON.stringify({ ok: true, result }));
+"#,
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let runtime_path = root.join("bin/fixture_provider-provider");
+        let mut permissions = fs::metadata(&runtime_path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(runtime_path, permissions).unwrap();
+    }
     fs::write(
         root.join("models/llm/_position.yaml"),
         "items:\n  - fixture_chat\n",
@@ -505,15 +558,32 @@ async fn wait_for_persisted_text_delta_events(
     application_id: &str,
     run_id: &str,
 ) -> Vec<Value> {
-    for _ in 0..200 {
-        let detail = wait_for_run_detail(
-            app,
-            cookie,
-            application_id,
-            run_id,
-            &["running", "waiting", "waiting_human", "succeeded", "failed"],
-        )
-        .await;
+    let terminal_detail = wait_for_run_detail(
+        app,
+        cookie,
+        application_id,
+        run_id,
+        &["succeeded", "failed", "cancelled"],
+    )
+    .await;
+    for _ in 0..50 {
+        let detail = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!(
+                        "/api/console/applications/{application_id}/logs/runs/{run_id}"
+                    ))
+                    .header("cookie", cookie)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(detail.status(), StatusCode::OK);
+        let body = to_bytes(detail.into_body(), usize::MAX).await.unwrap();
+        let payload: Value = serde_json::from_slice(&body).unwrap();
+        let detail = payload["data"].clone();
         let text_delta_events = detail["events"]
             .as_array()
             .unwrap()
@@ -521,16 +591,19 @@ async fn wait_for_persisted_text_delta_events(
             .filter(|event| event["event_type"].as_str() == Some("text_delta"))
             .cloned()
             .collect::<Vec<_>>();
-        if text_delta_events
-            .iter()
-            .any(|event| event["payload"]["text"].as_str().is_some())
-        {
+        if !text_delta_events.is_empty() {
             return text_delta_events;
         }
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
 
-    panic!("timed out waiting for persisted text_delta payload");
+    terminal_detail["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|event| event["event_type"].as_str() == Some("text_delta"))
+        .cloned()
+        .collect()
 }
 
 fn sse_data_payload(frame: &str) -> Value {
@@ -1125,7 +1198,7 @@ async fn application_runtime_routes_stream_debug_run_returns_flow_accepted() {
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
     let application_id =
-        seed_human_input_application(&app, &cookie, &csrf, &provider_instance_id).await;
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
 
     let response = app
         .clone()
