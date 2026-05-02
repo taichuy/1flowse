@@ -156,6 +156,13 @@ export type ConsoleFlowDebugStreamEvent =
       error_payload?: Record<string, unknown> | null;
     }
   | {
+      type: 'flow_cancelled';
+      run_id: string;
+      status: 'cancelled' | string;
+      reason?: string;
+      manual_stop?: boolean;
+    }
+  | {
       type: 'heartbeat';
     };
 

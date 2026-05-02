@@ -76,6 +76,23 @@ pub fn flow_failed(run_id: Uuid, error_payload: serde_json::Value) -> RuntimeEve
     }
 }
 
+pub fn flow_cancelled(run_id: Uuid) -> RuntimeEventPayload {
+    RuntimeEventPayload {
+        event_type: "flow_cancelled".to_string(),
+        source: RuntimeEventSource::Runtime,
+        durability: RuntimeEventDurability::DurableRequired,
+        persist_required: true,
+        trace_visible: true,
+        payload: json!({
+            "type": "flow_cancelled",
+            "run_id": run_id,
+            "status": "cancelled",
+            "reason": "manual_stop",
+            "manual_stop": true,
+        }),
+    }
+}
+
 pub fn node_started(node_run: &domain::NodeRunRecord) -> RuntimeEventPayload {
     RuntimeEventPayload {
         event_type: "node_started".to_string(),

@@ -157,6 +157,13 @@ export function applyDebugStreamEventToAssistantMessage(
         rawOutput: event.error_payload ?? null,
         traceSummary: traceItems
       };
+    case 'flow_cancelled':
+      return {
+        ...message,
+        runId: event.run_id,
+        status: 'cancelled',
+        traceSummary: traceItems
+      };
     default:
       return message;
   }

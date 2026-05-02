@@ -573,7 +573,10 @@ export function useAgentFlowDebugSession({
             streamTraceItemsSnapshot
           );
 
-          if (event.type === 'flow_started') {
+          if (
+            event.type === 'flow_started' ||
+            event.type === 'flow_cancelled'
+          ) {
             activeRunIdRef.current = event.run_id;
           }
 

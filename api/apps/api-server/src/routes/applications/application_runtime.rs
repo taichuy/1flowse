@@ -39,7 +39,10 @@ use crate::{
 use super::debug_run_stream;
 
 fn is_terminal_runtime_event(event_type: &str) -> bool {
-    matches!(event_type, "flow_finished" | "flow_failed")
+    matches!(
+        event_type,
+        "flow_finished" | "flow_failed" | "flow_cancelled"
+    )
 }
 
 async fn fail_runtime_event_stream_if_missing_terminal(
@@ -642,6 +645,7 @@ pub async fn cancel_flow_run(
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     )
+    .with_runtime_event_stream(state.runtime_event_stream.clone())
     .cancel_flow_run(CancelFlowRunCommand {
         actor_user_id: context.user.id,
         application_id: id,

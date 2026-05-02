@@ -287,4 +287,56 @@ describe('useAgentFlowDebugSession streaming', () => {
       queryKey: ['applications', 'app-1', 'runtime']
     });
   });
+
+  test('marks streamed debug run cancelled after flow cancelled event', async () => {
+    const queryClient = createQueryClient();
+    const startFlowDebugRunStreamSpy = vi
+      .spyOn(runtimeApi, 'startFlowDebugRunStream')
+      .mockImplementation(
+        async (_applicationId, _input, _csrfToken, handlers) => {
+          handlers.onEvent({
+            type: 'flow_started',
+            run_id: 'flow-run-stream',
+            status: 'running'
+          });
+          handlers.onEvent({
+            type: 'text_delta',
+            node_id: 'node-llm',
+            text: 'partial answer'
+          });
+          handlers.onEvent({
+            type: 'flow_cancelled',
+            run_id: 'flow-run-stream',
+            status: 'cancelled'
+          });
+          handlers.onCompleted?.();
+        }
+      );
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    const { result } = renderHook(
+      () =>
+        useAgentFlowDebugSession({
+          applicationId: 'app-1',
+          draftId: 'draft-1',
+          document
+        }),
+      { wrapper: createWrapper(queryClient) }
+    );
+
+    await act(async () => {
+      await result.current.submitPrompt('请总结退款政策');
+    });
+
+    expect(startFlowDebugRunStreamSpy).toHaveBeenCalled();
+    expect(result.current.status).toBe('cancelled');
+    expect(result.current.messages.at(-1)).toEqual(
+      expect.objectContaining({
+        role: 'assistant',
+        runId: 'flow-run-stream',
+        status: 'cancelled',
+        content: 'partial answer'
+      })
+    );
+  });
 });

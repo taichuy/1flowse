@@ -16,7 +16,10 @@ pub fn runtime_event_to_sse(envelope: RuntimeEventEnvelope) -> Result<Event, Inf
 }
 
 fn is_terminal_runtime_event(event_type: &str) -> bool {
-    matches!(event_type, "flow_finished" | "flow_failed")
+    matches!(
+        event_type,
+        "flow_finished" | "flow_failed" | "flow_cancelled"
+    )
 }
 
 pub async fn send_runtime_event_stream(
@@ -109,6 +112,40 @@ mod tests {
         assert!(
             matches!(closed, Ok(None)),
             "sender should close after terminal event"
+        );
+    }
+
+    #[tokio::test]
+    async fn send_runtime_event_stream_returns_after_flow_cancelled_terminal_event() {
+        let stream = Arc::new(LocalRuntimeEventStream::new());
+        let run_id = Uuid::now_v7();
+        stream
+            .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+            .await
+            .unwrap();
+        let (sender, mut receiver) = mpsc::channel(8);
+
+        tokio::spawn(send_runtime_event_stream(
+            stream.clone(),
+            run_id,
+            None,
+            sender,
+        ));
+        stream
+            .append(run_id, runtime_event("flow_cancelled"))
+            .await
+            .unwrap();
+
+        let _ = timeout(Duration::from_secs(1), receiver.recv())
+            .await
+            .expect("cancelled terminal event should be sent")
+            .expect("cancelled terminal event should be available")
+            .expect("sse event should be valid");
+
+        let closed = timeout(Duration::from_millis(100), receiver.recv()).await;
+        assert!(
+            matches!(closed, Ok(None)),
+            "sender should close after flow_cancelled terminal event"
         );
     }
 }

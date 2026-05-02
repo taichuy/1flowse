@@ -643,16 +643,13 @@ where
             finished_at: Some(OffsetDateTime::now_utc()),
         })
         .await?;
-    emit_flow_failed_and_close_with_reason(
+    append_runtime_event(
         service,
         flow_run.id,
-        json!({
-            "message": "flow debug run cancelled",
-            "reason": "manual_stop",
-        }),
-        RuntimeEventCloseReason::Cancelled,
+        debug_stream_events::flow_cancelled(flow_run.id),
     )
     .await;
+    close_runtime_event_stream(service, flow_run.id, RuntimeEventCloseReason::Cancelled).await;
     service
         .repository
         .append_run_event(&AppendRunEventInput {
