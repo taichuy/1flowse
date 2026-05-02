@@ -1116,7 +1116,7 @@ git commit -m "feat: support queued debug run shells"
 - Create: `api/crates/control-plane/src/orchestration_runtime/debug_stream_events.rs`
 - Modify: `api/crates/control-plane/src/_tests/orchestration_runtime/service.rs`
 
-- [ ] **Step 1: Add service tests for shell start**
+- [x] **Step 1: Add service tests for shell start**
 
 In `api/crates/control-plane/src/_tests/orchestration_runtime/service.rs`, add:
 
@@ -1141,7 +1141,7 @@ async fn opens_flow_debug_run_shell_without_compiling_plan() {
 }
 ```
 
-- [ ] **Step 2: Run the failing service test**
+- [x] **Step 2: Run the failing service test**
 
 Run:
 
@@ -1151,7 +1151,7 @@ cargo test -p control-plane opens_flow_debug_run_shell_without_compiling_plan
 
 Expected: FAIL because `open_flow_debug_run_shell` does not exist.
 
-- [ ] **Step 3: Add stream event helpers**
+- [x] **Step 3: Add stream event helpers**
 
 Create `api/crates/control-plane/src/orchestration_runtime/debug_stream_events.rs`:
 
@@ -1208,7 +1208,7 @@ Expose `debug_stream_events` from `orchestration_runtime.rs` by adding:
 pub mod debug_stream_events;
 ```
 
-- [ ] **Step 4: Implement shell opening**
+- [x] **Step 4: Implement shell opening**
 
 In `api/crates/control-plane/src/orchestration_runtime/live_debug_run.rs`, add:
 
@@ -1271,7 +1271,7 @@ pub async fn open_flow_debug_run_shell(
 }
 ```
 
-- [ ] **Step 5: Add background preparation method**
+- [x] **Step 5: Add background preparation method**
 
 Add a command:
 
@@ -1307,7 +1307,7 @@ let shell = open_flow_debug_run_shell(service, StartFlowDebugRunCommand { ... })
 prepare_flow_debug_run_from_shell(service, PrepareFlowDebugRunCommand { flow_run_id: shell.id, ... }).await
 ```
 
-- [ ] **Step 6: Run service tests**
+- [x] **Step 6: Run service tests**
 
 Run:
 
@@ -1318,7 +1318,7 @@ cargo test -p control-plane orchestration_runtime
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/crates/control-plane/src/orchestration_runtime.rs \
