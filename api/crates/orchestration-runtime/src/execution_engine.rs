@@ -885,10 +885,11 @@ fn build_llm_output_payload(
         .map(|reason| serde_json::to_value(reason).unwrap_or(Value::Null))
         .unwrap_or(Value::Null);
     let tool_calls = serde_json::to_value(&result.tool_calls).unwrap_or(Value::Null);
+    let text_parts = split_llm_think_tags(&text);
     let mut output = standard_llm_output_payload(
         node,
         runtime,
-        &text,
+        &text_parts.text,
         finish_reason,
         result.tool_calls.clone(),
         serde_json::to_value(usage).unwrap_or(Value::Null),
@@ -897,6 +898,12 @@ fn build_llm_output_payload(
 
     if let Some(object) = output.as_object_mut() {
         object.insert("tool_calls".to_string(), tool_calls);
+        if let Some(reasoning_content) = text_parts.reasoning_content {
+            object.insert(
+                "reasoning_content".to_string(),
+                Value::String(reasoning_content),
+            );
+        }
     }
     if !result.mcp_calls.is_empty() {
         output
@@ -917,6 +924,37 @@ fn build_llm_output_payload(
             );
     }
     output
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LlmTextParts {
+    text: String,
+    reasoning_content: Option<String>,
+}
+
+fn split_llm_think_tags(text: &str) -> LlmTextParts {
+    let mut answer = String::new();
+    let mut reasoning = String::new();
+    let mut remaining = text;
+
+    while let Some(start) = remaining.find("<think>") {
+        answer.push_str(&remaining[..start]);
+        let after_start = &remaining[start + "<think>".len()..];
+        if let Some(end) = after_start.find("</think>") {
+            reasoning.push_str(&after_start[..end]);
+            remaining = &after_start[end + "</think>".len()..];
+        } else {
+            reasoning.push_str(after_start);
+            remaining = "";
+            break;
+        }
+    }
+    answer.push_str(remaining);
+
+    LlmTextParts {
+        text: answer,
+        reasoning_content: (!reasoning.is_empty()).then_some(reasoning),
+    }
 }
 
 fn standard_llm_output_payload(
