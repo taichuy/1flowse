@@ -6,7 +6,7 @@ use control_plane::ports::{
     AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeItemInput, AppendRuntimeSpanInput,
     AppendUsageLedgerInput, AttachCompiledPlanToFlowRunInput, CompleteCallbackTaskInput,
     CompleteFlowRunInput, CompleteNodeRunInput, CreateCallbackTaskInput, CreateCheckpointInput,
-    CreateFlowRunInput, CreateFlowRunShellInput, CreateNodeRunInput,
+    CreateFlowRunInput, CreateFlowRunShellInput, CreateNodeRunInput, FailQueuedFlowRunShellInput,
     LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
     UpdateNodeRunInput, UpsertCompiledPlanInput,
 };
@@ -247,6 +247,48 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         .ok_or_else(|| anyhow!("flow run compiled plan cannot be attached"))?;
 
         map_flow_run_record(row)
+    }
+
+    async fn fail_queued_flow_run_shell(
+        &self,
+        input: &FailQueuedFlowRunShellInput,
+    ) -> Result<Option<domain::FlowRunRecord>> {
+        let row = sqlx::query(
+            r#"
+            update flow_runs
+            set status = 'failed',
+                output_payload = $2,
+                error_payload = $3,
+                finished_at = $4
+            where id = $1
+              and status = 'queued'
+              and compiled_plan_id is null
+            returning
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                run_mode,
+                target_node_id,
+                status,
+                input_payload,
+                output_payload,
+                error_payload,
+                created_by,
+                started_at,
+                finished_at,
+                created_at
+            "#,
+        )
+        .bind(input.flow_run_id)
+        .bind(&input.output_payload)
+        .bind(&input.error_payload)
+        .bind(input.finished_at)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_flow_run_record).transpose()
     }
 
     async fn get_flow_run(

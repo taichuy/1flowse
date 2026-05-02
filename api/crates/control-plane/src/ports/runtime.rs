@@ -54,6 +54,14 @@ pub struct AttachCompiledPlanToFlowRunInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct FailQueuedFlowRunShellInput {
+    pub flow_run_id: Uuid,
+    pub output_payload: serde_json::Value,
+    pub error_payload: serde_json::Value,
+    pub finished_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
 pub struct CreateNodeRunInput {
     pub flow_run_id: Uuid,
     pub node_id: String,
@@ -351,6 +359,10 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         &self,
         input: &AttachCompiledPlanToFlowRunInput,
     ) -> anyhow::Result<domain::FlowRunRecord>;
+    async fn fail_queued_flow_run_shell(
+        &self,
+        input: &FailQueuedFlowRunShellInput,
+    ) -> anyhow::Result<Option<domain::FlowRunRecord>>;
     async fn get_flow_run(
         &self,
         application_id: Uuid,

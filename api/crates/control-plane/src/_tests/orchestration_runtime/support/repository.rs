@@ -671,6 +671,50 @@ impl InMemoryOrchestrationRuntimeRepository {
     }
 }
 
+#[tokio::test]
+async fn fail_queued_flow_run_shell_does_not_fail_attached_run() {
+    let repository = InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
+        "application.view.all",
+        "application.create.all",
+    ]);
+    let now = OffsetDateTime::now_utc();
+    let flow_run = repository
+        .create_flow_run(&CreateFlowRunInput {
+            actor_user_id: Uuid::now_v7(),
+            application_id: Uuid::now_v7(),
+            flow_id: Uuid::now_v7(),
+            flow_draft_id: Uuid::now_v7(),
+            compiled_plan_id: Uuid::now_v7(),
+            run_mode: domain::FlowRunMode::DebugFlowRun,
+            target_node_id: None,
+            status: domain::FlowRunStatus::Running,
+            input_payload: json!({}),
+            started_at: now,
+        })
+        .await
+        .unwrap();
+
+    let failed = repository
+        .fail_queued_flow_run_shell(&crate::ports::FailQueuedFlowRunShellInput {
+            flow_run_id: flow_run.id,
+            output_payload: json!({}),
+            error_payload: json!({ "message": "prepare failed" }),
+            finished_at: now,
+        })
+        .await
+        .unwrap();
+
+    assert!(failed.is_none());
+    let unchanged = repository
+        .get_flow_run(flow_run.application_id, flow_run.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(unchanged.status, domain::FlowRunStatus::Running);
+    assert_eq!(unchanged.compiled_plan_id, flow_run.compiled_plan_id);
+    assert!(unchanged.error_payload.is_none());
+}
+
 fn test_data_model_definition() -> domain::ModelDefinitionRecord {
     domain::ModelDefinitionRecord {
         id: Uuid::nil(),
@@ -1680,6 +1724,24 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         record.compiled_plan_id = Some(input.compiled_plan_id);
         record.status = input.status;
         Ok(record.clone())
+    }
+
+    async fn fail_queued_flow_run_shell(
+        &self,
+        input: &crate::ports::FailQueuedFlowRunShellInput,
+    ) -> Result<Option<domain::FlowRunRecord>> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let Some(record) = inner.flow_runs_by_id.get_mut(&input.flow_run_id) else {
+            return Ok(None);
+        };
+        if record.status != domain::FlowRunStatus::Queued || record.compiled_plan_id.is_some() {
+            return Ok(None);
+        }
+        record.status = domain::FlowRunStatus::Failed;
+        record.output_payload = input.output_payload.clone();
+        record.error_payload = Some(input.error_payload.clone());
+        record.finished_at = Some(input.finished_at);
+        Ok(Some(record.clone()))
     }
 
     async fn get_flow_run(

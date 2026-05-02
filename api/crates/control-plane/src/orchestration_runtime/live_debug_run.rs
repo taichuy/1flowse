@@ -17,8 +17,9 @@ use crate::{
         AppendCostLedgerInput, AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput,
         AppendRunEventInput, AppendUsageLedgerInput, AttachCompiledPlanToFlowRunInput,
         CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunShellInput,
-        CreateNodeRunInput, LinkUsageLedgerToModelFailoverAttemptInput,
-        OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateNodeRunInput,
+        CreateNodeRunInput, FailQueuedFlowRunShellInput,
+        LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
+        UpdateFlowRunInput, UpdateNodeRunInput,
     },
     runtime_observability::{
         append_host_event, append_host_span, append_provider_stream_events_raw,
@@ -216,7 +217,13 @@ where
     let (compiled_plan, compiled_record) = match pre_attach_result {
         Ok(result) => result,
         Err(error) => {
-            fail_flow_run(service, command.application_id, command.flow_run_id, &error).await?;
+            fail_queued_flow_run_shell(
+                service,
+                command.application_id,
+                command.flow_run_id,
+                &error,
+            )
+            .await?;
             return Err(error);
         }
     };
@@ -232,13 +239,13 @@ where
     {
         Ok(flow_run) => flow_run,
         Err(error) => {
-            fail_flow_run_if_still_queued_shell(
+            fail_queued_flow_run_shell(
                 service,
                 command.application_id,
                 command.flow_run_id,
                 &error,
             )
-            .await;
+            .await?;
             return Err(error);
         }
     };
@@ -279,12 +286,13 @@ where
     post_attach_result
 }
 
-async fn fail_flow_run_if_still_queued_shell<R, H>(
+async fn fail_queued_flow_run_shell<R, H>(
     service: &OrchestrationRuntimeService<R, H>,
     application_id: Uuid,
     flow_run_id: Uuid,
     error: &anyhow::Error,
-) where
+) -> Result<Option<domain::ApplicationRunDetail>>
+where
     R: crate::ports::ApplicationRepository
         + crate::ports::FlowRepository
         + OrchestrationRuntimeRepository
@@ -300,17 +308,32 @@ async fn fail_flow_run_if_still_queued_shell<R, H>(
         + crate::capability_plugin_runtime::CapabilityPluginRuntimePort
         + Clone,
 {
-    let Ok(Some(flow_run)) = service
+    let error_payload = json!({ "message": error.to_string() });
+    let Some(flow_run) = service
         .repository
-        .get_flow_run(application_id, flow_run_id)
-        .await
+        .fail_queued_flow_run_shell(&FailQueuedFlowRunShellInput {
+            flow_run_id,
+            output_payload: json!({}),
+            error_payload: error_payload.clone(),
+            finished_at: OffsetDateTime::now_utc(),
+        })
+        .await?
     else {
-        return;
+        return Ok(None);
     };
+    service
+        .repository
+        .append_run_event(&AppendRunEventInput {
+            flow_run_id: flow_run.id,
+            node_run_id: None,
+            event_type: "flow_run_failed".to_string(),
+            payload: error_payload,
+        })
+        .await?;
 
-    if flow_run.status == domain::FlowRunStatus::Queued && flow_run.compiled_plan_id.is_none() {
-        let _ = fail_flow_run(service, application_id, flow_run_id, error).await;
-    }
+    load_run_detail(&service.repository, application_id, flow_run.id)
+        .await
+        .map(Some)
 }
 
 async fn record_gateway_billing_audit<R>(
