@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use control_plane::ports::{OfficialPluginSourcePort, SessionStore};
+use control_plane::ports::{OfficialPluginSourcePort, RuntimeEventStream, SessionStore};
 use runtime_core::runtime_engine::RuntimeEngine;
 use storage_durable::MainDurableStore;
 use time::OffsetDateTime;
@@ -29,6 +29,7 @@ pub struct ApiState {
     pub allow_unverified_filesystem_dropins: bool,
     pub allow_uploaded_host_extensions: bool,
     pub session_store: Arc<dyn SessionStore>,
+    pub runtime_event_stream: Arc<dyn RuntimeEventStream>,
     pub api_docs: Arc<ApiDocsRegistry>,
     pub cookie_name: String,
     pub session_ttl_days: i64,

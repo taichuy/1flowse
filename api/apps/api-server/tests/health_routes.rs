@@ -150,6 +150,9 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
     let session_store = infrastructure
         .session_store()
         .expect("local health test infrastructure must provide session store");
+    let runtime_event_stream = infrastructure
+        .runtime_event_stream()
+        .expect("local health test infrastructure must provide runtime event stream");
 
     app_with_state_and_config(
         std::sync::Arc::new(ApiState {
@@ -168,6 +171,7 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
             allow_unverified_filesystem_dropins: config.allow_unverified_filesystem_dropins,
             allow_uploaded_host_extensions: config.allow_uploaded_host_extensions,
             session_store,
+            runtime_event_stream,
             api_docs,
             cookie_name: config.cookie_name.clone(),
             session_ttl_days: config.session_ttl_days,

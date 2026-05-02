@@ -1015,7 +1015,69 @@ async fn application_runtime_routes_cancel_waiting_flow_run() {
 }
 
 #[tokio::test]
-async fn application_runtime_routes_stream_debug_run_events() {
+async fn stream_debug_run_returns_flow_accepted_before_background_compile_finishes() {
+    let (state, _database_url) = crate::_tests::support::test_api_state_with_database_url().await;
+    let app = crate::app_with_state(state.clone());
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let create = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/applications")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "application_type": "agent_flow",
+                        "name": "Fast Start SSE",
+                        "description": "runtime stream",
+                        "icon": "RobotOutlined",
+                        "icon_type": "iconfont",
+                        "icon_background": "#E6F7F2"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create.status(), StatusCode::CREATED);
+    let body = to_bytes(create.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    let application_id = payload["data"]["id"].as_str().unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-runs/stream"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("accept", "text/event-stream")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "input_payload": { "node-start": { "query": "hello" } }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let body = crate::_tests::support::read_first_sse_frame(response).await;
+    assert!(body.contains("\"type\":\"flow_accepted\""), "{body}");
+}
+
+#[tokio::test]
+async fn application_runtime_routes_stream_debug_run_returns_flow_accepted() {
     let app = test_app().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
@@ -1052,21 +1114,14 @@ async fn application_runtime_routes_stream_debug_run_events() {
         response.headers()["content-type"].to_str().unwrap(),
         "text/event-stream"
     );
-    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let stream_text = String::from_utf8_lossy(&body);
+    let stream_text = crate::_tests::support::read_first_sse_frame(response).await;
 
-    assert!(stream_text.contains("event: flow_started"), "{stream_text}");
-    assert!(stream_text.contains("event: node_started"), "{stream_text}");
     assert!(
-        stream_text.contains("event: node_finished"),
+        stream_text.contains("event: flow_accepted"),
         "{stream_text}"
     );
     assert!(
-        stream_text.contains("event: flow_finished"),
-        "{stream_text}"
-    );
-    assert!(
-        stream_text.contains("\"status\":\"waiting_human\""),
+        stream_text.contains("\"type\":\"flow_accepted\""),
         "{stream_text}"
     );
 }

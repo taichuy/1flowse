@@ -172,6 +172,9 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
     let session_store = infrastructure
         .session_store()
         .expect("storage-ephemeral default provider must provide session store");
+    let runtime_event_stream = infrastructure
+        .runtime_event_stream()
+        .expect("runtime-event-stream default provider must be registered");
     let salt = SaltString::generate(&mut OsRng);
     let root_password_hash = Argon2::default()
         .hash_password(config.bootstrap_root_password.as_bytes(), &salt)
@@ -274,6 +277,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
         allow_unverified_filesystem_dropins: config.allow_unverified_filesystem_dropins,
         allow_uploaded_host_extensions: config.allow_uploaded_host_extensions,
         session_store,
+        runtime_event_stream,
         api_docs,
         cookie_name: config.cookie_name.clone(),
         session_ttl_days: config.session_ttl_days,

@@ -4,6 +4,7 @@ use super::applications::{
 };
 use super::plugins::InMemoryOfficialPluginSource;
 use super::*;
+use axum::response::Response;
 use control_plane::ports::FileManagementRepository;
 use control_plane::ports::SessionStore;
 
@@ -181,6 +182,9 @@ async fn test_state_with_runtime_profile_state(
     let session_store = infrastructure
         .session_store()
         .expect("local test infrastructure must provide session store");
+    let runtime_event_stream = infrastructure
+        .runtime_event_stream()
+        .expect("local test infrastructure must provide runtime event stream");
 
     (
         Arc::new(ApiState {
@@ -199,6 +203,7 @@ async fn test_state_with_runtime_profile_state(
             allow_unverified_filesystem_dropins: config.allow_unverified_filesystem_dropins,
             allow_uploaded_host_extensions: config.allow_uploaded_host_extensions,
             session_store,
+            runtime_event_stream,
             api_docs,
             cookie_name: config.cookie_name.clone(),
             session_ttl_days: config.session_ttl_days,
@@ -253,6 +258,20 @@ pub(crate) async fn test_api_state_with_database_url() -> (Arc<ApiState>, String
 
 pub(crate) async fn seed_session(state: &ApiState, session: domain::SessionRecord) {
     state.session_store.put(session).await.unwrap();
+}
+
+pub(crate) async fn read_first_sse_frame(response: Response) -> String {
+    let mut stream = response.into_body().into_data_stream();
+    let mut buffer = Vec::new();
+
+    while let Some(chunk) = tokio_stream::StreamExt::next(&mut stream).await {
+        buffer.extend_from_slice(&chunk.unwrap());
+        if buffer.windows(2).any(|window| window == b"\n\n") {
+            break;
+        }
+    }
+
+    String::from_utf8(buffer).unwrap()
 }
 
 pub async fn login_and_capture_cookie(

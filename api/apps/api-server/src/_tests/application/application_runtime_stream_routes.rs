@@ -1,7 +1,8 @@
 use std::{fs, path::Path};
 
 use crate::_tests::support::{
-    login_and_capture_cookie, test_app, write_provider_manifest_v2, write_test_executable,
+    login_and_capture_cookie, read_first_sse_frame, test_app, write_provider_manifest_v2,
+    write_test_executable,
 };
 use axum::{
     body::{to_bytes, Body},
@@ -366,7 +367,7 @@ async fn seed_agent_flow_application(
 }
 
 #[tokio::test]
-async fn debug_run_stream_emits_text_deltas_before_llm_node_finished() {
+async fn debug_run_stream_returns_flow_accepted_before_runtime_continuation_finishes() {
     let app = test_app().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
@@ -399,17 +400,14 @@ async fn debug_run_stream_emits_text_deltas_before_llm_node_finished() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let stream_text = String::from_utf8_lossy(&body);
+    let stream_text = read_first_sse_frame(response).await;
 
-    let text_delta_count = stream_text.matches("event: text_delta").count();
-    assert_eq!(text_delta_count, 2, "{stream_text}");
-
-    let llm_started = stream_text.find("\"title\":\"LLM\"").unwrap();
-    let first_text_delta = stream_text.find("event: text_delta").unwrap();
-    let llm_node_finished = stream_text[llm_started..]
-        .find("event: node_finished")
-        .map(|offset| llm_started + offset)
-        .unwrap();
-    assert!(first_text_delta < llm_node_finished, "{stream_text}");
+    assert!(
+        stream_text.contains("event: flow_accepted"),
+        "{stream_text}"
+    );
+    assert!(
+        stream_text.contains("\"type\":\"flow_accepted\""),
+        "{stream_text}"
+    );
 }

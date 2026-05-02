@@ -1338,7 +1338,7 @@ git commit -m "feat: split flow debug run shell startup"
 - Modify: `api/apps/api-server/src/routes/applications/mod.rs`
 - Modify: `api/apps/api-server/src/routes/applications/application_runtime.rs`
 
-- [ ] **Step 1: Add API route test for fast-start**
+- [x] **Step 1: Add API route test for fast-start**
 
 Create or extend an API server route test under `api/apps/api-server/src/_tests/application/`:
 
@@ -1368,7 +1368,7 @@ async fn stream_debug_run_returns_flow_accepted_before_background_compile_finish
 
 Use the existing auth route helpers in `api/apps/api-server/src/_tests/support/auth.rs` and add only `read_first_sse_frame` as a small response body reader in the same support module.
 
-- [ ] **Step 2: Run the failing route test**
+- [x] **Step 2: Run the failing route test**
 
 Run:
 
@@ -1378,7 +1378,7 @@ cargo test -p api-server stream_debug_run_returns_flow_accepted_before_backgroun
 
 Expected: FAIL because the stream route still waits for `start_flow_debug_run`.
 
-- [ ] **Step 3: Add runtime event stream to ApiState**
+- [x] **Step 3: Add runtime event stream to ApiState**
 
 In `api/apps/api-server/src/app_state.rs`, import:
 
@@ -1402,7 +1402,7 @@ let runtime_event_stream = infrastructure
 
 and include `runtime_event_stream` in `ApiState`.
 
-- [ ] **Step 4: Create SSE helper module**
+- [x] **Step 4: Create SSE helper module**
 
 Create `api/apps/api-server/src/routes/applications/debug_run_stream.rs`:
 
@@ -1461,7 +1461,7 @@ Update `api/apps/api-server/src/routes/applications/mod.rs`:
 pub mod debug_run_stream;
 ```
 
-- [ ] **Step 5: Rewrite stream route to open SSE immediately**
+- [x] **Step 5: Rewrite stream route to open SSE immediately**
 
 In `api/apps/api-server/src/routes/applications/application_runtime.rs`, replace the blocking stream route path with:
 
@@ -1544,7 +1544,7 @@ pub fn with_runtime_event_stream(mut self, stream: Arc<dyn RuntimeEventStream>) 
 }
 ```
 
-- [ ] **Step 6: Run the route test**
+- [x] **Step 6: Run the route test**
 
 Run:
 
@@ -1554,7 +1554,7 @@ cargo test -p api-server stream_debug_run_returns_flow_accepted_before_backgroun
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/apps/api-server/src/app_state.rs \
