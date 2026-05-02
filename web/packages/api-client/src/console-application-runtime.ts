@@ -107,6 +107,11 @@ export interface RuntimeDebugStreamResponse {
 
 export type ConsoleFlowDebugStreamEvent =
   | {
+      type: 'flow_accepted';
+      run_id: string;
+      status: 'queued' | 'starting' | string;
+    }
+  | {
       type: 'flow_started';
       run_id: string;
       status: string;
@@ -164,6 +169,9 @@ export type ConsoleFlowDebugStreamEvent =
     }
   | {
       type: 'heartbeat';
+    }
+  | {
+      type: 'replay_expired';
     };
 
 export interface ConsoleFlowDebugStreamHandlers {

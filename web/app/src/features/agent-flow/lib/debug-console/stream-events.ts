@@ -120,6 +120,13 @@ export function applyDebugStreamEventToAssistantMessage(
   traceItems: AgentFlowTraceItem[]
 ): AgentFlowDebugMessage {
   switch (event.type) {
+    case 'flow_accepted':
+      return {
+        ...message,
+        runId: event.run_id,
+        status: 'running',
+        traceSummary: traceItems
+      };
     case 'flow_started':
       return {
         ...message,
@@ -130,8 +137,7 @@ export function applyDebugStreamEventToAssistantMessage(
     case 'text_delta':
       return {
         ...message,
-        content: `${message.content}${event.text}`,
-        traceSummary: traceItems
+        content: `${message.content}${event.text}`
       };
     case 'node_started':
     case 'node_finished':
@@ -163,6 +169,12 @@ export function applyDebugStreamEventToAssistantMessage(
         runId: event.run_id,
         status: 'cancelled',
         traceSummary: traceItems
+      };
+    case 'replay_expired':
+      return {
+        ...message,
+        status: 'failed',
+        content: '调试流已过期，请重新运行。'
       };
     default:
       return message;

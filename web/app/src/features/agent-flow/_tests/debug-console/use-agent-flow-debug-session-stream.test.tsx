@@ -57,6 +57,270 @@ afterEach(() => {
 });
 
 describe('useAgentFlowDebugSession streaming', () => {
+  test('handles flow accepted and batches text deltas without rebuilding variable cache per token', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const queryClient = createQueryClient();
+      const requestAnimationFrameSpy = vi.spyOn(window, 'requestAnimationFrame');
+      const startFlowDebugRunStreamSpy = vi
+        .spyOn(runtimeApi, 'startFlowDebugRunStream')
+        .mockImplementation(
+          async (_applicationId, _input, _csrfToken, handlers) => {
+            handlers.onEvent({
+              type: 'flow_accepted',
+              run_id: 'run-1',
+              status: 'queued'
+            });
+            handlers.onEvent({
+              type: 'flow_started',
+              run_id: 'run-1',
+              status: 'running'
+            });
+            handlers.onEvent({
+              type: 'text_delta',
+              node_id: 'node-llm',
+              text: '退'
+            });
+            handlers.onEvent({
+              type: 'text_delta',
+              node_id: 'node-llm',
+              text: '款'
+            });
+            handlers.onEvent({
+              type: 'flow_finished',
+              run_id: 'run-1',
+              status: 'succeeded',
+              output: { answer: '退款' }
+            });
+          }
+        );
+      const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+      const { result } = renderHook(
+        () =>
+          useAgentFlowDebugSession({
+            applicationId: 'app-1',
+            draftId: 'draft-1',
+            document
+          }),
+        { wrapper: createWrapper(queryClient) }
+      );
+
+      await act(async () => {
+        const promise = result.current.submitPrompt('退款');
+        await vi.runOnlyPendingTimersAsync();
+        await promise;
+      });
+
+      expect(startFlowDebugRunStreamSpy).toHaveBeenCalled();
+      expect(requestAnimationFrameSpy).toHaveBeenCalledTimes(1);
+      expect(result.current.messages.at(-1)).toEqual(
+        expect.objectContaining({
+          runId: 'run-1',
+          status: 'completed',
+          content: '退款'
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('keeps stream error state when a pending text delta flush exists', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const queryClient = createQueryClient();
+      vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockImplementation(
+        async (_applicationId, _input, _csrfToken, handlers) => {
+          handlers.onEvent({
+            type: 'flow_started',
+            run_id: 'flow-run-stream',
+            status: 'running'
+          });
+          handlers.onEvent({
+            type: 'text_delta',
+            node_id: 'node-llm',
+            text: 'partial answer'
+          });
+          throw new Error('stream down');
+        }
+      );
+      const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+      const { result } = renderHook(
+        () =>
+          useAgentFlowDebugSession({
+            applicationId: 'app-1',
+            draftId: 'draft-1',
+            document
+          }),
+        { wrapper: createWrapper(queryClient) }
+      );
+
+      await act(async () => {
+        await result.current.submitPrompt('请总结退款政策');
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(result.current.status).toBe('failed');
+      expect(result.current.messages.at(-1)).toEqual(
+        expect.objectContaining({
+          role: 'assistant',
+          runId: 'flow-run-stream',
+          status: 'failed',
+          content: 'stream down'
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('keeps newer trace summary when a node event follows a pending text delta', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const queryClient = createQueryClient();
+      vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockImplementation(
+        async (_applicationId, _input, _csrfToken, handlers) => {
+          handlers.onEvent({
+            type: 'flow_started',
+            run_id: 'flow-run-stream',
+            status: 'running'
+          });
+          handlers.onEvent({
+            type: 'text_delta',
+            node_id: 'node-llm',
+            text: 'partial answer'
+          });
+          handlers.onEvent({
+            type: 'node_started',
+            node_run_id: 'node-run-llm',
+            node_id: 'node-llm',
+            node_type: 'llm',
+            title: 'LLM',
+            input_payload: {}
+          });
+        }
+      );
+      const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+      const { result } = renderHook(
+        () =>
+          useAgentFlowDebugSession({
+            applicationId: 'app-1',
+            draftId: 'draft-1',
+            document
+          }),
+        { wrapper: createWrapper(queryClient) }
+      );
+
+      await act(async () => {
+        await result.current.submitPrompt('请总结退款政策');
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(result.current.messages.at(-1)).toEqual(
+        expect.objectContaining({
+          content: 'partial answer',
+          traceSummary: [
+            expect.objectContaining({
+              nodeId: 'node-llm',
+              nodeAlias: 'LLM',
+              status: 'running'
+            })
+          ]
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('does not restore a pending text delta after clearing the session', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const queryClient = createQueryClient();
+      vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockImplementation(
+        async (_applicationId, _input, _csrfToken, handlers) => {
+          handlers.onEvent({
+            type: 'flow_started',
+            run_id: 'flow-run-stream',
+            status: 'running'
+          });
+          handlers.onEvent({
+            type: 'text_delta',
+            node_id: 'node-llm',
+            text: 'partial answer'
+          });
+        }
+      );
+      const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+      const { result } = renderHook(
+        () =>
+          useAgentFlowDebugSession({
+            applicationId: 'app-1',
+            draftId: 'draft-1',
+            document
+          }),
+        { wrapper: createWrapper(queryClient) }
+      );
+
+      await act(async () => {
+        await result.current.submitPrompt('请总结退款政策');
+        result.current.clearSession();
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(result.current.status).toBe('idle');
+      expect(result.current.messages).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('does not return to running when resetting variables with a pending text delta', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const queryClient = createQueryClient();
+      vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockImplementation(
+        async (_applicationId, _input, _csrfToken, handlers) => {
+          handlers.onEvent({
+            type: 'flow_started',
+            run_id: 'flow-run-stream',
+            status: 'running'
+          });
+          handlers.onEvent({
+            type: 'text_delta',
+            node_id: 'node-llm',
+            text: 'partial answer'
+          });
+        }
+      );
+      const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+      const { result } = renderHook(
+        () =>
+          useAgentFlowDebugSession({
+            applicationId: 'app-1',
+            draftId: 'draft-1',
+            document
+          }),
+        { wrapper: createWrapper(queryClient) }
+      );
+
+      await act(async () => {
+        await result.current.submitPrompt('请总结退款政策');
+        result.current.resetVariableCache();
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(result.current.status).toBe('idle');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('submits even when crypto.randomUUID is unavailable', async () => {
     const descriptor = Object.getOwnPropertyDescriptor(crypto, 'randomUUID');
     Object.defineProperty(crypto, 'randomUUID', {

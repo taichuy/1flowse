@@ -373,6 +373,8 @@ export function useAgentFlowDebugSession({
   const lastSubmittedPromptRef = useRef<string | null>(null);
   const activeRunIdRef = useRef<string | null>(null);
   const pollTimerRef = useRef<number | null>(null);
+  const pendingAssistantMessageRef = useRef<AgentFlowDebugMessage | null>(null);
+  const flushStreamMessageFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     setRunContext((currentRunContext) => {
@@ -438,6 +440,52 @@ export function useAgentFlowDebugSession({
   function stopPolling() {
     clearPollTimer();
     activeRunIdRef.current = null;
+  }
+
+  function scheduleAssistantMessageFlush(
+    runningMessageId: string,
+    nextMessage: AgentFlowDebugMessage
+  ) {
+    pendingAssistantMessageRef.current = nextMessage;
+
+    if (flushStreamMessageFrameRef.current !== null) {
+      return;
+    }
+
+    flushStreamMessageFrameRef.current = window.requestAnimationFrame(() => {
+      flushStreamMessageFrameRef.current = null;
+      const pending = pendingAssistantMessageRef.current;
+
+      if (!pending) {
+        return;
+      }
+
+      pendingAssistantMessageRef.current = null;
+      setStatus(pending.status);
+      setMessages((currentMessages) =>
+        replaceAssistantMessage(currentMessages, pending, runningMessageId)
+      );
+    });
+  }
+
+  function clearScheduledAssistantMessageFlush() {
+    if (flushStreamMessageFrameRef.current !== null) {
+      window.cancelAnimationFrame(flushStreamMessageFrameRef.current);
+      flushStreamMessageFrameRef.current = null;
+    }
+
+    pendingAssistantMessageRef.current = null;
+  }
+
+  function flushAssistantMessageImmediately(
+    runningMessageId: string,
+    nextMessage: AgentFlowDebugMessage
+  ) {
+    clearScheduledAssistantMessageFlush();
+    setStatus(nextMessage.status);
+    setMessages((currentMessages) =>
+      replaceAssistantMessage(currentMessages, nextMessage, runningMessageId)
+    );
   }
 
   async function applyRunDetail(
@@ -521,6 +569,7 @@ export function useAgentFlowDebugSession({
   useEffect(() => () => {
     clearPollTimer();
     activeRunIdRef.current = null;
+    clearScheduledAssistantMessageFlush();
   }, []);
 
   async function submitPrompt(prompt?: string) {
@@ -530,6 +579,7 @@ export function useAgentFlowDebugSession({
     const runningMessage = createRunningAssistantMessage();
 
     stopPolling();
+    clearScheduledAssistantMessageFlush();
     setRunContext(clearRunContextQuery(nextRunContext));
     setStatus('running');
     setLastDetail(null);
@@ -563,10 +613,20 @@ export function useAgentFlowDebugSession({
 
       await startFlowDebugRunStream(applicationId, runInput, csrfToken, {
         onEvent: (event) => {
-          streamTraceItemsSnapshot = applyDebugStreamEventToTrace(
-            streamTraceItemsSnapshot,
-            event
-          );
+          const isTraceEvent =
+            event.type === 'node_started' || event.type === 'node_finished';
+          const isTerminalEvent =
+            event.type === 'flow_finished' ||
+            event.type === 'flow_failed' ||
+            event.type === 'replay_expired';
+
+          if (isTraceEvent) {
+            streamTraceItemsSnapshot = applyDebugStreamEventToTrace(
+              streamTraceItemsSnapshot,
+              event
+            );
+          }
+
           streamAssistantMessage = applyDebugStreamEventToAssistantMessage(
             streamAssistantMessage,
             event,
@@ -574,19 +634,40 @@ export function useAgentFlowDebugSession({
           );
 
           if (
+            event.type === 'flow_accepted' ||
             event.type === 'flow_started' ||
             event.type === 'flow_cancelled'
           ) {
             activeRunIdRef.current = event.run_id;
           }
 
-          setStreamTraceItems(streamTraceItemsSnapshot);
-          setNodePreviewVariableCache((currentCache) =>
-            mergeVariableCache(
-              currentCache,
-              buildVariableCacheFromTraceItems(streamTraceItemsSnapshot)
-            )
-          );
+          if (isTraceEvent) {
+            setStreamTraceItems(streamTraceItemsSnapshot);
+            setNodePreviewVariableCache((currentCache) =>
+              mergeVariableCache(
+                currentCache,
+                buildVariableCacheFromTraceItems(streamTraceItemsSnapshot)
+              )
+            );
+          }
+
+          if (event.type === 'text_delta') {
+            scheduleAssistantMessageFlush(
+              runningMessage.id,
+              streamAssistantMessage
+            );
+            return;
+          }
+
+          if (isTerminalEvent || event.type === 'flow_cancelled') {
+            flushAssistantMessageImmediately(
+              runningMessage.id,
+              streamAssistantMessage
+            );
+            return;
+          }
+
+          clearScheduledAssistantMessageFlush();
           setStatus(streamAssistantMessage.status);
           setMessages((currentMessages) =>
             replaceAssistantMessage(
@@ -610,6 +691,7 @@ export function useAgentFlowDebugSession({
       if (activeRunIdRef.current) {
         const errorMessage =
           error instanceof Error ? error.message : '调试流式连接中断';
+        clearScheduledAssistantMessageFlush();
         setStatus('failed');
         setMessages((currentMessages) =>
           replaceAssistantMessageWithError(currentMessages, errorMessage, {
@@ -683,6 +765,7 @@ export function useAgentFlowDebugSession({
         csrfToken
       );
       stopPolling();
+      clearScheduledAssistantMessageFlush();
       await applyRunDetail(detail, { invalidateRuntime: true });
       return detail;
     } catch {
@@ -692,6 +775,7 @@ export function useAgentFlowDebugSession({
 
   function clearSession() {
     stopPolling();
+    clearScheduledAssistantMessageFlush();
     setStatus('idle');
     setMessages([]);
     setLastDetail(null);
@@ -767,6 +851,7 @@ export function useAgentFlowDebugSession({
 
   function resetVariableCache() {
     stopPolling();
+    clearScheduledAssistantMessageFlush();
     setStatus('idle');
     setLastDetail(null);
     setStreamTraceItems([]);
