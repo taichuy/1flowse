@@ -499,12 +499,12 @@ async fn wait_for_run_detail(
     );
 }
 
-async fn wait_for_persisted_text_delta(
+async fn wait_for_persisted_text_delta_events(
     app: &axum::Router,
     cookie: &str,
     application_id: &str,
     run_id: &str,
-) -> Value {
+) -> Vec<Value> {
     for _ in 0..200 {
         let detail = wait_for_run_detail(
             app,
@@ -514,11 +514,18 @@ async fn wait_for_persisted_text_delta(
             &["running", "waiting", "waiting_human", "succeeded", "failed"],
         )
         .await;
-        if let Some(event) = detail["events"].as_array().unwrap().iter().find(|event| {
-            event["event_type"].as_str() == Some("text_delta")
-                && event["payload"]["text"].as_str().is_some()
-        }) {
-            return event.clone();
+        let text_delta_events = detail["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|event| event["event_type"].as_str() == Some("text_delta"))
+            .cloned()
+            .collect::<Vec<_>>();
+        if text_delta_events
+            .iter()
+            .any(|event| event["payload"]["text"].as_str().is_some())
+        {
+            return text_delta_events;
         }
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
@@ -1164,6 +1171,17 @@ async fn application_runtime_routes_stream_debug_run_returns_flow_accepted() {
         .as_str()
         .unwrap()
         .to_string();
-    let text_delta = wait_for_persisted_text_delta(&app, &cookie, &application_id, &run_id).await;
+    let text_delta_events =
+        wait_for_persisted_text_delta_events(&app, &cookie, &application_id, &run_id).await;
+    assert_eq!(
+        text_delta_events.len(),
+        1,
+        "streamed debug run should persist one logical durable text_delta event: {text_delta_events:?}"
+    );
+    let text_delta = &text_delta_events[0];
     assert!(!text_delta["payload"]["text"].as_str().unwrap().is_empty());
+    assert!(
+        text_delta["payload"]["delta"].is_null(),
+        "streamed debug run should not persist legacy provider delta payload: {text_delta:?}"
+    );
 }

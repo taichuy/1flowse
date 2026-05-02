@@ -23,11 +23,7 @@ use control_plane::{
 use serde::{Deserialize, Serialize};
 use storage_durable::MainDurableStore;
 use time::format_description::well_known::Rfc3339;
-use tokio::task::JoinHandle;
-use tokio::{
-    sync::mpsc,
-    time::{self as tokio_time, Duration, MissedTickBehavior},
-};
+use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::{error, warn};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -122,28 +118,18 @@ where
             return;
         }
 
-        let mut flush_interval = tokio_time::interval(Duration::from_millis(250));
-        flush_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
-
         loop {
-            tokio::select! {
-                maybe_event = subscription.live_events.recv() => {
-                    let Some(event) = maybe_event else {
-                        let _ = flush_debug_event_batch(&repository, &mut batch, run_id).await;
-                        return;
-                    };
-                    let is_terminal = is_terminal_runtime_event(&event.event_type);
-                    batch.push(event);
-                    if batch.len() >= 64 || is_terminal {
-                        if flush_debug_event_batch(&repository, &mut batch, run_id).await || is_terminal {
-                            return;
-                        }
-                    }
-                }
-                _ = flush_interval.tick(), if !batch.is_empty() => {
-                    if flush_debug_event_batch(&repository, &mut batch, run_id).await {
-                        return;
-                    }
+            let Some(event) = subscription.live_events.recv().await else {
+                let _ = flush_debug_event_batch(&repository, &mut batch, run_id).await;
+                return;
+            };
+
+            let is_terminal = is_terminal_runtime_event(&event.event_type);
+            let is_text_delta = event.event_type == "text_delta";
+            batch.push(event);
+            if batch.len() >= 64 || is_terminal || !is_text_delta {
+                if flush_debug_event_batch(&repository, &mut batch, run_id).await || is_terminal {
+                    return;
                 }
             }
         }

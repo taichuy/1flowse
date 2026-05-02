@@ -939,19 +939,29 @@ where
                 .await?;
             }
             "llm" => {
-                let (persist_sender, persist_receiver) = mpsc::unbounded_channel();
-                let persist_handle = tokio::spawn(run_live_event_persister(
-                    service.repository.clone(),
-                    flow_run.id,
-                    node_run.id,
-                    node_span.id,
-                    persist_receiver,
-                ));
-                let llm_invoker = invoker.for_live_llm_node_with_persist(
-                    node.node_id.clone(),
-                    node_run.id,
-                    persist_sender,
-                );
+                let (llm_invoker, persist_handle) = if service.runtime_event_stream.is_none() {
+                    let (persist_sender, persist_receiver) = mpsc::unbounded_channel();
+                    let persist_handle = tokio::spawn(run_live_event_persister(
+                        service.repository.clone(),
+                        flow_run.id,
+                        node_run.id,
+                        node_span.id,
+                        persist_receiver,
+                    ));
+                    (
+                        invoker.for_live_llm_node_with_persist(
+                            node.node_id.clone(),
+                            node_run.id,
+                            persist_sender,
+                        ),
+                        Some(persist_handle),
+                    )
+                } else {
+                    (
+                        invoker.for_live_llm_node(node.node_id.clone(), node_run.id),
+                        None,
+                    )
+                };
                 let execution_result = orchestration_runtime::execution_engine::execute_llm_node(
                     node,
                     &resolved_inputs,
@@ -960,9 +970,11 @@ where
                 )
                 .await;
                 drop(llm_invoker);
-                persist_handle
-                    .await
-                    .map_err(|e| anyhow!("persist task panicked: {e}"))??;
+                if let Some(persist_handle) = persist_handle {
+                    persist_handle
+                        .await
+                        .map_err(|e| anyhow!("persist task panicked: {e}"))??;
+                }
                 let execution = execution_result?;
 
                 last_output_payload = execution.output_payload.clone();

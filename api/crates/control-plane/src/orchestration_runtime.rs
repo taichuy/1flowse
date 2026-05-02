@@ -597,6 +597,7 @@ where
         )
         .await?;
 
+        let mut live_forward_handle = None;
         let live_provider_events = if let (Some(node_id), Some(node_run_id)) =
             (self.active_node_id.clone(), self.active_node_run_id)
         {
@@ -607,7 +608,7 @@ where
             let (provider_sender, mut provider_receiver) =
                 mpsc::unbounded_channel::<ProviderStreamEvent>();
             if live_sender.is_some() || runtime_event_stream.is_some() || persist_sender.is_some() {
-                tokio::spawn(async move {
+                live_forward_handle = Some(tokio::spawn(async move {
                     while let Some(event) = provider_receiver.recv().await {
                         if let Some(sender) = &live_sender {
                             let _ = sender.send(LiveProviderStreamEvent {
@@ -653,7 +654,7 @@ where
                             let _ = persist.send(event);
                         }
                     }
-                });
+                }));
                 Some(provider_sender)
             } else {
                 None
@@ -667,6 +668,14 @@ where
             .runtime
             .invoke_stream_with_live_events(&installation, input, live_provider_events)
             .await?;
+        if let Some(handle) = live_forward_handle {
+            if let Err(error) = handle.await {
+                tracing::warn!(
+                    error = %error,
+                    "provider live event forwarding task panicked"
+                );
+            }
+        }
         if let Some(persist) = &self.persist_events {
             if !has_live_provider_events {
                 for event in invocation_output.events.iter().cloned() {
@@ -723,6 +732,21 @@ where
             provider_secret_master_key: self.provider_secret_master_key.clone(),
             live_provider_events: self.live_provider_events.clone(),
             persist_events: Some(persist_events),
+            runtime_event_stream: self.runtime_event_stream.clone(),
+            flow_run_id: self.flow_run_id,
+            active_node_id: Some(node_id),
+            active_node_run_id: Some(node_run_id),
+        }
+    }
+
+    fn for_live_llm_node(&self, node_id: String, node_run_id: Uuid) -> Self {
+        Self {
+            repository: self.repository.clone(),
+            runtime: self.runtime.clone(),
+            workspace_id: self.workspace_id,
+            provider_secret_master_key: self.provider_secret_master_key.clone(),
+            live_provider_events: self.live_provider_events.clone(),
+            persist_events: None,
             runtime_event_stream: self.runtime_event_stream.clone(),
             flow_run_id: self.flow_run_id,
             active_node_id: Some(node_id),
