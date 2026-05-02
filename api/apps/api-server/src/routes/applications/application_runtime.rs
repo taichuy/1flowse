@@ -96,57 +96,6 @@ async fn fail_runtime_event_stream_if_missing_terminal(
     }
 }
 
-async fn persist_runtime_terminal_event_if_missing<R>(
-    repository: &R,
-    application_id: Uuid,
-    run_id: Uuid,
-    terminal_event: control_plane::ports::RuntimeEventPayload,
-) where
-    R: OrchestrationRuntimeRepository,
-{
-    match repository
-        .get_application_run_detail(application_id, run_id)
-        .await
-    {
-        Ok(Some(detail))
-            if detail
-                .events
-                .iter()
-                .any(|event| is_terminal_runtime_event(&event.event_type)) =>
-        {
-            return;
-        }
-        Ok(_) => {}
-        Err(error) => {
-            warn!(
-                application_id = %application_id,
-                flow_run_id = %run_id,
-                error = %error,
-                "failed to check persisted runtime terminal event"
-            );
-            return;
-        }
-    }
-
-    if let Err(error) = control_plane::orchestration_runtime::persist_debug_stream_events(
-        repository,
-        vec![control_plane::ports::RuntimeEventEnvelope::new(
-            run_id,
-            0,
-            terminal_event,
-        )],
-    )
-    .await
-    {
-        warn!(
-            application_id = %application_id,
-            flow_run_id = %run_id,
-            error = %error,
-            "failed to persist missing runtime terminal event"
-        );
-    }
-}
-
 fn spawn_debug_event_persister<R>(
     repository: R,
     stream: Arc<dyn RuntimeEventStream>,
@@ -182,6 +131,31 @@ where
             }
         }
     })
+}
+
+async fn wait_for_debug_event_persister(
+    handle: JoinHandle<()>,
+    application_id: Uuid,
+    run_id: Uuid,
+) {
+    match tokio::time::timeout(std::time::Duration::from_secs(2), handle).await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            warn!(
+                application_id = %application_id,
+                flow_run_id = %run_id,
+                error = %error,
+                "runtime debug stream persister task panicked"
+            );
+        }
+        Err(_) => {
+            warn!(
+                application_id = %application_id,
+                flow_run_id = %run_id,
+                "runtime debug stream persister did not finish after terminal event"
+            );
+        }
+    }
 }
 
 async fn push_debug_event_for_persistence<R>(
@@ -683,7 +657,7 @@ pub async fn start_flow_debug_run_stream(
         .runtime_event_stream
         .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
         .await?;
-    spawn_debug_event_persister(
+    let persister_handle = spawn_debug_event_persister(
         state.store.clone(),
         state.runtime_event_stream.clone(),
         run_id,
@@ -737,30 +711,12 @@ pub async fn start_flow_debug_run_stream(
         };
 
         match result {
-            Ok(detail) => {
-                persist_runtime_terminal_event_if_missing(
-                    &background_state.store,
-                    id,
-                    run_id,
-                    debug_stream_events::flow_finished(run_id, detail.flow_run.output_payload),
-                )
-                .await;
-            }
+            Ok(_) => {}
             Err(error) => {
                 fail_runtime_event_stream_if_missing_terminal(
                     background_state.runtime_event_stream.clone(),
                     run_id,
                     &error,
-                )
-                .await;
-                persist_runtime_terminal_event_if_missing(
-                    &background_state.store,
-                    id,
-                    run_id,
-                    debug_stream_events::flow_failed(
-                        run_id,
-                        serde_json::json!({ "message": error.to_string() }),
-                    ),
                 )
                 .await;
                 error!(
@@ -771,6 +727,7 @@ pub async fn start_flow_debug_run_stream(
                 );
             }
         }
+        wait_for_debug_event_persister(persister_handle, id, run_id).await;
     });
 
     Ok(Sse::new(debug_run_stream::DebugRunSseStream::new(receiver))
