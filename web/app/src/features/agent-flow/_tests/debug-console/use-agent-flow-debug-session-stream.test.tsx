@@ -62,7 +62,10 @@ describe('useAgentFlowDebugSession streaming', () => {
 
     try {
       const queryClient = createQueryClient();
-      const requestAnimationFrameSpy = vi.spyOn(window, 'requestAnimationFrame');
+      const requestAnimationFrameSpy = vi.spyOn(
+        window,
+        'requestAnimationFrame'
+      );
       const startFlowDebugRunStreamSpy = vi
         .spyOn(runtimeApi, 'startFlowDebugRunStream')
         .mockImplementation(
@@ -119,6 +122,59 @@ describe('useAgentFlowDebugSession streaming', () => {
           runId: 'run-1',
           status: 'completed',
           content: '退款'
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('streams reasoning deltas into assistant thought content before answer text', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const queryClient = createQueryClient();
+      vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockImplementation(
+        async (_applicationId, _input, _csrfToken, handlers) => {
+          handlers.onEvent({
+            type: 'flow_started',
+            run_id: 'run-reasoning',
+            status: 'running'
+          });
+          handlers.onEvent({
+            type: 'reasoning_delta',
+            node_id: 'node-llm',
+            text: '先分析'
+          });
+          handlers.onEvent({
+            type: 'text_delta',
+            node_id: 'node-llm',
+            text: '结果'
+          });
+        }
+      );
+      const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+      const { result } = renderHook(
+        () =>
+          useAgentFlowDebugSession({
+            applicationId: 'app-1',
+            draftId: 'draft-1',
+            document
+          }),
+        { wrapper: createWrapper(queryClient) }
+      );
+
+      await act(async () => {
+        await result.current.submitPrompt('请分析退款政策');
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(result.current.messages.at(-1)).toEqual(
+        expect.objectContaining({
+          runId: 'run-reasoning',
+          status: 'running',
+          reasoningContent: '先分析',
+          content: '结果'
         })
       );
     } finally {
@@ -441,19 +497,21 @@ describe('useAgentFlowDebugSession streaming', () => {
     const queryClient = createQueryClient();
     const startFlowDebugRunStreamSpy = vi
       .spyOn(runtimeApi, 'startFlowDebugRunStream')
-      .mockImplementation(async (_applicationId, _input, _csrfToken, handlers) => {
-        handlers.onEvent({
-          type: 'flow_started',
-          run_id: 'flow-run-stream',
-          status: 'running'
-        });
-        handlers.onEvent({
-          type: 'flow_finished',
-          run_id: 'flow-run-stream',
-          status: 'succeeded',
-          output: { answer: '你好' }
-        });
-      });
+      .mockImplementation(
+        async (_applicationId, _input, _csrfToken, handlers) => {
+          handlers.onEvent({
+            type: 'flow_started',
+            run_id: 'flow-run-stream',
+            status: 'running'
+          });
+          handlers.onEvent({
+            type: 'flow_finished',
+            run_id: 'flow-run-stream',
+            status: 'succeeded',
+            output: { answer: '你好' }
+          });
+        }
+      );
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
     try {
@@ -479,7 +537,8 @@ describe('useAgentFlowDebugSession streaming', () => {
         })
       );
       expect(
-        result.current.runContext.fields.find((field) => field.key === 'query')?.value
+        result.current.runContext.fields.find((field) => field.key === 'query')
+          ?.value
       ).toBe('');
       expect(result.current.messages.at(-1)).toEqual(
         expect.objectContaining({
@@ -500,68 +559,70 @@ describe('useAgentFlowDebugSession streaming', () => {
     const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
     const startFlowDebugRunStreamSpy = vi
       .spyOn(runtimeApi, 'startFlowDebugRunStream')
-      .mockImplementation(async (_applicationId, _input, _csrfToken, handlers) => {
-        handlers.onEvent({
-          type: 'flow_started',
-          run_id: 'flow-run-stream',
-          status: 'running'
-        });
-        handlers.onEvent({
-          type: 'node_started',
-          node_run_id: 'node-run-start',
-          node_id: 'node-start',
-          node_type: 'start',
-          title: 'Start',
-          input_payload: {}
-        });
-        handlers.onEvent({
-          type: 'node_finished',
-          node_run_id: 'node-run-start',
-          node_id: 'node-start',
-          status: 'succeeded',
-          output_payload: { query: '请总结退款政策' },
-          error_payload: null,
-          metrics_payload: {},
-          started_at: '2026-04-25T10:00:00Z',
-          finished_at: '2026-04-25T10:00:00Z'
-        });
-        handlers.onEvent({
-          type: 'node_started',
-          node_run_id: 'node-run-llm',
-          node_id: 'node-llm',
-          node_type: 'llm',
-          title: 'LLM',
-          input_payload: { user_prompt: '请总结退款政策' }
-        });
-        handlers.onEvent({
-          type: 'text_delta',
-          node_id: 'node-llm',
-          text: '退款'
-        });
-        handlers.onEvent({
-          type: 'text_delta',
-          node_id: 'node-llm',
-          text: '政策摘要'
-        });
-        handlers.onEvent({
-          type: 'node_finished',
-          node_run_id: 'node-run-llm',
-          node_id: 'node-llm',
-          status: 'succeeded',
-          output_payload: { text: '退款政策摘要' },
-          error_payload: null,
-          metrics_payload: { total_tokens: 128 },
-          started_at: '2026-04-25T10:00:01Z',
-          finished_at: '2026-04-25T10:00:02Z'
-        });
-        handlers.onEvent({
-          type: 'flow_finished',
-          run_id: 'flow-run-stream',
-          status: 'succeeded',
-          output: { answer: '退款政策摘要' }
-        });
-        handlers.onCompleted?.();
-      });
+      .mockImplementation(
+        async (_applicationId, _input, _csrfToken, handlers) => {
+          handlers.onEvent({
+            type: 'flow_started',
+            run_id: 'flow-run-stream',
+            status: 'running'
+          });
+          handlers.onEvent({
+            type: 'node_started',
+            node_run_id: 'node-run-start',
+            node_id: 'node-start',
+            node_type: 'start',
+            title: 'Start',
+            input_payload: {}
+          });
+          handlers.onEvent({
+            type: 'node_finished',
+            node_run_id: 'node-run-start',
+            node_id: 'node-start',
+            status: 'succeeded',
+            output_payload: { query: '请总结退款政策' },
+            error_payload: null,
+            metrics_payload: {},
+            started_at: '2026-04-25T10:00:00Z',
+            finished_at: '2026-04-25T10:00:00Z'
+          });
+          handlers.onEvent({
+            type: 'node_started',
+            node_run_id: 'node-run-llm',
+            node_id: 'node-llm',
+            node_type: 'llm',
+            title: 'LLM',
+            input_payload: { user_prompt: '请总结退款政策' }
+          });
+          handlers.onEvent({
+            type: 'text_delta',
+            node_id: 'node-llm',
+            text: '退款'
+          });
+          handlers.onEvent({
+            type: 'text_delta',
+            node_id: 'node-llm',
+            text: '政策摘要'
+          });
+          handlers.onEvent({
+            type: 'node_finished',
+            node_run_id: 'node-run-llm',
+            node_id: 'node-llm',
+            status: 'succeeded',
+            output_payload: { text: '退款政策摘要' },
+            error_payload: null,
+            metrics_payload: { total_tokens: 128 },
+            started_at: '2026-04-25T10:00:01Z',
+            finished_at: '2026-04-25T10:00:02Z'
+          });
+          handlers.onEvent({
+            type: 'flow_finished',
+            run_id: 'flow-run-stream',
+            status: 'succeeded',
+            output: { answer: '退款政策摘要' }
+          });
+          handlers.onCompleted?.();
+        }
+      );
     const startFlowDebugRunSpy = vi.spyOn(runtimeApi, 'startFlowDebugRun');
     const fetchApplicationRunDetailSpy = vi.spyOn(
       runtimeApi,

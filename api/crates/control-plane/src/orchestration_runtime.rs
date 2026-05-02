@@ -631,6 +631,7 @@ where
                 mpsc::unbounded_channel::<ProviderStreamEvent>();
             if live_sender.is_some() || runtime_event_stream.is_some() || persist_sender.is_some() {
                 live_forward_handle = Some(tokio::spawn(async move {
+                    let mut think_tag_splitter = ThinkTagStreamSplitter::default();
                     while let Some(event) = provider_receiver.recv().await {
                         if let Some(sender) = &live_sender {
                             let _ = sender.send(LiveProviderStreamEvent {
@@ -639,36 +640,65 @@ where
                                 event: event.clone(),
                             });
                         }
-                        if let (
-                            Some(stream),
-                            Some(flow_run_id),
-                            ProviderStreamEvent::TextDelta { delta },
-                        ) = (&runtime_event_stream, flow_run_id, &event)
+                        if let (Some(stream), Some(flow_run_id)) =
+                            (&runtime_event_stream, flow_run_id)
                         {
-                            let runtime_event = debug_stream_events::text_delta(
-                                &node_id,
-                                node_run_id,
-                                delta.clone(),
-                            );
-                            let event_type = runtime_event.event_type.clone();
-                            let source = runtime_event.source;
-                            if let Err(error) = stream.append(flow_run_id, runtime_event).await {
-                                if is_expected_runtime_event_stream_closed_error(&error) {
-                                    tracing::debug!(
-                                        flow_run_id = %flow_run_id,
-                                        event_type = %event_type,
-                                        source = ?source,
-                                        error = %error,
-                                        "provider runtime event append skipped because stream is already closed"
-                                    );
-                                } else {
-                                    tracing::warn!(
-                                        flow_run_id = %flow_run_id,
-                                        event_type = %event_type,
-                                        source = ?source,
-                                        error = %error,
-                                        "failed to append provider runtime event"
-                                    );
+                            let runtime_events = match &event {
+                                ProviderStreamEvent::TextDelta { delta } => think_tag_splitter
+                                    .split(delta)
+                                    .into_iter()
+                                    .map(|part| match part.kind {
+                                        DebugDeltaKind::Text => debug_stream_events::text_delta(
+                                            &node_id,
+                                            node_run_id,
+                                            part.text,
+                                        ),
+                                        DebugDeltaKind::Reasoning => {
+                                            debug_stream_events::reasoning_delta(
+                                                &node_id,
+                                                node_run_id,
+                                                part.text,
+                                            )
+                                        }
+                                    })
+                                    .collect::<Vec<_>>(),
+                                ProviderStreamEvent::ReasoningDelta { delta } => {
+                                    vec![debug_stream_events::reasoning_delta(
+                                        &node_id,
+                                        node_run_id,
+                                        delta.clone(),
+                                    )]
+                                }
+                                _ => Vec::new(),
+                            };
+                            if runtime_events.is_empty() {
+                                if let Some(persist) = &persist_sender {
+                                    let _ = persist.send(event);
+                                }
+                                continue;
+                            };
+                            for runtime_event in runtime_events {
+                                let event_type = runtime_event.event_type.clone();
+                                let source = runtime_event.source;
+                                if let Err(error) = stream.append(flow_run_id, runtime_event).await
+                                {
+                                    if is_expected_runtime_event_stream_closed_error(&error) {
+                                        tracing::debug!(
+                                            flow_run_id = %flow_run_id,
+                                            event_type = %event_type,
+                                            source = ?source,
+                                            error = %error,
+                                            "provider runtime event append skipped because stream is already closed"
+                                        );
+                                    } else {
+                                        tracing::warn!(
+                                            flow_run_id = %flow_run_id,
+                                            event_type = %event_type,
+                                            source = ?source,
+                                            error = %error,
+                                            "failed to append provider runtime event"
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -725,6 +755,98 @@ fn is_expected_runtime_event_stream_closed_error(error: &anyhow::Error) -> bool 
     let message = error.to_string();
     message.contains("runtime event stream is closed")
         || message.contains("runtime event stream is not open")
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DebugDeltaKind {
+    Text,
+    Reasoning,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DebugDeltaPart {
+    kind: DebugDeltaKind,
+    text: String,
+}
+
+#[derive(Debug, Default)]
+struct ThinkTagStreamSplitter {
+    inside_think: bool,
+    pending: String,
+}
+
+impl ThinkTagStreamSplitter {
+    fn split(&mut self, delta: &str) -> Vec<DebugDeltaPart> {
+        self.pending.push_str(delta);
+        let mut parts = Vec::new();
+
+        loop {
+            let tag = if self.inside_think {
+                "</think>"
+            } else {
+                "<think>"
+            };
+
+            if let Some(tag_index) = self.pending.find(tag) {
+                let text = self.pending[..tag_index].to_string();
+                push_debug_delta_part(
+                    &mut parts,
+                    if self.inside_think {
+                        DebugDeltaKind::Reasoning
+                    } else {
+                        DebugDeltaKind::Text
+                    },
+                    text,
+                );
+                self.pending.drain(..tag_index + tag.len());
+                self.inside_think = !self.inside_think;
+                continue;
+            }
+
+            let keep_len = partial_tag_prefix_len(&self.pending, tag);
+            let emit_len = self.pending.len().saturating_sub(keep_len);
+            if emit_len > 0 {
+                let text = self.pending[..emit_len].to_string();
+                self.pending.drain(..emit_len);
+                push_debug_delta_part(
+                    &mut parts,
+                    if self.inside_think {
+                        DebugDeltaKind::Reasoning
+                    } else {
+                        DebugDeltaKind::Text
+                    },
+                    text,
+                );
+            }
+            break;
+        }
+
+        parts
+    }
+}
+
+fn push_debug_delta_part(parts: &mut Vec<DebugDeltaPart>, kind: DebugDeltaKind, text: String) {
+    if text.is_empty() {
+        return;
+    }
+
+    if let Some(previous) = parts.last_mut().filter(|part| part.kind == kind) {
+        previous.text.push_str(&text);
+        return;
+    }
+
+    parts.push(DebugDeltaPart { kind, text });
+}
+
+fn partial_tag_prefix_len(buffer: &str, tag: &str) -> usize {
+    let max_len = buffer.len().min(tag.len().saturating_sub(1));
+    (1..=max_len)
+        .rev()
+        .find(|length| {
+            let start = buffer.len() - length;
+            buffer.is_char_boundary(start) && tag.starts_with(&buffer[start..])
+        })
+        .unwrap_or(0)
 }
 
 impl<R, H> RuntimeProviderInvoker<R, H>

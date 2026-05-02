@@ -168,9 +168,16 @@ where
     R: OrchestrationRuntimeRepository,
 {
     let is_terminal = is_terminal_runtime_event(&event.event_type);
-    let is_text_delta = event.event_type == "text_delta";
+    let is_stream_delta = event.event_type == "text_delta" || event.event_type == "reasoning_delta";
+    if is_stream_delta
+        && batch
+            .last()
+            .is_some_and(|previous| previous.event_type != event.event_type)
+    {
+        flush_debug_event_batch(repository, batch, run_id).await;
+    }
     batch.push(event);
-    if is_terminal || !is_text_delta {
+    if is_terminal || !is_stream_delta {
         return flush_debug_event_batch(repository, batch, run_id).await || is_terminal;
     }
     false

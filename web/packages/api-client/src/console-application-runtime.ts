@@ -143,6 +143,12 @@ export type ConsoleFlowDebugStreamEvent =
       text: string;
     }
   | {
+      type: 'reasoning_delta';
+      node_run_id?: string | null;
+      node_id: string;
+      text: string;
+    }
+  | {
       type: 'usage_snapshot';
       node_run_id?: string | null;
       node_id: string;
@@ -240,7 +246,9 @@ function dispatchSseEvent(
     return;
   }
 
-  handlers.onEvent(JSON.parse(dataLines.join('\n')) as ConsoleFlowDebugStreamEvent);
+  handlers.onEvent(
+    JSON.parse(dataLines.join('\n')) as ConsoleFlowDebugStreamEvent
+  );
 }
 
 async function readSseStream(

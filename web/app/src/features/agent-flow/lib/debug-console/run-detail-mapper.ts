@@ -47,18 +47,37 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
-function collectTextDeltaEvents(detail: FlowDebugRunDetail): string | null {
+function extractDeltaText(payload: unknown): string {
+  if (!isRecord(payload)) {
+    return '';
+  }
+
+  for (const key of ['text', 'delta']) {
+    const value = payload[key];
+
+    if (typeof value === 'string') {
+      return value;
+    }
+  }
+
+  return '';
+}
+
+function collectDeltaEvents(
+  detail: FlowDebugRunDetail,
+  eventType: 'text_delta' | 'reasoning_delta'
+): string | null {
   const text = detail.events
-    .filter((event) => event.event_type === 'text_delta')
+    .filter((event) => event.event_type === eventType)
     .sort((left, right) => left.sequence - right.sequence)
-    .map((event) =>
-      isRecord(event.payload) && typeof event.payload.delta === 'string'
-        ? event.payload.delta
-        : ''
-    )
+    .map((event) => extractDeltaText(event.payload))
     .join('');
 
   return text.trim().length > 0 ? text : null;
+}
+
+function collectTextDeltaEvents(detail: FlowDebugRunDetail): string | null {
+  return collectDeltaEvents(detail, 'text_delta');
 }
 
 function findPreferredOutputText(payload: unknown): string | null {
@@ -165,6 +184,12 @@ export function extractAssistantOutputText(detail: FlowDebugRunDetail): string {
   return summarizePayload(detail.flow_run.output_payload);
 }
 
+export function extractAssistantReasoningText(
+  detail: FlowDebugRunDetail
+): string {
+  return collectDeltaEvents(detail, 'reasoning_delta') ?? '';
+}
+
 export function mapRunDetailToConversation(
   detail: FlowDebugRunDetail
 ): AgentFlowDebugMessage {
@@ -178,6 +203,7 @@ export function mapRunDetailToConversation(
     id: `assistant-${detail.flow_run.id}`,
     role: 'assistant',
     content: extractAssistantOutputText(detail),
+    reasoningContent: extractAssistantReasoningText(detail),
     status: mapMessageStatus(detail.flow_run.status),
     runId: detail.flow_run.id,
     rawOutput,

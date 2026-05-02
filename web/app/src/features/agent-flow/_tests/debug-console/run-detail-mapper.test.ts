@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'vitest';
 
 import type { FlowDebugRunDetail } from '../../api/runtime';
-import { extractAssistantOutputText } from '../../lib/debug-console/run-detail-mapper';
+import {
+  extractAssistantOutputText,
+  extractAssistantReasoningText,
+  mapRunDetailToConversation
+} from '../../lib/debug-console/run-detail-mapper';
 
 function baseDetail(): FlowDebugRunDetail {
   return {
@@ -82,5 +86,38 @@ describe('run detail mapper', () => {
     ];
 
     expect(extractAssistantOutputText(detail)).toBe('退款政策摘要');
+  });
+
+  test('restores persisted reasoning delta events separately from answer text', () => {
+    const detail = baseDetail();
+    detail.flow_run.status = 'running';
+    detail.events = [
+      {
+        id: 'event-1',
+        flow_run_id: 'flow-run-1',
+        node_run_id: 'node-run-llm',
+        sequence: 1,
+        event_type: 'reasoning_delta',
+        payload: { type: 'reasoning_delta', text: '先分析' },
+        created_at: '2026-04-26T10:00:00Z'
+      },
+      {
+        id: 'event-2',
+        flow_run_id: 'flow-run-1',
+        node_run_id: 'node-run-llm',
+        sequence: 2,
+        event_type: 'text_delta',
+        payload: { type: 'text_delta', text: '结果' },
+        created_at: '2026-04-26T10:00:01Z'
+      }
+    ];
+
+    expect(extractAssistantReasoningText(detail)).toBe('先分析');
+    expect(mapRunDetailToConversation(detail)).toEqual(
+      expect.objectContaining({
+        reasoningContent: '先分析',
+        content: '结果'
+      })
+    );
   });
 });

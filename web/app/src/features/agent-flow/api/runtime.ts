@@ -64,6 +64,7 @@ export interface AgentFlowDebugMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  reasoningContent?: string;
   status: AgentFlowDebugMessageStatus;
   runId: string | null;
   rawOutput: Record<string, unknown> | null;

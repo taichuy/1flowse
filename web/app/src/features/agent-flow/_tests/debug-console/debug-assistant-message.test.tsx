@@ -49,38 +49,50 @@ describe('DebugAssistantMessage', () => {
       ]
     };
 
-    render(
-      <DebugAssistantMessage
-        message={message}
-        onViewTrace={vi.fn()}
-      />
-    );
+    render(<DebugAssistantMessage message={message} onViewTrace={vi.fn()} />);
 
-    expect(screen.getByRole('heading', { name: '处理结果' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '处理结果' })
+    ).toBeInTheDocument();
     const table = screen.getByRole('table');
     expect(within(table).getByText('退款')).toBeInTheDocument();
     expect(within(table).getByText('已确认')).toBeInTheDocument();
     const actionRow = screen.getByRole('group', { name: '输出动作' });
-    expect(within(actionRow).getByRole('button', { name: /复制输出/ })).toBeInTheDocument();
-    expect(within(actionRow).getByRole('button', { name: /查看 Trace/ })).toBeInTheDocument();
-    expect(within(actionRow).getByRole('button', { name: /查看 Raw Output/ })).toBeInTheDocument();
     expect(
-      table.compareDocumentPosition(actionRow) & Node.DOCUMENT_POSITION_FOLLOWING
+      within(actionRow).getByRole('button', { name: /复制输出/ })
+    ).toBeInTheDocument();
+    expect(
+      within(actionRow).getByRole('button', { name: /查看 Trace/ })
+    ).toBeInTheDocument();
+    expect(
+      within(actionRow).getByRole('button', { name: /查看 Raw Output/ })
+    ).toBeInTheDocument();
+    expect(
+      table.compareDocumentPosition(actionRow) &
+        Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
     expect(screen.getByRole('group', { name: '工作流' })).toBeInTheDocument();
     expect(screen.queryByText('Assistant')).not.toBeInTheDocument();
     expect(screen.getAllByText('LLM').length).toBeGreaterThan(0);
-    expect(screen.getByRole('img', { name: 'llm 节点类型' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: 'llm 节点类型' })
+    ).toBeInTheDocument();
 
     const workflowToggle = screen.getByRole('button', { name: /工作流/ });
     expect(workflowToggle).toHaveAttribute('aria-expanded', 'true');
-    expect(within(workflowToggle).getByLabelText('running 状态')).toBeInTheDocument();
-    expect(within(workflowToggle).queryByLabelText('succeeded 状态')).not.toBeInTheDocument();
+    expect(
+      within(workflowToggle).getByLabelText('running 状态')
+    ).toBeInTheDocument();
+    expect(
+      within(workflowToggle).queryByLabelText('succeeded 状态')
+    ).not.toBeInTheDocument();
 
     fireEvent.click(workflowToggle);
 
     expect(workflowToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByRole('button', { name: /LLM/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /LLM/ })
+    ).not.toBeInTheDocument();
 
     fireEvent.click(workflowToggle);
 
@@ -103,7 +115,6 @@ describe('DebugAssistantMessage', () => {
     expect(inputToggle).toHaveAttribute('aria-expanded', 'false');
   });
 
-
   test('reveals newly arrived assistant content progressively', () => {
     vi.useFakeTimers();
     const baseMessage: AgentFlowDebugMessage = {
@@ -117,10 +128,7 @@ describe('DebugAssistantMessage', () => {
     };
 
     const { container, rerender } = render(
-      <DebugAssistantMessage
-        message={baseMessage}
-        onViewTrace={vi.fn()}
-      />
+      <DebugAssistantMessage message={baseMessage} onViewTrace={vi.fn()} />
     );
 
     rerender(
@@ -140,4 +148,33 @@ describe('DebugAssistantMessage', () => {
     vi.useRealTimers();
   });
 
+  test('renders streamed reasoning in a collapsible labeled section', () => {
+    const message: AgentFlowDebugMessage = {
+      id: 'assistant-reasoning',
+      role: 'assistant',
+      status: 'running',
+      runId: 'run-1',
+      content: '退款政策摘要。',
+      reasoningContent: '先分析用户问题，再整理退款政策。',
+      rawOutput: null,
+      traceSummary: []
+    };
+
+    render(<DebugAssistantMessage message={message} onViewTrace={vi.fn()} />);
+
+    const reasoningToggle = screen.getByRole('button', { name: /思考/ });
+    expect(reasoningToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      screen.getByText('先分析用户问题，再整理退款政策。')
+    ).toBeInTheDocument();
+    expect(screen.getByText('退款政策摘要。')).toBeInTheDocument();
+
+    fireEvent.click(reasoningToggle);
+
+    expect(reasoningToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      screen.queryByText('先分析用户问题，再整理退款政策。')
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('退款政策摘要。')).toBeInTheDocument();
+  });
 });

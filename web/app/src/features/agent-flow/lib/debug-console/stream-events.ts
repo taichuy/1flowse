@@ -139,6 +139,11 @@ export function applyDebugStreamEventToAssistantMessage(
         ...message,
         content: `${message.content}${event.text}`
       };
+    case 'reasoning_delta':
+      return {
+        ...message,
+        reasoningContent: `${message.reasoningContent ?? ''}${event.text}`
+      };
     case 'node_started':
     case 'node_finished':
       return {

@@ -1,13 +1,15 @@
 ---
 memory_type: project
 topic: runtime-event-stream-fast-debug-plan-approved
-summary: 调试流首 token 加速方案已确认：先落地单机 LocalRuntimeEventStream，SSE 优先消费运行事件，DB 持久化异步后写，外部 Redis Streams 等只作为 HostExtension provider 实现同一合同。
+summary: 调试流首 token 加速方案已确认：先落地单机 LocalRuntimeEventStream，SSE 优先消费运行事件，DB 持久化异步后写；reasoning/thought 也属于生成内容，必须与 text delta 一样流式、缓存和持久化。
 keywords:
   - runtime-event-stream
   - first-token
   - debug-stream
   - sse
   - local-runtime-event-stream
+  - reasoning-delta
+  - agent-thought
   - redis-streams
   - host-extension
   - db-polling
@@ -16,8 +18,8 @@ match_when:
   - 设计 RuntimeEventStream、LocalRuntimeEventStream、Redis Streams provider 或缓存类 HostExtension
   - 执行 docs/superpowers/plans/2026-05-02-runtime-event-stream-fast-debug.md
 created_at: 2026-05-02 08
-updated_at: 2026-05-02 08
-last_verified_at: 2026-05-02 08
+updated_at: 2026-05-02 21
+last_verified_at: 2026-05-02 21
 decision_policy: verify_before_decision
 scope:
   - api/crates/control-plane
@@ -55,6 +57,8 @@ Dify 预览体验的关键不是所有状态都先落库，而是先建立实时
 - node lifecycle 由 runtime 直接 append `node_started/node_finished/node_failed`，不再把 100ms DB polling 作为实时来源。
 - audit/billing required 事件不能只停留在易失 ring；PostgreSQL 仍是 durable truth，持久化失败要可诊断但不阻塞普通 SSE token 输出。
 - 前端按 event type 分离 message delta、trace 和 variable cache 更新；text delta 不应每 token 重建 variable cache。
+- `reasoning_delta` / thought 是模型生成的一部分，不应被过滤掉；调试流应参考 Dify 的 `agent_thought` 独立区域，把思考内容单独展示，同时像 `text_delta` 一样进入 RuntimeEventStream、短期缓存和 durable debug event 持久化。
+- 复制正式输出默认只复制 answer/content，不把 reasoning 混入最终答案；reasoning 作为独立生成内容可单独展示和恢复。
 - 执行方式上，同一时间只运行一个独立 agent / 子 agent，防止系统资源不足；每完成一个任务必须更新计划状态。
 
 ## 截止日期

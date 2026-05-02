@@ -1,7 +1,9 @@
 import {
   CopyOutlined,
+  DownOutlined,
   EyeOutlined,
-  PartitionOutlined
+  PartitionOutlined,
+  RightOutlined
 } from '@ant-design/icons';
 import { Button, Space } from 'antd';
 import { useEffect, useState } from 'react';
@@ -64,7 +66,10 @@ function useProgressiveText(target: string) {
       setVisibleText((currentText) =>
         target.slice(
           0,
-          Math.min(target.length, currentText.length + TYPEWRITER_CHARS_PER_TICK)
+          Math.min(
+            target.length,
+            currentText.length + TYPEWRITER_CHARS_PER_TICK
+          )
         )
       );
     }, TYPEWRITER_INTERVAL_MS);
@@ -83,7 +88,10 @@ export function DebugAssistantMessage({
   onViewTrace: () => void;
 }) {
   const [showRawOutput, setShowRawOutput] = useState(false);
+  const [isReasoningExpanded, setIsReasoningExpanded] = useState(true);
   const visibleContent = useProgressiveText(message.content);
+  const visibleReasoning = useProgressiveText(message.reasoningContent ?? '');
+  const hasReasoning = Boolean(message.reasoningContent?.trim());
 
   async function handleCopyOutput() {
     if (!message.content) {
@@ -96,13 +104,39 @@ export function DebugAssistantMessage({
   return (
     <article className="agent-flow-editor__debug-message agent-flow-editor__debug-message--assistant">
       <div className="agent-flow-editor__debug-message-main">
-        <DebugWorkflowProcess
-          items={message.traceSummary}
-        />
-        <DebugMarkdownContent
-          className="agent-flow-editor__debug-message-content"
-          content={message.content ? visibleContent : fallbackContent(message)}
-        />
+        <DebugWorkflowProcess items={message.traceSummary} />
+        {hasReasoning ? (
+          <section
+            aria-label="思考"
+            className="agent-flow-editor__debug-reasoning"
+          >
+            <button
+              aria-expanded={isReasoningExpanded}
+              className="agent-flow-editor__debug-reasoning-toggle"
+              type="button"
+              onClick={() => setIsReasoningExpanded((current) => !current)}
+            >
+              {isReasoningExpanded ? <DownOutlined /> : <RightOutlined />}
+              <span className="agent-flow-editor__debug-reasoning-title">
+                思考
+              </span>
+            </button>
+            {isReasoningExpanded ? (
+              <DebugMarkdownContent
+                className="agent-flow-editor__debug-reasoning-content"
+                content={visibleReasoning}
+              />
+            ) : null}
+          </section>
+        ) : null}
+        {message.content || !hasReasoning ? (
+          <DebugMarkdownContent
+            className="agent-flow-editor__debug-message-content"
+            content={
+              message.content ? visibleContent : fallbackContent(message)
+            }
+          />
+        ) : null}
         {showRawOutput && message.rawOutput ? (
           <pre className="agent-flow-editor__debug-raw-output">
             {JSON.stringify(message.rawOutput, null, 2)}
@@ -114,7 +148,11 @@ export function DebugAssistantMessage({
         className="agent-flow-editor__debug-message-action-row"
         role="group"
       >
-        <Space className="agent-flow-editor__debug-message-actions" size={8} wrap>
+        <Space
+          className="agent-flow-editor__debug-message-actions"
+          size={8}
+          wrap
+        >
           <Button
             disabled={!message.content}
             icon={<CopyOutlined />}

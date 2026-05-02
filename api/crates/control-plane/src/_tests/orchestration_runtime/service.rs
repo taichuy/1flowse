@@ -35,6 +35,26 @@ fn runtime_text_delta(run_id: Uuid, node_run_id: Uuid, text: &str) -> RuntimeEve
     )
 }
 
+fn runtime_reasoning_delta(run_id: Uuid, node_run_id: Uuid, text: &str) -> RuntimeEventEnvelope {
+    RuntimeEventEnvelope::new(
+        run_id,
+        1,
+        RuntimeEventPayload {
+            event_type: "reasoning_delta".to_string(),
+            source: RuntimeEventSource::Provider,
+            durability: RuntimeEventDurability::DurableRequired,
+            persist_required: true,
+            trace_visible: false,
+            payload: serde_json::json!({
+                "type": "reasoning_delta",
+                "node_run_id": node_run_id,
+                "node_id": "node-llm",
+                "text": text,
+            }),
+        },
+    )
+}
+
 #[tokio::test]
 async fn debug_event_persister_coalesces_text_delta_run_events() {
     let repository =
@@ -55,6 +75,31 @@ async fn debug_event_persister_coalesces_text_delta_run_events() {
     assert_eq!(run_events.len(), 1);
     assert_eq!(run_events[0].event_type, "text_delta");
     assert_eq!(run_events[0].payload["text"], "退款摘要");
+}
+
+#[tokio::test]
+async fn debug_event_persister_coalesces_reasoning_delta_separately_from_text() {
+    let repository =
+        crate::orchestration_runtime::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
+    let run_id = Uuid::now_v7();
+    let node_run_id = Uuid::now_v7();
+    let events = vec![
+        runtime_reasoning_delta(run_id, node_run_id, "先"),
+        runtime_reasoning_delta(run_id, node_run_id, "分析"),
+        runtime_text_delta(run_id, node_run_id, "结"),
+        runtime_text_delta(run_id, node_run_id, "果"),
+    ];
+
+    control_plane::orchestration_runtime::persist_debug_stream_events(&repository, events)
+        .await
+        .unwrap();
+
+    let run_events = repository.events_for_flow_run(run_id);
+    assert_eq!(run_events.len(), 2);
+    assert_eq!(run_events[0].event_type, "reasoning_delta");
+    assert_eq!(run_events[0].payload["text"], "先分析");
+    assert_eq!(run_events[1].event_type, "text_delta");
+    assert_eq!(run_events[1].payload["text"], "结果");
 }
 
 #[tokio::test]
@@ -277,6 +322,102 @@ async fn live_provider_delta_is_appended_to_runtime_event_stream() {
         .events()
         .iter()
         .any(|event| event.event_type == "text_delta"));
+}
+
+#[tokio::test]
+async fn live_provider_reasoning_delta_is_appended_to_runtime_event_stream() {
+    let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
+        plugin_framework::provider_contract::ProviderStreamEvent::ReasoningDelta {
+            delta: "先分析".into(),
+        },
+        plugin_framework::provider_contract::ProviderStreamEvent::TextDelta {
+            delta: "结果".into(),
+        },
+    ]);
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+    let stream =
+        std::sync::Arc::new(crate::_tests::support::RecordingRuntimeEventStream::default());
+    let service = service.with_runtime_event_stream(stream.clone());
+
+    let detail = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
+            document_snapshot: None,
+        })
+        .await
+        .unwrap();
+
+    service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: detail.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let events = stream.events();
+    assert!(events
+        .iter()
+        .any(|event| event.event_type == "reasoning_delta" && event.payload["text"] == "先分析"));
+    assert!(events.iter().any(|event| event.event_type == "text_delta"));
+}
+
+#[tokio::test]
+async fn live_provider_text_delta_with_think_tags_is_split_into_reasoning_and_answer() {
+    let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
+        plugin_framework::provider_contract::ProviderStreamEvent::TextDelta {
+            delta: "<think>先分析".into(),
+        },
+        plugin_framework::provider_contract::ProviderStreamEvent::TextDelta {
+            delta: "用户问题</think>正式回答".into(),
+        },
+    ]);
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+    let stream =
+        std::sync::Arc::new(crate::_tests::support::RecordingRuntimeEventStream::default());
+    let service = service.with_runtime_event_stream(stream.clone());
+
+    let detail = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
+            document_snapshot: None,
+        })
+        .await
+        .unwrap();
+
+    service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: detail.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let events = stream.events();
+    let reasoning_text = events
+        .iter()
+        .filter(|event| event.event_type == "reasoning_delta")
+        .filter_map(|event| event.payload["text"].as_str())
+        .collect::<String>();
+    let answer_text = events
+        .iter()
+        .filter(|event| event.event_type == "text_delta")
+        .filter_map(|event| event.payload["text"].as_str())
+        .collect::<String>();
+
+    assert_eq!(reasoning_text, "先分析用户问题");
+    assert_eq!(answer_text, "正式回答");
+    assert!(!events.iter().any(|event| event
+        .payload
+        .get("text")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|text| text.contains("<think>") || text.contains("</think>"))));
 }
 
 #[tokio::test]

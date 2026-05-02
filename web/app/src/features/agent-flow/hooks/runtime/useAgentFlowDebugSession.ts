@@ -115,6 +115,7 @@ function createRunningAssistantMessage(): AgentFlowDebugMessage {
     id: createDebugMessageId('assistant-pending'),
     role: 'assistant',
     content: '',
+    reasoningContent: '',
     status: 'running',
     runId: null,
     rawOutput: null,
@@ -156,7 +157,9 @@ function updateRunContextQuery(
   };
 }
 
-function clearRunContextQuery(runContext: AgentFlowRunContext): AgentFlowRunContext {
+function clearRunContextQuery(
+  runContext: AgentFlowRunContext
+): AgentFlowRunContext {
   return updateRunContextQuery(runContext, '');
 }
 
@@ -173,7 +176,9 @@ function replaceAssistantMessage(
 ) {
   let replaced = false;
   const nextMessages = currentMessages.map((message) => {
-    const matchedById = fallbackMessageId ? message.id === fallbackMessageId : false;
+    const matchedById = fallbackMessageId
+      ? message.id === fallbackMessageId
+      : false;
     const matchedByRunId =
       nextMessage.runId !== null && message.runId === nextMessage.runId;
 
@@ -201,7 +206,9 @@ function replaceAssistantMessageWithError(
     const matchedById = options?.fallbackMessageId
       ? message.id === options.fallbackMessageId
       : false;
-    const matchedByRunId = options?.runId ? message.runId === options.runId : false;
+    const matchedByRunId = options?.runId
+      ? message.runId === options.runId
+      : false;
 
     if (!matchedById && !matchedByRunId) {
       return message;
@@ -291,7 +298,9 @@ function buildVariableCacheFromRunDetail(
 ): NodeDebugPreviewVariableCache {
   let cache: NodeDebugPreviewVariableCache = {};
 
-  for (const [nodeId, payload] of Object.entries(detail.flow_run.input_payload)) {
+  for (const [nodeId, payload] of Object.entries(
+    detail.flow_run.input_payload
+  )) {
     if (isRecord(payload)) {
       cache = mergeVariablePayload(cache, nodeId, payload);
     }
@@ -299,11 +308,19 @@ function buildVariableCacheFromRunDetail(
 
   for (const nodeRun of detail.node_runs) {
     if (isRecord(nodeRun.input_payload)) {
-      cache = mergeVariablePayload(cache, nodeRun.node_id, nodeRun.input_payload);
+      cache = mergeVariablePayload(
+        cache,
+        nodeRun.node_id,
+        nodeRun.input_payload
+      );
     }
 
     if (isRecord(nodeRun.output_payload)) {
-      cache = mergeVariablePayload(cache, nodeRun.node_id, nodeRun.output_payload);
+      cache = mergeVariablePayload(
+        cache,
+        nodeRun.node_id,
+        nodeRun.output_payload
+      );
     }
   }
 
@@ -333,7 +350,9 @@ function buildDisplayVariableCache(
         continue;
       }
 
-      displayCache = mergeVariablePayload(displayCache, nodeId, { [key]: value });
+      displayCache = mergeVariablePayload(displayCache, nodeId, {
+        [key]: value
+      });
     }
   }
 
@@ -362,7 +381,9 @@ export function useAgentFlowDebugSession({
   const [status, setStatus] = useState<AgentFlowDebugSessionStatus>('idle');
   const [messages, setMessages] = useState<AgentFlowDebugMessage[]>([]);
   const [lastDetail, setLastDetail] = useState<FlowDebugRunDetail | null>(null);
-  const [streamTraceItems, setStreamTraceItems] = useState<AgentFlowTraceItem[]>([]);
+  const [streamTraceItems, setStreamTraceItems] = useState<
+    AgentFlowTraceItem[]
+  >([]);
   const [activeNodeFilter, setActiveNodeFilter] = useState<string | null>(null);
   const [nodePreviewVariableCache, setNodePreviewVariableCache] =
     useState<NodeDebugPreviewVariableCache>({});
@@ -409,28 +430,31 @@ export function useAgentFlowDebugSession({
     () => filterTraceItemsByNode(rawTraceItems, activeNodeFilter),
     [activeNodeFilter, rawTraceItems]
   );
-  const variableGroups = useMemo<AgentFlowVariableGroup[]>(
-    () => {
-      if (lastDetail) {
-        return mapRunDetailToVariableGroups(lastDetail, {
-          applicationId,
-          draftId,
-          runContext
-        });
-      }
-
-      const groups = mapRunContextToVariableGroups(runContext, {
+  const variableGroups = useMemo<AgentFlowVariableGroup[]>(() => {
+    if (lastDetail) {
+      return mapRunDetailToVariableGroups(lastDetail, {
         applicationId,
-        draftId
+        draftId,
+        runContext
       });
-      const cacheGroup = mapVariableCacheToVariableGroup(
-        buildDisplayVariableCache(nodePreviewVariableCache, runContext)
-      );
+    }
 
-      return cacheGroup ? [cacheGroup, ...groups] : groups;
-    },
-    [applicationId, draftId, lastDetail, nodePreviewVariableCache, runContext]
-  );
+    const groups = mapRunContextToVariableGroups(runContext, {
+      applicationId,
+      draftId
+    });
+    const cacheGroup = mapVariableCacheToVariableGroup(
+      buildDisplayVariableCache(nodePreviewVariableCache, runContext)
+    );
+
+    return cacheGroup ? [cacheGroup, ...groups] : groups;
+  }, [
+    applicationId,
+    draftId,
+    lastDetail,
+    nodePreviewVariableCache,
+    runContext
+  ]);
 
   function clearPollTimer() {
     if (pollTimerRef.current !== null) {
@@ -588,12 +612,15 @@ export function useAgentFlowDebugSession({
     }, RUN_DETAIL_POLL_INTERVAL_MS);
   }
 
-  useEffect(() => () => {
-    clearPollTimer();
-    activeRunIdRef.current = null;
-    clearScheduledAssistantMessageFlush();
-    cancelActiveDebugStream();
-  }, []);
+  useEffect(
+    () => () => {
+      clearPollTimer();
+      activeRunIdRef.current = null;
+      clearScheduledAssistantMessageFlush();
+      cancelActiveDebugStream();
+    },
+    []
+  );
 
   async function submitPrompt(prompt?: string) {
     const resolvedPrompt = resolvePrompt(runContext, prompt);
@@ -687,7 +714,7 @@ export function useAgentFlowDebugSession({
             );
           }
 
-          if (event.type === 'text_delta') {
+          if (event.type === 'text_delta' || event.type === 'reasoning_delta') {
             scheduleAssistantMessageFlush(
               runningMessage.id,
               streamAssistantMessage
@@ -722,7 +749,10 @@ export function useAgentFlowDebugSession({
       streamAbortControllerRef.current = null;
 
       lastSubmittedPromptRef.current = resolvedPrompt;
-      writePersistedInputValues(storageKey, clearPersistedQueryValue(inputValues));
+      writePersistedInputValues(
+        storageKey,
+        clearPersistedQueryValue(inputValues)
+      );
       stopPolling();
       await queryClient.invalidateQueries({
         queryKey: ['applications', applicationId, 'runtime']
@@ -761,7 +791,10 @@ export function useAgentFlowDebugSession({
       );
 
       lastSubmittedPromptRef.current = resolvedPrompt;
-      writePersistedInputValues(storageKey, clearPersistedQueryValue(inputValues));
+      writePersistedInputValues(
+        storageKey,
+        clearPersistedQueryValue(inputValues)
+      );
       const assistantMessage = await applyRunDetail(detail, {
         fallbackMessageId: runningMessage.id,
         invalidateRuntime: !shouldPollRun(detail)
@@ -806,11 +839,7 @@ export function useAgentFlowDebugSession({
     }
 
     try {
-      const detail = await cancelFlowDebugRun(
-        applicationId,
-        runId,
-        csrfToken
-      );
+      const detail = await cancelFlowDebugRun(applicationId, runId, csrfToken);
       cancelActiveDebugStream();
       stopPolling();
       clearScheduledAssistantMessageFlush();
@@ -832,16 +861,14 @@ export function useAgentFlowDebugSession({
     setActiveNodeFilter(null);
   }
 
-  function setRunContextValue(
-    nodeId: string,
-    key: string,
-    value: unknown
-  ) {
+  function setRunContextValue(nodeId: string, key: string, value: unknown) {
     setRunContext((currentRunContext) => ({
       ...currentRunContext,
       remembered: false,
       fields: currentRunContext.fields.map((field) =>
-        field.nodeId === nodeId && field.key === key ? { ...field, value } : field
+        field.nodeId === nodeId && field.key === key
+          ? { ...field, value }
+          : field
       )
     }));
   }
@@ -855,7 +882,9 @@ export function useAgentFlowDebugSession({
     }
 
     if (lastDetail) {
-      for (const [nodeId, payload] of Object.entries(lastDetail.flow_run.input_payload)) {
+      for (const [nodeId, payload] of Object.entries(
+        lastDetail.flow_run.input_payload
+      )) {
         if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
           cache[nodeId] = {
             ...(cache[nodeId] ?? {}),

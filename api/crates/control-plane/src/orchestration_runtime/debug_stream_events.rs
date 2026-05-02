@@ -150,6 +150,22 @@ pub fn text_delta(node_id: &str, node_run_id: Uuid, text: String) -> RuntimeEven
     }
 }
 
+pub fn reasoning_delta(node_id: &str, node_run_id: Uuid, text: String) -> RuntimeEventPayload {
+    RuntimeEventPayload {
+        event_type: "reasoning_delta".to_string(),
+        source: RuntimeEventSource::Provider,
+        durability: RuntimeEventDurability::DurableRequired,
+        persist_required: true,
+        trace_visible: false,
+        payload: json!({
+            "type": "reasoning_delta",
+            "node_run_id": node_run_id,
+            "node_id": node_id,
+            "text": text,
+        }),
+    }
+}
+
 pub fn heartbeat() -> RuntimeEventPayload {
     RuntimeEventPayload {
         event_type: "heartbeat".to_string(),

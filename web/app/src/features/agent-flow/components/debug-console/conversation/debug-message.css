@@ -1,4 +1,5 @@
-.agent-flow-editor__debug-message--assistant .agent-flow-editor__debug-message-content {
+.agent-flow-editor__debug-message--assistant
+  .agent-flow-editor__debug-message-content {
   margin: 0;
   padding: 0;
   border: 0;
@@ -52,6 +53,59 @@
   color: inherit;
 }
 
+.agent-flow-editor__debug-reasoning {
+  display: grid;
+  gap: 0.25rem;
+  width: 100%;
+  border: 1px solid #dbe4ef;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  padding: 0.375rem 0.5rem;
+  color: #475569;
+  text-align: left;
+}
+
+.agent-flow-editor__debug-reasoning-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: max-content;
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #4f46e5;
+  cursor: pointer;
+  text-align: left;
+}
+
+.agent-flow-editor__debug-reasoning-toggle:hover {
+  color: #3730a3;
+}
+
+.agent-flow-editor__debug-reasoning-title {
+  color: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.agent-flow-editor__debug-reasoning-content {
+  margin: 0;
+  color: #475569;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  padding-left: 1.125rem;
+}
+
+.agent-flow-editor__debug-reasoning-content > :first-child {
+  margin-top: 0;
+}
+
+.agent-flow-editor__debug-reasoning-content > :last-child {
+  margin-bottom: 0;
+}
+
 .agent-flow-editor__debug-workflow-process {
   display: flex;
   flex-direction: column;
@@ -85,11 +139,13 @@
   gap: 0.5rem;
 }
 
-.agent-flow-editor__debug-workflow-title > .anticon:not(.agent-flow-editor__debug-workflow-status-icon) {
+.agent-flow-editor__debug-workflow-title
+  > .anticon:not(.agent-flow-editor__debug-workflow-status-icon) {
   color: #039855;
 }
 
-.agent-flow-editor__debug-workflow-header:hover .agent-flow-editor__debug-workflow-title {
+.agent-flow-editor__debug-workflow-header:hover
+  .agent-flow-editor__debug-workflow-title {
   color: #0f172a;
 }
 
@@ -111,7 +167,9 @@
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
 }
 
-.agent-flow-editor__debug-workflow-collapse-list > .ant-collapse-item > .ant-collapse-header {
+.agent-flow-editor__debug-workflow-collapse-list
+  > .ant-collapse-item
+  > .ant-collapse-header {
   align-items: center;
   min-height: 2.625rem;
   padding: clamp(0.4rem, 1.8cqw, 0.5rem);
