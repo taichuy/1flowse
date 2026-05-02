@@ -23,7 +23,11 @@ use control_plane::{
 use serde::{Deserialize, Serialize};
 use storage_durable::MainDurableStore;
 use time::format_description::well_known::Rfc3339;
-use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+use tokio::{
+    sync::mpsc,
+    time::{self as tokio_time, Duration, MissedTickBehavior},
+};
 use tracing::{error, warn};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -94,6 +98,85 @@ async fn fail_runtime_event_stream_if_missing_terminal(
             "failed to close fallback runtime event stream"
         );
     }
+}
+
+fn spawn_debug_event_persister<R>(
+    repository: R,
+    stream: Arc<dyn RuntimeEventStream>,
+    run_id: Uuid,
+) -> JoinHandle<()>
+where
+    R: OrchestrationRuntimeRepository + Send + Sync + 'static,
+{
+    tokio::spawn(async move {
+        let Ok(mut subscription) = stream.subscribe(run_id, Some(0)).await else {
+            warn!(
+                flow_run_id = %run_id,
+                "failed to subscribe runtime debug stream for durable event persistence"
+            );
+            return;
+        };
+
+        let mut batch = subscription.replay;
+        if flush_debug_event_batch(&repository, &mut batch, run_id).await {
+            return;
+        }
+
+        let mut flush_interval = tokio_time::interval(Duration::from_millis(250));
+        flush_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
+        loop {
+            tokio::select! {
+                maybe_event = subscription.live_events.recv() => {
+                    let Some(event) = maybe_event else {
+                        let _ = flush_debug_event_batch(&repository, &mut batch, run_id).await;
+                        return;
+                    };
+                    let is_terminal = is_terminal_runtime_event(&event.event_type);
+                    batch.push(event);
+                    if batch.len() >= 64 || is_terminal {
+                        if flush_debug_event_batch(&repository, &mut batch, run_id).await || is_terminal {
+                            return;
+                        }
+                    }
+                }
+                _ = flush_interval.tick(), if !batch.is_empty() => {
+                    if flush_debug_event_batch(&repository, &mut batch, run_id).await {
+                        return;
+                    }
+                }
+            }
+        }
+    })
+}
+
+async fn flush_debug_event_batch<R>(
+    repository: &R,
+    batch: &mut Vec<control_plane::ports::RuntimeEventEnvelope>,
+    run_id: Uuid,
+) -> bool
+where
+    R: OrchestrationRuntimeRepository,
+{
+    if batch.is_empty() {
+        return false;
+    }
+
+    let has_terminal = batch
+        .iter()
+        .any(|event| is_terminal_runtime_event(&event.event_type));
+    let events = std::mem::take(batch);
+    if let Err(error) =
+        control_plane::orchestration_runtime::persist_debug_stream_events(repository, events).await
+    {
+        warn!(
+            flow_run_id = %run_id,
+            error = %error,
+            "failed to persist runtime debug stream events"
+        );
+    }
+
+    has_terminal
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -548,6 +631,11 @@ pub async fn start_flow_debug_run_stream(
         .runtime_event_stream
         .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
         .await?;
+    spawn_debug_event_persister(
+        state.store.clone(),
+        state.runtime_event_stream.clone(),
+        run_id,
+    );
     state
         .runtime_event_stream
         .append(run_id, debug_stream_events::flow_accepted(run_id))

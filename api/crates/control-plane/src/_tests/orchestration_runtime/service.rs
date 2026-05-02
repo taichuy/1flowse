@@ -7,12 +7,55 @@ use control_plane::{
     ports::{
         ApplicationRepository, FlowRepository, ModelDefinitionRepository, ModelProviderRepository,
         NodeContributionRepository, OrchestrationRuntimeRepository, PluginRepository,
-        ProviderRuntimePort,
+        ProviderRuntimePort, RuntimeEventDurability, RuntimeEventEnvelope, RuntimeEventPayload,
+        RuntimeEventSource,
     },
 };
 use serde_json::{json, Value};
 use time::Duration;
 use uuid::Uuid;
+
+fn runtime_text_delta(run_id: Uuid, node_run_id: Uuid, text: &str) -> RuntimeEventEnvelope {
+    RuntimeEventEnvelope::new(
+        run_id,
+        1,
+        RuntimeEventPayload {
+            event_type: "text_delta".to_string(),
+            source: RuntimeEventSource::Provider,
+            durability: RuntimeEventDurability::DurableRequired,
+            persist_required: true,
+            trace_visible: false,
+            payload: serde_json::json!({
+                "type": "text_delta",
+                "node_run_id": node_run_id,
+                "node_id": "node-llm",
+                "text": text,
+            }),
+        },
+    )
+}
+
+#[tokio::test]
+async fn debug_event_persister_coalesces_text_delta_run_events() {
+    let repository =
+        crate::orchestration_runtime::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
+    let run_id = Uuid::now_v7();
+    let node_run_id = Uuid::now_v7();
+    let events = vec![
+        runtime_text_delta(run_id, node_run_id, "退"),
+        runtime_text_delta(run_id, node_run_id, "款"),
+        runtime_text_delta(run_id, node_run_id, "摘要"),
+    ];
+
+    control_plane::orchestration_runtime::persist_debug_stream_events(&repository, events)
+        .await
+        .unwrap();
+
+    let run_events = repository.events_for_flow_run(run_id);
+    assert_eq!(run_events.len(), 1);
+    assert_eq!(run_events[0].event_type, "text_delta");
+    assert_eq!(run_events[0].payload["text"], "退款摘要");
+}
 
 #[tokio::test]
 async fn start_node_debug_preview_creates_run_node_run_and_events() {

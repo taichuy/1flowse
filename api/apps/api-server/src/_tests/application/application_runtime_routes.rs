@@ -499,6 +499,42 @@ async fn wait_for_run_detail(
     );
 }
 
+async fn wait_for_persisted_text_delta(
+    app: &axum::Router,
+    cookie: &str,
+    application_id: &str,
+    run_id: &str,
+) -> Value {
+    for _ in 0..200 {
+        let detail = wait_for_run_detail(
+            app,
+            cookie,
+            application_id,
+            run_id,
+            &["running", "waiting", "waiting_human", "succeeded", "failed"],
+        )
+        .await;
+        if let Some(event) = detail["events"].as_array().unwrap().iter().find(|event| {
+            event["event_type"].as_str() == Some("text_delta")
+                && event["payload"]["text"].as_str().is_some()
+        }) {
+            return event.clone();
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+
+    panic!("timed out waiting for persisted text_delta payload");
+}
+
+fn sse_data_payload(frame: &str) -> Value {
+    let data = frame
+        .lines()
+        .find_map(|line| line.strip_prefix("data:"))
+        .expect("sse frame should include data")
+        .trim();
+    serde_json::from_str(data).expect("sse data should be json")
+}
+
 #[tokio::test]
 async fn get_runtime_debug_stream_returns_trusted_parts() {
     let app = test_app().await;
@@ -1124,4 +1160,10 @@ async fn application_runtime_routes_stream_debug_run_returns_flow_accepted() {
         stream_text.contains("\"type\":\"flow_accepted\""),
         "{stream_text}"
     );
+    let run_id = sse_data_payload(&stream_text)["run_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let text_delta = wait_for_persisted_text_delta(&app, &cookie, &application_id, &run_id).await;
+    assert!(!text_delta["payload"]["text"].as_str().unwrap().is_empty());
 }

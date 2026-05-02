@@ -21,13 +21,15 @@ use crate::{
     ports::{
         ApplicationRepository, CompleteCallbackTaskInput, FlowRepository,
         ModelDefinitionRepository, ModelProviderRepository, NodeContributionRepository,
-        OrchestrationRuntimeRepository, PluginRepository, ProviderRuntimePort, RuntimeEventStream,
+        OrchestrationRuntimeRepository, PluginRepository, ProviderRuntimePort,
+        RuntimeEventEnvelope, RuntimeEventStream,
     },
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
 
 mod compile_context;
 mod data_model_runtime;
+mod debug_event_persister;
 pub mod debug_stream_events;
 mod inputs;
 mod live_debug_run;
@@ -103,6 +105,16 @@ pub struct CompleteCallbackTaskCommand {
     pub application_id: Uuid,
     pub callback_task_id: Uuid,
     pub response_payload: serde_json::Value,
+}
+
+pub async fn persist_debug_stream_events<R>(
+    repository: &R,
+    events: Vec<RuntimeEventEnvelope>,
+) -> Result<()>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    debug_event_persister::persist_debug_stream_events(repository, events).await
 }
 
 #[derive(Clone)]
@@ -973,7 +985,7 @@ where
 
 #[cfg(test)]
 #[path = "_tests/orchestration_runtime/support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 
 #[cfg(test)]
 mod tests {
