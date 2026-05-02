@@ -15,13 +15,16 @@ use control_plane::{
         ContinueFlowDebugRunCommand, OrchestrationRuntimeService, PrepareFlowDebugRunCommand,
         ResumeFlowRunCommand, StartFlowDebugRunCommand, StartNodeDebugPreviewCommand,
     },
-    ports::{OrchestrationRuntimeRepository, RuntimeEventStreamPolicy},
+    ports::{
+        OrchestrationRuntimeRepository, RuntimeEventCloseReason, RuntimeEventStream,
+        RuntimeEventStreamPolicy,
+    },
 };
 use serde::{Deserialize, Serialize};
 use storage_durable::MainDurableStore;
 use time::format_description::well_known::Rfc3339;
 use tokio::sync::mpsc;
-use tracing::error;
+use tracing::{error, warn};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -34,6 +37,61 @@ use crate::{
 };
 
 use super::debug_run_stream;
+
+fn is_terminal_runtime_event(event_type: &str) -> bool {
+    matches!(event_type, "flow_finished" | "flow_failed")
+}
+
+async fn fail_runtime_event_stream_if_missing_terminal(
+    stream: Arc<dyn RuntimeEventStream>,
+    run_id: Uuid,
+    error: &anyhow::Error,
+) {
+    match stream.replay(run_id, None, usize::MAX).await {
+        Ok(events)
+            if events
+                .iter()
+                .any(|event| is_terminal_runtime_event(&event.event_type)) =>
+        {
+            return;
+        }
+        Ok(_) => {}
+        Err(replay_error) => {
+            warn!(
+                flow_run_id = %run_id,
+                error = %replay_error,
+                "failed to check runtime event stream terminal state"
+            );
+        }
+    }
+
+    let error_payload = serde_json::json!({ "message": error.to_string() });
+    if let Err(append_error) = stream
+        .append(
+            run_id,
+            debug_stream_events::flow_failed(run_id, error_payload),
+        )
+        .await
+    {
+        warn!(
+            flow_run_id = %run_id,
+            event_type = "flow_failed",
+            error = %append_error,
+            "failed to append fallback runtime terminal event"
+        );
+    }
+    if let Err(close_error) = stream
+        .close_run(run_id, RuntimeEventCloseReason::Failed)
+        .await
+    {
+        warn!(
+            flow_run_id = %run_id,
+            reason = ?RuntimeEventCloseReason::Failed,
+            error = %close_error,
+            "failed to close fallback runtime event stream"
+        );
+    }
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct StartNodeDebugPreviewBody {
@@ -536,6 +594,12 @@ pub async fn start_flow_debug_run_stream(
         };
 
         if let Err(error) = result {
+            fail_runtime_event_stream_if_missing_terminal(
+                background_state.runtime_event_stream.clone(),
+                run_id,
+                &error,
+            )
+            .await;
             error!(
                 application_id = %id,
                 flow_run_id = %run_id,

@@ -32,6 +32,50 @@ pub fn flow_started(run_id: Uuid) -> RuntimeEventPayload {
     }
 }
 
+pub fn flow_finished(run_id: Uuid, output: serde_json::Value) -> RuntimeEventPayload {
+    RuntimeEventPayload {
+        event_type: "flow_finished".to_string(),
+        source: RuntimeEventSource::Runtime,
+        durability: RuntimeEventDurability::DurableRequired,
+        persist_required: true,
+        trace_visible: true,
+        payload: json!({
+            "type": "flow_finished",
+            "run_id": run_id,
+            "status": "succeeded",
+            "output": output,
+        }),
+    }
+}
+
+pub fn flow_failed(run_id: Uuid, error_payload: serde_json::Value) -> RuntimeEventPayload {
+    let error = error_payload
+        .get("message")
+        .and_then(|message| message.as_str())
+        .map(ToString::to_string)
+        .unwrap_or_else(|| {
+            if error_payload.is_null() {
+                "flow debug run failed".to_string()
+            } else {
+                error_payload.to_string()
+            }
+        });
+
+    RuntimeEventPayload {
+        event_type: "flow_failed".to_string(),
+        source: RuntimeEventSource::Runtime,
+        durability: RuntimeEventDurability::DurableRequired,
+        persist_required: true,
+        trace_visible: true,
+        payload: json!({
+            "type": "flow_failed",
+            "run_id": run_id,
+            "error": error,
+            "error_payload": error_payload,
+        }),
+    }
+}
+
 pub fn node_started(node_run: &domain::NodeRunRecord) -> RuntimeEventPayload {
     RuntimeEventPayload {
         event_type: "node_started".to_string(),

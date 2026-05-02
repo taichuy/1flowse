@@ -610,16 +610,22 @@ where
                             ProviderStreamEvent::TextDelta { delta },
                         ) = (&runtime_event_stream, flow_run_id, &event)
                         {
-                            let _ = stream
-                                .append(
-                                    flow_run_id,
-                                    debug_stream_events::text_delta(
-                                        &node_id,
-                                        node_run_id,
-                                        delta.clone(),
-                                    ),
-                                )
-                                .await;
+                            let runtime_event = debug_stream_events::text_delta(
+                                &node_id,
+                                node_run_id,
+                                delta.clone(),
+                            );
+                            let event_type = runtime_event.event_type.clone();
+                            let source = runtime_event.source;
+                            if let Err(error) = stream.append(flow_run_id, runtime_event).await {
+                                tracing::warn!(
+                                    flow_run_id = %flow_run_id,
+                                    event_type = %event_type,
+                                    source = ?source,
+                                    error = %error,
+                                    "failed to append provider runtime event"
+                                );
+                            }
                         }
                         if let Some(persist) = &persist_sender {
                             let _ = persist.send(event);

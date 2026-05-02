@@ -19,7 +19,7 @@ use crate::{
         CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunShellInput,
         CreateNodeRunInput, FailQueuedFlowRunShellInput,
         LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
-        UpdateFlowRunInput, UpdateNodeRunInput,
+        RuntimeEventCloseReason, UpdateFlowRunInput, UpdateNodeRunInput,
     },
     runtime_observability::{
         append_host_event, append_host_span, append_provider_stream_events_raw,
@@ -264,6 +264,12 @@ where
                 }),
             })
             .await?;
+        append_runtime_event(
+            service,
+            flow_run.id,
+            debug_stream_events::flow_started(flow_run.id),
+        )
+        .await;
 
         record_gateway_billing_audit(
             &service.repository,
@@ -322,13 +328,14 @@ where
     else {
         return Ok(None);
     };
+    emit_flow_failed_and_close(service, flow_run.id, error_payload.clone()).await;
     service
         .repository
         .append_run_event(&AppendRunEventInput {
             flow_run_id: flow_run.id,
             node_run_id: None,
             event_type: "flow_run_failed".to_string(),
-            payload: error_payload,
+            payload: error_payload.clone(),
         })
         .await?;
 
@@ -636,6 +643,16 @@ where
             finished_at: Some(OffsetDateTime::now_utc()),
         })
         .await?;
+    emit_flow_failed_and_close_with_reason(
+        service,
+        flow_run.id,
+        json!({
+            "message": "flow debug run cancelled",
+            "reason": "manual_stop",
+        }),
+        RuntimeEventCloseReason::Cancelled,
+    )
+    .await;
     service
         .repository
         .append_run_event(&AppendRunEventInput {
@@ -657,8 +674,64 @@ async fn append_runtime_event<R, H>(
     event: crate::ports::RuntimeEventPayload,
 ) {
     if let Some(stream) = &service.runtime_event_stream {
-        let _ = stream.append(flow_run_id, event).await;
+        let event_type = event.event_type.clone();
+        let source = event.source;
+        if let Err(error) = stream.append(flow_run_id, event).await {
+            tracing::warn!(
+                flow_run_id = %flow_run_id,
+                event_type = %event_type,
+                source = ?source,
+                error = %error,
+                "failed to append runtime event"
+            );
+        }
     }
+}
+
+async fn close_runtime_event_stream<R, H>(
+    service: &OrchestrationRuntimeService<R, H>,
+    flow_run_id: Uuid,
+    reason: RuntimeEventCloseReason,
+) {
+    if let Some(stream) = &service.runtime_event_stream {
+        if let Err(error) = stream.close_run(flow_run_id, reason).await {
+            tracing::warn!(
+                flow_run_id = %flow_run_id,
+                reason = ?reason,
+                error = %error,
+                "failed to close runtime event stream"
+            );
+        }
+    }
+}
+
+async fn emit_flow_failed_and_close<R, H>(
+    service: &OrchestrationRuntimeService<R, H>,
+    flow_run_id: Uuid,
+    error_payload: Value,
+) {
+    emit_flow_failed_and_close_with_reason(
+        service,
+        flow_run_id,
+        error_payload,
+        RuntimeEventCloseReason::Failed,
+    )
+    .await;
+}
+
+async fn emit_flow_failed_and_close_with_reason<R, H>(
+    service: &OrchestrationRuntimeService<R, H>,
+    flow_run_id: Uuid,
+    error_payload: Value,
+    reason: RuntimeEventCloseReason,
+) {
+    append_runtime_event(
+        service,
+        flow_run_id,
+        debug_stream_events::flow_failed(flow_run_id, error_payload),
+    )
+    .await;
+    close_runtime_event_stream(service, flow_run_id, reason).await;
 }
 
 async fn update_node_run_and_emit<R, H>(
@@ -926,6 +999,7 @@ where
                             finished_at: Some(OffsetDateTime::now_utc()),
                         })
                         .await?;
+                    emit_flow_failed_and_close(service, flow_run.id, error_payload.clone()).await;
                     service
                         .repository
                         .append_run_event(&AppendRunEventInput {
@@ -1006,6 +1080,7 @@ where
                             finished_at: Some(OffsetDateTime::now_utc()),
                         })
                         .await?;
+                    emit_flow_failed_and_close(service, flow_run.id, error_payload.clone()).await;
                     service
                         .repository
                         .append_run_event(&AppendRunEventInput {
@@ -1075,6 +1150,7 @@ where
                             finished_at: Some(OffsetDateTime::now_utc()),
                         })
                         .await?;
+                    emit_flow_failed_and_close(service, flow_run.id, error_payload.clone()).await;
                     service
                         .repository
                         .append_run_event(&AppendRunEventInput {
@@ -1281,6 +1357,13 @@ where
             finished_at: Some(OffsetDateTime::now_utc()),
         })
         .await?;
+    append_runtime_event(
+        service,
+        flow_run.id,
+        debug_stream_events::flow_finished(flow_run.id, last_output_payload.clone()),
+    )
+    .await;
+    close_runtime_event_stream(service, flow_run.id, RuntimeEventCloseReason::Finished).await;
     service
         .repository
         .append_run_event(&AppendRunEventInput {
@@ -1361,6 +1444,7 @@ where
             finished_at: Some(OffsetDateTime::now_utc()),
         })
         .await?;
+    emit_flow_failed_and_close(service, flow_run_id, error_payload.clone()).await;
     service
         .repository
         .append_run_event(&AppendRunEventInput {

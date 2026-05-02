@@ -37,6 +37,7 @@ use domain::{
 #[derive(Default)]
 pub struct RecordingRuntimeEventStream {
     events: Mutex<Vec<RuntimeEventEnvelope>>,
+    close_calls: Mutex<Vec<(Uuid, RuntimeEventCloseReason)>>,
 }
 
 impl RecordingRuntimeEventStream {
@@ -44,6 +45,13 @@ impl RecordingRuntimeEventStream {
         self.events
             .lock()
             .expect("runtime event stream lock should be available")
+            .clone()
+    }
+
+    pub fn close_calls(&self) -> Vec<(Uuid, RuntimeEventCloseReason)> {
+        self.close_calls
+            .lock()
+            .expect("runtime event stream close lock should be available")
             .clone()
     }
 }
@@ -94,7 +102,11 @@ impl RuntimeEventStream for RecordingRuntimeEventStream {
             .collect())
     }
 
-    async fn close_run(&self, _run_id: Uuid, _reason: RuntimeEventCloseReason) -> Result<()> {
+    async fn close_run(&self, run_id: Uuid, reason: RuntimeEventCloseReason) -> Result<()> {
+        self.close_calls
+            .lock()
+            .expect("runtime event stream close lock should be available")
+            .push((run_id, reason));
         Ok(())
     }
 
